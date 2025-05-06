@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+    <title>Song List</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/index.css">
+
+    <h1>Song List</h1>
+    {% for error in errors %}
+        <p class="error">{{ error }}</p>
+    {% endfor %}
+    <form method="POST" action="/vote">
+        <div class="form-data">
+            <label for="username">Voter Name</label>
+            <input type="text" name="username" value="{{ username }}">
+            <label for="nickname">Display Name</label>
+            <input type="text" name="nickname" value="{{ nickname }}">
+    {% for point in points %}
+            {% set pl = loop %}
+            <label for="pts-{{point}}">{{point}} points</label>
+            <select name="pts-{{point}}" id="pts-{{point}}" class="{% if point in invalid %}invalid{% else %}valid{% endif %}">
+            {% for song in songs %}
+                <option value="{{song[0]}}" {% if (not selected and pl.index == loop.index) or (selected[point] == loop.index) %}selected{% endif %}>
+                    {{song[2]}} ({{song[3]}})
+                </option>
+            {% endfor %}
+            </select>
+    {% endfor %}
+        </div>
+        <div>
+            <button type="submit">Submit</button>
+        </div>
+    </form>
+</html>

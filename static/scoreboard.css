@@ -1,0 +1,135 @@
+@keyframes winner {
+    0% {
+        background: white;
+    }
+
+    50% {
+        background: gold;
+    }
+
+    100% {
+        background: white;
+    }
+}
+
+#container {
+    position: relative;
+    width: 1000px;
+    height: 600px;
+
+}
+
+#from {
+    width: 80%;
+    height: 100px;
+
+    position: relative;
+    margin: 1em 0;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 0.5em 1em;
+}
+
+#controls {
+    float: right;
+    background: lightblue;
+    border: 1px solid black;
+    padding: 0.5em;
+}
+
+.voting-card {
+    position: absolute;
+    width: 50%;
+    height: 100%;
+    vertical-align: middle;
+    display: flex;
+
+    transition: transform 2s;
+}
+
+.voting-card-flag {
+    max-width: 100%;
+    max-height: 100px;
+}
+
+.voting-card-name {
+    font-size: 4em;
+    font-weight: bold;
+}
+
+.unloaded {
+    transform: translate(200%);
+}
+
+.unloaded2 {
+    transform: translate(-200%);
+}
+
+.element {
+    box-sizing: border-box;
+    position: absolute;
+    width: 50%;
+    border: 1px solid black;
+    display: flex;
+    gap: 0.25em;
+    padding: 0.1em;
+    height: 40px;
+
+    transition: top 1s, left 1s, background 1s;
+    background: white;
+}
+
+.name-container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.current-points {
+    font-size: 200%;
+    opacity: 0%;
+    transition: opacity 1s;
+}
+
+.current-points.visible {
+    opacity: 100%;
+}
+
+.total-points {
+    font-size: 200%;
+    width: 3ch;
+}
+
+.main-moving {
+    z-index: 100;
+}
+
+.other-moving {
+    z-index: -50;
+}
+
+.total-points {
+    width: 4ch;
+}
+
+.active {
+    background: cornflowerblue;
+}
+
+.no-win {
+    background: gray;
+}
+
+.active.no-win {
+    background: darkblue;
+    color: white;
+}
+
+.winner {
+    animation: linear winner 2.5s infinite;
+}

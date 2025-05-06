@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+    <title>User Votes</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/index.css">
+
+    <h1>User Votes</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>RO</th>
+                <th>Country</th>
+                <th>Artist</th>
+                <th>Title</th>
+                <th>Total</th>
+                {% for voter in results.keys() %}
+                    <th>{{ voter }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for song in songs %}
+                <tr>
+                    <th class="number">{{ loop.index }}</td>
+                    <td>{{ song.country }}</td>
+                    <td>{{ song.artist }}</td>
+                    <td>{{ song.title }}</td>
+                    <td class="number">{{ song.sum }}</td>
+                    {% for voter in results.keys() %}
+                        {% set pts = results[voter].get(song.id, 0) %}
+                        <td class="number {{ "zero" if pts == 0 else "nonzero" }}">{{ pts }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>

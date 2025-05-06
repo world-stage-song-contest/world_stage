@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+    <title>Vote Submitted</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/index.css">
+
+    <h1>Vote Submitted</h1>
+    <p>Thank you for voting!</p>
+    {% if action == "updated" %}
+    <p>Your vote has been successfully edited.</p>
+    {% else %}
+    <p>Your vote has been successfully recorded.</p>
+    {% endif %}
+    <p><a href="/">Return to Home</a></p>

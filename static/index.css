@@ -1,0 +1,43 @@
+.form-data {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 1rem;
+    width: fit-content;
+}
+
+select {
+    border-radius: 1px;
+}
+
+.invalid {
+    border-color: red;
+}
+
+.valid {
+    border-color: grey;
+}
+
+.error {
+    color: red;
+    font-weight: bold;
+}
+
+.zero {
+    color: transparent;
+}
+
+.number {
+    text-align: right;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+table, th, td {
+    border: 1px solid black;
+}
+
+th, td {
+    padding: 0.1em 0.25em;
+}
