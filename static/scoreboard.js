@@ -5,7 +5,8 @@ let points = []
 let associations = {}
 
 async function loadVotes() {
-    const res = await fetch("/scoreboard/votes");
+    const show = document.querySelector("#show").innerText;
+    const res = await fetch(`/results/${show}/scoreboard/votes`);
     const json = await res.json();
     points = json.points;
     points.sort((a, b) => a - b);
@@ -13,6 +14,7 @@ async function loadVotes() {
     for (const [id, ro, country, song, artist] of json.songs) {
         data.push({id, ro, country, title: song, artist});
     }
+    data.sort((a, b) => a.ro - b.ro);
     votes = json.results;
     associations = json.associations;
 }
@@ -221,6 +223,7 @@ async function vote() {
         
         let revealedPts = points.length - 1;
         const vts = votes[from];
+        console.log(vts)
         const assoc = associations[from];
         const nickname = assoc && assoc.nickname || from;
         
@@ -239,6 +242,7 @@ async function vote() {
 
         for (const pt of points) {
             const to = vts[pt];
+            console.log(`Voted ${pt} for ${to}`);
             while (paused) {
                 if (isReset) {
                     isReset = false;

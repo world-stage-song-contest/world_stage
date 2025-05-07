@@ -133,3 +133,7 @@
 .winner {
     animation: linear winner 2.5s infinite;
 }
+
+.hidden {
+    display: none;
+}

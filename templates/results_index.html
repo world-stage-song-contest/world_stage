@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+    <title>Results</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/index.css">
+
+    <h1>Results</h1>
+    {% if results %}
+        <ul>
+            {% for show in results %}
+                <li>{{ show.name }}
+                    (<a href="/results/{{ show.short_name }}">Results summary</a>,
+                     <a href="/results/{{ show.short_name }}/detailed">Detailed results</a>,
+                     <a href="/results/{{ show.short_name }}/scoreboard">Scoreboard</a>)</li>
+            {% endfor %}
+    {% else %}
+        <p>No results available.</p>
+    {% endif %}
+    <p><a href="/">Return to Home</a></p>
+</html>

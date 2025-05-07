@@ -41,3 +41,7 @@ table, th, td {
 th, td {
     padding: 0.1em 0.25em;
 }
+
+.point-header {
+    width: 3ch;
+}

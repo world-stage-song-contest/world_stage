@@ -9,19 +9,19 @@
     {% for error in errors %}
         <p class="error">{{ error }}</p>
     {% endfor %}
-    <form method="POST" action="/vote">
+    <form method="POST" action="/vote/{{ show }}">
         <div class="form-data">
             <label for="username">Voter Name</label>
-            <input type="text" name="username" value="{{ username }}">
+            <input type="text" name="username" value="{{ username or "" }}">
             <label for="nickname">Display Name</label>
-            <input type="text" name="nickname" value="{{ nickname }}">
+            <input type="text" name="nickname" value="{{ nickname or ""}}">
     {% for point in points %}
             {% set pl = loop %}
             <label for="pts-{{point}}">{{point}} points</label>
             <select name="pts-{{point}}" id="pts-{{point}}" class="{% if point in invalid %}invalid{% else %}valid{% endif %}">
             {% for song in songs %}
-                <option value="{{song[0]}}" {% if (not selected and pl.index == loop.index) or (selected[point] == loop.index) %}selected{% endif %}>
-                    {{song[2]}} ({{song[3]}})
+                <option value="{{song.id}}" {% if (not selected and pl.index == loop.index) or (selected[point] == song.id) %}selected{% endif %}>
+                    {{song.title}} ({{song.artist}})
                 </option>
             {% endfor %}
             </select>

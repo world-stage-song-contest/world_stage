@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+    <title>Open Votings</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/index.css">
+
+    <h1>Open Votings</h1>
+    {% if shows %}
+    <ul>
+        {% for show in shows %}
+            <li><a href="/vote/{{ show.short_name }}">{{ show.name }}</a> ({{ show.left }})</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No open votings.</p>
+    {% endif %}
+    </table>
