@@ -11,8 +11,8 @@ async function loadVotes() {
     points = json.points;
     points.sort((a, b) => a - b);
     voteOrder = json.vote_order;
-    for (const [id, ro, country, song, artist] of json.songs) {
-        data.push({id, ro, country, title: song, artist});
+    for (const song of json.songs) {
+        data.push(song);
     }
     data.sort((a, b) => a.ro - b.ro);
     votes = json.results;

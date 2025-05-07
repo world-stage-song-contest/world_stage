@@ -131,7 +131,7 @@
 }
 
 .winner {
-    animation: linear winner 2.5s infinite;
+    animation: linear winner 5s infinite;
 }
 
 .hidden {

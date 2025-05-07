@@ -1,0 +1,11 @@
+[project]
+name = "world-stage"
+version = "1.0.0"
+description = "Voting website for World Stage."
+dependencies = [
+    "flask",
+]
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
