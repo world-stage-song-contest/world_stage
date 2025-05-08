@@ -51,10 +51,10 @@ def vote_post(show: str):
     points = show_data['points']
 
     if not show_id:
-        return redirect(url_for('error', error="Show not found"))
+        return redirect(url_for('main.error', error="Show not found"))
     
     if voting_opens > datetime.datetime.now() or voting_closes < datetime.datetime.now():
-        return redirect(url_for('error', error="Voting is closed"))
+        return redirect(url_for('main.error', error="Voting is closed"))
 
     db = get_db()
     cursor = db.cursor()
@@ -145,10 +145,10 @@ def vote(show: str):
     points = show_data['points']
 
     if not show_id:
-        return redirect(url_for('error', error="Show not found"))
+        return redirect(url_for('main.error', error="Show not found"))
     
     if voting_opens > datetime.datetime.now() or voting_closes < datetime.datetime.now():
-        return redirect(url_for('error', error="Voting is closed"))
+        return redirect(url_for('main.error', error="Voting is closed"))
     
     db = get_db()
     cursor = db.cursor()
