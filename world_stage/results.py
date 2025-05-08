@@ -15,10 +15,9 @@ def results_index():
     cursor = db.cursor()
    
     cursor.execute('''
-        SELECT show_name, short_name, year.year
+        SELECT show_name, short_name, year_id
         FROM show
-        LEFT OUTER JOIN year ON show.year_id = year.id
-        WHERE show.voting_closes < datetime('now')
+        WHERE voting_closes < datetime('now')
     ''')
     for name, short_name, year in cursor.fetchall():
         results.append({
@@ -155,17 +154,18 @@ def scores(show: str):
     cursor = db.cursor()
     songs = []
     cursor.execute('''
-        SELECT song.id, song_show.running_order, country.name, song.title, song.artist FROM song
+        SELECT song.id, song_show.running_order, country.name, country.id, song.title, song.artist FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = ?
         ORDER BY song_show.running_order
     ''', (show_id,))
-    for id, running_order, country, title, artist in cursor.fetchall():
+    for id, running_order, country, cc, title, artist in cursor.fetchall():
         val = {
             'id': id,
             'ro': running_order,
             'country': country,
+            'code': cc,
             'title': title,
             'artist': artist,
         }
@@ -188,14 +188,14 @@ def scores(show: str):
         results[username][pts] = song_id
 
     cursor.execute('''
-        SELECT username, nickname, country.name FROM vote_set
+        SELECT username, nickname, country_id, country.name FROM vote_set
         JOIN user ON vote_set.voter_id = user.id
         JOIN country ON vote_set.country_id = country.id
         WHERE vote_set.show_id = ?
     ''', (show_id,))
     vote_set = cursor.fetchall()
     voter_assoc = {}
-    for username, nickname, country in vote_set:
-        voter_assoc[username] = {'nickname': nickname, 'country': country}
+    for username, nickname, country_code, country_name in vote_set:
+        voter_assoc[username] = {'nickname': nickname, 'country': country_name, 'code': country_code}
 
     return {'songs': songs, 'results': results, 'points': points, 'vote_order': vote_order, 'associations': voter_assoc}

@@ -1,0 +1,16 @@
+<svg width="96" height="96" xmlns="http://www.w3.org/2000/svg">
+  <g style="display:inline">
+    <path fill="#00247d" style="display:inline" d="M0 0h300v300H0z" transform="scale(.32)"/>
+    <path style="color:#000;display:inline;fill:#fff;-inkscape-stroke:none" d="M0 0v42.432L107.574 150 0 257.568V300h42.432L150 192.426 257.568 300H300v-42.432L192.426 150 300 42.432V0h-42.432L150 107.574 42.432 0Z" transform="scale(.32)"/>
+    <path style="fill:#cf142b;fill-opacity:1;stroke-width:1.5625;stroke-linecap:round;stroke-linejoin:round" d="M0 0v28.125L71.875 100H100Zm271.875 0L200 71.875V100L300 0ZM100 200 0 300h28.125L100 228.125Zm100 0 100 100v-28.125L228.125 200Z" transform="scale(.32)"/>
+    <path d="M150 0v300M0 150h300" stroke="#fff" stroke-width="100" style="display:inline" transform="scale(.32)"/>
+    <path d="M150 0v300M0 150h300" stroke="#cf142b" stroke-width="60" style="display:inline" transform="scale(.32)"/>
+  </g>
+  <g style="display:inline">
+    <path fill="#00247d" style="display:inline" d="M0 0h300v300H0z" transform="scale(.32)"/>
+    <path style="color:#000;display:inline;fill:#fff;-inkscape-stroke:none" d="M0 0v37.5L112.5 150 0 262.5V300h37.5L150 187.5 262.5 300H300v-37.5L187.5 150 300 37.5V0h-37.5L150 112.5 37.5 0Z" transform="scale(.32)"/>
+    <path style="fill:#cf142b;fill-opacity:1;stroke-width:1.5625;stroke-linecap:round;stroke-linejoin:round" d="M0 0v25l75 75h25zm275 0-75 75v25L300 0ZM100 200 0 300h25l75-75zm100 0 100 100v-25l-75-75z" transform="scale(.32)"/>
+    <path d="M150 0v300M0 150h300" stroke="#fff" stroke-width="100" style="display:inline" transform="scale(.32)"/>
+    <path d="M150 0v300M0 150h300" stroke="#cf142b" stroke-width="60" style="display:inline;stroke-width:62.5;stroke-dasharray:none" transform="scale(.32)"/>
+  </g>
+</svg>

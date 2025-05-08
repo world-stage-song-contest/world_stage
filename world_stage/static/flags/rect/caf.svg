@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   version="1.1"
+   id="svg1"
+   width="600"
+   height="400"
+   viewBox="0 0 600 400"
+   sodipodi:docname="cf.ai"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1">
+    <inkscape:page
+       x="0"
+       y="0"
+       inkscape:label="1"
+       id="page1"
+       width="600"
+       height="400"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <g
+     id="layer-MC0"
+     inkscape:groupmode="layer"
+     inkscape:label="Layer 1">
+    <path
+       id="path1"
+       d="m 0,225 h 450 v 75 H 0 Z"
+       style="fill:#003082;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,400)" />
+    <path
+       id="path2"
+       d="m 0,150 h 450 v 75 H 0 Z"
+       style="fill:#ffffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,400)" />
+    <path
+       id="path3"
+       d="m 0,75 h 450 v 75.001 H 0 Z"
+       style="fill:#289728;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,400)" />
+    <path
+       id="path4"
+       d="M 0,0 H 450 V 75 H 0 Z"
+       style="fill:#ffce00;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,400)" />
+    <path
+       id="path5"
+       d="m 187.5,0 h 75.001 V 300 H 187.5 Z"
+       style="fill:#d21034;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,400)" />
+    <path
+       id="path6"
+       d="M 0,0 7.577,-23.321 H 32.098 L 12.26,-37.734 19.838,-61.055 0,-46.642 l -19.838,-14.413 7.578,23.321 -19.838,14.413 h 24.521 z"
+       style="fill:#ffce00;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,100,9.2969333)" />
+  </g>
+</svg>

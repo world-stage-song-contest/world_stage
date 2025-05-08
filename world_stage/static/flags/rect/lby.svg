@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   version="1.1"
+   id="svg1"
+   width="1000"
+   height="666.66669"
+   viewBox="0 0 1000 666.66669"
+   sodipodi:docname="ly.ai"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath5">
+      <path
+         d="M 0,500 H 750 V 0 H 0 Z"
+         transform="translate(-405.40041,-250.00001)"
+         id="path5" />
+    </clipPath>
+  </defs>
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1">
+    <inkscape:page
+       x="0"
+       y="0"
+       inkscape:label="1"
+       id="page1"
+       width="1000"
+       height="666.66669"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <g
+     id="layer-MC0"
+     inkscape:groupmode="layer"
+     inkscape:label="Layer 1">
+    <path
+       id="path1"
+       d="M 0,0 H 750 V 500 H 0 Z"
+       style="fill:#239e46;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,666.66667)" />
+    <path
+       id="path2"
+       d="M 0,125 H 750 V 500 H 0 Z"
+       style="fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,666.66667)" />
+    <path
+       id="path3"
+       d="M 0,375 H 750 V 500 H 0 Z"
+       style="fill:#e70013;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,666.66667)" />
+    <path
+       id="path4"
+       d="m 0,0 84.1,27.3 -52,-71.5 v 88.4 l 52,-71.5 z M 13.8,44.2 C -10.611,61.62 -44.522,55.952 -61.941,31.541 -79.361,7.13 -73.694,-26.78 -49.283,-44.2 c 18.871,-13.467 44.211,-13.467 63.083,0 -24.411,-24.404 -63.984,-24.4 -88.389,0.012 -24.404,24.411 -24.399,63.983 0.012,88.388 24.406,24.4 63.971,24.4 88.377,0"
+       style="fill:#ffffff;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,540.53387,333.33333)"
+       clip-path="url(#clipPath5)" />
+  </g>
+</svg>

@@ -19,32 +19,41 @@ async function loadVotes() {
     associations = json.associations;
 }
 
-function makeRow(name, subtitle, id) {
+function makeRow(code, name, subtitle, id) {
     const container = document.createElement("div");
     container.classList.add("element");
     container.dataset.country = name;
     container.dataset.id = id;
 
+    const flagContainer = document.createElement("div");
+    flagContainer.classList.add("flag-container");
+    container.appendChild(flagContainer);
+
+    const flagEl = document.createElement("img");
+    flagEl.classList.add("flag");
+    flagEl.src = `/static/flags/square/${code.toLowerCase()}.svg`;
+    flagContainer.appendChild(flagEl);
+
     const nameContainer = document.createElement("div");
     nameContainer.classList.add("name-container");
     container.appendChild(nameContainer);
 
-    const nameEl = document.createElement("span");
+    const nameEl = document.createElement("div");
     nameEl.classList.add("name");
     nameEl.innerText = name;
     nameContainer.appendChild(nameEl);
 
-    const subtitleEl = document.createElement("span");
+    const subtitleEl = document.createElement("div");
     subtitleEl.classList.add("subtitle");
     subtitleEl.innerText = subtitle;
     nameContainer.appendChild(subtitleEl);
 
-    const currentEl = document.createElement("span");
+    const currentEl = document.createElement("div");
     currentEl.classList.add("current-points", "number");
     currentEl.innerText = "";
     container.appendChild(currentEl);
 
-    const totalEl = document.createElement("span");
+    const totalEl = document.createElement("div");
     totalEl.classList.add("total-points", "number");
     totalEl.innerText = "0";
     container.appendChild(totalEl);
@@ -52,21 +61,29 @@ function makeRow(name, subtitle, id) {
     return [nameEl, currentEl, totalEl, container];
 }
 
-function makeVotingCard(from) {
+function makeVotingCard(from, code, country) {
     const container = document.createElement("div");
     container.classList.add("voting-card", "unloaded");
 
-    /*
     const flagEl = document.createElement("img");
     flagEl.classList.add("voting-card-flag");
-    flagEl.src = `flags/${from}.svg`;
+    flagEl.src = `/static/flags/rect/${code.toLowerCase()}.svg`;
     flagEl.alt = from;
-    container.appendChild(flagEl);*/
+    container.appendChild(flagEl);
+
+    const wrapperEl = document.createElement("div");
+    wrapperEl.classList.add("voting-card-user-wrapper");
+    container.appendChild(wrapperEl);
 
     const nameEl = document.createElement("span");
     nameEl.classList.add("voting-card-name");
     nameEl.innerText = from;
-    container.appendChild(nameEl);
+    wrapperEl.appendChild(nameEl);
+
+    const countryEl = document.createElement("span");
+    countryEl.classList.add("voting-card-country");
+    countryEl.innerText = `From ${country}`;
+    wrapperEl.appendChild(countryEl);
 
     return container;
 }
@@ -80,15 +97,17 @@ function ptsToIndex(pt) {
 }
 
 class Country {
-    constructor(name, subtitle, ro, id) {
+    constructor(name, subtitle, ro, id, country, code) {
         this.rollback = [];
         this.ro = ro;
         this.name = name;
         this.subtitle = subtitle;
         this.id = id;
+        this.country = country;
+        this.code = code;
         this.win = true;
         this.votes = new Array(Math.max(...points) + 1).fill(0);
-        [this.nameEl, this.currentEl, this.totalEl, this.element] = makeRow(name, subtitle, id);
+        [this.nameEl, this.currentEl, this.totalEl, this.element] = makeRow(code, name, subtitle, id);
     }
     
     get points() {
@@ -189,7 +208,7 @@ function populate() {
     const cnt = data.length;
     perColumn = cnt / 2;
     for (const c of data) {
-        const country = new Country(c.country, `${c.artist} – ${c.title}`, c.ro, c.id);
+        const country = new Country(c.country, `${c.title} – ${c.artist}`, c.ro, c.id, c.country, c.code);
         countries[c.id] = country;
         ro.push(country);
 
@@ -220,16 +239,24 @@ async function vote() {
     let countriesVoted = 0;
     
     for (const from of voteOrder) {
-        
         let revealedPts = points.length - 1;
         const vts = votes[from];
         console.log(vts)
+
+        let nickname = from;
+        let country = null;
+        let code = null;
         const assoc = associations[from];
-        const nickname = assoc && assoc.nickname || from;
+        console.log(assoc)
+        if (assoc) {
+            nickname = assoc.nickname || from;
+            country = assoc.country;
+            code = assoc.code;
+        }
         
         let voted = [];
 
-        const card = makeVotingCard(nickname);
+        const card = makeVotingCard(nickname, code, country);
         document.querySelector("#from").appendChild(card);
 
         while (paused) {
@@ -288,8 +315,9 @@ async function vote() {
             }
         }
 
+        await new Promise(r => setTimeout(r, delay * 2.5));
         card.classList.add("unloaded2");
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, delay * 2.5));
 
         countriesVoted++;
         const leader = ro[0];

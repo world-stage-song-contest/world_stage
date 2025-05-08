@@ -15,6 +15,13 @@
             <input type="text" name="username" value="{{ username or "" }}">
             <label for="nickname">Display Name</label>
             <input type="text" name="nickname" value="{{ nickname or ""}}">
+            <label for="country">Country</label>
+            <select name="country" id="country">
+                <option value="">Select a country</option>
+            {% for country in countries %}
+                <option value="{{ country.id }}" {% if country.id == selected_country %}selected{% endif %}>{{ country.name }}</option>
+            {% endfor %}
+            </select>
     {% for point in points %}
             {% set pl = loop %}
             <label for="pts-{{point}}">{{point}} points</label>

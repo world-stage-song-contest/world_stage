@@ -34,6 +34,11 @@ def populate_db():
     specials_path = import_path / 'specials'
     regular_path = import_path / 'regular'
     points_path = import_path / 'points.json'
+    countries_path = import_path / 'countries.csv'
+    alternatives_path = import_path / 'alternative_names.csv'
+
+    for i in range(1960, 2025):
+        cur.execute('INSERT OR IGNORE INTO year (id) VALUES (?)', (i,))
 
     with points_path.open('r', encoding='utf-8') as file:
         points = json.load(file)
@@ -49,14 +54,34 @@ def populate_db():
             for place, point in enumerate(data):
                 cur.execute('INSERT OR IGNORE INTO point (place, score, point_system_id) VALUES (?, ?, ?)', (place + 1, point, point_system_id))
 
+    with countries_path.open('r', encoding='utf-8') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            name = row['name']
+            code = row['code']
+            is_participating = int(row['is_participating'])
+            cur.execute('INSERT OR IGNORE INTO country (name, id, is_participating) VALUES (?, ?, ?)', (name, code, is_participating))
+
+
+    with alternatives_path.open('r', encoding='utf-8') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            code = row['code']
+            name = row['name']
+            from_year = int(row['from'])
+            to_year = int(row['to'])
+
+            cur.execute('''
+                INSERT OR IGNORE INTO alternative_name (name, country_id, from_year_id, to_year_id)
+                VALUES (?, ?, ?, ?)
+            ''', (name, code, from_year, to_year))
+
     for f in specials_path.iterdir():
         if f.is_file() and f.suffix == '.csv':
             full_name, short_name, vote_options = f.stem.split('-')
             full_name = full_name.strip()
             short_name = short_name.strip()
             vote_options = int(vote_options.strip())
-
-            print(f"Processing {full_name} ({short_name}) with {vote_options} points")
 
             cur.execute('SELECT id FROM point_system WHERE number = ?', (vote_options,))
             point_system_id = cur.fetchone()
@@ -79,13 +104,16 @@ def populate_db():
                     user_id = cur.fetchone()[0]
 
                     country = row['country']
-                    cur.execute('INSERT OR IGNORE INTO country (name, code) VALUES (?, \'XX\')', (country,))
                     cur.execute('SELECT id FROM country WHERE name = ?', (country,))
                     country_id = cur.fetchone()[0]
 
                     title = row['title']
                     artist = row['artist']
-                    cur.execute('INSERT INTO song (title, artist, submitter_id, country_id) VALUES (?, ?, ?, ?) RETURNING id', (title, artist, user_id, country_id))
+                    cur.execute('''
+                        INSERT INTO song (title, artist, submitter_id, country_id)
+                        VALUES (?, ?, ?, ?)
+                        RETURNING id
+                    ''', (title, artist, user_id, country_id))
                     song_id = cur.fetchone()[0]
 
                     running_order = row['ro']

@@ -3,7 +3,11 @@
         background: white;
     }
 
-    50% {
+    40% {
+        background: gold;
+    }
+
+    60% {
         background: gold;
     }
 
@@ -28,6 +32,9 @@
     overflow: hidden;
     box-sizing: border-box;
     padding: 0.5em 1em;
+
+    display: flex;
+    align-items: center;
 }
 
 #controls {
@@ -41,19 +48,30 @@
     position: absolute;
     width: 50%;
     height: 100%;
-    vertical-align: middle;
+    align-items: center;
     display: flex;
+    gap: 1em;
 
     transition: transform 2s;
 }
 
 .voting-card-flag {
-    max-width: 100%;
-    max-height: 100px;
+    height: 95px;
+    border: 1px solid grey;
+}
+
+.voting-card-user-wrapper {
+    display: flex;
+    flex-direction: column;
 }
 
 .voting-card-name {
-    font-size: 4em;
+    font-size: 3em;
+    font-weight: bold;
+}
+
+.voting-card-country {
+    font-size: 1.5em;
     font-weight: bold;
 }
 
@@ -72,8 +90,8 @@
     border: 1px solid black;
     display: flex;
     gap: 0.25em;
-    padding: 0.1em;
-    height: 40px;
+    padding: 2px;
+    height: 42px;
 
     transition: top 1s, left 1s, background 1s;
     background: white;
@@ -81,8 +99,32 @@
 
 .name-container {
     flex-grow: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
+}
+
+.title-container {
+    display: flex;
+}
+
+.flag-container {
+    height: 36px;
+    min-width: 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.flag {
+    height: 32px;
+    border: 1px solid grey;
+}
+
+.subtitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .number {
@@ -94,6 +136,7 @@
     font-size: 200%;
     opacity: 0%;
     transition: opacity 1s;
+    min-width: 3ch;
 }
 
 .current-points.visible {
@@ -102,7 +145,7 @@
 
 .total-points {
     font-size: 200%;
-    width: 3ch;
+    min-width: 4ch;
 }
 
 .main-moving {
@@ -111,10 +154,6 @@
 
 .other-moving {
     z-index: -50;
-}
-
-.total-points {
-    width: 4ch;
 }
 
 .active {

@@ -3,7 +3,7 @@ import sqlite3
 from flask import render_template, request, redirect, url_for, Blueprint
 import datetime
 
-from .utils import add_votes, format_timedelta, get_show_id
+from .utils import add_votes, format_timedelta, get_show_id, get_countries
 from .db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
@@ -16,14 +16,14 @@ def vote_index():
     cursor = db.cursor()
     
     cursor.execute('''
-        SELECT show.id, show.show_name, show.short_name, year.year, show.voting_opens, show.voting_closes
+        SELECT id, show_name, short_name, year_id, voting_opens, voting_closes
         FROM show
-        LEFT OUTER JOIN year ON show.year_id = year.id
-        WHERE show.voting_opens <= datetime('now') AND show.voting_closes >= datetime('now')
+        WHERE voting_opens <= datetime('now') AND voting_closes >= datetime('now')
     ''')
 
     for id, name, short_name, year, voting_opens, voting_closes in cursor.fetchall():
-        left = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M') - datetime.datetime.now()
+        print(voting_opens, voting_closes)
+        left = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S') - datetime.datetime.now()
         open_votings.append({
             'id': id,
             'name': f"{year} {name}" if year else name,
@@ -79,6 +79,9 @@ def vote_post(show: str):
     errors = []
 
     username = request.form['username']
+    country_id = request.form['country']
+    if not country_id:
+        country_id = None
 
     if not username:
         errors.append("Username is required.")
@@ -117,7 +120,7 @@ def vote_post(show: str):
         errors.append(f"Duplicate votes.")
 
     if not errors:
-        action = add_votes(username, nickname or None, show_id, point_system_id, votes)
+        action = add_votes(username, nickname or None, country_id, show_id, point_system_id, votes)
         resp = redirect(url_for('main.success', action=action))
         resp.set_cookie('username', username)
         return resp
@@ -126,13 +129,15 @@ def vote_post(show: str):
                            songs=songs, points=points, errors=errors,
                            selected=votes, invalid=invalid,
                            username=username, nickname=nickname,
-                           year=year, show_name=show_name, show=show)
+                           year=year, show_name=show_name, show=show,
+                           selected_country=country_id, countries=get_countries())
 
 @bp.get('/<show>')
 def vote(show: str):
     username = request.cookies.get('username')
     nickname = None
     country = ''
+    country_id = ''
 
     selected = {}
 
@@ -194,4 +199,5 @@ def vote(show: str):
     return render_template('vote.html',
                            songs=songs, points=points, selected=selected,
                            username=username, nickname=nickname, country=country,
-                           year=year, show_name=show_name, show=show)
+                           year=year, show_name=show_name, show=show,
+                           selected_country=country_id, countries=get_countries())

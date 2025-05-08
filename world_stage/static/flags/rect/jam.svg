@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   version="1.1"
+   id="svg1"
+   width="450"
+   height="300"
+   viewBox="0 0 450 300"
+   sodipodi:docname="jm.ai"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1">
+    <inkscape:page
+       x="0"
+       y="0"
+       inkscape:label="1"
+       id="page1"
+       width="450"
+       height="300"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <g
+     id="layer-MC0"
+     inkscape:groupmode="layer"
+     inkscape:label="Layer 1">
+    <path
+       id="path1"
+       d="M 0,0.23 H 337.5 V 225 H 0 Z"
+       style="fill:#009b3a;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,0,300)" />
+    <path
+       id="path2"
+       d="M 0,0 168.75,-111.624 V 111.624 Z M -168.75,-111.624 0,0 -168.75,111.624 Z"
+       style="fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,225,149.6928)" />
+    <path
+       id="path3"
+       d="M 0,0 -138.036,-91.306 -276.072,0 h -30.714 v -21.609 l 137.058,-90.661 -137.058,-90.66 V -225 h 30.019 l 138.731,91.768 L 0.695,-225 h 30.019 v 22.07 l -137.059,90.66 137.059,90.661 V 0 Z"
+       style="fill:#fed100;fill-opacity:1;fill-rule:nonzero;stroke:none"
+       transform="matrix(1.3333333,0,0,-1.3333333,409.0484,0)" />
+  </g>
+</svg>

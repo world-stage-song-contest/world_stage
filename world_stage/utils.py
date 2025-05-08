@@ -62,8 +62,8 @@ def get_show_id(show):
 
     points = get_points_for_system(point_system_id)
 
-    voting_opens = datetime.datetime.strptime(voting_opens, '%Y-%m-%d %H:%M')
-    voting_closes = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M')
+    voting_opens = datetime.datetime.strptime(voting_opens, '%Y-%m-%d %H:%M:%S')
+    voting_closes = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S')
 
     ret['id'] = show_id
     ret['point_system_id'] = point_system_id
@@ -90,14 +90,31 @@ def get_points_for_system(point_system_id):
 
     return points
 
-def update_votes(voter_id, nickname, point_system_id, votes):
+def get_countries(only_participating=False):
+    if only_participating:
+        query = 'SELECT id, name FROM country WHERE is_participating = 1 ORDER BY name'
+    else:
+        query = 'SELECT id, name FROM country ORDER BY name'
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute(query)
+    countries = []
+    for id, name in cursor.fetchall():
+        countries.append({
+            'id': id,
+            'name': name
+        })
+    return countries
+
+def update_votes(voter_id, nickname, country_id, point_system_id, votes):
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
     vote_set_id = cursor.fetchone()[0]
 
-    cursor.execute('UPDATE vote_set SET nickname = ? WHERE id = ?', (nickname, vote_set_id))
+    cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id, vote_set_id))
 
     for point, song_id in votes.items():
         cursor.execute('''
@@ -111,7 +128,7 @@ def update_votes(voter_id, nickname, point_system_id, votes):
             WHERE vote_set_id = ? AND point_id = ?
         ''', (song_id, vote_set_id, point_id))
 
-def add_votes(username, nickname, show_id, point_system_id, votes):
+def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
     db = get_db()
     cursor = db.cursor()
 
@@ -124,9 +141,9 @@ def add_votes(username, nickname, show_id, point_system_id, votes):
 
     if not existing_vote_set:
         cursor.execute('''
-            INSERT INTO vote_set (voter_id, show_id, nickname, created_at)
-            VALUES (?, ?, ?, datetime('now'))
-            ''', (voter_id, show_id, nickname))
+            INSERT INTO vote_set (voter_id, show_id, country_id, nickname, created_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
+            ''', (voter_id, show_id, country_id, nickname))
         cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
         vote_set_id = cursor.fetchone()[0]
         for point, song_id in votes.items():
@@ -138,7 +155,7 @@ def add_votes(username, nickname, show_id, point_system_id, votes):
             cursor.execute('INSERT INTO vote (vote_set_id, song_id, point_id) VALUES (?, ?, ?)', (vote_set_id, song_id, point_id))
         action = "added"
     else:
-        update_votes(voter_id, nickname, point_system_id, votes)
+        update_votes(voter_id, nickname, country_id, point_system_id, votes)
         action = "updated"
     
     db.commit()
