@@ -17,10 +17,10 @@ def favicon():
 
 @bp.get('/error')
 def error():
-    error = request.args.get('error')
-    return render_template('error.html', error=error), 400
+    errors = request.args.getlist('error')
+    return render_template('error.html', errors=errors), 400
 
 @bp.get('/error.json')
 def error_json():
-    error = request.args.get('error')
-    return {'error': error}, 400
+    errors = request.args.getlist('error')
+    return {'errors': errors}, 400
