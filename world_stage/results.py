@@ -40,7 +40,7 @@ def results(show: str):
         val = (a['sum'], a['count']) + tuple(pt_cnt) + (-a['running_order'],)
         return val
 
-    if voting_closes > datetime.datetime.now():
+    if voting_closes > datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error', error="Voting hasn't closed yet."))
 
     db = get_db()
@@ -86,7 +86,7 @@ def detailed_results(show: str):
     show_id = show_data['id']
     voting_closes = show_data['voting_closes']
 
-    if voting_closes > datetime.datetime.now():
+    if voting_closes > datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error', error="Voting hasn't closed yet."))
     
     db = get_db()
@@ -135,7 +135,7 @@ def scoreboard(show: str):
     show_data = get_show_id(show)
     voting_closes = show_data['voting_closes']
 
-    if voting_closes > datetime.datetime.now():
+    if voting_closes > datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error', error="Voting hasn't closed yet."))
     
     return render_template('scoreboard.html', show=show)
@@ -147,7 +147,7 @@ def scores(show: str):
     points = show_data['points']
     voting_closes = show_data['voting_closes']
 
-    if voting_closes > datetime.datetime.now():
+    if voting_closes > datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error_json', error="Voting hasn't closed yet."))
 
     db = get_db()

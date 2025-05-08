@@ -62,8 +62,8 @@ def get_show_id(show):
 
     points = get_points_for_system(point_system_id)
 
-    voting_opens = datetime.datetime.strptime(voting_opens, '%Y-%m-%d %H:%M:%S')
-    voting_closes = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S')
+    voting_opens = datetime.datetime.strptime(voting_opens, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc)
+    voting_closes = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc)
 
     ret['id'] = show_id
     ret['point_system_id'] = point_system_id

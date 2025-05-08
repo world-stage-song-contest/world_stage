@@ -23,7 +23,7 @@ def vote_index():
 
     for id, name, short_name, year, voting_opens, voting_closes in cursor.fetchall():
         print(voting_opens, voting_closes)
-        left = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S') - datetime.datetime.now()
+        left = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc) - datetime.datetime.now(tz=datetime.timezone.utc)
         open_votings.append({
             'id': id,
             'name': f"{year} {name}" if year else name,
@@ -53,7 +53,7 @@ def vote_post(show: str):
     if not show_id:
         return redirect(url_for('main.error', error="Show not found"))
     
-    if voting_opens > datetime.datetime.now() or voting_closes < datetime.datetime.now():
+    if voting_opens > datetime.datetime.now(datetime.timezone.utc) or voting_closes < datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error', error="Voting is closed"))
 
     db = get_db()
@@ -152,7 +152,7 @@ def vote(show: str):
     if not show_id:
         return redirect(url_for('main.error', error="Show not found"))
     
-    if voting_opens > datetime.datetime.now() or voting_closes < datetime.datetime.now():
+    if voting_opens > datetime.datetime.now(datetime.timezone.utc) or voting_closes < datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error', error="Voting is closed"))
     
     db = get_db()

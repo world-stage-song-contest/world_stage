@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 22.5 15"
+   width="720"
+   height="480"
+   version="1.1"
+   id="svg3"
+   sodipodi:docname="Flag_of_England.svg"
+   inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs3" />
+  <sodipodi:namedview
+     id="namedview3"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.1956317"
+     inkscape:cx="195.29426"
+     inkscape:cy="161.83914"
+     inkscape:window-width="1584"
+     inkscape:window-height="850"
+     inkscape:window-x="0"
+     inkscape:window-y="38"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg3" />
+  <rect
+     width="22.5"
+     height="15"
+     fill="#ffffff"
+     id="rect1"
+     x="0"
+     y="0"
+     style="stroke-width:0.948683" />
+  <rect
+     width="3"
+     height="15"
+     x="9.75"
+     id="rect2"
+     y="0"
+     style="fill:#ce1124" />
+  <rect
+     width="22.5"
+     height="3"
+     y="6"
+     id="rect3"
+     x="0"
+     style="fill:#ce1124;stroke-width:0.999928" />
+</svg>
