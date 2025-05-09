@@ -1,18 +1,10 @@
 @keyframes winner {
-    0% {
+    from {
         background: white;
     }
 
-    40% {
+    to {
         background: gold;
-    }
-
-    60% {
-        background: gold;
-    }
-
-    100% {
-        background: white;
     }
 }
 
@@ -127,6 +119,11 @@
     white-space: nowrap;
 }
 
+.title {
+    font-weight: bold;
+    font-style: italic;
+}
+
 .number {
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -170,7 +167,7 @@
 }
 
 .winner {
-    animation: linear winner 5s infinite;
+    animation: ease-out winner 2s infinite alternate;
 }
 
 .hidden {

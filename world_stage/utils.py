@@ -107,57 +107,21 @@ def get_countries(only_participating=False):
         })
     return countries
 
-def update_votes(voter_id, nickname, country_id, point_system_id, votes):
-    db = get_db()
-    cursor = db.cursor()
+def deterministic_shuffle(items, seed):
+    n = len(items)
 
-    cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
-    vote_set_id = cursor.fetchone()[0]
+    def lcg(seed):
+        a = 0x19660d
+        c = 0x3c6ef35f
+        m = 2**32
+        while True:
+            seed = (a * seed + c) % m
+            yield seed
 
-    cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id, vote_set_id))
+    rng = lcg(seed)
 
-    for point, song_id in votes.items():
-        cursor.execute('''
-            SELECT id FROM point 
-            WHERE point_system_id = ? AND score = ?
-            ''', (point_system_id, point))
-        point_id = cursor.fetchone()[0]
-        cursor.execute('''
-            UPDATE vote
-            SET song_id = ?
-            WHERE vote_set_id = ? AND point_id = ?
-        ''', (song_id, vote_set_id, point_id))
+    for i in reversed(range(1, n)):
+        j = next(rng) % (i + 1)
+        items[i], items[j] = items[j], items[i]
 
-def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute('INSERT OR IGNORE INTO user (username) VALUES (?)', (username,))
-    cursor.execute('SELECT id FROM user WHERE username = ?', (username,))
-    voter_id = cursor.fetchone()[0]
-
-    cursor.execute('SELECT id FROM vote_set WHERE voter_id = ? AND show_id = ?', (voter_id, show_id))
-    existing_vote_set = cursor.fetchone()
-
-    if not existing_vote_set:
-        cursor.execute('''
-            INSERT INTO vote_set (voter_id, show_id, country_id, nickname, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
-            ''', (voter_id, show_id, country_id, nickname))
-        cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
-        vote_set_id = cursor.fetchone()[0]
-        for point, song_id in votes.items():
-            cursor.execute('''
-                SELECT id FROM point 
-                WHERE point_system_id = ? AND score = ?
-                ''', (point_system_id, point))
-            point_id = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO vote (vote_set_id, song_id, point_id) VALUES (?, ?, ?)', (vote_set_id, song_id, point_id))
-        action = "added"
-    else:
-        update_votes(voter_id, nickname, country_id, point_system_id, votes)
-        action = "updated"
-    
-    db.commit()
-
-    return action
+    return items

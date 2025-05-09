@@ -6,7 +6,8 @@ let associations = {}
 
 async function loadVotes() {
     const show = document.querySelector("#show").innerText;
-    const res = await fetch(`/results/${show}/scoreboard/votes`);
+    const searchParams = new URL(window.location.toString()).search;
+    const res = await fetch(`/results/${show}/scoreboard/votes` + searchParams);
     const json = await res.json();
     points = json.points;
     points.sort((a, b) => a - b);
@@ -19,7 +20,7 @@ async function loadVotes() {
     associations = json.associations;
 }
 
-function makeRow(code, name, subtitle, id) {
+function makeRow(code, name, artist, title, id) {
     const container = document.createElement("div");
     container.classList.add("element");
     container.dataset.country = name;
@@ -43,10 +44,22 @@ function makeRow(code, name, subtitle, id) {
     nameEl.innerText = name;
     nameContainer.appendChild(nameEl);
 
-    const subtitleEl = document.createElement("div");
-    subtitleEl.classList.add("subtitle");
-    subtitleEl.innerText = subtitle;
-    nameContainer.appendChild(subtitleEl);
+    const subtitleContainer = document.createElement("div");
+    subtitleContainer.classList.add("subtitle");
+    nameContainer.appendChild(subtitleContainer);
+
+    const titleEl = document.createElement("span");
+    titleEl.classList.add("title");
+    titleEl.innerText = title;
+    subtitleContainer.appendChild(titleEl);
+
+    const byNode = document.createTextNode(" by ");
+    subtitleContainer.appendChild(byNode);
+
+    const artistEl = document.createElement("span");
+    artistEl.classList.add("artist");
+    artistEl.innerText = artist;
+    subtitleContainer.appendChild(artistEl);
 
     const currentEl = document.createElement("div");
     currentEl.classList.add("current-points", "number");
@@ -62,6 +75,9 @@ function makeRow(code, name, subtitle, id) {
 }
 
 function makeVotingCard(from, code, country) {
+    code = code || "XRW";
+    country = country || "Rest of the World";
+
     const container = document.createElement("div");
     container.classList.add("voting-card", "unloaded");
 
@@ -97,17 +113,19 @@ function ptsToIndex(pt) {
 }
 
 class Country {
-    constructor(name, subtitle, ro, id, country, code) {
+    constructor(index, name, artist, title, ro, id, country, code) {
         this.rollback = [];
+        this.index = index;
         this.ro = ro;
         this.name = name;
-        this.subtitle = subtitle;
+        this.artist = artist;
+        this.title = title;
         this.id = id;
         this.country = country;
         this.code = code;
         this.win = true;
         this.votes = new Array(Math.max(...points) + 1).fill(0);
-        [this.nameEl, this.currentEl, this.totalEl, this.element] = makeRow(code, name, subtitle, id);
+        [this.nameEl, this.currentEl, this.totalEl, this.element] = makeRow(code, name, artist, title, id);
     }
     
     get points() {
@@ -120,6 +138,8 @@ class Country {
     setPosition(i, lim) {
         const col = Math.floor(i / lim);
         const row = i - lim * col;
+
+        this.index = i;
 
         this.element.style.top = `${45 * row}px`;
         this.element.style.left = `${505 * col}px`;
@@ -139,8 +159,13 @@ class Country {
         } else {
             this.currentEl.innerText = pt;
             this.currentEl.classList.add("visible");
+            this.element.classList.add( "main-moving");
             if (setClass == undefined || setClass) this.element.classList.add("active");
         }
+    }
+
+    finalise() {
+        this.element.classList.remove("main-moving");
     }
     
     compare(other) {
@@ -161,7 +186,7 @@ class Country {
         
         if (ptsDiff != 0) return ptsDiff;
         if (vtsDiff != 0) return ptsDiff;
-        return this.ro - other.ro;
+        return other.ro - this.ro;
     }
 
     setCanWin(leftVotes, leaderPts) {
@@ -183,32 +208,15 @@ class Country {
     }
 }
 
-function findInsertIndex(element, array) {
-    for (const [i, el] of array.entries()) {
-        const res = el.compare(element);
-        if (res <= 0) return i;
-    }
-    
-    return array.length - 1;
-}
-
-function moveElement(array, fromIndex, toIndex) {
-    if (fromIndex >= 0 && fromIndex < array.length && toIndex >= 0 && toIndex < array.length) {
-        const element = array.splice(fromIndex, 1)[0];
-        array.splice(toIndex, 0, element);
-    }
-    return array;
-}
-
 let countries = {};
 let ro = [];
 let perColumn = 0;
 
 function populate() {
     const cnt = data.length;
-    perColumn = cnt / 2;
-    for (const c of data) {
-        const country = new Country(c.country, `${c.title} – ${c.artist}`, c.ro, c.id, c.country, c.code);
+    perColumn = Math.ceil(cnt / 2);
+    for (const [i, c] of data.entries()) {
+        const country = new Country(i, c.country, c.artist, c.title, c.ro, c.id, c.country, c.code);
         countries[c.id] = country;
         ro.push(country);
 
@@ -232,22 +240,31 @@ let delay = 1000;
 let isReset = false;
 let isVoting = false;
 
+async function sortCountries() {
+    ro.sort((a, b) => b.compare(a));
+    for (const [i, c] of ro.entries()) {
+        c.setPosition(i, perColumn);
+    }
+    await new Promise(r => setTimeout(r, delay * 2));
+    for (const c of ro) {
+        c.finalise();
+    }
+}
+
 async function vote() {
-    console.log("Voting");
     const voterCount = voteOrder.length;
+    const pointsImmediate = points.slice(0, points.length - 3);
+    const pointsDelayed = points.slice(points.length - 3);
 
     let countriesVoted = 0;
     
     for (const from of voteOrder) {
-        let revealedPts = points.length - 1;
         const vts = votes[from];
-        console.log(vts)
 
         let nickname = from;
         let country = null;
         let code = null;
         const assoc = associations[from];
-        console.log(assoc)
         if (assoc) {
             nickname = assoc.nickname || from;
             country = assoc.country;
@@ -267,9 +284,28 @@ async function vote() {
         card.classList.remove("unloaded");
         await new Promise(r => setTimeout(r, 2000));
 
-        for (const pt of points) {
+        for (const pt of pointsImmediate) {
+            while (paused) {
+                if (isReset) {
+                    isReset = false;
+                    return;
+                }
+
+                await new Promise(r => setTimeout(r, 100));
+            }
+
             const to = vts[pt];
-            console.log(`Voted ${pt} for ${to}`);
+            const country = countries[to];
+
+            country.vote(pt);
+            voted.push(country);
+        }
+
+        await new Promise(r => setTimeout(r, delay * 2.5));
+        sortCountries();
+        await new Promise(r => setTimeout(r, delay * 2.5));
+
+        for (const pt of pointsDelayed) {
             while (paused) {
                 if (isReset) {
                     isReset = false;
@@ -279,40 +315,15 @@ async function vote() {
                 await new Promise(r => setTimeout(r, 100));
             }
             
-            const country = countries[to]
+            const to = vts[pt];
+            const country = countries[to];
+
             country.vote(pt);
             voted.push(country);
-            
-            const newIndex = findInsertIndex(country, ro);
-            const oldIndex = ro.indexOf(country);
 
-            let moveBack = [];
-            
-            if (oldIndex != newIndex) {
-                moveBack = ro.slice(newIndex, oldIndex);
-                for (const [off, el] of moveBack.entries()) {
-                    el.element.classList.add("other-moving");
-                    el.setPosition(newIndex + off + 1, perColumn);
-                }
-                
-                country.setPosition(newIndex, perColumn);
-                country.element.classList.add("main-moving");
-                
-                moveElement(ro, oldIndex, newIndex);
-            }
-            
-            if (revealedPts == 3 || revealedPts == 1) {
-                await new Promise(r => setTimeout(r, delay * 2));
-            } else if (revealedPts == 2) {
-                await new Promise(r => setTimeout(r, delay));
-            }
-
-            revealedPts--;
-
-            country.element.classList.remove("main-moving");
-            for (const el of moveBack) {
-                el.element.classList.remove("other-moving");
-            }
+            await new Promise(r => setTimeout(r, delay * 2.5));
+            sortCountries();
+            await new Promise(r => setTimeout(r, delay * 2.5));
         }
 
         await new Promise(r => setTimeout(r, delay * 2.5));
@@ -326,6 +337,8 @@ async function vote() {
             c.refresh();
             c.setCanWin(voterCount - countriesVoted, leader.points);
         }
+        
+        await new Promise(r => setTimeout(r, 100));
 
         card.remove();
     
@@ -354,7 +367,6 @@ function speedDown() {
 let loaded = false
 
 async function reset() {
-    console.log("Resetting");
     isReset = true;
     paused = true;
 

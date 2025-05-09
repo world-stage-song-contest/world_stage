@@ -26,8 +26,9 @@
             {% set pl = loop %}
             <label for="pts-{{point}}">{{point}} points</label>
             <select name="pts-{{point}}" id="pts-{{point}}" class="{% if point in invalid %}invalid{% else %}valid{% endif %}">
+                <option value=""></option>
             {% for song in songs %}
-                <option value="{{song.id}}" {% if (not selected and pl.index == loop.index) or (selected[point] == song.id) %}selected{% endif %}>
+                <option value="{{song.id}}" {% if (selected[point] == song.id) %}selected{% endif %}>
                     {{song.title}} ({{song.artist}})
                 </option>
             {% endfor %}

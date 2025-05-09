@@ -1,14 +1,14 @@
 CREATE TABLE IF NOT EXISTS user (
     id INTEGER PRIMARY KEY,
     username TEXT NOT NULL,
-    UNIQUE(username)
+    UNIQUE(username COLLATE NOCASE)
 );
 
 CREATE TABLE IF NOT EXISTS country (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     is_participating INTEGER,
-    UNIQUE(name)
+    UNIQUE(name COLLATE NOCASE),
 );
 
 CREATE TABLE IF NOT EXISTS year (

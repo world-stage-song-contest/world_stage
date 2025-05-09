@@ -1,12 +1,68 @@
 from collections import defaultdict
-import sqlite3
 from flask import render_template, request, redirect, url_for, Blueprint
 import datetime
+import unicodedata
 
-from .utils import add_votes, format_timedelta, get_show_id, get_countries
+from .utils import format_timedelta, get_show_id, get_countries
 from .db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
+
+def update_votes(voter_id, nickname, country_id, point_system_id, votes):
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
+    vote_set_id = cursor.fetchone()[0]
+
+    cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id, vote_set_id))
+
+    for point, song_id in votes.items():
+        cursor.execute('''
+            SELECT id FROM point 
+            WHERE point_system_id = ? AND score = ?
+            ''', (point_system_id, point))
+        point_id = cursor.fetchone()[0]
+        cursor.execute('''
+            UPDATE vote
+            SET song_id = ?
+            WHERE vote_set_id = ? AND point_id = ?
+        ''', (song_id, vote_set_id, point_id))
+
+def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('INSERT OR IGNORE INTO user (username) VALUES (?)', (username,))
+    cursor.execute('SELECT id FROM user WHERE username = ?', (username,))
+    voter_id = cursor.fetchone()[0]
+
+    cursor.execute('SELECT id FROM vote_set WHERE voter_id = ? AND show_id = ?', (voter_id, show_id))
+    existing_vote_set = cursor.fetchone()
+
+    if not existing_vote_set:
+        cursor.execute('''
+            INSERT INTO vote_set (voter_id, show_id, country_id, nickname, created_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
+            ''', (voter_id, show_id, country_id, nickname))
+        cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
+        vote_set_id = cursor.fetchone()[0]
+        for point, song_id in votes.items():
+            cursor.execute('''
+                SELECT id FROM point 
+                WHERE point_system_id = ? AND score = ?
+                ''', (point_system_id, point))
+            point_id = cursor.fetchone()[0]
+            cursor.execute('INSERT INTO vote (vote_set_id, song_id, point_id) VALUES (?, ?, ?)', (vote_set_id, song_id, point_id))
+        action = "added"
+    else:
+        update_votes(voter_id, nickname, country_id, point_system_id, votes)
+        action = "updated"
+    
+    db.commit()
+
+    return action
+
 
 @bp.get('/')
 def vote_index():
@@ -22,7 +78,6 @@ def vote_index():
     ''')
 
     for id, name, short_name, year, voting_opens, voting_closes in cursor.fetchall():
-        print(voting_opens, voting_closes)
         left = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc) - datetime.datetime.now(tz=datetime.timezone.utc)
         open_votings.append({
             'id': id,
@@ -79,6 +134,8 @@ def vote_post(show: str):
     errors = []
 
     username = request.form['username']
+    username = unicodedata.normalize('NFKC', username)
+    nickname = request.form['nickname']
     country_id = request.form['country']
     if not country_id:
         country_id = None
@@ -86,7 +143,7 @@ def vote_post(show: str):
     if not username:
         errors.append("Username is required.")
 
-    cursor.execute('SELECT id FROM user WHERE username = ?', (username,))
+    cursor.execute('SELECT id FROM user WHERE username = ? COLLATE NOCASE', (username,))
     voter = cursor.fetchone()
     if voter:
         voter_id = voter[0]
@@ -102,12 +159,21 @@ def vote_post(show: str):
     else:
         submitted_song = None
 
+    missing = []
     for point in points:
-        song_id = int(request.form.get(f'pts-{point}'))
+        id_str = request.form.get(f'pts-{point}')
+        if not id_str:
+            missing.append(point)
+            continue
+        song_id = int(id_str)
         if song_id == submitted_song:
             errors.append(f"You cannot vote for your own song ({point} points).")
             invalid.append(point)
         votes[point] = song_id
+
+    if missing:
+        errors.append(f"Missing votes for {', '.join(map(str, missing))} points.")
+        invalid.extend(missing)
 
     invalid_votes = defaultdict(list)
     for point, song_id in votes.items():
@@ -117,12 +183,12 @@ def vote_post(show: str):
     invalid.extend(item for sublist in invalid_votes.values() for item in sublist)
 
     if invalid_votes:
-        errors.append(f"Duplicate votes.")
+        errors.append(f"Duplicate votes: {'; '.join(map(lambda v: f"{', '.join(map(str, v))} points", invalid_votes.values()))}")
 
     if not errors:
         action = add_votes(username, nickname or None, country_id, show_id, point_system_id, votes)
         resp = redirect(url_for('main.success', action=action))
-        resp.set_cookie('username', username)
+        resp.set_cookie('username', username, max_age=datetime.timedelta(days=30))
         return resp
 
     return render_template('vote.html',

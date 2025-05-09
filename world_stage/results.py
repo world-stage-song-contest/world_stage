@@ -1,10 +1,10 @@
 import datetime
-from flask import Blueprint, redirect, render_template, url_for
+from flask import Blueprint, redirect, render_template, request, url_for
 from collections import defaultdict
-import sqlite3
+import random
 
 from .db import get_db
-from .utils import get_show_id
+from .utils import deterministic_shuffle, get_show_id
 
 bp = Blueprint('results', __name__, url_prefix='/results')
 
@@ -33,6 +33,8 @@ def results(show: str):
     voting_closes = show_data['voting_closes']
     points = show_data['points']
 
+    override = request.args.get('override')
+
     def songs_comparer(a):
         pt_cnt = []
         for p in points:
@@ -40,7 +42,7 @@ def results(show: str):
         val = (a['sum'], a['count']) + tuple(pt_cnt) + (-a['running_order'],)
         return val
 
-    if voting_closes > datetime.datetime.now(datetime.timezone.utc):
+    if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error', error="Voting hasn't closed yet."))
 
     db = get_db()
@@ -86,7 +88,9 @@ def detailed_results(show: str):
     show_id = show_data['id']
     voting_closes = show_data['voting_closes']
 
-    if voting_closes > datetime.datetime.now(datetime.timezone.utc):
+    override = request.args.get('override')
+
+    if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error', error="Voting hasn't closed yet."))
     
     db = get_db()
@@ -135,8 +139,10 @@ def scoreboard(show: str):
     show_data = get_show_id(show)
     voting_closes = show_data['voting_closes']
 
-    if voting_closes > datetime.datetime.now(datetime.timezone.utc):
-        return redirect(url_for('main.error', error="Voting hasn't closed yet."))
+    override = request.args.get('override')
+
+    if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
+        pass#return redirect(url_for('main.error', error="Voting hasn't closed yet."))
     
     return render_template('scoreboard.html', show=show)
 
@@ -147,7 +153,9 @@ def scores(show: str):
     points = show_data['points']
     voting_closes = show_data['voting_closes']
 
-    if voting_closes > datetime.datetime.now(datetime.timezone.utc):
+    override = request.args.get('override')
+
+    if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
         return redirect(url_for('main.error_json', error="Voting hasn't closed yet."))
 
     db = get_db()
@@ -186,6 +194,8 @@ def scores(show: str):
         if username not in vote_order:
             vote_order.append(username)
         results[username][pts] = song_id
+
+    deterministic_shuffle(vote_order, show_id)
 
     cursor.execute('''
         SELECT username, nickname, country_id, country.name FROM vote_set
