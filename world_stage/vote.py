@@ -1,5 +1,6 @@
 from collections import defaultdict
-from flask import make_response, render_template, request, redirect, url_for, Blueprint
+from typing import Optional
+from flask import make_response, render_template, request, Blueprint
 import datetime
 import unicodedata
 
@@ -97,18 +98,12 @@ def vote_post(show: str):
     nickname = ''
 
     show_data = get_show_id(show)
-    show_id = show_data['id']
-    show_name = show_data['show_name']
-    voting_opens = show_data['voting_opens']
-    voting_closes = show_data['voting_closes']
-    point_system_id = show_data['point_system_id']
-    year = show_data['year']
-    points = show_data['points']
 
-    if not show_id:
+    if not show_data.id:
         return render_template('error.html', error="Show not found"), 404
     
-    if voting_opens > datetime.datetime.now(datetime.timezone.utc) or voting_closes < datetime.datetime.now(datetime.timezone.utc):
+    if (show_data.voting_opens > datetime.datetime.now(datetime.timezone.utc)
+        or show_data.voting_closes < datetime.datetime.now(datetime.timezone.utc)):
         return render_template('error.html', error="Voting is closed"), 400
 
     db = get_db()
@@ -120,7 +115,7 @@ def vote_post(show: str):
         JOIN song_show ON song.id = song_show.song_id
         WHERE song_show.show_id = ?
         ORDER BY song_show.running_order
-    ''', (show_id,))
+    ''', (show_data.id,))
     songs = []
     for id, title, artist, running_order in cursor.fetchall():
         val = {
@@ -136,7 +131,7 @@ def vote_post(show: str):
     username = request.form['username']
     username = unicodedata.normalize('NFKC', username)
     nickname = request.form['nickname']
-    country_id = request.form['country']
+    country_id: Optional[str] = request.form['country']
     if not country_id:
         country_id = None
 
@@ -160,7 +155,7 @@ def vote_post(show: str):
         submitted_song = None
 
     missing = []
-    for point in points:
+    for point in show_data.points:
         id_str = request.form.get(f'pts-{point}')
         if not id_str:
             missing.append(point)
@@ -175,7 +170,7 @@ def vote_post(show: str):
         errors.append(f"Missing votes for {', '.join(map(str, missing))} points.")
         invalid.extend(missing)
 
-    invalid_votes = defaultdict(list)
+    invalid_votes: dict[int, list[int]] = defaultdict(list)
     for point, song_id in votes.items():
         invalid_votes[song_id].append(point)
     
@@ -186,16 +181,16 @@ def vote_post(show: str):
         errors.append(f"Duplicate votes: {'; '.join(map(lambda v: f"{', '.join(map(str, v))} points", invalid_votes.values()))}")
 
     if not errors:
-        action = add_votes(username, nickname or None, country_id, show_id, point_system_id, votes)
+        action = add_votes(username, nickname or None, country_id, show_data.id, show_data.point_system_id, votes)
         resp = make_response(render_template('successfully_voted.html', action=action))
         resp.set_cookie('username', username, max_age=datetime.timedelta(days=30))
         return resp
 
     return render_template('vote.html',
-                           songs=songs, points=points, errors=errors,
+                           songs=songs, points=show_data.points, errors=errors,
                            selected=votes, invalid=invalid,
                            username=username, nickname=nickname,
-                           year=year, show_name=show_name, show=show,
+                           year=show_data.year, show_name=show_data.name, show=show,
                            selected_country=country_id, countries=get_countries())
 
 @bp.get('/<show>')
@@ -208,17 +203,12 @@ def vote(show: str):
     selected = {}
 
     show_data = get_show_id(show)
-    show_id = show_data['id']
-    show_name = show_data['show_name']
-    voting_opens = show_data['voting_opens']
-    voting_closes = show_data['voting_closes']
-    year = show_data['year']
-    points = show_data['points']
 
-    if not show_id:
+    if not show_data.id:
         return render_template('error.html', error="Show not found"), 404
     
-    if voting_opens > datetime.datetime.now(datetime.timezone.utc) or voting_closes < datetime.datetime.now(datetime.timezone.utc):
+    if (show_data.voting_opens > datetime.datetime.now(datetime.timezone.utc)
+        or show_data.voting_closes < datetime.datetime.now(datetime.timezone.utc)):
         return render_template('error.html', error="Voting is closed"), 400
     
     db = get_db()
@@ -231,7 +221,7 @@ def vote(show: str):
             FROM vote_set
             JOIN user ON vote_set.voter_id = user.id
             WHERE user.username = ? AND vote_set.show_id = ?
-        ''', (username, show_id))
+        ''', (username, show_data.id))
         vote_set_id = cursor.fetchone()
         if vote_set_id:
             vote_set_id, nickname, country_id = vote_set_id
@@ -251,7 +241,7 @@ def vote(show: str):
         JOIN song_show ON song.id = song_show.song_id
         WHERE song_show.show_id = ?
         ORDER BY song_show.running_order
-    ''', (show_id,))
+    ''', (show_data.id,))
     songs = []
     for id, title, artist, running_order in cursor.fetchall():
         val = {
@@ -263,7 +253,7 @@ def vote(show: str):
         songs.append(val)
     
     return render_template('vote.html',
-                           songs=songs, points=points, selected=selected,
+                           songs=songs, points=show_data.points, selected=selected,
                            username=username, nickname=nickname, country=country,
-                           year=year, show_name=show_name, show=show,
+                           year=show_data.year, show_name=show_data.name, show=show,
                            selected_country=country_id, countries=get_countries())

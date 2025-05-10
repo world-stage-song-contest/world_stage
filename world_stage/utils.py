@@ -1,5 +1,18 @@
 import datetime
+from typing import Optional
 from .db import get_db
+from dataclasses import dataclass
+from copy import deepcopy
+
+@dataclass
+class ShowData:
+    id: int
+    points: list[int]
+    point_system_id: int
+    name: str
+    voting_opens: datetime.datetime
+    voting_closes: datetime.datetime
+    year: Optional[int]
 
 def format_timedelta(td: datetime.timedelta):
     days, seconds = td.days, td.seconds
@@ -19,16 +32,7 @@ def format_timedelta(td: datetime.timedelta):
         values.append(f"{seconds} seconds")
     return ', '.join(values)
 
-def get_show_id(show):
-    ret = {
-        'id': None,
-        'points': None,
-        'point_system_id': None,
-        'show_name': None,
-        'voting_opens': None,
-        'voting_closes': None,
-        'year': None
-    }
+def get_show_id(show: str) -> ShowData:
     show_data = show.split('-')
     if len(show_data) == 2:
         year = int(show_data[0])
@@ -41,8 +45,6 @@ def get_show_id(show):
     cursor = db.cursor()
 
     if year:
-        year_id = year_id[0]
-
         cursor.execute('''
             SELECT show.id, show.point_system_id, show.show_name, show.voting_opens, show.voting_closes FROM show
             JOIN year ON show.year_id = year.id
@@ -65,17 +67,19 @@ def get_show_id(show):
     voting_opens = datetime.datetime.strptime(voting_opens, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc)
     voting_closes = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc)
 
-    ret['id'] = show_id
-    ret['point_system_id'] = point_system_id
-    ret['show_name'] = show_name
-    ret['voting_opens'] = voting_opens
-    ret['voting_closes'] = voting_closes
-    ret['year'] = year
-    ret['points'] = list(points)
+    ret = ShowData(
+        id=show_id,
+        points=list(points),
+        point_system_id=point_system_id,
+        name=show_name,
+        voting_opens=voting_opens,
+        voting_closes=voting_closes,
+        year=year
+    )
 
     return ret
 
-def get_points_for_system(point_system_id):
+def get_points_for_system(point_system_id: int) -> list[int]:
     db = get_db()
     cursor = db.cursor()
 
@@ -90,7 +94,7 @@ def get_points_for_system(point_system_id):
 
     return points
 
-def get_countries(only_participating=False):
+def get_countries(only_participating: bool = False) -> list[dict]:
     if only_participating:
         query = 'SELECT id, name FROM country WHERE is_participating = 1 ORDER BY name'
     else:
@@ -107,7 +111,7 @@ def get_countries(only_participating=False):
         })
     return countries
 
-def deterministic_shuffle(items, seed):
+def deterministic_shuffle(items: list, seed: int):
     n = len(items)
 
     def lcg(seed):
@@ -124,4 +128,32 @@ def deterministic_shuffle(items, seed):
         j = next(rng) % (i + 1)
         items[i], items[j] = items[j], items[i]
 
-    return items
+def suspenseful_vote_order(vote_dict: dict[str, dict[int, int]], vote_items: list[int]) -> list[str]:
+    remaining_votes = deepcopy(vote_dict)
+    current_scores = {item: 0 for item in vote_items}
+    
+    order = []
+    
+    while remaining_votes:
+        best_user = ''
+        best_tension = float('inf')
+        
+        for user, vote in remaining_votes.items():
+            temp_scores = current_scores.copy()
+            for pts, item in vote.items():
+                temp_scores[item] += pts
+
+            sorted_scores = sorted(temp_scores.values(), reverse=True)
+            tension = sorted_scores[0] - sorted_scores[1] if len(sorted_scores) > 1 else 0
+
+            if tension < best_tension:
+                best_tension = tension
+                best_user = user
+
+        for pts, item in remaining_votes[best_user].items():
+            current_scores[item] += pts
+        
+        order.append(best_user)
+        del remaining_votes[best_user]
+    
+    return order
