@@ -17,6 +17,7 @@ async function loadVotes() {
     }
     data.sort((a, b) => a.ro - b.ro);
     votes = json.results;
+    console.log(votes);
     associations = json.associations;
 }
 
@@ -134,6 +135,10 @@ class Country {
             0
         );
     }
+
+    get voters() {
+        return this.votes.reduce((a, v) => a + v, 0);
+    }
     
     setPosition(i, lim) {
         const col = Math.floor(i / lim);
@@ -156,6 +161,7 @@ class Country {
             this.currentEl.innerText = "";
             this.element.classList.remove("active");
             this.currentEl.classList.remove("visible");
+            this.element.classList.remove("own-entry");
         } else {
             this.currentEl.innerText = pt;
             this.currentEl.classList.add("visible");
@@ -182,20 +188,22 @@ class Country {
         }
         
         const ptsDiff = this.points - other.points;
+        const votersDiff = this.voters - other.voters;
         const vtsDiff = compareArrays(this.votes, other.votes);
         
         if (ptsDiff != 0) return ptsDiff;
-        if (vtsDiff != 0) return ptsDiff;
+        if (votersDiff != 0) return votersDiff;
+        if (vtsDiff != 0) return vtsDiff;
         return other.ro - this.ro;
     }
 
     setCanWin(leftVotes, leaderPts) {
-        return;
+        /*
         if (!this.win) return;
         if (this.points + leftVotes * 12 <= leaderPts) {
             this.win = false;
             this.element.classList.add("no-win");
-        }
+        }*/
     }
 
     setWinner() {
@@ -259,7 +267,9 @@ async function vote() {
     let countriesVoted = 0;
     
     for (const from of voteOrder) {
-        const vts = votes[from];
+        console.log(votes[from])
+        const vts = votes[from].pts;
+        const entries = votes[from].songs || [];
 
         let nickname = from;
         let country = null;
@@ -283,6 +293,16 @@ async function vote() {
         await new Promise(r => setTimeout(r, 50));
         card.classList.remove("unloaded");
         await new Promise(r => setTimeout(r, 2000));
+
+        if (entries) {
+            for (const entry of entries) {
+                const country = countries[entry];
+                if (country) {
+                    country.element.classList.add("own-entry");
+                }
+            }
+            await new Promise(r => setTimeout(r, 500));
+        }
 
         for (const pt of pointsImmediate) {
             while (paused) {

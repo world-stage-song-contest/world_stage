@@ -59,6 +59,7 @@
 
 .voting-card-name {
     font-size: 3em;
+    white-space: nowrap;
     font-weight: bold;
 }
 
@@ -155,6 +156,10 @@
 
 .active {
     background: cornflowerblue;
+}
+
+.own-entry {
+    background: salmon;
 }
 
 .no-win {

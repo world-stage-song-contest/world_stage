@@ -116,7 +116,16 @@ def detailed_results(show: str):
         songs.append(val)
         rs[id] = val
 
-    results = defaultdict(dict)
+    results = {}
+    cursor.execute('''
+        SELECT DISTINCT username FROM vote
+        JOIN vote_set ON vote.vote_set_id = vote_set.id
+        JOIN user ON vote_set.voter_id = user.id
+        WHERE vote_set.show_id = ?
+    ''', (show_id,))
+    for username, in cursor.fetchall():
+        results[username] = {}
+
     for song in songs:
         song_id = song['id']
         cursor.execute('''
@@ -142,7 +151,7 @@ def scoreboard(show: str):
     override = request.args.get('override')
 
     if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
-        pass#return redirect(url_for('main.error', error="Voting hasn't closed yet."))
+        return redirect(url_for('main.error', error="Voting hasn't closed yet."))
     
     return render_template('scoreboard.html', show=show)
 
@@ -188,14 +197,24 @@ def scores(show: str):
         ORDER BY vote_set.created_at
     ''')
     results_raw = cursor.fetchall()
-    results = defaultdict(dict)
+    results = defaultdict(lambda: defaultdict(dict))
     vote_order = []
     for song_id, pts, username in results_raw:
         if username not in vote_order:
             vote_order.append(username)
-        results[username][pts] = song_id
+        results[username]['pts'][pts] = song_id
 
     deterministic_shuffle(vote_order, show_id)
+
+    for voter_username in vote_order:
+        cursor.execute('''
+            SELECT song.id FROM song
+            JOIN user ON song.submitter_id = user.id
+            JOIN song_show ON song.id = song_show.song_id
+            WHERE user.username = ? AND song_show.show_id = ?
+        ''', (voter_username,show_id))
+        for song_id in cursor.fetchall():
+            results[voter_username]['songs'] = list(song_id)
 
     cursor.execute('''
         SELECT username, nickname, country_id, country.name FROM vote_set
