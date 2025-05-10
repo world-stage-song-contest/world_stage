@@ -1,15 +1,13 @@
-<!doctype html>
-<html lang="en">
-    <title>Error</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/index.css">
+{% extends "base.html" %}
+{% block title%}Error{%endblock%}
+{% block content %}
 
-    <h1>Error</h1>
-    {% if errors %}
-    {% for error in errors %}
-        <p class="error">{{ error }}</p>    
-    {% endfor %}
-    {% endif %}
-    <p><a href="/">Return to Home</a></p>
-</html>
+{% if errors %}
+{% for error in errors %}
+    <p class="error">{{ error }}</p>    
+{% endfor %}
+{% elif error %}
+    <p class="error">{{ error }}</p>   
+{% endif %}
+
+{% endblock %}

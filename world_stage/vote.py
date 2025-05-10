@@ -1,5 +1,5 @@
 from collections import defaultdict
-from flask import render_template, request, redirect, url_for, Blueprint
+from flask import make_response, render_template, request, redirect, url_for, Blueprint
 import datetime
 import unicodedata
 
@@ -106,10 +106,10 @@ def vote_post(show: str):
     points = show_data['points']
 
     if not show_id:
-        return redirect(url_for('main.error', error="Show not found"))
+        return render_template('error.html', error="Show not found"), 404
     
     if voting_opens > datetime.datetime.now(datetime.timezone.utc) or voting_closes < datetime.datetime.now(datetime.timezone.utc):
-        return redirect(url_for('main.error', error="Voting is closed"))
+        return render_template('error.html', error="Voting is closed"), 400
 
     db = get_db()
     cursor = db.cursor()
@@ -187,7 +187,7 @@ def vote_post(show: str):
 
     if not errors:
         action = add_votes(username, nickname or None, country_id, show_id, point_system_id, votes)
-        resp = redirect(url_for('main.success', action=action))
+        resp = make_response(render_template('successfully_voted.html', action=action))
         resp.set_cookie('username', username, max_age=datetime.timedelta(days=30))
         return resp
 
@@ -216,10 +216,10 @@ def vote(show: str):
     points = show_data['points']
 
     if not show_id:
-        return redirect(url_for('main.error', error="Show not found"))
+        return render_template('error.html', error="Show not found"), 404
     
     if voting_opens > datetime.datetime.now(datetime.timezone.utc) or voting_closes < datetime.datetime.now(datetime.timezone.utc):
-        return redirect(url_for('main.error', error="Voting is closed"))
+        return render_template('error.html', error="Voting is closed"), 400
     
     db = get_db()
     cursor = db.cursor()

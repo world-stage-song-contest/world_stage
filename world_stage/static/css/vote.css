@@ -1,0 +1,18 @@
+.form-data {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 1rem;
+    width: fit-content;
+}
+
+select {
+    border-radius: 1px;
+}
+
+.invalid {
+    border-color: red;
+}
+
+.valid {
+    border-color: grey;
+}

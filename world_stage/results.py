@@ -32,6 +32,7 @@ def results(show: str):
     show_id = show_data['id']
     voting_closes = show_data['voting_closes']
     points = show_data['points']
+    show_name = show_data['show_name']
 
     override = request.args.get('override')
 
@@ -43,7 +44,7 @@ def results(show: str):
         return val
 
     if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
-        return redirect(url_for('main.error', error="Voting hasn't closed yet."))
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
 
     db = get_db()
     cursor = db.cursor()
@@ -80,18 +81,19 @@ def results(show: str):
 
     songs.sort(key=songs_comparer, reverse=True)
 
-    return render_template('results.html', songs=songs, points=points)
+    return render_template('results.html', songs=songs, points=points, show=show, show_name=show_name, show_id=show_id)
 
 @bp.get('/<show>/detailed')
 def detailed_results(show: str):
     show_data = get_show_id(show)
     show_id = show_data['id']
     voting_closes = show_data['voting_closes']
+    show_name = show_data['show_name']
 
     override = request.args.get('override')
 
     if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
-        return redirect(url_for('main.error', error="Voting hasn't closed yet."))
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
     
     db = get_db()
     cursor = db.cursor()
@@ -118,13 +120,14 @@ def detailed_results(show: str):
 
     results = {}
     cursor.execute('''
-        SELECT DISTINCT username FROM vote
+        SELECT DISTINCT username, country_id, country.name FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN user ON vote_set.voter_id = user.id
+        JOIN country ON vote_set.country_id = country.id
         WHERE vote_set.show_id = ?
     ''', (show_id,))
-    for username, in cursor.fetchall():
-        results[username] = {}
+    for username, country_id, country_name in cursor.fetchall():
+        results[username] = {'code': country_id or "XRW", 'country': country_name}
 
     for song in songs:
         song_id = song['id']
@@ -141,7 +144,7 @@ def detailed_results(show: str):
             results[username][song_id] = pts
             rs[song_id]['sum'] += pts
 
-    return render_template('user_votes.html', songs=songs, results=results)
+    return render_template('detailed_votes.html', songs=songs, results=results, show_name=show_name, show=show)
 
 @bp.get('/<show>/scoreboard')
 def scoreboard(show: str):
@@ -151,7 +154,7 @@ def scoreboard(show: str):
     override = request.args.get('override')
 
     if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
-        return redirect(url_for('main.error', error="Voting hasn't closed yet."))
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
     
     return render_template('scoreboard.html', show=show)
 
@@ -165,7 +168,7 @@ def scores(show: str):
     override = request.args.get('override')
 
     if override != "override" and voting_closes > datetime.datetime.now(datetime.timezone.utc):
-        return redirect(url_for('main.error_json', error="Voting hasn't closed yet."))
+        return {'error': "Voting hasn't closed yet."}, 400
 
     db = get_db()
     cursor = db.cursor()

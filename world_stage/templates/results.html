@@ -1,39 +1,40 @@
-<!doctype html>
-<html lang="en">
-    <title>Song List</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/index.css">
-
-    <h1>Results</h1>
-    <table>
-        <thead>
+{% extends "base.html" %}
+{% block title %}Results – {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
+{% endblock %}
+{% block navigation %}
+    <a href="/results/{{ show }}/scoreboard" class="nav-item">Scoreboard</a>
+    <a href="/results/{{ show }}/detailed" class="nav-item">Detailed Results</a>
+{% endblock %}
+{% block content %}
+<table>
+    <thead>
+        <tr>
+            <th>Place</th>
+            <th>Country</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Points</th>
+            <th>Voters</th>
+        {% for point in points %}
+            <th class="point-header">{{ point }}</th>
+        {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for song in songs %}
             <tr>
-                <th>Place</th>
-                <th>Country</th>
-                <th>Artist</th>
-                <th>Title</th>
-                <th>Points</th>
-                <th>Voters</th>
+                <th class="number">{{ loop.index }}</td>
+                <td>{{ song.country }}</td>
+                <td>{{ song.artist }}</td>
+                <td>{{ song.title }}</td>
+                <td class="number">{{ song.sum }}</td>
+                <td class="number">{{ song.count }}</td>
             {% for point in points %}
-                <th class="point-header">{{ point }}</th>
+                <td class="number {{ "zero" if (song[point] == 0) else "nonzero" }}">{{ song[point] }}</td>
             {% endfor %}
             </tr>
-        </thead>
-        <tbody>
-            {% for song in songs %}
-                <tr>
-                    <th class="number">{{ loop.index }}</td>
-                    <td>{{ song.country }}</td>
-                    <td>{{ song.artist }}</td>
-                    <td>{{ song.title }}</td>
-                    <td class="number">{{ song.sum }}</td>
-                    <td class="number">{{ song.count }}</td>
-                {% for point in points %}
-                    <td class="number {{ "zero" if (song[point] == 0) else "nonzero" }}">{{ song[point] }}</td>
-                {% endfor %}
-                </tr>
-            {% endfor %}
-    </table>
-</html>
-    
+        {% endfor %}
+</table>
+{% endblock %}

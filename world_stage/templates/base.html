@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{% block title %}World Stage{% endblock %}</title>
+        <link rel="stylesheet" href="/static/css/index.css">
+        {% block headercontents %}{% endblock %}
+    </head>
+    <body>
+        <header id="page-header">
+            <div id="header-logo">
+                <img src="/static/logo.svg" alt="World Stage Logo" id="logo">
+            </div>
+            <h1>
+                {{ self.title() }}
+            </h1>
+        </header>
+        <nav id="page-nav">
+            <a href="/" class="nav-item">Home</a></li>
+            {%block navigation %}{% endblock %}
+        </nav>
+        <main id="page-content">
+            {% block content %}
+            {% endblock %}
+        </main>
+    </body>
+</html>

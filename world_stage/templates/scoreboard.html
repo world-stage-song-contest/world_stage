@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Scoreboard</title>
 
-        <link rel="stylesheet" href="/static/scoreboard.css">
+        <link rel="stylesheet" href="/static/css/scoreboard.css">
         <script src="/static/scoreboard.js"></script>
     </head>
 
@@ -16,6 +16,10 @@
             <button onclick="speedUp()">Faster</button>
             <button onclick="speedDown()">Slower</button>
             <button id="reset">Reset</button>
+        </div>
+        <div id="navigation">
+            <button onclick="location.href='/results/{{ show }}'" class="nav-item">Results</button>
+            <button onclick="location.href='/results/{{ show }}/detailed'" class="nav-item">Detailed Results</button>
         </div>
 
         <div id="from">
