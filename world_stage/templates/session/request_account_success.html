@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Signed Up Successfully{% endblock %}
+{% block headercontents %}
+<script>
+    setTimeout(function() {
+        window.location.href = "/";
+    }, 5000);
+</script>
+{% endblock %}
+{% block content %}
+
+<p>Your account request has been processed.</p>
+<p>Please wait until your account is approved by a moderator.</p>
+
+{% endblock%}

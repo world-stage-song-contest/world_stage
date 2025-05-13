@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Vote Submitted{% endblock %}
+{% block headercontents %}
+<script>
+    setTimeout(function() {
+        window.location.href = "/";
+    }, 5000);
+{% endblock %}
 {% block content %}
 
 <p>Thank you for voting!</p>
@@ -8,5 +14,6 @@
 {% else %}
 <p>Your vote has been successfully recorded.</p>
 {% endif %}
+<p>You will be redirected to the home page in a few seconds.</p>
 
 {% endblock%}

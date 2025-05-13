@@ -1,8 +1,142 @@
+from collections import defaultdict, deque
 import datetime
 from typing import Optional
 from .db import get_db
 from dataclasses import dataclass
-from copy import deepcopy
+from typing import Dict, List, Tuple, Deque, TypeAlias
+import urllib.parse
+
+Bucket: TypeAlias = Deque[Tuple[str, Dict[int, int]]]
+
+class LCG:
+    def __init__(self, seed: int, a: int = 0x19660d, c: int = 0x3c6ef35f, m: int = 2**32) -> None:
+        self.state = seed
+
+    def next(self) -> int:
+        self.state = (self.state * 48271) % 2147483647
+        return self.state
+    
+    def shuffle(self, arr: list):
+        n = len(arr)
+        for i in range(n - 1, 0, -1):
+            j = self.next() % (i + 1)
+            arr[i], arr[j] = arr[j], arr[i]
+    
+    def sample[T](self, arr: list[T], k: int) -> list[T]:
+        indices = list(range(len(arr)))
+        self.shuffle(indices)
+        return [arr[i] for i in indices[:k]]
+    
+    def lightly_shuffle[T](self, arr: list[T], num_swaps: int):
+        n = len(arr)
+        indices = self.sample(list(range(n-1)), 2*num_swaps)
+        for i in range(0, len(indices), 2):
+            a, b = indices[i], indices[i + 1]
+            arr[a], arr[b] = arr[b], arr[a]
+
+class SuspensefulVoteSequencer:
+    def __init__(
+        self,
+        vote_dict: Dict[str, Dict[int, int]],
+        vote_items: List[int],
+        points: List[int],
+        *,
+        winner_weight: int = 2,
+        swaps: int = 5,
+        seed: int = 0
+    ) -> None:
+        self.vote_dict = vote_dict
+        self.vote_items = vote_items
+        self.points = sorted(points, reverse=True)
+        self.winner_weight = winner_weight
+        self.num_swaps = swaps
+        self.seed = seed
+
+        self.high_threshold, self.medium_threshold = self._calculate_thresholds()
+        self.final_scores = self._calculate_final_scores()
+        self.known_winner = max(self.final_scores, key=self.final_scores.__getitem__)
+
+    def _calculate_thresholds(self) -> Tuple[int, int]:
+        n = len(self.points)
+        top = self.points[:n // 3]
+        middle = self.points[n // 3: 2 * n // 3]
+        high_threshold = min(top) if top else 0
+        medium_threshold = min(middle) if middle else 0
+        return high_threshold, medium_threshold
+
+    def _calculate_final_scores(self) -> Dict[int, int]:
+        scores: Dict[int, int] = {item: 0 for item in self.vote_items}
+        for vote in self.vote_dict.values():
+            for pts, item in vote.items():
+                scores[item] += pts
+        return scores
+
+    def _classify_votes(self) -> Tuple[Bucket, Bucket, Bucket]:
+        high: Bucket = deque()
+        medium: Bucket = deque()
+        low: Bucket = deque()
+
+        for user, vote in self.vote_dict.items():
+            winner_points = sum(pts for pts, item in vote.items() if item == self.known_winner)
+            if winner_points >= self.high_threshold:
+                high.append((user, vote))
+            elif winner_points >= self.medium_threshold:
+                medium.append((user, vote))
+            else:
+                low.append((user, vote))
+        return low, medium, high
+
+    def _suspense_metric(self, temp_scores: Dict[int, int], vote: Dict[int, int]) -> int:
+        sorted_scores = sorted(temp_scores.values(), reverse=True)
+        gap = sorted_scores[0] - sorted_scores[1] if len(sorted_scores) > 1 else 0
+        winner_points = sum(pts for pts, item in vote.items() if item == self.known_winner)
+        return (winner_points * self.winner_weight) + gap
+
+    def get_order(self) -> List[str]:
+        low, medium, high = self._classify_votes()
+        current_scores: Dict[int, int] = {item: 0 for item in self.vote_items}
+        final_order: List[str] = []
+
+        buckets: List[Bucket] = [low, medium, high]
+        bucket_idx = 0
+
+        while any(buckets):
+            tried = 0
+            while tried < len(buckets):
+                bucket = buckets[bucket_idx % len(buckets)]
+                bucket_idx += 1
+                tried += 1
+
+                if not bucket:
+                    continue
+
+                best_user: str = ""
+                best_vote: Dict[int, int] = {}
+                best_score: float = float('inf')
+
+                for user, vote in bucket:
+                    temp_scores = current_scores.copy()
+                    for pts, item in vote.items():
+                        temp_scores[item] += pts
+                    score = self._suspense_metric(temp_scores, vote)
+                    if score < best_score:
+                        best_user, best_vote = user, vote
+                        best_score = score
+
+                for pts, item in best_vote.items():
+                    current_scores[item] += pts
+                final_order.append(best_user)
+
+                # Remove used vote
+                bucket = deque((u, v) for u, v in bucket if u != best_user)
+                buckets[(bucket_idx - 1) % len(buckets)] = bucket
+                break
+
+        if self.num_swaps > 0:
+            lcg = LCG(self.seed)
+            lcg.lightly_shuffle(final_order, self.num_swaps)
+
+        return final_order
 
 @dataclass
 class ShowData:
@@ -32,6 +166,19 @@ def format_timedelta(td: datetime.timedelta):
         values.append(f"{seconds} seconds")
     return ', '.join(values)
 
+def parse_timedelta(td: str) -> datetime.timedelta:
+    """Parse a timedetla string in the format 'MM:SS' or 'HH:MM:SS'."""
+    parts = list(map(int, td.split(':')))
+    if len(parts) == 2:
+        return datetime.timedelta(minutes=parts[0], seconds=parts[1])
+    elif len(parts) == 3:
+        return datetime.timedelta(hours=parts[0], minutes=parts[1], seconds=parts[2])
+    else:
+        raise ValueError("Invalid timedelta format. Use 'MM:SS' or 'HH:MM:SS'.")
+
+def dt_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
 def get_show_id(show: str) -> ShowData:
     show_data = show.split('-')
     if len(show_data) == 2:
@@ -48,7 +195,7 @@ def get_show_id(show: str) -> ShowData:
         cursor.execute('''
             SELECT show.id, show.point_system_id, show.show_name, show.voting_opens, show.voting_closes FROM show
             JOIN year ON show.year_id = year.id
-            WHERE year.year = ? AND show.short_name = ?
+            WHERE year.id = ? AND show.short_name = ?
         ''', (year, short_show_name))
         show_id = cursor.fetchone()
         if show_id:
@@ -63,9 +210,6 @@ def get_show_id(show: str) -> ShowData:
             show_id, point_system_id, show_name, voting_opens, voting_closes = show_id
 
     points = get_points_for_system(point_system_id)
-
-    voting_opens = datetime.datetime.strptime(voting_opens, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc)
-    voting_closes = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc)
 
     ret = ShowData(
         id=show_id,
@@ -111,49 +255,19 @@ def get_countries(only_participating: bool = False) -> list[dict]:
         })
     return countries
 
-def deterministic_shuffle(items: list, seed: int):
-    n = len(items)
+def create_cookie(**kwargs: str) -> str:
+    cookie = []
+    for key, value in kwargs.items():
+        value = urllib.parse.quote(value)
+        cookie.append(f"{key}={value}")
+    return '&'.join(cookie)
 
-    def lcg(seed):
-        a = 0x19660d
-        c = 0x3c6ef35f
-        m = 2**32
-        while True:
-            seed = (a * seed + c) % m
-            yield seed
-
-    rng = lcg(seed)
-
-    for i in reversed(range(1, n)):
-        j = next(rng) % (i + 1)
-        items[i], items[j] = items[j], items[i]
-
-def suspenseful_vote_order(vote_dict: dict[str, dict[int, int]], vote_items: list[int]) -> list[str]:
-    remaining_votes = deepcopy(vote_dict)
-    current_scores = {item: 0 for item in vote_items}
+def parse_cookie(cookie: str) -> dict[str, str]:
+    cookie_dict: dict[str, str] = defaultdict(str)
+    if not cookie:
+        return cookie_dict
     
-    order = []
-    
-    while remaining_votes:
-        best_user = ''
-        best_tension = float('inf')
-        
-        for user, vote in remaining_votes.items():
-            temp_scores = current_scores.copy()
-            for pts, item in vote.items():
-                temp_scores[item] += pts
-
-            sorted_scores = sorted(temp_scores.values(), reverse=True)
-            tension = sorted_scores[0] - sorted_scores[1] if len(sorted_scores) > 1 else 0
-
-            if tension < best_tension:
-                best_tension = tension
-                best_user = user
-
-        for pts, item in remaining_votes[best_user].items():
-            current_scores[item] += pts
-        
-        order.append(best_user)
-        del remaining_votes[best_user]
-    
-    return order
+    for item in cookie.split('&'):
+        key, value = item.split('=')
+        cookie_dict[key] = urllib.parse.unquote(value)
+    return cookie_dict

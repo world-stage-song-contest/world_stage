@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Voting History: {{ username }}{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="/static/css/user-votes.css">
+{% endblock %}
+{% block content %}
+
+{% if votes %}
+<div class="vote-card-container">
+{% for vote in votes %}
+<div class="vote-card">
+    <h3 class="card-show-name"><a href="/results/{{ vote.short_name }}">{{ vote.year or '' }} {{ vote.show_name }}</a></h3>
+    <p class="vote-date">{{ vote.date }}</p>
+    <p class="voter-name">{{ flag(vote.code) }}{{ vote.nickname }}</p>
+    <table class="user-votes">
+        <tbody>
+        {% for v in vote.points %}
+            <tr>
+                <td><div class="song-container">{{ flag(v.code) }} <div class="song-title">{{ v.title }}</div></div></td>
+                <td class="points-data">{{ v.pts}} pts</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,12 +1,5 @@
-.form-data {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 1rem;
-    width: fit-content;
-}
-
-select {
-    border-radius: 1px;
+select, input[type="text"] {
+    border-width: 1.5px;
 }
 
 .invalid {

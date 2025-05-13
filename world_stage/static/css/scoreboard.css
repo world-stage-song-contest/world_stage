@@ -12,7 +12,6 @@
     position: relative;
     width: 1000px;
     height: 600px;
-
 }
 
 #from {
@@ -140,6 +139,7 @@
     opacity: 0%;
     transition: opacity 1s;
     min-width: 3ch;
+    font-variant-numeric: tabular-nums;
 }
 
 .current-points.visible {
@@ -149,6 +149,7 @@
 .total-points {
     font-size: 200%;
     min-width: 4ch;
+    font-variant-numeric: tabular-nums;
 }
 
 .main-moving {
@@ -182,4 +183,11 @@
 
 .hidden {
     display: none;
+}
+
+#jury-counter {
+    float: right;
+    font-weight: bold;
+    font-size: 2em;
+    margin: 0;
 }

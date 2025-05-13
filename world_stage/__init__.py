@@ -33,11 +33,16 @@ def create_app():
     from . import db
     db.init_app(app)
 
-    from . import index
-    from . import vote
-    from . import results
+    from .routes import index
+    from .routes import vote
+    from .routes import results
+    from .routes import session
+    from .routes import user
+    
     app.register_blueprint(index.bp)
     app.register_blueprint(vote.bp)
     app.register_blueprint(results.bp)
+    app.register_blueprint(session.bp)
+    app.register_blueprint(user.bp)
 
     return app

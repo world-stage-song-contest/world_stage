@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Logged In Successfully{% endblock %}
+{% block headercontents %}
+<script>
+    setTimeout(function() {
+        window.location.href = "/user";
+    }, 5000);
+</script>
+{% endblock %}
+{% block content %}
+
+{% if state == "logged_in" %}
+<p>You were successfully logged in.</p>
+{% elif state == "already_logged_in" %}
+<p>You were already logged in.</p>
+{% endif %}
+<p>You will be redirected to your user page in a few seconds.</p>
+
+{% endblock%}

@@ -4,8 +4,8 @@ from flask import make_response, render_template, request, Blueprint
 import datetime
 import unicodedata
 
-from .utils import format_timedelta, get_show_id, get_countries
-from .db import get_db
+from ..utils import format_timedelta, get_show_id, get_countries, dt_now
+from ..db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
 
@@ -79,7 +79,7 @@ def vote_index():
     ''')
 
     for id, name, short_name, year, voting_opens, voting_closes in cursor.fetchall():
-        left = datetime.datetime.strptime(voting_closes, '%Y-%m-%d %H:%M:%S').replace(tzinfo=datetime.timezone.utc) - datetime.datetime.now(tz=datetime.timezone.utc)
+        left = voting_closes - dt_now()
         open_votings.append({
             'id': id,
             'name': f"{year} {name}" if year else name,
@@ -88,7 +88,7 @@ def vote_index():
             'voting_closes': voting_closes,
             'left': format_timedelta(left),
         })
-    return render_template('open_votings.html', shows=open_votings)
+    return render_template('vote/index.html', shows=open_votings)
 
 @bp.post('/<show>')
 def vote_post(show: str):
@@ -102,8 +102,8 @@ def vote_post(show: str):
     if not show_data.id:
         return render_template('error.html', error="Show not found"), 404
     
-    if (show_data.voting_opens > datetime.datetime.now(datetime.timezone.utc)
-        or show_data.voting_closes < datetime.datetime.now(datetime.timezone.utc)):
+    if (show_data.voting_opens > dt_now()
+        or show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
 
     db = get_db()
@@ -128,6 +128,7 @@ def vote_post(show: str):
 
     errors = []
 
+    username_invalid = False
     username = request.form['username']
     username = unicodedata.normalize('NFKC', username)
     nickname = request.form['nickname']
@@ -136,6 +137,7 @@ def vote_post(show: str):
         country_id = None
 
     if not username:
+        username_invalid = True
         errors.append("Username is required.")
 
     cursor.execute('SELECT id FROM user WHERE username = ? COLLATE NOCASE', (username,))
@@ -182,20 +184,21 @@ def vote_post(show: str):
 
     if not errors:
         action = add_votes(username, nickname or None, country_id, show_data.id, show_data.point_system_id, votes)
-        resp = make_response(render_template('successfully_voted.html', action=action))
+        resp = make_response(render_template('vote/success.html', action=action))
         resp.set_cookie('username', username, max_age=datetime.timedelta(days=30))
         return resp
 
-    return render_template('vote.html',
+    return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, errors=errors,
                            selected=votes, invalid=invalid,
-                           username=username, nickname=nickname,
+                           username=(username, username_invalid and "invalid"), nickname=nickname,
                            year=show_data.year, show_name=show_data.name, show=show,
                            selected_country=country_id, countries=get_countries())
 
 @bp.get('/<show>')
 def vote(show: str):
     username = request.cookies.get('username')
+    session_id = request.cookies.get('session')
     nickname = None
     country = ''
     country_id = ''
@@ -207,12 +210,22 @@ def vote(show: str):
     if not show_data.id:
         return render_template('error.html', error="Show not found"), 404
     
-    if (show_data.voting_opens > datetime.datetime.now(datetime.timezone.utc)
-        or show_data.voting_closes < datetime.datetime.now(datetime.timezone.utc)):
+    if (show_data.voting_opens > dt_now()
+        or show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
     
     db = get_db()
     cursor = db.cursor()
+
+    if session_id:
+        cursor.execute('''
+            SELECT user.username FROM session
+            JOIN user ON session.user_id = user.id
+            WHERE session.session_id = ? AND session.expires_at > datetime('now')
+        ''', (session_id,))
+        row = cursor.fetchone()
+        if row:
+            username = row[0]
 
     vote_set_id = None
     if username:
@@ -252,7 +265,7 @@ def vote(show: str):
         }
         songs.append(val)
     
-    return render_template('vote.html',
+    return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, selected=selected,
                            username=username, nickname=nickname, country=country,
                            year=show_data.year, show_name=show_data.name, show=show,

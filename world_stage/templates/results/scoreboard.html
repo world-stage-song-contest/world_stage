@@ -6,11 +6,12 @@
         <title>Scoreboard</title>
 
         <link rel="stylesheet" href="/static/css/scoreboard.css">
-        <script src="/static/scoreboard.js"></script>
+        <script src="/static/js/scoreboard.js"></script>
     </head>
 
     <body onload="onLoad()">
         <span class="hidden" id="show">{{ show }}</span>
+        <p id="jury-counter"><span id="jury-count">0</span>/<span id="total-juries">0</span></p>
         <div id="controls">
             <button onclick="togglePause()">Pause</button>
             <button onclick="speedUp()">Faster</button>

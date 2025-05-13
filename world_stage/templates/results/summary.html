@@ -4,15 +4,16 @@
     <link rel="stylesheet" href="/static/css/results.css">
 {% endblock %}
 {% block navigation %}
-    <a href="/results/{{ show }}/scoreboard" class="nav-item">Scoreboard</a>
-    <a href="/results/{{ show }}/detailed" class="nav-item">Detailed Results</a>
+    <a class="nav-item" href="/results/{{ show }}/scoreboard">Scoreboard</a>
+    <a class="nav-item" href="/results/{{ show }}/detailed">Detailed Results</a>
 {% endblock %}
 {% block content %}
+<div id="scroll-container">
 <table>
     <thead>
         <tr>
             <th>Place</th>
-            <th>Country</th>
+            <th class="sticky">Country</th>
             <th>Artist</th>
             <th>Title</th>
             <th>Points</th>
@@ -26,7 +27,7 @@
         {% for song in songs %}
             <tr>
                 <th class="number">{{ loop.index }}</td>
-                <td>{{ song.country }}</td>
+                <td class="sticky">{{ flag(song.cc, song.country) }}{{ song.country }}</td>
                 <td>{{ song.artist }}</td>
                 <td>{{ song.title }}</td>
                 <td class="number">{{ song.sum }}</td>
@@ -37,4 +38,5 @@
             </tr>
         {% endfor %}
 </table>
+</div>
 {% endblock %}

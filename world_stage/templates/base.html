@@ -1,13 +1,24 @@
+{% macro flag(cc, country='', type="rect", class="flag") -%}
+<img src="/static/flags/{{ cc.upper() }}/{{ type }}.svg" class="{{ class }}" {% if country %}alt="{{ country }}"{% endif %}>
+{%- endmacro %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{% block title %}Home{% endblock %}</title>
+        <link rel="stylesheet"
+              type="text/css"
+              href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
+        <link rel="stylesheet"
+              type="text/css"
+              href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/fill/style.css">
         <link rel="stylesheet" href="/static/css/index.css">
+        <script src="/static/js/index.js"></script>
         {% block headercontents %}{% endblock %}
     </head>
     <body>
+        <script>setTheme()</script>
         <header id="page-header">
             <div id="header-logo">
                 <svg viewBox="0 0 605 72.5" id="header-logo-image">
@@ -16,10 +27,13 @@
                 <h1>
                     {{ self.title() }}
                 </h1>
+                <div id="header-strecher"></div>
             </div>
             <nav id="page-nav">
-                <a href="/" class="nav-item">Home</a></li>
+                <a class="nav-item" href="/"><i class="ph-fill ph-house"></i> Home</a>
                 {%block navigation %}{% endblock %}
+                <span id="nav-spacer"></span>
+                <a class="nav-item" href="/settings"><i class="ph-fill ph-gear-fine"></i> Settings</a>
             </nav>
         </header>
         <main id="page-content">

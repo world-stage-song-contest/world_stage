@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+    <p>Here you can configure the settings for the World Stage Song Contest.</p>
+    <p>Note that these settings are stored in a cookie, so they will only apply to this browser.</p>
+    {% if message %}
+        <p class="success">{{ message }}</p>
+    {% endif %}
+    <form id="settings-form" method="POST">
+        <fieldset class="nongrid">
+            <legend>Select Website Theme</legend>
+            <div class="fieldset-row">
+                <input type="radio" id="theme-auto" name="theme" value="auto" {% if settings.theme == "auto" or settings.theme == '' %}checked{% endif %}>
+                <label for="theme-auto">Automatic</label>
+            </div>
+            <div class="fieldset-row">
+                <input type="radio" id="theme-light" name="theme" value="light" {% if settings.theme == "light" %}checked{% endif %}>
+                <label for="theme-light">Light</label>
+            </div>
+            <div class="fieldset-row">
+                <input type="radio" id="theme-dark" name="theme" value="dark" {% if settings.theme == "dark" %}checked{% endif %}>
+                <label for="theme-dark">Dark</label>
+            </div>
+        </fieldset>
+        <input type="submit" value="Save Settings">
+    </form>
+{% endblock %}

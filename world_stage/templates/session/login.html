@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+    <p class="banner">If you don't have an account, you can <a href="/signup">sign up</a>.</p>
+    <p class="banner">If you submitted songs through Discord or voted in a contest before, you need to <a href="/setpassword">set your password</a> before logging in.</p>
+    {% if message %}
+        <p class="error">{{ message }}</p>
+    {% endif %}
+    <form id="login-form" method="POST">
+        <fieldset>
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required maxlength="64" minlength="3">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required maxlength="64" minlength="8">
+        </fieldset>
+        <input type="submit" value="Login">
+    </form>
+{% endblock %}

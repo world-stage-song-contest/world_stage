@@ -7,7 +7,7 @@
     color: transparent;
 }
 
-.number {
+.number.number {
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
@@ -34,4 +34,28 @@
     box-sizing: border-box;
     width: 30px;
     border: 1px solid grey;
+}
+
+#scroll-container {
+    overflow-x: auto;
+}
+
+#scroll-container th, #scroll-container td {
+    white-space: nowrap;
+}
+
+.flag {
+    height: 1em;
+    border: 1px solid grey;
+    margin-right: 0.25em;
+}
+
+th.plain {
+    font-weight: normal;
+    text-align: left;
+}
+
+td.header-like {
+    font-weight: bold;
+    text-align: center;
 }

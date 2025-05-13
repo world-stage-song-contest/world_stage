@@ -1,14 +1,12 @@
 CREATE TABLE IF NOT EXISTS user (
     id INTEGER PRIMARY KEY,
-    username TEXT NOT NULL,
-    UNIQUE(username COLLATE NOCASE)
+    username TEXT NOT NULL UNIQUE COLLATE NOCASE
 );
 
 CREATE TABLE IF NOT EXISTS country (
     id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    is_participating INTEGER,
-    UNIQUE(name COLLATE NOCASE),
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    is_participating INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS year (
@@ -28,8 +26,7 @@ CREATE TABLE IF NOT EXISTS alternative_name (
 
 CREATE TABLE IF NOT EXISTS point_system (
     id INTEGER PRIMARY KEY,
-    number INTEGER NOT NULL,
-    UNIQUE(number)
+    number INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS point (
@@ -83,7 +80,7 @@ CREATE TABLE IF NOT EXISTS vote_set (
     country_id TEXT,
     nickname TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (voter_id) REFERENCES voter (id),
+    FOREIGN KEY (voter_id) REFERENCES user (id),
     FOREIGN KEY (show_id) REFERENCES show (id),
     FOREIGN KEY (country_id) REFERENCES country (id)
 );
@@ -100,7 +97,6 @@ CREATE TABLE IF NOT EXISTS vote (
 
 CREATE TABLE IF NOT EXISTS migration (
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(name)
+    name TEXT NOT NULL UNIQUE,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );

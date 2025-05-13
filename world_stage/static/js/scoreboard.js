@@ -34,7 +34,7 @@ function makeRow(code, name, artist, title, id) {
 
     const flagEl = document.createElement("img");
     flagEl.classList.add("flag");
-    flagEl.src = `/static/flags/square/${code.toLowerCase()}.svg`;
+    flagEl.src = `/static/flags/${code.toUpperCase()}/square.svg`;
     flagContainer.appendChild(flagEl);
 
     const nameContainer = document.createElement("div");
@@ -77,15 +77,15 @@ function makeRow(code, name, artist, title, id) {
 }
 
 function makeVotingCard(from, code, country) {
-    code = code || "XRW";
-    country = country || "Rest of the World";
+    code = code || "XXX";
+    country = country || "Somewhere";
 
     const container = document.createElement("div");
     container.classList.add("voting-card", "unloaded");
 
     const flagEl = document.createElement("img");
     flagEl.classList.add("voting-card-flag");
-    flagEl.src = `/static/flags/rect/${code.toLowerCase()}.svg`;
+    flagEl.src = `/static/flags/${code.toUpperCase()}/rect.svg`;
     flagEl.alt = from;
     container.appendChild(flagEl);
 
@@ -124,7 +124,7 @@ class Country {
         this.title = title;
         this.id = id;
         this.country = country;
-        this.code = code;
+        this.code = code || "XXX";
         this.win = true;
         this.votes = new Array(Math.max(...points) + 1).fill(0);
         [this.nameEl, this.currentEl, this.totalEl, this.element] = makeRow(code, name, artist, title, id);
@@ -225,7 +225,7 @@ function populate() {
     const cnt = data.length;
     perColumn = Math.ceil(cnt / 2);
     for (const [i, c] of data.entries()) {
-        const country = new Country(i, c.country, c.artist, c.title, c.ro, c.id, c.country, c.code);
+        const country = new Country(i, c.country, c.artist, c.title, c.ro, c.id, c.country, c.cc);
         countries[c.id] = country;
         ro.push(country);
 
@@ -261,6 +261,8 @@ async function sortCountries() {
 }
 
 async function vote() {
+    const juryCounter = document.querySelector("#jury-count");
+    let juryCount = 0;
     const voterCount = voteOrder.length;
     const pointsImmediate = points.slice(0, points.length - 3);
     const pointsDelayed = points.slice(points.length - 3);
@@ -268,6 +270,8 @@ async function vote() {
     let countriesVoted = 0;
     
     for (const from of voteOrder) {
+        juryCount++;
+        juryCounter.innerText = juryCount;
         const vts = votes[from];
         const entries = userSongs[from] || [];
 
@@ -402,6 +406,8 @@ async function onLoad() {
     loaded = true;
 
     await loadVotes();
+
+    document.querySelector("#total-juries").innerHTML = voteOrder.length + 1;
 
     document.querySelector("#reset").onclick = async () => {
         await reset();

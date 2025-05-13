@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Homepage: {{ username }}{% endblock %}
+{% block content %}
+<div class="cards-container">
+    <a href="/user/submit" class="card">
+        <h3>Submit</h3>
+        <img src="/static/images/submit.png" alt="Submit Icon">
+        <p>Submit a song for one of the next World Stage editions.</p>
+    </a>
+    <a href="{{ url_for('results.user_results', username=(username)) }}" class="card">
+        <h3>Results</h3>
+        <img src="/static/images/history.png" alt="History Icon">
+        <p>Check out your past votes.</p>
+    </a>
+</div>
+{% endblock %}
