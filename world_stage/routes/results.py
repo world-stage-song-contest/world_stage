@@ -118,11 +118,11 @@ def detailed_results(show: str):
 
     results = {}
     cursor.execute('''
-        SELECT DISTINCT username, country_id, country.name FROM vote
-        JOIN vote_set ON vote.vote_set_id = vote_set.id
+        SELECT username, country_id, country.name FROM vote_set
         JOIN user ON vote_set.voter_id = user.id
         LEFT OUTER JOIN country ON vote_set.country_id = country.id
         WHERE vote_set.show_id = ?
+        ORDER BY created_at
     ''', (show_data.id,))
     for username, country_id, country_name in cursor.fetchall():
         results[username] = {'code': country_id or "XXX", 'country': country_name}

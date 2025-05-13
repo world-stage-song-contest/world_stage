@@ -35,7 +35,10 @@ def validate_password(password: str) -> tuple[bool, str]:
 def login():
     if request.cookies.get('session'):
         return render_template('session/login_success.html', state="already_logged_in")
-    username = request.args.get('username')
+
+    username = request.cookies.get('username') or ''
+    username = username.strip()
+    username = unicodedata.normalize('NFKC', username)
 
     if username:
         username = username.strip()
@@ -94,6 +97,9 @@ def login_post():
 
 @bp.get('/setpassword')
 def set_password():
+    username = request.cookies.get('username') or ''
+    username = username.strip()
+    username = unicodedata.normalize('NFKC', username)
     if username:
         username = username.strip()
         username = unicodedata.normalize('NFKC', username)
@@ -104,7 +110,6 @@ def set_password():
 
 @bp.post('/setpassword')
 def set_password_post():
-    print(request.form)
     username = request.form.get('username')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
@@ -142,6 +147,9 @@ def set_password_post():
 
 @bp.get('/signup')
 def signup():
+    username = request.cookies.get('username') or ''
+    username = username.strip()
+    username = unicodedata.normalize('NFKC', username)
     if username:
         username = username.strip()
         username = unicodedata.normalize('NFKC', username)
