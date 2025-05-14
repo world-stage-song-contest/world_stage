@@ -1,8 +1,9 @@
 from collections import defaultdict, deque
 import datetime
-from typing import Optional
+from functools import total_ordering
+from typing import Optional, Union
 from .db import get_db
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Deque, TypeAlias
 import urllib.parse
 
@@ -147,6 +148,15 @@ class ShowData:
     voting_opens: datetime.datetime
     voting_closes: datetime.datetime
     year: Optional[int]
+    dtf: Optional[int]
+    sc: Optional[int]
+    special: Optional[int]
+
+@dataclass
+class UserPermissions:
+    can_view_restricted: bool
+    can_edit: bool
+    can_approve: bool
 
 def format_timedelta(td: datetime.timedelta):
     days, seconds = td.days, td.seconds
@@ -193,21 +203,19 @@ def get_show_id(show: str) -> ShowData:
 
     if year:
         cursor.execute('''
-            SELECT show.id, show.point_system_id, show.show_name, show.voting_opens, show.voting_closes FROM show
+            SELECT show.id, show.point_system_id, show.show_name, show.voting_opens, show.voting_closes, show.dtf, show.sc, show.special FROM show
             JOIN year ON show.year_id = year.id
             WHERE year.id = ? AND show.short_name = ?
         ''', (year, short_show_name))
-        show_id = cursor.fetchone()
-        if show_id:
-            show_id, point_system_id, show_name, voting_opens, voting_closes = show_id
     else:
         cursor.execute('''
-            SELECT id, point_system_id, show_name, voting_opens, voting_closes FROM show
+            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special FROM show
             WHERE short_name = ?
         ''', (short_show_name,))
-        show_id = cursor.fetchone()
-        if show_id:
-            show_id, point_system_id, show_name, voting_opens, voting_closes = show_id
+
+    show_id = cursor.fetchone()
+    if show_id:
+        show_id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special = show_id
 
     points = get_points_for_system(point_system_id)
 
@@ -218,7 +226,10 @@ def get_show_id(show: str) -> ShowData:
         name=show_name,
         voting_opens=voting_opens,
         voting_closes=voting_closes,
-        year=year
+        year=year,
+        dtf=dtf,
+        sc=sc,
+        special=special
     )
 
     return ret
@@ -255,6 +266,46 @@ def get_countries(only_participating: bool = False) -> list[dict]:
         })
     return countries
 
+def get_user_id_from_session(session_id: str | None) -> int | None:
+    if not session_id:
+        return None
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT user.id FROM session
+        JOIN user ON session.user_id = user.id
+        WHERE session.session_id = ? AND session.expires_at > datetime('now')
+    ''', (session_id,))
+    row = cursor.fetchone()
+    if row:
+        return row[0]
+    return None
+
+def get_user_role_from_session(session_id: str | None) -> UserPermissions:
+    if not session_id:
+        return UserPermissions(False, False, False)
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT role FROM session
+        JOIN user ON session.user_id = user.id
+        WHERE session.session_id = ? AND session.expires_at > datetime('now')
+    ''', (session_id,))
+    row = cursor.fetchone()
+    if row:
+        role = row[0]
+        if role == 'admin':
+            return UserPermissions(can_view_restricted=True, can_edit=True, can_approve=False)
+        elif role == 'owner':
+            return UserPermissions(can_view_restricted=True, can_edit=True, can_approve=True)
+        elif role == 'editor':
+            return UserPermissions(can_view_restricted=False, can_edit=True, can_approve=False)
+        elif role == 'user':
+            return UserPermissions(can_view_restricted=False, can_edit=False, can_approve=False)
+    return UserPermissions(False, False, False)
+
 def create_cookie(**kwargs: str) -> str:
     cookie = []
     for key, value in kwargs.items():
@@ -271,3 +322,69 @@ def parse_cookie(cookie: str) -> dict[str, str]:
         key, value = item.split('=')
         cookie_dict[key] = urllib.parse.unquote(value)
     return cookie_dict
+
+@total_ordering
+@dataclass
+class VoteData:
+    ro: int
+    sum: int = 0
+    count: int = 0
+    pts: dict[int, int] = field(default_factory=lambda: defaultdict(int))
+
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, VoteData):
+            raise TypeError("Cannot compare VoteData with non-VoteData object")
+        if self.sum != other.sum:
+            return self.sum < other.sum
+        if self.count != other.count:
+            return self.count < other.count
+        this_keys = sorted(self.pts.keys())
+        other_keys = sorted(other.pts.keys())
+        this_max = max(this_keys)
+        other_max = max(other_keys)
+        if this_max != other_max:
+            return this_max < other_max
+        for i in range(len(this_keys)):
+            if this_keys[i] != other_keys[i]:
+                return this_keys[i] < other_keys[i]
+        return self.ro < other.ro
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, VoteData):
+            return False
+        return self.ro == other.ro and self.sum == other.sum and self.count == other.count and self.pts == other.pts
+
+def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT score FROM vote
+        JOIN vote_set ON vote.vote_set_id = vote_set.id
+        JOIN user ON vote_set.voter_id = user.id
+        JOIN point ON vote.point_id = point.id
+        WHERE song_id = ? AND show_id = ?
+    ''', (song_id,show_id))
+    res = VoteData(ro=ro)
+    for points in cursor.fetchall():
+        pt = points[0]
+        res.sum += pt
+        res.count += 1
+        res.pts[pt] += 1
+    return res
+
+def format_seconds(seconds: int) -> str:
+    """Format seconds into a string in the format MM:SS."""
+    if seconds < 0:
+        return "00:00"
+    minutes = seconds // 60
+    seconds %= 60
+    return f"{minutes:02}:{seconds:02}"
+
+def parse_seconds(td: str) -> int:
+    """Parse a string in the format MM:SS into seconds."""
+    parts = list(map(int, td.split(':')))
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    else:
+        raise ValueError("Invalid time format. Use 'MM:SS'.")

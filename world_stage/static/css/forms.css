@@ -3,14 +3,42 @@ form {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    align-items:start;
+    align-items: start;
 }
 
-fieldset:not(.nongrid) {
+fieldset {
+    width: 100%;
+}
+
+fieldset.grid {
     display: grid;
     grid-template-columns: max-content 1fr;
     gap: 1rem;
-    width: 100%;
+    align-items: center;
+}
+
+fieldset.nongrid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+fieldset.nongrid .labels-row {
+    display: flex;
+    gap: 1rem;
+    justify-content: space-evenly;
+}
+
+.labels-row .labels-row-item {
+    flex-grow: 1;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.labels-row-item .stretchable {
+    max-width: max-content;
+    flex-grow: 1;
 }
 
 fieldset > label {
@@ -23,4 +51,32 @@ fieldset.rightlabels {
 
 fieldset.rightlabels > label {
     text-align: left;
+}
+
+.span-fieldset {
+    grid-column: span 2;
+    display: flex;
+    justify-content: center;
+}
+
+optgroup:empty {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    fieldset.grid {
+        grid-template-columns: 1fr;
+    }
+
+    fieldset.grid > label {
+        text-align: left;
+    }
+
+    fieldset > input, fieldset > select {
+        width: fit-content;
+    }
+
+    form {
+        width: fit-content
+    }
 }

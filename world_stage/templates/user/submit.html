@@ -1,5 +1,175 @@
 {% extends "base.html" %}
-{% block title %}Submit a song{% endblock %}
+{% block title %}Submit/edit a song{% endblock %}
+{% block headercontents %}
+    <script src="/static/js/submit.js"></script>
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block onload %}onLoad(){% endblock %}
 {% block content %}
-<h2>Come back later!</h2>
+<div id="rules" class="banner compact">
+<p>Please remember that it's <b>your</b> responsibility to verify that:</p>
+<ul>
+    <li>The song is not a cover</li>
+    <li>The song was released in the year you selected</li>
+    <li>The duration of the song is less than 8 minutes</li>
+    <li>The song has lyrics</li>
+    <li>The song isn't too famous</li>
+</ul>
+</div>
+<div class="banner long-text">
+    <div>
+    <details>
+        <summary>Detailed explanations of every field</summary>
+        <dl>
+            <dt><strong>Artist</strong> (Mandatory)</dt>
+            <dd>The name of the artist. Write this in Latin script.</dd>
+            <dt><strong>Latin title</strong>  (Mandatory)</dt>
+            <dd>The title of the song in Latin alphabet. It can either be a translation of the native title or a romanization.</dd>
+            <dt><strong>Is the Latin title a translation?</strong></dt>
+            <dd>Check this box if the Latin title is a translation of the native title into English.</dd>
+            <dt><strong>Native title</strong></dt>
+            <dd>The title of the song in its original script. If the original script is already a Latin script,
+            please do not fill this in at all unless you're providing a translation.</dd>
+            <dt><strong>Does the title and song languages match?</strong></dt>
+            <dd>Check this box if the language of the title matches the language of the song.
+            If the title is in a different language, please select the language of the title in the next field.</dd>
+            <dt><strong>Native title language</strong> (hidden by default)</dt>
+            <dd>The language of the native title.
+            Provided for cases where the language of the title doesn't match the language of the song.
+            You may leave this on "Select a language" if the language of the title matches the song.</dd>
+            <dt><strong>Placeholder?</strong></dt>
+            <dd>Check this box if the song is a placeholder. This means that the song is free to be claimed or replaced by any other participant.</dd>
+            <dt><strong>Language 1</strong> (Mandatory)</dt>
+            <dd>The language of the song. If the song is in multiple languages, please select the most prominent one.</dd>
+            <dt><strong>Additional languages</strong></dt>
+            <dd>If the song is in multiple languages, please select the additional languages in decreasing order of prominence.
+            You can add as many languages as you want, although limit yourself to 2-3.
+            Please do not include short phrases in other languages as a whole language.</dd>
+            <dt><strong>Video URL</strong> (Mandatory)</dt>
+            <dd>The URL of the song's video. If you don't have it yet, please put N/A.</dd>
+            <dt><strong>Recap snippet start</strong></dt>
+            <dd>The start time of the recap snippet. This is the time in the video where the recap starts.</dd>
+            <dt><strong>Recap snippet end</strong></dt>
+            <dd>The end time of the recap snippet. This is the time in the video where the recap ends. Must be at most 20 seconds after the start.</dd>
+            <dt><strong>English lyrics</strong></dt>
+            <dd>The English lyrics of the song.</dd>
+            <dt><strong>Native lyrics (Latin alphabet)</strong></dt>
+            <dd>The native lyrics of the song in Latin alphabet.</dd>
+        </dl>
+    </details>
+    </div>
+</div>
+<p id="error-message" class="error hidden"></p>
+<form id="submit-song" name="submit_song" method="POST" action="/user/submit">
+    <fieldset class="grid" id="select-submission">
+        <legend>Submit for</legend>
+        <label for="year">Year</label>
+        <select id="year" name="year" onchange="populateCountries(this)">
+            <option value="">Select a year</option>
+            {% for y in years %}
+                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+
+        <label class="hidable" for="country">Country</label>
+        <select class="hidable" id="country" name="country" onchange="populateSongData()">
+            <option value="">Select a country</option>
+            <optgroup id="own-countries" label="Your submissions">
+                {% for c in countries.own %}
+                    <option value="{{ c.id }}" {% if c.id == country %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </optgroup>
+            <optgroup id="available-countries" label="Available countries">
+                {% for c in countries.placeholder %}
+                    <option value="{{ c.id }}" {% if c.id == country %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </optgroup>
+        </select>
+    </fieldset>
+
+    <fieldset class="grid hidable">
+        <legend>Song information</legend>
+        <label class="req" for="artist">Artist</label>
+        <input type="text" id="artist" name="artist" placeholder="Artist name" required maxlength="150" minlength="1" value="{{ data.artist }}">
+        <label class="req" for="song">Latin title</label>
+        <input type="text" id="title" name="title" placeholder="Song title" required maxlength="100" minlength="1" value="{{ data.title }}">
+        <div class="span-fieldset">
+            <div>
+                <input type="checkbox" id="is_translation" name="is_translation" {% if data.is_translation %}checked{% endif %}>
+                <label for="is_translation">Is the Latin title a translation?</label>
+            </div>
+        </div>
+        <label for="native_title">Native title</label>
+        <input type="text" id="native_title_id" name="native_title" placeholder="Native title" maxlength="100" value="{{ data.native_title }}">
+        <div class="span-fieldset">
+            <div>
+                <input type="checkbox" id="does_match" name="does_match" onchange="toggleTitleLanguageSelect(this)" {% if data.does_match %}checked{% endif %}>
+                <label for="does_match">Title and song languages match?</label>
+            </div>
+        </div>
+        <label for="song" class="hide-match">Title language</label>
+        <select id="title_language_id" name="title_language_id" class="hide-match">
+            <option value="">Select a language</option>
+            {% for lang in languages %}
+                <option value="{{ lang.id }}" {% if lang.id == title_language_id %}selected{% endif %}>{{ lang.name }}</option>
+            {% endfor %}
+        </select>
+        <div class="span-fieldset">
+            <div>
+                <input type="checkbox" id="is_placeholder" name="is_placeholder {% if data.is_placeholder %}checked{% endif %}">
+                <label for="is_placeholder">Placeholder?</label>
+            </div>
+        </div>
+    </fieldset>
+
+    <fieldset class="grid hidable">
+        <legend>Languages</legend>
+        {% for lang_id in selected_languages or [''] %}
+            <label data-n="{{loop.index}}" class="req language-label" for="language{{loop.index}}">Language {{loop.index}}</label>
+            <select data-n="{{loop.index}}" class="language-select" id="language{{loop.index}}" name="language{{loop.index}}">
+                <option value="">Select a language</option>
+                {% for lang in languages %}
+                    <option value="{{ lang.id }}" {% if lang.id == lang_id %}selected{% endif %}>{{ lang.name }}</option>
+                {% endfor %}
+            </select>
+        {% endfor %}
+        <div id="language-insert-before" class="span-fieldset" style="display: flex; justify-content: space-evenly;">
+            <button type="button" onclick="addLanguageRow()">Add language</button>
+            <button type="button" id="remove-language-button" onclick="removeLanguageRow()" disabled>Remove language</button>
+        </div>
+    </fieldset>
+
+    <fieldset class="grid hidable">
+        <legend>Song video</legend>
+        <label class="req" for="video">Video URL</label>
+        <input class="stretchable" type="url" id="video_link" name="video_link" placeholder="Put N/A if you'll upload later" maxlength="50" required value="{{ data.video_link }}">
+        <label for="snippet_start">Recap snippet start</label>
+        <div>
+        <input type="time" id="snippet_start" name="snippet_start" placeholder="00:00" maxlength="5" size="5" value="{{ data.snippet_start }}">
+        </div>
+        <label for="snippet_end">Recap snippet end</label>
+        <div>
+        <input type="time" id="snippet_end" name="snippet_end" placeholder="00:00" maxlength="5" size="5" value="{{ data.snippet_end }}">
+        </div>
+    </fieldset>
+
+    <fieldset class="hidable nongrid">
+        <legend>Lyrics</legend>
+        <details>
+            <summary>English lyrics</summary>
+            <textarea id="english_lyrics" name="english_lyrics" rows="15" cols="50" placeholder="English lyrics">{{ data.english_lyrics }}</textarea>
+        </details>
+        <details>
+            <summary>Native lyrics (Latin alphabet)</summary>
+            <textarea id="romanized_lyrics" name="romanized_lyrics" rows="15" cols="50" placeholder="Native lyrics (Latin alphabet)">{{ data.romanized_lyrics }}</textarea>
+        </details>
+        <details>
+            <summary>Native lyrics</summary>
+            <textarea id="native_lyrics" name="native_lyrics" rows="15" cols="50" placeholder="Native lyrics">{{ data.native_lyrics }}</textarea>
+        </details>
+    </fieldset>
+    <div class="hidable">
+        <button type="submit">Submit</button>
+    </div>
+</form>
 {% endblock %}

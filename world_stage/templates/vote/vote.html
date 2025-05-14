@@ -12,17 +12,11 @@
 <form method="POST" action="/vote/{{ show }}">
     <fieldset>
         <legend>User data</legend>
-            <label title="Your submitter name. Doesn't change." for="username" onclick="showTooltip(this)">
-                Voter Name<span class="req">*</span> <i class="ph-fill ph-question"></i>
-            </label>
+            <label class="req" title="Your submitter name. Doesn't change." for="username">Voter Name</label>
             <input type="text" name="username" value="{{ username.0 or "" }}" {% if username.1 %}class="{{ username.1 }}"{% endif %} maxlength="64" required>
-            <label title="The name you want to be displayed on the scoreboard." for="nickname" onclick="showTooltip(this)">
-                Display Name <i class="ph-fill ph-question"></i>
-            </label>
+            <label class="req" title="The name you want to be displayed on the scoreboard." for="nickname">Display Name</label>
             <input type="text" name="nickname" value="{{ nickname or ""}}" maxlength="64">
-            <label title="The country to display on the scoreboard." for="country" onclick="showTooltip(this)">
-                Country <i class="ph-fill ph-question"></i>
-            </label>
+            <label class="req" title="The country to display on the scoreboard." for="country">Country</label>
             <select name="country" id="country">
                 <option value="XXX">Select a country</option>
             {% for country in countries %}

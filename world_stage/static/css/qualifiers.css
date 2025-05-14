@@ -1,0 +1,197 @@
+:root {
+    --dtf-color: #FFDEAD;
+    --sc-color: #AFEEEE;
+}
+
+#wrapper {
+    height: 98vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.inner-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.flex-spacer {
+    flex: 1;
+}
+
+#envelopes {
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    gap: 2em;
+    align-items: center;
+    justify-items: center;
+    align-content: space-evenly;
+}
+
+#results {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5em;
+}
+
+#reveal {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    align-items: center;
+}
+
+#spacer {
+    height: 400px;
+}
+
+#data-button {
+    position:absolute;
+}
+
+#proceed-button {
+    position:absolute;
+    right: 0;
+}
+
+.country {
+    height: 30px;
+    /*width: 270px;*/
+    box-sizing: content-box;
+
+    border: 2px solid grey;
+    padding: 0 0.25em;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.25em;
+
+    transition: 1s ease-in-out;
+    background-size: 200%;
+}
+
+.country.direct-to-final {
+    background: linear-gradient(to left, transparent 50%, var(--dtf-color) 50%) right/200%;
+}
+
+.country.second-chance {
+    background: linear-gradient(to left, transparent 50%, var(--sc-color) 50%) right/200%;
+}
+
+.country.revealed {
+    color: black;
+    background-position: left;
+}
+
+.country .reveal-flag {
+    width: 25px;
+    max-height: 25px;
+    object-fit: contain;
+    border: 1px solid lightgrey;
+}
+
+.country .reveal-country {
+    flex: 1;
+}
+
+.country .reveal-ro {
+    width: 4ch;
+    text-align: right;
+    opacity: 1;
+    transition: opacity 1s;
+}
+
+#runningorder .ro {
+    display: inline-block;
+    width: 2ch;
+    text-align: right;
+    opacity: 1;
+    transition: opacity 1s;
+}
+
+.transparent.transparent:not(#abc) {
+    opacity: 0;
+}
+
+#runningorder {
+    max-width: fit-content;
+}
+
+.hidden {
+    display: none;
+}
+
+table {
+    border-collapse: collapse;
+    width: max-content;
+}
+
+th, td {
+    border: 1px solid black;
+    padding: 0.5em;
+}
+
+th {
+    background: lightgrey;
+    position: sticky;
+    top: 0;
+}
+
+td.results-score, td.results-voters, td.results-points, td.results-score-percent {
+    text-align: right;
+    font-family: monospace;
+}
+
+td.results-place {
+    text-align: center;
+}
+
+
+td.translucent {
+    opacity: 0;
+    transition: opacity 1s;
+}
+
+td.revealable.revealed {
+    opacity: 1;
+}
+
+.results-country-container {
+    display: flex;
+    gap: 0.25em;
+    align-items: center;
+}
+
+td.results-country .results-flag {
+    width: 25px;
+    max-height: 25px;
+    border: 1px solid lightgray;
+}
+
+.results-small-number-col {
+    width: 50px;
+}
+
+.results-score, .results-voters {
+    border-left: 2px solid black;
+    border-right: 2px solid black;
+}
+
+.results-header {
+    border-bottom: 2px solid black;
+}
+
+.form-column-wrapper {
+    display: flex;
+    gap: 1em;
+
+    flex-direction: row;
+}
+
+.form-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+}

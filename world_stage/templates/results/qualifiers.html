@@ -1,0 +1,43 @@
+
+{% extends "base.html" %}
+{% block title %}Qualifiers: {{ show }}{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="/static/css/qualifiers.css">
+<link rel="stylesheet" href="/static/css/qualifiers-envelopes.css">
+<script src="/static/js/qualifiers.js"></script>
+{% endblock %}
+{% block navigation %}
+<a class="nav-item" href="/results/{{ show }}">Results summary</a>
+<a class="nav-item" href="/results/{{ show }}/detailed">Detailed Results</a>
+{% endblock %}
+{% block onload %}onLoad('{{ show }}'){% endblock %}
+{% block content %}
+<svg style="display: none;">
+    <symbol id="envelope-top" viewBox="0 0 180 60">
+        <polygon points="0,0 90,60 180,0" stroke="#888888" fill="currentColor" style="stroke-width: 1px;"/>
+    </symbol>
+    <symbol id="envelope-bottom" viewBox="0 0 180 120">
+        <polygon points="0,0 90,60, 180,0 180,120, 0,120" stroke="#888888" fill="currentColor" style="stroke-width: 1px;"/>
+    </symbol>
+    <symbol id="envelope-bg" viewBox="0 0 180 120">
+        <rect width="180" height="120" stroke="#888888" fill="currentColor" style="stroke-width: 1px;"/>
+    </symbol>
+</svg>
+
+<div id="step-one">
+    <div id="wrapper">
+        <div class="inner-wrapper">
+            <div id="results"></div>
+            <div class="flex-spacer"></div>
+        </div>
+        <div class="inner-wrapper">
+            <div id="envelopes"></div>
+            <div class="flex-spacer"></div>
+        </div> 
+        <div id="reveal">
+            <div id="spacer"></div>
+            <div id="envelope"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}

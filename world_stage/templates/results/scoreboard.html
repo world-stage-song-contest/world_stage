@@ -1,34 +1,28 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Scoreboard</title>
+{% extends "base.html" %}
+{% block title %}Scoreboard: {{ show }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/scoreboard.css">
+    <script src="/static/js/scoreboard.js"></script>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="/results/{{ show }}">Results</a>
+    <a class="nav-item" href="/results/{{ show }}/detailed">Detailed Results</a>
+{% endblock %}
+{% block onload %}onLoad('{{ show }}'){% endblock %}
+{% block content %}
+    <p id="jury-counter">Jury <span id="jury-count">0</span> out of <span id="total-juries">0</span></p>
+    <div id="controls">
+        <button onclick="togglePause()">Pause</button>
+        <button onclick="speedUp()">Faster</button>
+        <button onclick="speedDown()">Slower</button>
+        <button id="reset">Reset</button>
+    </div>
 
-        <link rel="stylesheet" href="/static/css/scoreboard.css">
-        <script src="/static/js/scoreboard.js"></script>
-    </head>
+    <div id="from">
 
-    <body onload="onLoad()">
-        <span class="hidden" id="show">{{ show }}</span>
-        <p id="jury-counter"><span id="jury-count">0</span>/<span id="total-juries">0</span></p>
-        <div id="controls">
-            <button onclick="togglePause()">Pause</button>
-            <button onclick="speedUp()">Faster</button>
-            <button onclick="speedDown()">Slower</button>
-            <button id="reset">Reset</button>
-        </div>
-        <div id="navigation">
-            <button onclick="location.href='/results/{{ show }}'" class="nav-item">Results</button>
-            <button onclick="location.href='/results/{{ show }}/detailed'" class="nav-item">Detailed Results</button>
-        </div>
+    </div>
 
-        <div id="from">
-        
-        </div>
+    <div id="container">
 
-        <div id="container">
-
-        </div>
-    </body>
-</html>
+    </div>
+{% endblock %}

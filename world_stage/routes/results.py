@@ -5,7 +5,7 @@ from flask import Blueprint, redirect, render_template, request, url_for
 from collections import defaultdict
 
 from ..db import get_db
-from ..utils import get_show_id, SuspensefulVoteSequencer, dt_now
+from ..utils import get_show_id, SuspensefulVoteSequencer, dt_now, get_user_role_from_session, LCG, get_votes_for_song
 
 bp = Blueprint('results', __name__, url_prefix='/results')
 
@@ -32,8 +32,6 @@ def results_index():
 def results(show: str):
     show_data = get_show_id(show)
 
-    override = request.args.get('override')
-
     def songs_comparer(a):
         pt_cnt = []
         for p in show_data.points:
@@ -41,7 +39,10 @@ def results(show: str):
         val = (a['sum'], a['count']) + tuple(pt_cnt) + (-a['running_order'],)
         return val
 
-    if override != "override" and show_data.voting_closes > dt_now():
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
         return render_template('error.html', error="Voting hasn't closed yet."), 400
 
     db = get_db()
@@ -87,9 +88,10 @@ def results(show: str):
 def detailed_results(show: str):
     show_data = get_show_id(show)
 
-    override = request.args.get('override')
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
 
-    if override != "override" and show_data.voting_closes > dt_now():
+    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
         return render_template('error.html', error="Voting hasn't closed yet."), 400
     
     db = get_db()
@@ -148,9 +150,10 @@ def detailed_results(show: str):
 def scoreboard(show: str):
     show_data = get_show_id(show)
 
-    override = request.args.get('override')
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
 
-    if override != "override" and show_data.voting_closes > dt_now():
+    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
         return render_template('error.html', error="Voting hasn't closed yet."), 400
     
     return render_template('results/scoreboard.html', show=show)
@@ -159,9 +162,10 @@ def scoreboard(show: str):
 def scores(show: str):
     show_data = get_show_id(show)
 
-    override = request.args.get('override')
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
 
-    if override != "override" and show_data.voting_closes > dt_now():
+    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
         return {'error': "Voting hasn't closed yet."}, 400
 
     db = get_db()
@@ -286,6 +290,72 @@ def user_results(username: str):
             songs.append(val)
         vote['points'] = songs
 
-    print(votes)
-
     return render_template('results/user.html', votes=votes, username=username)
+
+@bp.get('/<show>/qualifiers')
+def qualifiers(show: str):
+    show_data = get_show_id(show)
+
+    if show_data.dtf is None:
+        return render_template('error.html', error="Not a semi-final."), 400
+    
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
+    
+    return render_template('results/qualifiers.html', show=show)
+
+@bp.get('/<show>/qualifiers/votes')
+def qualifiers_scores(show: str):
+    show_data = get_show_id(show)
+
+    if show_data.dtf is None:
+        return {"error": "Not a semi-final."}, 400
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
+        return {'error': "Voting hasn't closed yet."}, 400
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT song.id, song_show.running_order, country.name, country.id FROM song
+        JOIN song_show ON song.id = song_show.song_id
+        JOIN country ON song.country_id = country.id
+        WHERE song_show.show_id = ?
+        ORDER BY song_show.running_order
+    ''', (show_data.id,))
+    countries = []
+    for id, running_order, country, cc in cursor.fetchall():
+        val = {
+            'country': country,
+            'cc': cc,
+            'points': get_votes_for_song(id, show_data.id, running_order)
+        }
+        countries.append(val)
+
+    countries.sort(key=lambda x: x['points'], reverse=True)
+
+    dtf_countries = []
+    for i in range(show_data.dtf):
+        dtf_countries.append(countries[i])
+
+    sc_countries = []
+    for i in range(show_data.sc or 0):
+        sc_countries.append(countries[show_data.dtf + i])
+
+    countries.sort(key=lambda x: x['points'].ro)
+
+    for c in countries:
+        del c['points']
+
+    lcg = LCG(show_data.id)
+    lcg.shuffle(dtf_countries)
+    lcg.shuffle(sc_countries)
+
+    return {'countries': countries,'reveal_order': {'dtf': dtf_countries, 'sc': sc_countries},
+            'dtf': show_data.dtf, 'sc': show_data.sc or 0, 'special': show_data.special or 0}

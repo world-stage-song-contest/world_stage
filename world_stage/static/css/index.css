@@ -72,8 +72,10 @@ a:visited {
     font-weight: bold;
 }
 
-.req {
+.req::after {
+    content: "*";
     color: red;
+    font-weight: bold;
 }
 
 table {
@@ -120,7 +122,7 @@ th, td {
 #header-logo {
     color: var(--foreground2);
     display: flex;
-    align-items: baseline;
+    align-items: end;
     gap: 2em;
 }
 
@@ -131,6 +133,12 @@ th, td {
 h1 {
     font-size: 2em;
     margin: 0;
+}
+
+@media (max-width: 600px) {
+    h1 {
+        font-size: 1.5em;
+    }
 }
 
 #page-header {
@@ -196,7 +204,21 @@ h1 {
 .banner {
     width: 100%;
     box-sizing: border-box;
-    padding: 1em;
+    padding: 0.5em;
     border: 2px solid var(--foreground2);
     background-color: var(--background2);
+    margin-bottom: 1em;
+}
+
+.hidden.hidden.hidden {
+    display: none;
+}
+
+.banner.compact p, .banner.compact ul {
+    margin: 0;
+}
+
+.banner.long-text > div {
+    max-width: 80ch;
+    text-wrap: balance;
 }
