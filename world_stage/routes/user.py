@@ -225,7 +225,7 @@ def get_country_data(year, country):
 
 required_fields = {
     'artist': "Artist",
-    'roman_title': "Latin title",
+    'title': "Latin title",
     'video_link': "Video URL"
 }
 
@@ -237,9 +237,6 @@ def submit_song_post():
     user_id = get_user_id_from_session(session_id)
     if not user_id:
         return redirect(url_for('session.login'))
-
-    db = get_db()
-    cursor = db.cursor()
 
     languages = []
     other_data = {}
@@ -273,6 +270,8 @@ def submit_song_post():
         if field not in other_data or other_data[field] is None:
             missing_fields.append(required_fields[field])
             missing_fields_internal.append(field)
+
+    print(missing_fields)
     
     if missing_fields:
         return render_template('user/submit.html', years=get_years(), data=other_data,

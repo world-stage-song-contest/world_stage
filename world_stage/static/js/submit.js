@@ -1,7 +1,8 @@
 function onLoad() {
     const yearSelect = document.getElementById('year');
     yearSelect.value = '';
-    document.getElementById('remove-language-button').disabled = true;
+    const languageCount = document.querySelectorAll('.language-select').length;
+    document.getElementById('remove-language-button').disabled = languageCount == 1;
     const form = document.forms.submit_song;
     for (const element of form.elements) {
         if (element.tagName === 'SELECT' || element.tagName === 'TEXTAREA') {
@@ -147,7 +148,7 @@ async function populateSongData() {
     const form = document.forms.submit_song;
     for (const [key, value] of Object.entries(songData)) {
         const newVal = value === null ? '' : value;
-        const element = document.querySelector(`[name="${key}"]`);
+        const element = form.querySelector(`[name="${key}"]`);
         if (element) {
             if (element.tagName === 'SELECT') {
                 element.value = newVal;
@@ -161,5 +162,15 @@ async function populateSongData() {
                 element.value = newVal;
             }
         }
+    }
+
+    console.log(languages);
+
+    for (const [i, {id, name}] of languages.entries()) {
+        if (i != 0) {
+            addLanguageRow();
+        }
+        const languageSelect = document.querySelector(`#language${i + 1}`);
+        languageSelect.value = id;
     }
 }

@@ -59,6 +59,9 @@
     </details>
     </div>
 </div>
+{% if error %}
+    <p class="error">{{ error }}</p>
+{% endif %}
 <p id="error-message" class="error hidden"></p>
 <form id="submit-song" name="submit_song" method="POST" action="/user/submit">
     <fieldset class="grid" id="select-submission">
@@ -116,7 +119,7 @@
         </select>
         <div class="span-fieldset">
             <div>
-                <input type="checkbox" id="is_placeholder" name="is_placeholder {% if data.is_placeholder %}checked{% endif %}">
+                <input type="checkbox" id="is_placeholder" name="is_placeholder" {% if data.is_placeholder %}checked{% endif %}>
                 <label for="is_placeholder">Placeholder?</label>
             </div>
         </div>
@@ -142,7 +145,7 @@
     <fieldset class="grid hidable">
         <legend>Song video</legend>
         <label class="req" for="video">Video URL</label>
-        <input class="stretchable" type="url" id="video_link" name="video_link" placeholder="Put N/A if you'll upload later" maxlength="50" required value="{{ data.video_link }}">
+        <input class="stretchable" type="text" id="video_link" name="video_link" placeholder="Put N/A if you'll upload later" maxlength="50" required value="{{ data.video_link }}">
         <label for="snippet_start">Recap snippet start</label>
         <div>
         <input type="time" id="snippet_start" name="snippet_start" placeholder="00:00" maxlength="5" size="5" value="{{ data.snippet_start }}">

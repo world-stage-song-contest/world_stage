@@ -375,14 +375,18 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
 
 def format_seconds(seconds: int) -> str:
     """Format seconds into a string in the format MM:SS."""
+    if seconds is None:
+        return "00:00"
     if seconds < 0:
         return "00:00"
     minutes = seconds // 60
     seconds %= 60
     return f"{minutes:02}:{seconds:02}"
 
-def parse_seconds(td: str) -> int:
+def parse_seconds(td: str | None) -> int | None:
     """Parse a string in the format MM:SS into seconds."""
+    if not td:
+        return None
     parts = list(map(int, td.split(':')))
     if len(parts) == 2:
         return parts[0] * 60 + parts[1]
