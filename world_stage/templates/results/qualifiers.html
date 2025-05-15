@@ -24,6 +24,11 @@
     </symbol>
 </svg>
 
+{% if secret %}
+<div class="banner">
+    <p>The qualifiers are a secret until the end of the show.</p>
+</div>
+{% else %}
 <div id="step-one">
     <div id="wrapper">
         <div class="inner-wrapper">
@@ -40,4 +45,5 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}

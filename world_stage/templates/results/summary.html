@@ -8,6 +8,11 @@
     <a class="nav-item" href="/results/{{ show }}/detailed">Detailed Results</a>
 {% endblock %}
 {% block content %}
+{% if secret %}
+<div class="banner">
+    <p>The results summary is a secret until the end of the show.</p>
+</div>
+{% else %}
 <div id="scroll-container">
 <table>
     <thead>
@@ -26,7 +31,7 @@
     <tbody>
         {% for song in songs %}
             <tr>
-                <th class="number">{{ loop.index }}</td>
+                <th class="number">{{ song.place }}</td>
                 <td class="sticky">{{ flag(song.cc, song.country) }}{{ song.country }}</td>
                 <td>{{ song.artist }}</td>
                 <td>{{ song.title }}</td>
@@ -39,4 +44,5 @@
         {% endfor %}
 </table>
 </div>
+{% endif %}
 {% endblock %}

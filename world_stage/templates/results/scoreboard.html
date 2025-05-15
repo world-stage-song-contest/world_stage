@@ -8,21 +8,22 @@
     <a class="nav-item" href="/results/{{ show }}">Results</a>
     <a class="nav-item" href="/results/{{ show }}/detailed">Detailed Results</a>
 {% endblock %}
+
 {% block onload %}onLoad('{{ show }}'){% endblock %}
 {% block content %}
-    <p id="jury-counter">Jury <span id="jury-count">0</span> out of <span id="total-juries">0</span></p>
-    <div id="controls">
-        <button onclick="togglePause()">Pause</button>
-        <button onclick="speedUp()">Faster</button>
-        <button onclick="speedDown()">Slower</button>
-        <button id="reset">Reset</button>
-    </div>
-
-    <div id="from">
-
-    </div>
-
-    <div id="container">
-
-    </div>
+{% if secret %}
+<div class="banner">
+    <p>The scoreboard is a secret until the end of the show.</p>
+</div>
+{% else %}
+<p id="jury-counter">Jury <span id="jury-count">0</span> out of <span id="total-juries">0</span></p>
+<div id="controls">
+    <button onclick="togglePause()">Pause</button>
+    <button onclick="speedUp()">Faster</button>
+    <button onclick="speedDown()">Slower</button>
+    <button id="reset">Reset</button>
+</div>
+<div id="from"></div>
+<div id="container"></div>
+{% endif %}
 {% endblock %}

@@ -208,7 +208,7 @@ def scores(show: str):
     sequencer = SuspensefulVoteSequencer(results, song_ids, show_data.points)
     vote_order = sequencer.get_order()
 
-    user_songs = {}
+    user_songs = defaultdict(list)
     for voter_username in vote_order:
         cursor.execute('''
             SELECT song.id FROM song
@@ -217,7 +217,7 @@ def scores(show: str):
             WHERE user.username = ? AND song_show.show_id = ?
         ''', (voter_username,show_data.id))
         for song_id in cursor.fetchall():
-            user_songs[voter_username] = list(song_id)
+            user_songs[voter_username].append(song_id[0])
 
     cursor.execute('''
         SELECT username, nickname, country_id, country.name FROM vote_set
@@ -313,6 +313,9 @@ def qualifiers_scores(show: str):
 
     if show_data.dtf is None:
         return {"error": "Not a semi-final."}, 400
+    
+    if show_data.access_type == 'none':
+        return {"error": "This show is not public."}, 400
 
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)

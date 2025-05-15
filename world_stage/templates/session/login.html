@@ -4,8 +4,10 @@
     <link rel="stylesheet" href="/static/css/forms.css">
 {% endblock %}
 {% block content %}
-    <p class="banner">If you don't have an account, you can <a href="/signup">sign up</a>.</p>
-    <p class="banner">If you submitted songs through Discord or voted in a contest before, you need to <a href="/setpassword">set your password</a> before logging in.</p>
+    <p class="banner">If you don't have an account and haven't submitted songs or voted before, you can <a href="/signup">sign up</a>.</p>
+    <p class="banner">If you submitted songs through Discord or voted in a contest before (either on the
+        website or Scorewiz), you need to <a href="/setpassword">set your password</a> before logging in.
+        Your username is the same as the name on the submitter sheets.</p>
     {% if message %}
         <p class="error">{{ message }}</p>
     {% endif %}

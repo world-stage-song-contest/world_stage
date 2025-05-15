@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Results{% endblock %}
 {% block content %}
-
 {% if results %}
     <ul>
         {% for show in results %}
@@ -15,5 +14,4 @@
 {% else %}
     <h2 class="center">No results available.</h2>
 {% endif %}
-
 {% endblock %}

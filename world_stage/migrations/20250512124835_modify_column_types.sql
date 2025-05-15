@@ -71,7 +71,7 @@ CREATE TABLE song_language (
     song_id INTEGER,
     language_id INTEGER,
     FOREIGN KEY (song_id) REFERENCES song (id),
-    FOREIGN KEY (language_id) REFERENCES language (id)
+    FOREIGN KEY (language_id) REFERENCES language (id),
 );
 
 CREATE TABLE song_show (

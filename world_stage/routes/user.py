@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import unicodedata
 from flask import Blueprint, redirect, render_template, request, url_for
+from typing import Optional
 
 from ..db import get_db
 from ..utils import get_user_id_from_session, format_seconds, parse_seconds
@@ -12,17 +13,17 @@ class SongData:
     year: int
     country: str
     title: str
-    native_title: str | None
+    native_title: Optional[str]
     artist: str
     is_placeholder: bool
-    title_language_id: int | None
-    native_language_id: int | None
-    video_link: str | None
-    snippet_start: str | None
-    snippet_end: str | None
-    english_lyrics: str | None
-    romanized_lyrics: str | None
-    native_lyrics: str | None
+    title_language_id: Optional[int]
+    native_language_id: Optional[int]
+    video_link: Optional[str]
+    snippet_start: Optional[str]
+    snippet_end: Optional[str]
+    english_lyrics: Optional[str]
+    romanized_lyrics: Optional[str]
+    native_lyrics: Optional[str]
     languages: list[dict]
 
     def as_dict(self) -> dict:
@@ -30,6 +31,21 @@ class SongData:
         for attr in self.__dict__:
                 res[attr] = getattr(self, attr)
         return res
+    
+    def __init__(self, **kwargs):
+        annotations = self.__dataclass_fields__
+        for key, value in kwargs.items():
+            annotation = annotations.get(key)
+            if annotation:
+                if annotation.type == list:
+                    value = list(value)
+                elif annotation.type == Optional[str] or annotation.type == str:
+                    value = str(value) if value else None
+                elif annotation.type == Optional[int] or annotation.type == int:
+                    value = int(value) if value else None
+                setattr(self, key, value)
+            else:
+                raise ValueError(f"Invalid field: {key}")
 
 def update_song(song_data: SongData, user_id: int) -> dict:
     db = get_db()
@@ -37,8 +53,8 @@ def update_song(song_data: SongData, user_id: int) -> dict:
 
     cursor.execute('''
         SELECT id FROM song
-        WHERE year_id = ? AND country_id = ? AND submitter_id = ?
-    ''', (song_data.year, song_data.country, user_id))
+        WHERE year_id = ? AND country_id = ?
+    ''', (song_data.year, song_data.country))
     song_id = cursor.fetchone()
     if not song_id:
         return {'error': 'Song not found.'}
@@ -51,7 +67,7 @@ def update_song(song_data: SongData, user_id: int) -> dict:
             native_language_id = ?, video_link = ?,
             snippet_start = ?, snippet_end = ?,
             translated_lyrics = ?, romanized_lyrics = ?,
-            native_lyrics = ?
+            native_lyrics = ?, submitter_id = ?
         WHERE id = ?
     ''', (
         song_data.title,
@@ -66,15 +82,20 @@ def update_song(song_data: SongData, user_id: int) -> dict:
         song_data.english_lyrics,
         song_data.romanized_lyrics,
         song_data.native_lyrics,
+        user_id,
         song_id
     ))
+
+    cursor.execute('''
+        DELETE FROM song_language
+        WHERE song_id = ?
+        ''', (song_id,))
 
     for i, lang_id in enumerate(song_data.languages):
         cursor.execute('''
             INSERT INTO song_language (song_id, language_id, priority)
             VALUES (?, ?, ?)
-            ON CONFLICT(song_id, priority) DO UPDATE SET language_id = ?
-        ''', (song_id, lang_id, i, lang_id))
+        ''', (song_id, lang_id, i))
 
     db.commit()
 
@@ -287,6 +308,15 @@ def submit_song_post():
     other_data['snippet_end'] = parse_seconds(other_data['snippet_end'])
 
     song_data = SongData(languages=languages, **other_data)
-    update_song(song_data, user_id)
+
+    print(song_data)
+
+    res = update_song(song_data, user_id)
+    if 'error' in res:
+        return render_template('user/submit.html', years=get_years(), data=other_data,
+                               languages=get_languages(), countries=get_countries(other_data['year'], user_id),
+                               year=other_data['year'], country=other_data['country'],
+                               selected_languages=languages, invalid_languages=invalid_languages,
+                               error=res['error'], missing_fields=missing_fields_internal, onLoad=False)
 
     return render_template('user/submit_success.html')

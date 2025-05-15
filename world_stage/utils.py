@@ -151,6 +151,7 @@ class ShowData:
     dtf: Optional[int]
     sc: Optional[int]
     special: Optional[int]
+    access_type: str
 
 @dataclass
 class UserPermissions:
@@ -203,19 +204,19 @@ def get_show_id(show: str) -> ShowData:
 
     if year:
         cursor.execute('''
-            SELECT show.id, show.point_system_id, show.show_name, show.voting_opens, show.voting_closes, show.dtf, show.sc, show.special FROM show
+            SELECT show.id, show.point_system_id, show.show_name, show.voting_opens, show.voting_closes, show.dtf, show.sc, show.special, show.allow_access_type FROM show
             JOIN year ON show.year_id = year.id
             WHERE year.id = ? AND show.short_name = ?
         ''', (year, short_show_name))
     else:
         cursor.execute('''
-            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special FROM show
+            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, allow_access_type FROM show
             WHERE short_name = ?
         ''', (short_show_name,))
 
     show_id = cursor.fetchone()
     if show_id:
-        show_id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special = show_id
+        show_id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, access_type = show_id
 
     points = get_points_for_system(point_system_id)
 
@@ -229,7 +230,8 @@ def get_show_id(show: str) -> ShowData:
         year=year,
         dtf=dtf,
         sc=sc,
-        special=special
+        special=special,
+        access_type=access_type
     )
 
     return ret
