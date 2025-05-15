@@ -1,6 +1,6 @@
 @keyframes winner {
     from {
-        background: white;
+        background: var(--background1);
     }
 
     to {
@@ -84,14 +84,14 @@
     box-sizing: border-box;
     position: absolute;
     width: 50%;
-    border: 1px solid black;
+    border: 1px solid var(--foreground1);
     display: flex;
     gap: 0.25em;
     padding: 2px;
     height: 42px;
 
     transition: top 1s, left 1s, background 1s;
-    background: white;
+    background: var(--background1);
 }
 
 .name-container {
@@ -161,11 +161,11 @@
 }
 
 .active {
-    background: cornflowerblue;
+    background: var(--active-entry-color);
 }
 
 .own-entry {
-    background: salmon;
+    background: var(--own-entry-color);
 }
 
 .no-win {
