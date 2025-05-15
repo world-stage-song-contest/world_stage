@@ -239,11 +239,15 @@ def submit_song_post():
         return redirect(url_for('session.login'))
 
     languages = []
+    invalid_languages = []
     other_data = {}
     for key, value in request.form.items():
         if key.startswith('language'):
             n = int(key.removeprefix('language'))
-            languages.append((n, int(value)))
+            try:
+                languages.append((n, int(value or 0)))
+            except ValueError:
+                invalid_languages.append(key)
         else:
             other_data[key] = value.strip()
             other_data[key] = unicodedata.normalize('NFKC', other_data[key])
@@ -252,9 +256,9 @@ def submit_song_post():
     languages.sort(key=lambda x: x[0])
     languages = list(map(lambda x: x[1], languages))
 
-    other_data['is_placeholder'] = request.form.get('is_placeholder', False)
-    is_translation = other_data.pop('is_translation', False)
-    does_match = other_data.pop('does_match', False)
+    other_data['is_placeholder'] = other_data.get('is_placeholder', False) == "on"
+    is_translation = other_data.pop('is_translation', False) == "on"
+    does_match = other_data.pop('does_match', False) == "on"
 
     if does_match or not other_data.get('native_title', None):
         other_data['native_language_id'] = languages[0]
@@ -270,14 +274,12 @@ def submit_song_post():
         if field not in other_data or other_data[field] is None:
             missing_fields.append(required_fields[field])
             missing_fields_internal.append(field)
-
-    print(missing_fields)
     
     if missing_fields:
         return render_template('user/submit.html', years=get_years(), data=other_data,
                                languages=get_languages(), countries=get_countries(other_data['year'], user_id),
                                year=other_data['year'], country=other_data['country'],
-                               selected_languages=languages,
+                               selected_languages=languages, invalid_languages=invalid_languages,
                                error='Missing required fields: ' + ', '.join(missing_fields),
                                missing_fields=missing_fields_internal, onLoad=False)
 
