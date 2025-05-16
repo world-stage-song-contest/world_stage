@@ -5,7 +5,7 @@
    width="1600"
    version="1.1"
    id="svg7"
-   sodipodi:docname="rect copy.svg"
+   sodipodi:docname="square.svg"
    inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -26,49 +26,49 @@
   <clipPath
      id="a">
     <path
-       d="M 0,800 H 1200 V 0 H 0 Z"
-       transform="translate(-425.00001,-600.00001)"
+       d="m0 800h1200v-800h-1200z"
+       transform="translate(-425.00001 -600.00001)"
        id="path1" />
   </clipPath>
   <clipPath
      id="b">
     <path
-       d="M 0,800 H 1200 V 0 H 0 Z"
-       transform="translate(-475.00001,-560.00001)"
+       d="m0 800h1200v-800h-1200z"
+       transform="translate(-475.00001 -560.00001)"
        id="path2" />
   </clipPath>
   <clipPath
      id="c">
     <path
-       d="M 0,800 H 1200 V 0 H 0 Z"
-       transform="translate(-583.33402,-400.00001)"
+       d="m0 800h1200v-800h-1200z"
+       transform="translate(-583.33402 -400.00001)"
        id="path3" />
   </clipPath>
   <path
-     d="M 0,1600.0001 H 1600 V 6e-5 H 0 Z"
+     d="m0 1600.0001h1600v-1600.00004h-1600z"
      fill="#e30a17"
-     id="path4"
-     style="stroke-width:1.63299" />
+     stroke-width="1.63299"
+     id="path4" />
   <g
      id="g7"
-     transform="translate(0,266.66667)">
+     transform="matrix(1.3125,0,0,1.3125,-93.750013,-250)">
     <path
        clip-path="url(#a)"
        d="m 0,0 c 110.457,0 200,-89.543 200,-200 0,-110.457 -89.543,-200 -200,-200 -110.457,0 -200,89.543 -200,200 0,110.457 89.543,200 200,200"
        fill="#ffffff"
-       transform="matrix(1.3333333,0,0,-1.3333333,566.66667,266.66667)"
+       transform="matrix(1.3333333,0,0,-1.3333333,566.66667,533.33334)"
        id="path5" />
     <path
        clip-path="url(#b)"
        d="m 0,0 c 88.366,0 160,-71.634 160,-160 0,-88.365 -71.634,-160 -160,-160 -88.366,0 -160,71.635 -160,160 0,88.366 71.634,160 160,160"
        fill="#e30a17"
-       transform="matrix(1.3333333,0,0,-1.3333333,633.33333,320)"
+       transform="matrix(1.3333333,0,0,-1.3333333,633.33333,586.66667)"
        id="path6" />
     <path
        clip-path="url(#c)"
        d="M 0,0 180.901,-58.779 69.097,95.106 V -95.106 L 180.901,58.779 Z"
        fill="#ffffff"
-       transform="matrix(1.3333333,0,0,-1.3333333,777.77867,533.33333)"
+       transform="matrix(1.3333333,0,0,-1.3333333,777.77867,800)"
        id="path7" />
   </g>
 </svg>
