@@ -1,17 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Results{% endblock %}
 {% block content %}
-{% if results %}
-    <ul>
-        {% for show in results %}
-            <li>{{ show.name }}
-                (<a href="/results/{{ show.short_name }}">Results summary</a>,
-                    <a href="/results/{{ show.short_name }}/detailed">Detailed results</a>,
-                    <a href="/results/{{ show.short_name }}/scoreboard">Scoreboard</a>)
-            </li>
-        {% endfor %}
-    </ul>
-{% else %}
-    <h2 class="center">No results available.</h2>
-{% endif %}
+<div class="cards-container">
+    <a href="/year" class="card">
+        <h3>Years</h3>
+        <img src="/static/images/calendar.png" alt="Calendar Icon">
+        <p>Check information about previous years.</p>
+    </a>
+    <a href="/user" class="card">
+        <h3>Users</h3>
+        <img src="/static/images/user.png" alt="User Icon">
+        <p>Check information about other users.</p>
+    </a>
+</div>
 {% endblock %}

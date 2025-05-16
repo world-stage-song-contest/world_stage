@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Submissions: {{ username }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/submissions.css">
+{% endblock %}
+{% block content %}
+{% if not closed %}
+<div class="banner compact">
+    <p>Songs in <i>italics</i> are placeholders and can be replaced by any other user.</p>
+</div>
+{% endif %}
+
+<table class="songs-table">
+    <thead>
+        <tr>
+            <th>Year</th>
+            <th>Country</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Language</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for song in songs %}
+        <tr class="{{ "placeholder" if song.placeholder else "" }}">
+            <td><a href="/year/{{ song.year }}">{{ song.year }}</a></td>
+            <td><div class="country">{{ flag(song.cc, song.country) }}
+                <span href="/country/{{ song.cc }}">{{ song.country }}</span></div></td>
+            <td>{{ song.artist }}</td>
+            <td>{{ song.title }}</td>
+            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Overview: {{ year }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/year.css">
+{% endblock %}
+{% block content %}
+{% if not closed %}
+<div class="banner compact">
+    <p>Songs in <i>italics</i> are placeholders and can be replaced.</p>
+</div>
+{% endif %}
+
+<div class="shows">
+{% for show in shows %}
+    <a href="/year/{{ year }}/{{ show.short_name }}">{{ show.name }}</a> {% if not loop.last %}|{% endif %}
+{% endfor %}
+</div>
+
+<table class="songs-table">
+    <thead>
+        <tr>
+            <th>Country</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Language</th>
+            <th>Submitter</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for song in songs %}
+        <tr class="{{ "placeholder" if song.placeholder else "" }}">
+            <td><div class="country">{{ flag(song.cc, song.country) }}
+                <span href="/country/{{ song.cc }}">{{ song.country }}</span></div></td>
+            <td>{{ song.artist }}</td>
+            <td>{{ song.title }}</td>
+            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+            <td>{{ song.submitter or '' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

@@ -1,16 +1,16 @@
 
 {% extends "base.html" %}
-{% block title %}Qualifiers: {{ show }}{% endblock %}
+{% block title %}Qualifiers: {{ year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
 <link rel="stylesheet" href="/static/css/qualifiers.css">
 <link rel="stylesheet" href="/static/css/qualifiers-envelopes.css">
 <script src="/static/js/qualifiers.js"></script>
 {% endblock %}
 {% block navigation %}
-<a class="nav-item" href="/results/{{ show }}">Results summary</a>
-<a class="nav-item" href="/results/{{ show }}/detailed">Detailed Results</a>
+<a class="nav-item" href="/year/{{ year }}/{{ show }}">Results summary</a>
+<a class="nav-item" href="/year/{{ year }}/{{ show }}/detailed">Detailed Results</a>
 {% endblock %}
-{% block onload %}onLoad('{{ show }}'){% endblock %}
+{% block onload %}onLoad({{ year }}, '{{ show }}'){% endblock %}
 {% block content %}
 <svg style="display: none;">
     <symbol id="envelope-top" viewBox="0 0 180 60">

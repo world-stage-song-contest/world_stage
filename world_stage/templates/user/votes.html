@@ -8,7 +8,7 @@
 <div class="vote-card-container">
 {% for vote in votes %}
 <div class="vote-card">
-    <h3 class="card-show-name"><a href="/results/{{ vote.short_name }}">{{ vote.year or '' }} {{ vote.show_name }}</a></h3>
+    <h3 class="card-show-name"><a href="/year/{{ vote.year }}/{{ vote.short_name }}">{{ vote.year or '' }} {{ vote.show_name }}</a></h3>
     <p class="vote-date">{{ vote.date }}</p>
     <p class="voter-name">{{ flag(vote.code) }}{{ vote.nickname }}</p>
     <table class="user-votes">

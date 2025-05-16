@@ -1,0 +1,44 @@
+.flag {
+    height: 1.5em;
+    border: 1px solid grey;
+}
+
+.country {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.no-winner {
+    background: var(--background3);
+    text-align: center;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.placeholder {
+    font-style: italic;
+}
+
+.upcoming-year {
+    border: 1px solid var(--foreground2);
+    background: var(--background2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+    padding: 0.5em;
+    font-weight: bold;
+}
+
+.year-container {
+    display: flex;
+    align-items: space-between;
+    gap: 0.5em;
+    flex-wrap: wrap;
+}
+
+.shows {
+    margin: 1em 0;
+}

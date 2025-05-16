@@ -27,8 +27,8 @@ let allCountries = {};
 
 let clicked = false;
 
-async function loadVotes(show) {
-    const res = await fetch(`/results/${show}/qualifiers/votes`);
+async function loadVotes(year, show) {
+    const res = await fetch(`/year/${year}/${show}/qualifiers/votes`);
     const json = await res.json();
     nTop = json.dtf;
     nSecondChance = json.sc;
@@ -298,11 +298,11 @@ function createRo() {
 
 let loaded = false;
 
-async function onLoad(showName) {
+async function onLoad(year, show) {
     if (loaded) return;
     loaded = true;
 
-    await loadVotes(showName);
+    await loadVotes(year, show);
     createRo();
     createEnvelopes();
 }

@@ -1,11 +1,11 @@
 {%extends "base.html" %}
-{% block title %}Detailed Results – {{ show_name }}{% endblock %}
+{% block title %}Detailed Results: {{year or ''}} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
 {% endblock %}
 {% block navigation %}
-    <a class="nav-item" href="/results/{{ show }}">Results Summary</a>
-    <a class="nav-item" href="/results/{{ show }}/scoreboard">Scoreboard</a>
+    <a class="nav-item" href="/year/{{ year }}/{{ show }}">Results Summary</a>
+    <a class="nav-item" href="/year/{{ year }}/{{ show }}/scoreboard">Scoreboard</a>
 {% endblock %}
 {% block content %}
 {% if secret %}
@@ -35,11 +35,11 @@
         <tbody>
         {% for song in songs %}
             <tr>
-                <td class="number header-like">{{ loop.index }}</td>
+                <td class="number header-like">{{ song.vote_data.ro }}</td>
                 <td class="sticky">{{ flag(song.cc, song.country) }}{{ song.country }}</td>
                 <td>{{ song.artist }}</td>
                 <th class="plain">{{ song.title }}</td>
-                <td class="number">{{ song.sum }}</td>
+                <td class="number" data-value="{{ loop.index }}">{{ song.vote_data.sum }}</td>
             {% for voter in results.keys() %}
             {% set pts = results[voter].get(song.id, 0) %}
                 <td class="number {{ "zero" if pts == 0 else "nonzero" }}">{{ pts }}</td>

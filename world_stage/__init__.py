@@ -37,12 +37,16 @@ def create_app():
     from .routes import vote
     from .routes import results
     from .routes import session
+    from .routes import member
+    from .routes import year
     from .routes import user
     
     app.register_blueprint(index.bp)
     app.register_blueprint(vote.bp)
     app.register_blueprint(results.bp)
     app.register_blueprint(session.bp)
+    app.register_blueprint(member.bp)
+    app.register_blueprint(year.bp)
     app.register_blueprint(user.bp)
 
     return app

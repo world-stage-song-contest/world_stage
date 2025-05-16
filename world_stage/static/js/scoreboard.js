@@ -5,8 +5,8 @@ let points = []
 let associations = {}
 let userSongs = {}
 
-async function loadVotes(show) {
-    const res = await fetch(`/results/${show}/scoreboard/votes`);
+async function loadVotes(year, show) {
+    const res = await fetch(`/year/${year}/${show}/scoreboard/votes`);
     const json = await res.json();
     points = json.points;
     userSongs = json.user_songs;
@@ -399,11 +399,11 @@ async function reset() {
     await vote();
 }
 
-async function onLoad(show) {
+async function onLoad(year, show) {
     if (loaded) return;
     loaded = true;
 
-    await loadVotes(show);
+    await loadVotes(year, show);
 
     document.querySelector("#total-juries").innerHTML = voteOrder.length;
 

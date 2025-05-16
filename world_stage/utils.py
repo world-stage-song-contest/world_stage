@@ -190,14 +190,17 @@ def parse_timedelta(td: str) -> datetime.timedelta:
 def dt_now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
-def get_show_id(show: str) -> ShowData:
-    show_data = show.split('-')
-    if len(show_data) == 2:
-        year = int(show_data[0])
-        short_show_name = show_data[1]
+def get_show_id(show: str, year: Optional[int] = None) -> Optional[ShowData]:
+    if year:
+        short_show_name = show
     else:
-        year = None
-        short_show_name = show_data[0]
+        show_data = show.split('-')
+        if len(show_data) == 2:
+            year = int(show_data[0])
+            short_show_name = show_data[1]
+        else:
+            year = None
+            short_show_name = show_data[0]
 
     db = get_db()
     cursor = db.cursor()
@@ -217,6 +220,8 @@ def get_show_id(show: str) -> ShowData:
     show_id = cursor.fetchone()
     if show_id:
         show_id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, access_type = show_id
+    else:
+        return None
 
     points = get_points_for_system(point_system_id)
 
@@ -329,6 +334,9 @@ def parse_cookie(cookie: str) -> dict[str, str]:
 @dataclass
 class VoteData:
     ro: int
+    total_votes: int
+    max_pts: int
+    show_voters: int
     sum: int = 0
     count: int = 0
     pts: dict[int, int] = field(default_factory=lambda: defaultdict(int))
@@ -349,17 +357,50 @@ class VoteData:
         for i in range(len(this_keys)):
             if this_keys[i] != other_keys[i]:
                 return this_keys[i] < other_keys[i]
+        if self.ro is None or other.ro is None:
+            return False
         return self.ro < other.ro
     
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VoteData):
             return False
         return self.ro == other.ro and self.sum == other.sum and self.count == other.count and self.pts == other.pts
+    
+    def pct(self) -> str:
+        if self.show_voters == 0 or self.max_pts == 0:
+            return "0.00%"
+        return f"{(self.sum / (self.show_voters * self.max_pts)) * 100:.2f}%"
+
+    def get_pt(self, pt: int) -> int:
+        if pt not in self.pts:
+            return 0
+        return self.pts[pt]
 
 def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
     db = get_db()
     cursor = db.cursor()
 
+    cursor.execute('''
+        SELECT COUNT(*) FROM vote
+        JOIN vote_set ON vote.vote_set_id = vote_set.id
+        WHERE song_id = ? AND show_id = ?
+    ''', (song_id, show_id))
+
+    count = cursor.fetchone()[0]
+
+    cursor.execute('''
+        SELECT MAX(score) FROM show
+        JOIN point ON show.point_system_id = point.point_system_id
+        WHERE show.id = ?
+    ''', (show_id,))
+    max_pts = cursor.fetchone()[0]
+
+    cursor.execute('''
+        SELECT COUNT(DISTINCT voter_id) FROM vote_set
+        WHERE show_id = ?
+    ''', (show_id,))
+    show_voters = cursor.fetchone()[0]
+                   
     cursor.execute('''
         SELECT score FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
@@ -367,7 +408,7 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         JOIN point ON vote.point_id = point.id
         WHERE song_id = ? AND show_id = ?
     ''', (song_id,show_id))
-    res = VoteData(ro=ro)
+    res = VoteData(ro=ro, total_votes=count, max_pts=max_pts, show_voters=show_voters)
     for points in cursor.fetchall():
         pt = points[0]
         res.sum += pt
@@ -394,3 +435,247 @@ def parse_seconds(td: str | None) -> int | None:
         return parts[0] * 60 + parts[1]
     else:
         raise ValueError("Invalid time format. Use 'MM:SS'.")
+    
+
+@total_ordering
+@dataclass
+class Song:
+    id: int
+    title: str
+    artist: str
+    cc: int
+    country: str
+    year: int
+    placeholder: bool
+    languages: list['Language']
+    vote_data: Optional[VoteData]
+    submitter: Optional[str]
+
+    def __init__(self, id: int, title: str, artist: str, cc: int, country: str, year: int, placeholder: bool, submitter: Optional[str],
+                 languages: list['Language'] = [], show_id: Optional[int] = None, ro: Optional[int] = None):
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.cc = cc
+        self.country = country
+        self.year = year
+        self.languages = languages
+        self.placeholder = placeholder
+        self.submitter = submitter
+        if show_id is not None and ro is not None:
+            self.vote_data = get_votes_for_song(self.id, show_id, ro)
+        else:
+            self.vote_data = None
+
+    def __lt__(self, other):
+        if not isinstance(other, Song):
+            return NotImplemented
+        if self.vote_data is None or other.vote_data is None:
+            return self.id < other.id
+        else:
+            return self.vote_data < other.vote_data
+    
+    def __eq__(self, other):
+        if not isinstance(other, Song):
+            return NotImplemented
+        return self.id == other.id
+    
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'artist': self.artist,
+            'cc': self.cc,
+            'country': self.country,
+            'languages': self.languages,
+        }
+    
+    def get_pt(self, points: int) -> Optional[int]:
+        if self.vote_data is None:
+            return None
+        return self.vote_data.get_pt(points)
+
+@dataclass
+class Language:
+    name: str
+    tag: str
+    extlang: str
+    region: str
+    subvariant: str
+    suppress_script: bool
+
+    def as_dict(self):
+        return {
+            'name': self.name,
+            'tag': self.tag,
+            'extlang': self.extlang,
+            'region': self.region,
+            'subvariant': self.subvariant,
+            'suppress_script': self.suppress_script,
+        }
+
+@total_ordering
+@dataclass
+class Show:
+    year: int
+    short_name: str
+    name: str
+
+    def __lt__(self, other):
+        def value_map(name: str) -> int:
+            if name.startswith('sf'):
+                return 0
+            elif name == 'sc':
+                return 1
+            elif name == 'f':
+                return 2
+            else:
+                return 3
+            
+        if not isinstance(other, Show):
+            return NotImplemented
+        
+        if self.year != other.year:
+            return self.year < other.year
+
+        v1 = value_map(self.short_name)
+        v2 = value_map(other.short_name)
+        return v1 < v2
+
+def get_song_languages(song_id: int) -> list[Language]:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT language.name, language.tag, language.extlang, language.region, language.subvariant, language.suppress_script FROM song_language
+        JOIN language ON song_language.language_id = language.id
+        WHERE song_id = ?
+        ORDER BY priority
+    ''', (song_id,))
+    languages = [Language(lang[0], lang[1], lang[2], lang[3], lang[4], lang[5]) for lang in cursor.fetchall()]
+
+    return languages
+
+def get_show_songs(year: int, short_name: str, *, select_languages=False, select_votes=False) -> Optional[list[Song]]:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT show.id FROM show
+        JOIN year ON show.year_id = year.id
+        WHERE year.id = ? AND show.short_name = ? AND allow_access_type = 'full'
+        ''', (year, short_name))
+    show_id = cursor.fetchone()
+    if not show_id:
+        return None
+    show_id = show_id[0]
+
+    cursor.execute('''
+        SELECT song.id, song.title, song.artist, song.country_id, country.name, song.year_id, song_show.running_order, song.is_placeholder, user.username FROM song
+        JOIN song_show ON song.id = song_show.song_id
+        JOIN show ON song_show.show_id = show.id
+        JOIN country ON song.country_id = country.id
+        LEFT OUTER JOIN user on song.submitter_id = user.id
+        WHERE show.id = ?
+        ''', (show_id,))
+    songs = [Song(id=song['id'],
+                  title=song['title'],
+                  artist=song['artist'],
+                  cc=song['country_id'],
+                  country=song['name'],
+                  year=song['year_id'],
+                  placeholder=bool(song['is_placeholder']),
+                  submitter=song['username'],
+                  ro=song['running_order'])
+                for song in cursor.fetchall()]
+
+    for song in songs:
+        if select_languages:
+            song.languages = get_song_languages(song.id)
+        if select_votes:
+            song.vote_data = get_votes_for_song(song.id, show_id, show_id)
+
+    return songs
+
+def get_year_winner(year: int) -> Optional[Song]:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT closed FROM year
+        WHERE id = ?
+        ''', (year,))
+    
+    closed = cursor.fetchone()[0]
+    if not closed:
+        return None
+    
+    songs = get_show_songs(year, 'f', select_votes=True)
+    if not songs:
+        return None
+    
+    songs.sort(reverse=True)
+    winner = songs[0]
+    winner.languages = get_song_languages(winner.id)
+
+    return winner
+
+def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT song.id, song.title, song.artist, song.country_id, country.name, song.is_placeholder, user.username, song.year_id FROM song
+        JOIN country ON song.country_id = country.id
+        LEFT OUTER JOIN user on song.submitter_id = user.id
+        WHERE song.year_id = ?
+        ORDER BY country.name
+        ''', (year,))
+    songs = [Song(id=song['id'],
+                  title=song['title'],
+                  artist=song['artist'],
+                  cc=song['country_id'],
+                  country=song['name'],
+                  placeholder=bool(song['is_placeholder']),
+                  year=song['year_id'],
+                  submitter=song['username']) for song in cursor.fetchall()]
+
+    if select_languages:
+        for song in songs:
+            song.languages = get_song_languages(song.id)
+
+    return songs
+
+def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages = False) -> list[Song]:
+    db = get_db()
+    cursor = db.cursor()
+
+    if year:
+        cursor.execute('''
+            SELECT song.id, song.title, song.artist, song.country_id, country.name, song.is_placeholder, user.username, song.year_id FROM song
+            JOIN country ON song.country_id = country.id
+            JOIN user on song.submitter_id = user.id
+            WHERE song.submitter_id = ? AND song.year_id = ? AND song.year_id IS NOT NULL
+            ORDER BY song.year_id, country.name
+        ''', (user_id, year))
+    else:
+        cursor.execute('''
+            SELECT song.id, song.title, song.artist, song.country_id, country.name, song.is_placeholder, user.username, song.year_id FROM song
+            JOIN country ON song.country_id = country.id
+            JOIN user on song.submitter_id = user.id
+            WHERE song.submitter_id = ? AND song.year_id IS NOT NULL
+            ORDER BY song.year_id, country.name
+        ''', (user_id,))
+    songs = [Song(id=song['id'],
+                    title=song['title'],
+                    artist=song['artist'],
+                    cc=song['country_id'],
+                    country=song['name'],
+                    placeholder=bool(song['is_placeholder']),
+                    year=song['year_id'],
+                    submitter=song['username']) for song in cursor.fetchall()]
+
+    if select_languages:
+        for song in songs:
+            song.languages = get_song_languages(song.id)
+    return songs

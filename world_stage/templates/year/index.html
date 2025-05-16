@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Years{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="/static/css/year.css">
+{% endblock %}
+{% block content %}
+
+<h2>Upcoming years</h2>
+<div class="year-container">
+    {% for year in upcoming %}
+        <div class="upcoming-year">
+            <a href="/year/{{ year.id }}">
+                <div class="year-number">{{ year.id }}</div>
+            </a>
+        </div>
+    {% endfor %}
+</div>
+
+<h2>Done years</h2>
+<div class="sticky-header-table-container">
+    <table class="results-table sticky-header-table">
+        <thead>
+            <tr>
+                <th>Year</th>
+                <th>Winner</th>
+                <th>Artist</th>
+                <th>Title</th>
+                <th>Language</th>
+                <th>Points</th>
+                <th>% of Max</th>
+                <th>Submitter</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for year in years %}
+        {% set winner = year.winner %}
+            <tr>
+                <td class="year"><a href="/year/{{ year.id }}"><b>{{ year.id }}</b></a></td>
+                <td><div class="country">
+                    {{ flag(winner.cc, winner.country) }}
+                    <span href="/country/{{ winner.cc }}">{{ winner.country }}</span>
+                </div></td>
+                <td class="artist">{{ winner.artist }}</td>
+                <td class="title">{{ winner.title }}</td>
+                <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
+                <td class="points">{{ winner.vote_data.sum }}</td>
+                <td class="percent">{{ winner.vote_data.pct() }}</td>
+                <td class="submitter">{{ winner.submitter }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
