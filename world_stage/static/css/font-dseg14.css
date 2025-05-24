@@ -1,0 +1,53 @@
+@font-face {
+    font-family: 'DSEG14 Classic Mini';
+    src: url('/static/fonts/dseg14/DSEG14ClassicMini-Bold.woff2') format('woff2'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-Bold.woff') format('woff'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'DSEG14 Classic Mini';
+    src: url('/static/fonts/dseg14/DSEG14ClassicMini-BoldItalic.woff2') format('woff2'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-BoldItalic.woff') format('woff'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-BoldItalic.ttf') format('truetype');
+    font-weight: bold;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'DSEG14 Classic Mini';
+    src: url('/static/fonts/dseg14/DSEG14ClassicMini-Italic.woff2') format('woff2'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-Italic.woff') format('woff'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-Italic.ttf') format('truetype');
+    font-weight: normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'DSEG14 Classic Mini';
+    src: url('/static/fonts/dseg14/DSEG14ClassicMini-Light.woff2') format('woff2'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-Light.woff') format('woff'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'DSEG14 Classic Mini';
+    src: url('/static/fonts/dseg14/DSEG14ClassicMini-LightItalic.woff2') format('woff2'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-LightItalic.woff') format('woff'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-LightItalic.ttf') format('truetype');
+    font-weight: 300;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'DSEG14 Classic Mini';
+    src: url('/static/fonts/dseg14/DSEG14ClassicMini-Regular.woff2') format('woff2'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-Regular.woff') format('woff'),
+         url('/static/fonts/dseg14/DSEG14ClassicMini-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}

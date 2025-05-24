@@ -1,0 +1,39 @@
+@font-face {
+    font-family: 'Eurostile';
+    src: url("/static/fonts/eurostile/EurostileNextLTPro-Bold.woff2") format("woff2"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-Bold.woff") format("woff"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-Bold.ttf") format("truetype");
+    font-weight: bold;
+}
+
+@font-face {
+    font-family: 'Eurostile';
+    src: url("/static/fonts/eurostile/EurostileNextLTPro-Light.woff2") format("woff2"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-Light.woff") format("woff"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-Light.ttf") format("truetype");
+    font-weight: 300;
+}
+
+@font-face {
+    font-family: 'Eurostile';
+    src: url("/static/fonts/eurostile/EurostileNextLTPro-Regular.woff2") format("woff2"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-Regular.woff") format("woff"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-Regular.ttf") format("truetype");
+    font-weight: normal;
+}
+
+@font-face {
+    font-family: 'Eurostile';
+    src: url("/static/fonts/eurostile/EurostileNextLTPro-SmBd.woff2") format("woff2"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-SmBd.woff") format("woff"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-SmBd.ttf") format("truetype");
+    font-weight: 600;
+}
+
+@font-face {
+    font-family: 'Eurostile';
+    src: url("/static/fonts/eurostile/EurostileNextLTPro-UltLight.woff2") format("woff2"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-UltLight.woff") format("woff"),
+         url("/static/fonts/eurostile/EurostileNextLTPro-UltLight.ttf") format("truetype");
+    font-weight: 200;
+}
