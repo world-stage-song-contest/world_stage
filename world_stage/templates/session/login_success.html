@@ -3,7 +3,7 @@
 {% block headercontents %}
 <script>
     setTimeout(function() {
-        window.location.href = "/user";
+        window.location.href = "{{ url_for('member.index') }}";
     }, 5000);
 </script>
 {% endblock %}
@@ -15,5 +15,6 @@
 <p>You were already logged in.</p>
 {% endif %}
 <p>You will be redirected to your user in a few seconds.</p>
+<p>If you are not redirected or are feeling impatient, click <a href="{{ url_for('member.index') }}">HERE</a>.</p>
 
 {% endblock%}

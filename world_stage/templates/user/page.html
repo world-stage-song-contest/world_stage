@@ -2,12 +2,12 @@
 {% block title %}User: {{ username }}{% endblock %}
 {% block content %}
 <div class="cards-container">
-    <a href="/user/{{ username }}/submissions" class="card">
+    <a href="{{ url_for('user.submissions', username=username) }}" class="card">
         <h3>Submissions</h3>
         <img src="/static/images/submit.png" alt="Submit Icon">
         <p>Views user's submissions.</p>
     </a>
-    <a href="/user/{{ username }}/votes" class="card">
+    <a href="{{ url_for('user.votes', username=username) }}" class="card">
         <h3>History</h3>
         <img src="/static/images/history.png" alt="History Icon">
         <p>View user's vote history.</p>

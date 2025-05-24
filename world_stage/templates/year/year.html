@@ -18,23 +18,34 @@
 {% endfor %}
 </div>
 
-<table class="songs-table">
+<div>
+    <input type="checkbox" id="hidesolid" onchange="hideNonPlaceholders(this)">
+    <label for="hidesolid">Only show placeholders</label>
+</div>
+
+<table class="songs-table sortable">
     <thead>
         <tr>
-            <th>Country</th>
-            <th>Artist</th>
-            <th>Title</th>
-            <th>Language</th>
-            <th>Submitter</th>
+            <th class="sortable"><div>Country</div></th>
+            <th class="sortable"><div>Artist</div></th>
+            <th class="sortable"><div>Title</div></th>
+            <th class="sortable"><div>Language</div></th>
+            <th class="sortable"><div>Submitter</div></th>
         </tr>
     </thead>
     <tbody>
     {% for song in songs %}
-        <tr class="{{ "placeholder" if song.placeholder else "" }}">
-            <td><div class="country">{{ flag(song.cc, song.country) }}
-                <span href="/country/{{ song.cc }}">{{ song.country }}</span></div></td>
-            <td>{{ song.artist }}</td>
-            <td>{{ song.title }}</td>
+        <tr data-value="{{ loop.index }}"
+            class="{{ "placeholder" if song.placeholder else "finalised" }}" data-value="{{ loop.index }}">
+            <td><div class="country">{{ flag(song.country.cc, 40, song.country.name) }}
+                <span href="/country/{{ song.country.cc }}">{{ song.country.name }}</span></div></td>
+            <td>{{ song.artist or '' }}</td>
+            <td><div class="song-title">
+                <span lang="{{song.title_lang.str()}}">{{ song.title or '' }}</span>
+                {% if song.native_title %}
+                <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
+                {% endif %}
+            </div></td>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
             <td>{{ song.submitter or '' }}</td>
         </tr>

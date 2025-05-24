@@ -2,10 +2,11 @@
 {% block title %}Results: {{ year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
+    <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block navigation %}
-    <a class="nav-item" href="/year/{{ year }}/{{ show }}/scoreboard">Scoreboard</a>
-    <a class="nav-item" href="/year/{{ year }}/{{ show }}/detailed">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
+    <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
 {% endblock %}
 {% block content %}
 {% if secret %}
@@ -14,32 +15,35 @@
 </div>
 {% else %}
 <div id="scroll-container">
-<table>
+<table class="sortable">
     <thead>
         <tr>
-            <th>RO</th>
-            <th class="sticky">Country</th>
+            <th class="sortable"><div>RO</div></th>
+            <th class="sticky sortable"><div>Country</div></th>
             <th>Artist</th>
             <th>Title</th>
-            <th>Points</th>
-            <th>Voters</th>
+            <th class="sortable"><div>Place</div></th>
+            <th class="sortable"><div>Points</div></th>
+            <th class="sortable"><div>Voters</div></th>
         {% for point in points %}
-            <th class="point-header">{{ point }}</th>
+            <th class="point-header sortable"><div>{{ point }}</div></th>
         {% endfor %}
         </tr>
     </thead>
     <tbody>
         {% for song in songs %}
-            <tr>
+            <tr class="{% if loop.index == 1 %}first{% elif loop.index == 2 %}second{% elif loop.index == 3 %}third{% elif loop.index == participants%}last{% endif %}"
+                data-value="{{ loop.index }}">
                 <th class="number">{{ song.vote_data.ro }}</td>
-                <td class="sticky">{{ flag(song.cc, song.country) }}{{ song.country }}</td>
+                <td class="sticky"><div class="country">{{ flag(song.country.cc, 25, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
                 <td>{{ song.title }}</td>
-                <td data-value="{{ loop.index }}" class="number">{{ song.vote_data.sum }}</td>
+                <td class="number">{{ loop.index }}</td>
+                <td class="number">{{ song.vote_data.sum }}</td>
                 <td class="number">{{ song.vote_data.count }}</td>
             {% for point in points %}
                 {% set pts = song.get_pt(point) %}
-                <td class="number {{ "zero" if (pts == 0) else "nonzero" }}">{{ pts}}</td>
+                <td class="number">{{ pts if pts != 0 else '' }}</td>
             {% endfor %}
             </tr>
         {% endfor %}

@@ -63,7 +63,7 @@
     <p class="error">{{ error }}</p>
 {% endif %}
 <p id="error-message" class="error hidden"></p>
-<form id="submit-song" name="submit_song" method="POST" action="/user/submit">
+<form id="submit-song" name="submit_song" method="POST">
     <fieldset class="grid" id="select-submission">
         <legend>Submit for</legend>
         <label for="year">Year</label>
@@ -156,6 +156,12 @@
         </div>
     </fieldset>
 
+    <div class="banner">
+        Make sure that each version of the lyrics has the same number of lines and that
+        all the different parts of the lyrics (verses, chorus, bridge and so on) are
+        separated with a double blank line (i.e. you hit the Enter/Return key twice).
+    </div>
+    
     <fieldset class="hidable nongrid">
         <legend>Lyrics</legend>
         <details>

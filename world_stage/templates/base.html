@@ -1,5 +1,11 @@
-{% macro flag(cc, country='', type="rect", class="flag") -%}
-<img src="/static/flags/{{ cc.upper() }}/{{ type }}.svg" class="{{ class }}" {% if country %}alt="{{ country }}"{% endif %}>
+{% macro flag(cc, width, country='', type="rect", class="flag") -%}
+<img
+    src="{{ url_for('main.flag', country=cc, t=type, w=width) }}"
+    width="{{ width }}"
+    {% if country %}alt="{{ country }}"{% endif %}
+    class="flag {{ class }}">
+{%- endmacro %}
+{% macro title(title, native_title, lang, native_lang) -%}
 {%- endmacro %}
 <!DOCTYPE html>
 <html lang="en">

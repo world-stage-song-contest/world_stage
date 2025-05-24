@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="cards-container">
-    <a href="/member" class="card">
+    <a href="{{ url_for('member.index') }}" class="card">
         <h3>User Page</h3>
         <img src="/static/images/user.png" alt="User Icon">
         <p>View information about yourself.</p>
     </a>
-    <a href="/vote" class="card">
+    <a href="{{ url_for('vote.index') }}" class="card">
         <h3>Vote</h3>
         <img src="/static/images/ballot-box.png" alt="Vote Icon">
         <p>Cast your vote for one of the ongoing votings.</p>
     </a>
-    <a href="/results" class="card">
+    <a href="{{ url_for('results.index') }}" class="card">
         <h3>Results</h3>
         <img src="/static/images/podium.png" alt="Results Icon">
         <p>Check out the past results.</p>
