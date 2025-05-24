@@ -80,7 +80,7 @@
             <tr>
                 <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.results', year='special', show=special.short_name) }}"><b>{{ special.name }}</b></a></td>
                 <td><div class="country">
-                    {{ flag(winner.country.cc, winner.country.name) }}
+                    {{ flag(winner.country.cc, 40, winner.country.name) }}
                     <span href="/country/{{ winner.country.cc }}">{{ winner.country.name }}</span>
                 </div></td>
                 <td class="artist">{{ winner.artist }}</td>

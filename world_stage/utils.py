@@ -485,9 +485,8 @@ def get_show_id(show: str, year: Optional[int] = None) -> Optional[ShowData]:
 
     if year:
         cursor.execute('''
-            SELECT show.id, show.point_system_id, show.show_name, show.voting_opens, show.voting_closes, show.dtf, show.sc, show.special, show.allow_access_type FROM show
-            JOIN year ON show.year_id = year.id
-            WHERE year.id = ? AND show.short_name = ?
+            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, allow_access_type FROM show
+            WHERE year_id = ? AND short_name = ?
         ''', (year, short_show_name))
     else:
         cursor.execute('''
@@ -698,21 +697,11 @@ def get_song_languages(song_id: int) -> list[Language]:
 def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False) -> Optional[list[Song]]:
     db = get_db()
     cursor = db.cursor()
+    data = get_show_id(short_name, year)
 
-    if year:
-        cursor.execute('''
-            SELECT show.id FROM show
-            WHERE year_id = ? AND show.short_name = ? AND allow_access_type = 'full'
-            ''', (year, short_name))
-    else:
-        cursor.execute('''
-            SELECT id FROM show
-            WHERE year_id IS NULL AND short_name = ? AND allow_access_type = 'full'
-            ''', (short_name,))
-    show_id = cursor.fetchone()
-    if not show_id:
+    if not data:
         return None
-    show_id = show_id[0]
+    show_id = data.id
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
