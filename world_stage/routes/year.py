@@ -147,7 +147,6 @@ def detailed_results(year: str, show: str):
 
     songs.sort(reverse=True)
 
-    print(len(songs))
     return render_template('year/detailed.html', songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
 
 @bp.get('/<year>/<show>/scoreboard')

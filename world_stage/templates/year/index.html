@@ -22,20 +22,20 @@
     <table class="results-table sticky-header-table sortable">
         <thead>
             <tr>
-                <th class="sortable"><div>Year</div></th>
-                <th><div>Winner</div></th>
-                <th><div>Artist</div></th>
-                <th><div>Title</div></th>
-                <th><div>Language</div></th>
-                <th class="sortable"><div>Points</div></th>
-                <th class="sortable"><div>% of Max</div></th>
-                <th><div>Submitter</div></th>
+                <th>Year</th>
+                <th>Winner</th>
+                <th>Artist</th>
+                <th>Title</th>
+                <th>Language</th>
+                <th>Points</th>
+                <th>% of Max</th>
+                <th>Submitter</th>
             </tr>
         </thead>
         <tbody>
         {% for year in years %}
         {% set winner = year.winner %}
-            <tr>
+            <tr data-value="{{ loop.index }}">
                 <td class="year"><a href="{{ url_for('year.year', year=year.id) }}"><b>{{ year.id }}</b></a></td>
                 <td><div class="country">
                     {{ flag(winner.country.cc, 40, winner.country.name) }}
@@ -64,20 +64,20 @@
     <table class="results-table sticky-header-table sortable">
         <thead>
             <tr>
-                <th class="sortable">Special</div></th>
-                <th><div>Winner</div></th>
-                <th><div>Artist</div></th>
-                <th><div>Title</div></th>
-                <th><div>Language</div></th>
-                <th class="sortable">Points</th>
-                <th class="sortable">% of Max</th>
-                <th><div>Submitter</div></th>
+                <th>Special</th>
+                <th>Winner</th>
+                <th>Artist</th>
+                <th>Title</th>
+                <th>Language</th>
+                <th>Points</th>
+                <th>% of Max</th>
+                <th>Submitter</th>
             </tr>
         </thead>
         <tbody>
         {% for special in specials %}
         {% set winner = special.winner %}
-            <tr>
+            <tr data-value="{{ loop.index }}">
                 <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.results', year='special', show=special.short_name) }}"><b>{{ special.name }}</b></a></td>
                 <td><div class="country">
                     {{ flag(winner.country.cc, 40, winner.country.name) }}

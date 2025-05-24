@@ -13,16 +13,16 @@
 <table class="songs-table sortable">
     <thead>
         <tr>
-            <th><div>Year</div></th>
-            <th><div>Country</div></th>
-            <th><div>Artist</div></th>
-            <th><div>Title</div></th>
-            <th><div>Language</div></th>
+            <th>Year</th>
+            <th>Country</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Language</th>
         </tr>
     </thead>
     <tbody>
     {% for song in songs %}
-        <tr class="{{ "placeholder" if song.placeholder else "" }}">
+        <tr data-value="{{ loop.index }}" class="{{ "placeholder" if song.placeholder else "" }}">
             <td><a href="{{ url_for('year.year', year=song.year) }}">{{ song.year }}</a></td>
             <td><div class="country">{{ flag(song.country.cc, 40, song.country.name) }}
                 <span href="/country/{{ song.country.cc }}">{{ song.country.name }}</span></div></td>

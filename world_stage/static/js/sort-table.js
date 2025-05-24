@@ -63,6 +63,10 @@ function addTableListeners() {
     for (const table of document.querySelectorAll('table.sortable')) {
         const ths = table.querySelectorAll('th');
         ths.forEach((th, i) => {
+            const div = document.createElement("div");
+            div.textContent = th.textContent;
+            th.innerHTML = '';
+            th.appendChild(div);
             th.addEventListener('click', () => {
                 const currentSort = th.ariaSort;
 

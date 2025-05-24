@@ -317,11 +317,7 @@ def submit_song_post():
     other_data['snippet_start'] = parse_seconds(other_data['snippet_start'])
     other_data['snippet_end'] = parse_seconds(other_data['snippet_end'])
 
-    print(other_data)
-
     song_data = SongData(languages=languages, **other_data)
-
-    print(song_data)
 
     res = update_song(song_data, user_id)
     if 'error' in res:

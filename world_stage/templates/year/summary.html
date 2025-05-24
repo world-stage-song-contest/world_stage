@@ -18,21 +18,22 @@
 <table class="sortable">
     <thead>
         <tr>
-            <th class="sortable"><div>RO</div></th>
-            <th class="sticky sortable"><div>Country</div></th>
-            <th><div>Artist</div></th>
-            <th><div>Title</div></th>
-            <th class="sortable"><div>Place</div></th>
-            <th class="sortable"><div>Points</div></th>
-            <th class="sortable"><div>Voters</div></th>
+            <th>RO</th>
+            <th class="sticky">Country</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Place</th>
+            <th>Points</th>
+            <th>Voters</th>
         {% for point in points %}
-            <th class="point-header sortable"><div>{{ point }}</div></th>
+            <th class="point-header"><div>{{ point }}</th>
         {% endfor %}
         </tr>
     </thead>
     <tbody>
         {% for song in songs %}
-            <tr class="{% if loop.index == 1 %}first{% elif loop.index == 2 %}second{% elif loop.index == 3 %}third{% elif loop.index == participants%}last{% endif %}"
+            <tr data-value="{{ loop.index }}"
+                class="{% if loop.index == 1 %}first{% elif loop.index == 2 %}second{% elif loop.index == 3 %}third{% elif loop.index == participants%}last{% endif %}"
                 data-value="{{ loop.index }}">
                 <th class="number">{{ song.vote_data.ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 25, song.country.name) }}{{ song.country.name }}</div></td>
