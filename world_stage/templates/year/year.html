@@ -2,6 +2,8 @@
 {% block title %}Overview: {{ year }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/year.css">
+    <script src="/static/js/sort-table.js"></script>
+    <script src="/static/js/year.js"></script>
 {% endblock %}
 {% block content %}
 {% if not closed %}
@@ -12,7 +14,7 @@
 
 <div class="shows">
 {% for show in shows %}
-    <a href="/year/{{ year }}/{{ show.short_name }}">{{ show.name }}</a> {% if not loop.last %}|{% endif %}
+    <a href="{{ url_for('year.results', year=year, show=show.short_name) }}">{{ show.name }}</a> {% if not loop.last %}|{% endif %}
 {% endfor %}
 </div>
 

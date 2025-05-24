@@ -33,7 +33,7 @@ function toggleTitleLanguageSelect(checkbox) {
 
 async function fetchCountries(yearSelect) {
     const year = yearSelect.value;
-    const url = `/user/submit/${year}`;
+    const url = `/member/submit/${year}`;
     const res = await fetch(url);
     const countries = await res.json();
     return countries;
@@ -126,7 +126,7 @@ async function populateCountries(yearSelect) {
 }
 
 async function fetchSongData(year, country) {
-    const url = `/user/submit/${year}/${country}`;
+    const url = `/member/submit/${year}/${country}`;
     const res = await fetch(url);
     const songData = await res.json();
     return songData;
