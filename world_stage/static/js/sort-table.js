@@ -63,23 +63,21 @@ function addTableListeners() {
     for (const table of document.querySelectorAll('table.sortable')) {
         const ths = table.querySelectorAll('th');
         ths.forEach((th, i) => {
-            if (th.classList.contains('sortable')) {
-                th.addEventListener('click', () => {
-                    const currentSort = th.ariaSort;
+            th.addEventListener('click', () => {
+                const currentSort = th.ariaSort;
 
-                    let newSort = 'none';
-                    if (currentSort == null || currentSort === 'none') {
-                        newSort = 'ascending';
-                    } else if (currentSort === 'ascending') {
-                        newSort = 'descending';
-                    } else if (currentSort === 'descending') {
-                        newSort = 'none';
-                    }
-                    console.log(currentSort, newSort);
-                    th.ariaSort = newSort;
-                    sortTable(th, table, i, newSort);
-                });
-            }
+                let newSort = 'none';
+                if (currentSort == null || currentSort === 'none') {
+                    newSort = 'ascending';
+                } else if (currentSort === 'ascending') {
+                    newSort = 'descending';
+                } else if (currentSort === 'descending') {
+                    newSort = 'none';
+                }
+                console.log(currentSort, newSort);
+                th.ariaSort = newSort;
+                sortTable(th, table, i, newSort);
+            });
         });
     }
 }

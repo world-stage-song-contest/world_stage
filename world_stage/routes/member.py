@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 import unicodedata
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import Blueprint, redirect, request, url_for
 from typing import Optional
 
 from ..db import get_db
-from ..utils import get_user_id_from_session, format_seconds, parse_seconds
+from ..utils import get_user_id_from_session, format_seconds, parse_seconds, render_template
 
 bp = Blueprint('member', __name__, url_prefix='/member')
 
@@ -26,26 +26,34 @@ class SongData:
     native_lyrics: Optional[str]
     languages: list[dict]
 
+    def __init__(self, *, year: int, country: str, title: str,
+                 native_title: Optional[str], artist: str,
+                 is_placeholder: bool, title_language_id: Optional[int],
+                 native_language_id: Optional[int], video_link: Optional[str],
+                 snippet_start: Optional[str], snippet_end: Optional[str],
+                 english_lyrics: Optional[str], romanized_lyrics: Optional[str],
+                 native_lyrics: Optional[str], languages: list[dict]):
+        self.year = year
+        self.country = country
+        self.title = title
+        self.native_title = native_title
+        self.artist = artist
+        self.is_placeholder = is_placeholder
+        self.title_language_id = title_language_id
+        self.native_language_id = native_language_id
+        self.video_link = video_link
+        self.snippet_start = snippet_start
+        self.snippet_end = snippet_end
+        self.english_lyrics = english_lyrics
+        self.romanized_lyrics = romanized_lyrics
+        self.native_lyrics = native_lyrics
+        self.languages = languages
+
     def as_dict(self) -> dict:
         res = {}
         for attr in self.__dict__:
                 res[attr] = getattr(self, attr)
         return res
-    
-    def __init__(self, **kwargs):
-        annotations = self.__dataclass_fields__
-        for key, value in kwargs.items():
-            annotation = annotations.get(key)
-            if annotation:
-                if annotation.type == list:
-                    value = list(value)
-                elif annotation.type == Optional[str] or annotation.type == str:
-                    value = str(value) if value else None
-                elif annotation.type == Optional[int] or annotation.type == int:
-                    value = int(value) if value else None
-                setattr(self, key, value)
-            else:
-                raise ValueError(f"Invalid field: {key}")
 
 def update_song(song_data: SongData, user_id: int) -> dict:
     db = get_db()
@@ -67,7 +75,8 @@ def update_song(song_data: SongData, user_id: int) -> dict:
             native_language_id = ?, video_link = ?,
             snippet_start = ?, snippet_end = ?,
             translated_lyrics = ?, romanized_lyrics = ?,
-            native_lyrics = ?, submitter_id = ?
+            native_lyrics = ?, submitter_id = ?,
+            modified_at = CURRENT_TIMESTAMP
         WHERE id = ?
     ''', (
         song_data.title,
@@ -102,7 +111,7 @@ def update_song(song_data: SongData, user_id: int) -> dict:
     return {'success': True}
 
 @bp.get('/')
-def user_index():
+def index():
     session_id = request.cookies.get('session')
     if not session_id:
         return redirect(url_for('session.login'))
@@ -211,8 +220,8 @@ def get_country_data(year, country):
      video_link, snippet_start, snippet_end,
      translated_lyrics, romanized_lyrics, native_lyrics) = song
 
-    snippet_start = format_seconds(snippet_start) if snippet_start else None
-    snippet_end = format_seconds(snippet_end) if snippet_end else None
+    snippet_start = format_seconds(snippet_start) if snippet_start is not None else None
+    snippet_end = format_seconds(snippet_end) if snippet_end is not None else None
 
     cursor.execute('''
         SELECT language.id, name FROM song_language
@@ -308,7 +317,11 @@ def submit_song_post():
     other_data['snippet_start'] = parse_seconds(other_data['snippet_start'])
     other_data['snippet_end'] = parse_seconds(other_data['snippet_end'])
 
+    print(other_data)
+
     song_data = SongData(languages=languages, **other_data)
+
+    print(song_data)
 
     res = update_song(song_data, user_id)
     if 'error' in res:

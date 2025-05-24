@@ -2,8 +2,14 @@ let voteOrder = []
 let votes = {}
 let data = []
 let points = []
+let maxPoints = 0;
 let associations = {}
 let userSongs = {}
+
+function toggleHeader() {
+    const header = document.querySelector("header");
+    header.classList.toggle("hidden");
+}
 
 async function loadVotes(year, show) {
     const res = await fetch(`/year/${year}/${show}/scoreboard/votes`);
@@ -11,20 +17,45 @@ async function loadVotes(year, show) {
     points = json.points;
     userSongs = json.user_songs;
     points.sort((a, b) => a - b);
+    maxPoints = points[points.length - 1];
     voteOrder = json.vote_order;
     for (const song of json.songs) {
         data.push(song);
     }
-    data.sort((a, b) => a.ro - b.ro);
+    data.sort((a, b) => a.vote_data.ro - b.vote_data.ro);
     votes = json.results;
     associations = json.associations;
 }
 
-function makeRow(code, name, artist, title, id) {
+function makeRow(country) {
+    function makeElementDigits(el) {
+        const digits = String(0).padStart(el.dataset.pad, "0");
+        for (const d of digits) {
+            const digitEl = document.createElement("span");
+            digitEl.classList.add("scoreboard-digit", "zero-value");
+            digitEl.textContent = d;
+            el.appendChild(digitEl);
+        }
+    }
+
+    const superContainer = document.createElement("div");
+    superContainer.classList.add("element", "inactive", "metal", "linear");
+    superContainer.classList.add(`background-${country.bg}`, `text-${country.text}`, `foreground-${country.fg1}`, `foreground2-${country.fg2}`);
+    superContainer.dataset.country = country.name;
+    superContainer.dataset.id = country.id;
+
     const container = document.createElement("div");
-    container.classList.add("element");
-    container.dataset.country = name;
-    container.dataset.id = id;
+    container.classList.add("inner-container");
+    superContainer.appendChild(container);
+
+    const overlayEl = document.createElement("div");
+    overlayEl.classList.add("element-overlay");
+    container.appendChild(overlayEl);
+
+    const placeEl = document.createElement("div");
+    placeEl.classList.add("element-place", "number");
+    placeEl.textContent = "";
+    container.appendChild(placeEl);
 
     const flagContainer = document.createElement("div");
     flagContainer.classList.add("flag-container");
@@ -32,8 +63,13 @@ function makeRow(code, name, artist, title, id) {
 
     const flagEl = document.createElement("img");
     flagEl.classList.add("flag");
-    flagEl.src = `/static/flags/${code.toUpperCase()}/square.svg`;
+    flagEl.src = `/flag/${country.code}.svg?t=square&s=40`;
+    flagEl.alt = country.name;
     flagContainer.appendChild(flagEl);
+
+    const flagOverlayEl = document.createElement("div");
+    flagOverlayEl.classList.add("flag-overlay");
+    flagContainer.appendChild(flagOverlayEl);
 
     const nameContainer = document.createElement("div");
     nameContainer.classList.add("name-container");
@@ -41,16 +77,17 @@ function makeRow(code, name, artist, title, id) {
 
     const nameEl = document.createElement("div");
     nameEl.classList.add("name");
-    nameEl.innerText = name;
+    nameEl.textContent = country.name;
     nameContainer.appendChild(nameEl);
 
+    /*
     const subtitleContainer = document.createElement("div");
     subtitleContainer.classList.add("subtitle");
     nameContainer.appendChild(subtitleContainer);
 
     const titleEl = document.createElement("span");
     titleEl.classList.add("title");
-    titleEl.innerText = title;
+    titleEl.textContent = country.title;
     subtitleContainer.appendChild(titleEl);
 
     const byNode = document.createTextNode(" by ");
@@ -58,20 +95,60 @@ function makeRow(code, name, artist, title, id) {
 
     const artistEl = document.createElement("span");
     artistEl.classList.add("artist");
-    artistEl.innerText = artist;
+    artistEl.textContent = country.artist;
     subtitleContainer.appendChild(artistEl);
+    */
+
+    const currentlyVotingEl = document.createElement("div");
+    currentlyVotingEl.classList.add("currently-voting");
+    container.appendChild(currentlyVotingEl);
 
     const currentEl = document.createElement("div");
-    currentEl.classList.add("current-points", "number");
-    currentEl.innerText = "";
+    currentEl.classList.add("current-points", "number", "point-display");
+    currentEl.dataset.pad = "2";
     container.appendChild(currentEl);
+    makeElementDigits(currentEl);
 
     const totalEl = document.createElement("div");
-    totalEl.classList.add("total-points", "number");
-    totalEl.innerText = "0";
+    totalEl.classList.add("total-points", "number", "point-display");
+    totalEl.dataset.pad = "3";
     container.appendChild(totalEl);
+    makeElementDigits(totalEl);
 
-    return [nameEl, currentEl, totalEl, container];
+    return [nameEl, currentEl, totalEl, superContainer, currentlyVotingEl];
+}
+
+function makePointsRow() {
+    const row = document.querySelector("#points-row");
+
+    for (const pt of points) {
+        const container = document.createElement("div");
+        container.classList.add("points-container");
+
+        if (pt == points[points.length - 1]) {
+            container.classList.add("gold");
+        } else if (pt == points[points.length - 2]) {
+            container.classList.add("silver");
+        } else if (pt == points[points.length - 3]) {
+            container.classList.add("bronze");
+        }
+
+        const ptEl = document.createElement("div");
+        ptEl.classList.add("points-value", "number");
+        const v = String(pt).padStart(2, "0");
+        ptEl.textContent = v;
+        ptEl.dataset.pad = "2";
+        ptEl.dataset.value = pt;
+        container.appendChild(ptEl);
+
+        const overlayEl = document.createElement("div");
+        overlayEl.classList.add("points-overlay");
+        container.appendChild(overlayEl);
+
+        row.insertBefore(container, row.firstChild);
+    }
+
+    return row;
 }
 
 function makeVotingCard(from, code, country) {
@@ -83,7 +160,7 @@ function makeVotingCard(from, code, country) {
 
     const flagEl = document.createElement("img");
     flagEl.classList.add("voting-card-flag");
-    flagEl.src = `/static/flags/${code.toUpperCase()}/rect.svg`;
+    flagEl.src = `/flag/${code}.svg?t=rect&s=96`;
     flagEl.alt = from;
     container.appendChild(flagEl);
 
@@ -93,41 +170,207 @@ function makeVotingCard(from, code, country) {
 
     const nameEl = document.createElement("span");
     nameEl.classList.add("voting-card-name");
-    nameEl.innerText = from;
+    nameEl.textContent = from;
     wrapperEl.appendChild(nameEl);
 
     const countryEl = document.createElement("span");
     countryEl.classList.add("voting-card-country");
-    countryEl.innerText = `From ${country}`;
+    countryEl.textContent = `From ${country}`;
     wrapperEl.appendChild(countryEl);
 
     return container;
 }
 
-function indexToPts(i) {
-    return points[i];
+/**
+ * @param {HTMLElement} el 
+ * @param {number} value 
+ */
+function setDigitValue(el, value) {
+    console.log(el, value);
+    /*if (value == 0) {
+        el.classList.add("zero-value");
+    } else {
+        el.classList.remove("zero-value");
+    }*/
+    el.textContent = value;
 }
 
-function ptsToIndex(pt) {
-    return points.indexOf(pt);
+/**
+ * @param {HTMLElement} el 
+ * @param {number} value 
+ */
+function setElementValue(el, value) {
+    const digits = String(value).padStart(el.dataset.pad, "0");
+    for (let i = 0; i < el.children.length; i++) {
+        const digitEl = el.children[i];
+        const d = digits[i];
+        setDigitValue(digitEl, d);
+    }
+}
+
+const duration = 1250;
+
+/**
+ * @param {HTMLElement} element 
+ * @param {number} end 
+ */
+function animatePoints(element, end) {
+    end = +end;
+    let start = parseInt(element.textContent) || 0;
+    const direction = end > start ? 1 : -1;
+    const stepDuration = duration / (maxPoints - 1);
+    let lastTime = performance.now();
+
+    function update(now) {
+        const elapsed = now - lastTime;
+
+        if (elapsed >= stepDuration) {
+            lastTime = now;
+
+            if (start !== end) {
+                start += direction;
+                setElementValue(element, start);
+            }
+        }
+
+        if (start !== end) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+/**
+ * @param {HTMLElement} element 
+ * @param {number} end 
+ */
+function animateDigit(element, end, allowCountDown = false) {
+    end = +end;
+    let start = parseInt(element.textContent) || 0;
+    let direction;
+    if (allowCountDown) {
+        direction = end > start ? 1 : -1;
+    } else {
+        direction = 1;
+    }
+    const stepDuration = duration / (maxPoints - 1);
+    let lastTime = performance.now();
+
+    function update(now) {
+        const elapsed = now - lastTime;
+
+        if (elapsed >= stepDuration) {
+            lastTime = now;
+
+            if (start !== end) {
+                start += direction;
+                start %= 10;
+                setDigitValue(element, start);
+            }
+        }
+
+        if (start !== end) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+/**
+ * @param {HTMLElement} element 
+ * @param {number} end 
+ */
+function animatePointsSeparately(element, end, allowCountDown = true) {
+    const padding = +element.dataset.pad;
+    const str = String(end).padStart(padding);
+
+    element.querySelectorAll('.scoreboard-digit').forEach((el, i) => {
+        const d = str[i];
+        animateDigit(el, d, allowCountDown);
+    });
+}
+
+function countDownPointValue(pt, animateEachDigit = false, allowCountDown = true) {
+    const el = document.querySelector(`.points-value[data-value="${pt}"]`);
+    el.classList.add("spent");
+    if (animateEachDigit) {
+        animatePointsSeparately(el, 0, allowCountDown);
+    } else {
+        animatePoints(el, 0);
+    }
+}
+
+function resetPointValues(animateEachDigit = false, allowCountDown = true) {
+    const els = document.querySelectorAll(".points-value");
+    for (const el of els) {
+        el.classList.remove("spent");
+        if (animateEachDigit) {
+            animatePointsSeparately(el, +el.dataset.value, allowCountDown);
+        } else {
+            animatePoints(el, +el.dataset.value);
+        }
+    }
 }
 
 class Country {
-    constructor(index, name, artist, title, ro, id, country, code) {
-        this.rollback = [];
-        this.index = index;
-        this.ro = ro;
-        this.name = name;
-        this.artist = artist;
-        this.title = title;
-        this.id = id;
-        this.country = country;
-        this.code = code || "XXX";
+    /** @type {number} */
+    index;
+    /** @type {number} */
+    ro;
+    /** @type {string} */
+    name;
+    /** @type {string} */
+    artist;
+    /** @type {string} */
+    title;
+    /** @type {number} */
+    id;
+    /** @type {string} */
+    country;
+    /** @type {string} */
+    code;
+    /** @type {boolean} */
+    win;
+    /** @type {Array<number>} */
+    votes;
+    /** @type {HTMLElement} */
+    element;
+    /** @type {HTMLElement} */
+    nameEl;
+    /** @type {HTMLElement} */
+    currentEl;
+    /** @type {HTMLElement} */
+    totalEl;
+    /** @type {HTMLElement} */
+    currentlyVotingEl;
+    /** @type {string} */
+    bg;
+    /** @type {string} */
+    fg1;
+    /** @type {string} */
+    fg2;
+    /** @type {string} */
+    text;
+
+    constructor(data) {
+        this.index = data.index;
+        this.ro = data.ro;
+        this.name = data.name;
+        this.artist = data.artist;
+        this.title = data.title;
+        this.id = data.id;
+        this.code = data.cc || "XXX";
+        this.bg = data.bg;
+        this.fg1 = data.fg1;
+        this.fg2 = data.fg2;
+        this.text = data.text;
         this.win = true;
         this.votes = new Array(Math.max(...points) + 1).fill(0);
-        [this.nameEl, this.currentEl, this.totalEl, this.element] = makeRow(code, name, artist, title, id);
+        [this.nameEl, this.currentEl, this.totalEl, this.element, this.currentlyVotingEl] = makeRow(this);
     }
-    
+
     get points() {
         return this.votes.reduce(
             (a, v, i) => a + v * i,
@@ -138,78 +381,117 @@ class Country {
     get voters() {
         return this.votes.reduce((a, v) => a + v, 0);
     }
-    
+
+    /**
+     * @param {number} i
+     * @param {number} lim
+     */
     setPosition(i, lim) {
         const col = Math.floor(i / lim);
         const row = i - lim * col;
 
         this.index = i;
+        const elsz = this.element.getBoundingClientRect();
+        const yoff = elsz.height + 5;
+        const xoff = elsz.width + 5;
 
-        this.element.style.top = `${45 * row}px`;
-        this.element.style.left = `${505 * col}px`;
+        this.element.style.top = `${yoff * row}px`;
+        this.element.style.left = `${xoff * col}px`;
     }
-    
+
+    /**
+     * @param {number} pt
+     */
     vote(pt) {
         this.votes[pt]++;
         this.refresh(pt);
+        countDownPointValue(pt);
     }
-    
-    refresh(pt, setClass) {
-        this.totalEl.innerText = this.points;
+
+    /**
+     * @param {number} pt
+     */
+    refresh(pt) {
         if (pt == null) {
-            this.currentEl.innerText = "";
-            this.element.classList.remove("active");
+            animatePoints(this.currentEl, 0);
             this.currentEl.classList.remove("visible");
-            this.element.classList.remove("own-entry");
+            this.element.classList.remove("gold", "silver", "bronze", "active", "own-entry");
         } else {
-            this.currentEl.innerText = pt;
+            animatePoints(this.totalEl, this.points);
+            animatePoints(this.currentEl, pt);
+            this.element.classList.remove("inactive");
             this.currentEl.classList.add("visible");
-            this.element.classList.add( "main-moving");
-            if (setClass == undefined || setClass) this.element.classList.add("active");
+            this.element.classList.add("main-moving");
+            /*if (pt == points[points.length - 1]) {
+                this.element.classList.add("gold");
+            } else if (pt == points[points.length - 2]) {
+                this.element.classList.add("silver");
+            }
+            else if (pt == points[points.length - 3]) {
+                this.element.classList.add("bronze");
+            } else {*/
+            this.element.classList.add("active");
+            //}
         }
+    }
+
+    /**
+     * @param {number} place
+     */
+    setPlace(place) {
+        this.currentEl.classList.add("showing-place");
+        this.element.classList.remove("own-entry", "active");
+        animatePoints(this.currentEl, place);
     }
 
     finalise() {
         this.element.classList.remove("main-moving");
     }
-    
+
+    /**
+     * @param {Country} other
+     * @returns {number}
+     */
     compare(other) {
         function compareArrays(arr1, arr2) {
             for (let i = arr1.length - 1; i <= 0; i++) {
                 const el1 = arr1[i];
                 const el2 = arr2[i];
-                
+
                 const d = el1 - el2;
                 if (d != 0) return d;
             }
-            
+
             return 0;
         }
-        
+
         const ptsDiff = this.points - other.points;
         const votersDiff = this.voters - other.voters;
         const vtsDiff = compareArrays(this.votes, other.votes);
-        
+
         if (ptsDiff != 0) return ptsDiff;
         if (votersDiff != 0) return votersDiff;
         if (vtsDiff != 0) return vtsDiff;
         return other.ro - this.ro;
     }
 
+    /**
+     * @param {number} leftVotes
+     * @param {number} leaderPts
+     */
     setCanWin(leftVotes, leaderPts) {
-        /*
         if (!this.win) return;
-        if (this.points + leftVotes * 12 <= leaderPts) {
+        if (this.points + leftVotes * Math.max(points) <= leaderPts) {
             this.win = false;
             this.element.classList.add("no-win");
-        }*/
+        }
     }
 
     setWinner() {
         this.element.classList.add("winner");
-        this.element.classList.remove("no-win");
+        this.element.classList.remove("no-win", "own-entry", "active");
     }
-    
+
     toString() {
         return `Country { name = ${this.name}, ro = ${this.ro}, votes = ${this.votes} }`;
     }
@@ -221,15 +503,28 @@ let perColumn = 0;
 
 function populate() {
     const cnt = data.length;
+    const container = document.querySelector("#container");
     perColumn = Math.ceil(cnt / 2);
     for (const [i, c] of data.entries()) {
-        const country = new Country(i, c.country, c.artist, c.title, c.ro, c.id, c.country, c.cc);
+        const country = new Country({
+            index: i,
+            artist: c.artist,
+            title: c.title,
+            ro: c.vote_data.ro,
+            id: c.id,
+            name: c.country.name,
+            cc: c.country.cc,
+            bg: c.country.bg,
+            fg1: c.country.fg1,
+            fg2: c.country.fg2,
+            text: c.country.text
+        });
         countries[c.id] = country;
         ro.push(country);
 
-        country.setPosition(c.ro - 1, perColumn);
-        
-        document.querySelector("#container").appendChild(country.element);
+        container.appendChild(country.element);
+
+        country.setPosition(c.vote_data.ro - 1, perColumn);
     }
 }
 
@@ -248,28 +543,31 @@ let isReset = false;
 let isVoting = false;
 
 async function sortCountries() {
+    await new Promise(r => setTimeout(r, delay * 2.5));
+
     ro.sort((a, b) => b.compare(a));
     for (const [i, c] of ro.entries()) {
+        setTimeout(() => {
+            c.element.classList.remove("main-moving");
+        }, delay * 2.5);
         c.setPosition(i, perColumn);
     }
-    await new Promise(r => setTimeout(r, delay * 2));
-    for (const c of ro) {
-        c.finalise();
-    }
+
+    await new Promise(r => setTimeout(r, delay * 2.5));
 }
 
 async function vote() {
     const juryCounter = document.querySelector("#jury-count");
+    const juryBar = document.querySelector("#jury-bar");
+    const fromJury = document.querySelector("#from");
+
     let juryCount = 0;
     const voterCount = voteOrder.length;
     const pointsImmediate = points.slice(0, points.length - 3);
     const pointsDelayed = points.slice(points.length - 3);
 
-    let countriesVoted = 0;
-    
     for (const from of voteOrder) {
         juryCount++;
-        juryCounter.innerText = juryCount;
         const vts = votes[from];
         const entries = userSongs[from] || [];
 
@@ -282,15 +580,20 @@ async function vote() {
             country = assoc.country;
             code = assoc.code;
         }
-        
-        let voted = [];
 
         const card = makeVotingCard(nickname, code, country);
-        document.querySelector("#from").appendChild(card);
+        fromJury.appendChild(card);
 
         while (paused) {
             await new Promise(r => setTimeout(r, 100));
         }
+
+        juryCounter.textContent = juryCount;
+        juryBar.classList.add("animating");
+        setTimeout(() => {
+            juryBar.classList.remove("animating");
+        }, 2100);
+        juryBar.style.width = `${(juryCount / voterCount) * 100}%`;
 
         await new Promise(r => setTimeout(r, 50));
         card.classList.remove("unloaded");
@@ -320,12 +623,9 @@ async function vote() {
             const country = countries[to];
 
             country.vote(pt);
-            voted.push(country);
         }
 
-        await new Promise(r => setTimeout(r, delay * 2.5));
-        sortCountries();
-        await new Promise(r => setTimeout(r, delay * 2.5));
+        await sortCountries();
 
         for (const pt of pointsDelayed) {
             while (paused) {
@@ -336,41 +636,38 @@ async function vote() {
 
                 await new Promise(r => setTimeout(r, 100));
             }
-            
+
             const to = vts[pt];
             const country = countries[to];
 
             country.vote(pt);
-            voted.push(country);
 
-            await new Promise(r => setTimeout(r, delay * 2.5));
-            sortCountries();
-            await new Promise(r => setTimeout(r, delay * 2.5));
+            await sortCountries();
         }
 
-        await new Promise(r => setTimeout(r, delay * 2.5));
         card.classList.add("unloaded2");
         await new Promise(r => setTimeout(r, delay * 2.5));
 
-        countriesVoted++;
         const leader = ro[0];
-        
-        for (const c of ro) {
-            c.refresh();
-            c.setCanWin(voterCount - countriesVoted, leader.points);
+
+        if (juryCount != voterCount) {
+            for (const c of ro) {
+                c.refresh();
+                c.setCanWin(voterCount - juryCount, leader.points);
+            }
         }
-        
+
         await new Promise(r => setTimeout(r, 100));
 
         card.remove();
-    
+
         await new Promise(r => setTimeout(r, delay));
     }
 
+    juryBar.style.width = "100%";
     ro[0].setWinner();
     for (const [i, c] of ro.entries()) {
-        c.refresh(i + 1, false);
-        await new Promise(r => setTimeout(r, 100));
+        c.setPlace(i + 1);
     }
 }
 
@@ -393,7 +690,7 @@ async function reset() {
     paused = true;
 
     document.querySelector("#from").innerHTML = "";
-    
+
     depopulate();
     populate();
     await vote();
@@ -411,6 +708,7 @@ async function onLoad(year, show) {
         await reset();
     }
 
+    makePointsRow();
     populate();
     await vote();
 }

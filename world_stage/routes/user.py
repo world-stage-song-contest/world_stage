@@ -1,11 +1,9 @@
 from collections import defaultdict
 import urllib.parse
 import unicodedata
-import datetime
+from flask import Blueprint
 
-from flask import render_template, request, Blueprint, redirect, url_for
-
-from ..utils import LCG, SuspensefulVoteSequencer, VoteData, get_show_id, dt_now, get_user_role_from_session, get_votes_for_song, get_user_songs
+from ..utils import get_user_songs, render_template
 from ..db import get_db
 
 bp = Blueprint('user', __name__, url_prefix='/user')
@@ -31,17 +29,14 @@ def index():
     return render_template('user/index.html', users=users)
 
 @bp.get('/<username>')
-def user_profile(username: str):
+def profile(username: str):
     username = urllib.parse.unquote(username)
     username = unicodedata.normalize('NFKC', username)
 
-    db = get_db()
-    cursor = db.cursor()
-
-    return render_template('user/profile.html', username=username)
+    return render_template('user/page.html', username=username)
 
 @bp.get('/<username>/votes')
-def user_votes(username: str):
+def votes(username: str):
     username = urllib.parse.unquote(username)
     username = unicodedata.normalize('NFKC', username)
 
@@ -101,7 +96,7 @@ def user_votes(username: str):
     return render_template('user/votes.html', votes=votes, username=username)
 
 @bp.get('/<username>/submissions')
-def user_submissions(username: str):
+def submissions(username: str):
     username = urllib.parse.unquote(username)
     username = unicodedata.normalize('NFKC', username)
 

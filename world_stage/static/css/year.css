@@ -1,12 +1,8 @@
-.flag {
-    height: 1.5em;
-    border: 1px solid grey;
-}
-
 .country {
     display: flex;
     align-items: center;
     gap: 0.5em;
+    padding: 0.25em;
 }
 
 .no-winner {
@@ -22,7 +18,7 @@
 
 .upcoming-year {
     border: 1px solid var(--foreground2);
-    background: var(--background2);
+    background: var(--background3);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -41,4 +37,12 @@
 
 .shows {
     margin: 1em 0;
+}
+
+.song-title {
+    padding: 0.25em 0;
+    display: flex;
+    gap: 0.25em;
+    flex-direction: column;
+    font-style: italic;
 }

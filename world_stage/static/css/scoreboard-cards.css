@@ -1,0 +1,109 @@
+.foreground-black {
+    --foreground: #2D2D2D;
+}
+
+.foreground-white {
+    --foreground: #E6E6E6;
+}
+
+.foreground-red {
+    --foreground: #A64534;
+}
+
+.foreground-orange {
+    --foreground: #B7672B;
+}
+
+.foreground-yellow {
+    --foreground: #C59F30;
+}
+
+.foreground-lime {
+    --foreground: #6AA556;
+}
+
+.foreground-green {
+    --foreground: #38582d;
+}
+
+.foreground-cyan {
+    --foreground: #6A87A5;
+}
+
+.foreground-blue {
+    --foreground: #324561;
+}
+
+
+.background-black {
+    --background: #2D2D2D;
+}
+
+.background-white {
+    --background: #E6E6E6;
+}
+
+.background-red {
+    --background: #A64534;
+}
+
+.background-orange {
+    --background: #B7672B;
+}
+
+.background-yellow {
+    --background: #C59F30;
+}
+
+.background-lime {
+    --background: #6AA556;
+}
+
+.background-green {
+    --background: #38582d;
+}
+
+.background-cyan {
+    --background: #6A87A5;
+}
+
+.background-blue {
+    --background: #324561;
+}
+
+
+.text-black {
+    --text: #2D2D2D;
+}
+
+.text-white {
+    --text: #E6E6E6;
+}
+
+.text-red {
+    --text: #A64534;
+}
+
+.text-orange {
+    --text: #B7672B;
+}
+
+.text-yellow {
+    --text: #C59F30;
+}
+
+.text-lime {
+    --text: #6AA556;
+}
+
+.text-green {
+    --text: #38582d;
+}
+
+.text-cyan {
+    --text: #6A87A5;
+}
+
+.text-blue {
+    --text: #324561;
+}

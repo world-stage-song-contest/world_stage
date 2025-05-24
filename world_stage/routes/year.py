@@ -1,16 +1,28 @@
 from collections import defaultdict
-from dataclasses import dataclass
-from functools import total_ordering
-from typing import Optional
-from flask import render_template, request, Blueprint
+from flask import request, Blueprint
 
-from ..utils import LCG, Show, Song, SuspensefulVoteSequencer, VoteData, get_show_id, dt_now, get_user_role_from_session, get_votes_for_song, get_year_songs, get_year_winner
+from ..utils import (LCG, Show, Song, SuspensefulVoteSequencer, 
+                     get_show_id, dt_now, get_user_role_from_session,
+                     get_votes_for_song, get_year_songs, get_year_winner,
+                     get_special_winner, render_template, get_show_songs)
 from ..db import get_db
 
 bp = Blueprint('year', __name__, url_prefix='/year')
 
+def get_specials() -> list[dict]:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id IS NULL')
+    specials = [{'short_name': short_name, 'name': show_name, 'date': date} for short_name, show_name, date in cursor.fetchall()]
+
+    for special in specials:
+        special['winner'] = get_special_winner(special['short_name'])
+
+    return specials
+
 @bp.get('/')
-def year_index():
+def index():
     db = get_db()
     cursor = db.cursor()
 
@@ -29,29 +41,43 @@ def year_index():
     for year in years:
         year['winner'] = get_year_winner(year['id'])
 
-    return render_template('year/index.html', years=years, upcoming=upcoming)
+    specials = get_specials()
 
-@bp.get('/<int:year>')
-def year_view(year: int):
+    return render_template('year/index.html', years=years, upcoming=upcoming, specials=specials)
+
+@bp.get('/<year>')
+def year(year: str):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT closed FROM year WHERE id = ?', (year,))
-    closed = cursor.fetchone()
-    if not closed:
-        return render_template('error.html', error='Year not closed yet'), 404
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
 
-    songs = get_year_songs(year, select_languages=True)
+    if _year:
+        cursor.execute('SELECT closed FROM year WHERE id = ?', (year,))
+        closed = cursor.fetchone()
+        if not closed:
+            return render_template('error.html', error='Year not closed yet'), 404
 
-    cursor.execute('SELECT short_name, show_name FROM show WHERE year_id = ?', (year,))
-    shows = [Show(year, show[0], show[1]) for show in cursor.fetchall()]
-    shows.sort()
+        songs = get_year_songs(_year, select_languages=True)
 
-    return render_template('year/year.html', year=year, songs=songs, closed=closed[0], shows=shows)
+        cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = ?', (year,))
+        shows = [Show(year=_year, short_name=show[0], name=show[1], date=show[2]) for show in cursor.fetchall()]
+        shows.sort()
 
-@bp.get('/<int:year>/<show>')
-def results(year: int, show: str):
-    show_data = get_show_id(show, year)
+        return render_template('year/year.html', year=year, songs=songs, closed=closed[0], shows=shows)
+    else:
+        return render_template('year/specials.html', specials=get_specials())
+
+@bp.get('/<year>/<show>')
+def results(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template('error.html', error="Show not found"), 404
@@ -62,27 +88,22 @@ def results(year: int, show: str):
     if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
         return render_template('error.html', error="Voting hasn't closed yet."), 400
 
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute('''
-        SELECT song.id, song_show.running_order, country.name, country.id, song.title, song.artist FROM song
-        JOIN song_show ON song.id = song_show.song_id
-        JOIN country ON song.country_id = country.id
-        WHERE song_show.show_id = ?
-        ORDER BY song_show.running_order
-    ''', (show_data.id,))
-    songs = []
-    for id, ro, country, cc, title, artist in cursor.fetchall():
-        val = Song(id=id, title=title, artist=artist, cc=cc, country=country, placeholder=False, submitter=None, show_id=show_data.id, ro=ro, year=year)
-        songs.append(val)
+    songs = get_show_songs(_year, show, select_votes=True)
+
+    if not songs:
+        return render_template('error.html', error="No songs found for this show."), 404
 
     songs.sort(reverse=True)
 
-    return render_template('year/summary.html', songs=songs, points=show_data.points, show=show, show_name=show_data.name, show_id=show_data.id, year=year)
+    return render_template('year/summary.html', songs=songs, points=show_data.points, show=show, show_name=show_data.name, show_id=show_data.id, year=year, participants=len(songs))
 
-@bp.get('/<int:year>/<show>/detailed')
-def detailed_results(year: int, show: str):
-    show_data = get_show_id(show, year)
+@bp.get('/<year>/<show>/detailed')
+def detailed_results(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template('error.html', error="Show not found"), 404
@@ -93,20 +114,13 @@ def detailed_results(year: int, show: str):
     if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
         return render_template('error.html', error="Voting hasn't closed yet."), 400
     
+    songs = get_show_songs(_year, show, select_votes=True)
+    if not songs:
+        return render_template('error.html', error="No songs found for this show."), 404
+
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('''
-        SELECT song.id, song_show.running_order, country.name, country.id, song.title, song.artist FROM song
-        JOIN song_show ON song.id = song_show.song_id
-        JOIN country ON song.country_id = country.id
-        WHERE song_show.show_id = ?
-        ORDER BY song_show.running_order
-    ''', (show_data.id,))
-    songs: list[Song] = []
-    for id, ro, country, cc, title, artist in cursor.fetchall():
-        val = Song(id=id, title=title, artist=artist, cc=cc, country=country, placeholder=False, submitter=None, show_id=show_data.id, ro=ro, year=year)
-        songs.append(val)
-
+    
     results: dict = {}
     cursor.execute('''
         SELECT username, country_id, country.name FROM vote_set
@@ -133,11 +147,16 @@ def detailed_results(year: int, show: str):
 
     songs.sort(reverse=True)
 
-    return render_template('year/detailed.html', songs=songs, results=results, show_name=show_data.name, show=show, year=year)
+    print(len(songs))
+    return render_template('year/detailed.html', songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
 
-@bp.get('/<int:year>/<show>/scoreboard')
-def scoreboard(year:int, show: str):
-    show_data = get_show_id(show, year)
+@bp.get('/<year>/<show>/scoreboard')
+def scoreboard(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template('error.html', error="Show not found"), 404
@@ -150,9 +169,13 @@ def scoreboard(year:int, show: str):
     
     return render_template('year/scoreboard.html', show=show, year=year, show_name=show_data.name)
 
-@bp.get('/<int:year>/<show>/scoreboard/votes')
-def scores(year: int, show: str):
-    show_data = get_show_id(show, year)
+@bp.get('/<year>/<show>/scoreboard/votes')
+def scores(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
 
     if not show_data:
         return {"error": "Show not found"}, 404
@@ -165,26 +188,9 @@ def scores(year: int, show: str):
 
     db = get_db()
     cursor = db.cursor()
-    songs = []
-    cursor.execute('''
-        SELECT song.id, song_show.running_order, country.name, country.id, song.title, song.artist FROM song
-        JOIN song_show ON song.id = song_show.song_id
-        JOIN country ON song.country_id = country.id
-        WHERE song_show.show_id = ?
-        ORDER BY song_show.running_order
-    ''', (show_data.id,))
-    song_ids = []
-    for id, running_order, country, cc, title, artist in cursor.fetchall():
-        val = {
-            'id': id,
-            'ro': running_order,
-            'country': country,
-            'cc': cc,
-            'title': title,
-            'artist': artist,
-        }
-        songs.append(val)
-        song_ids.append(id)
+    songs = get_show_songs(_year, show, select_votes=True)
+    if not songs:
+        return {"error": "No songs found for this show."}, 404
 
     cursor.execute('''
         SELECT song_id, point.score, username FROM vote
@@ -200,7 +206,7 @@ def scores(year: int, show: str):
     for song_id, pts, username in results_raw:
         results[username][pts] = song_id
 
-    sequencer = SuspensefulVoteSequencer(results, song_ids, show_data.points)
+    sequencer = SuspensefulVoteSequencer(results, songs, show_data.points, seed=show_data.id)
     vote_order = sequencer.get_order()
 
     user_songs = defaultdict(list)
@@ -227,9 +233,13 @@ def scores(year: int, show: str):
 
     return {'songs': songs, 'results': results, 'points': show_data.points, 'vote_order': vote_order, 'associations': voter_assoc, 'user_songs': user_songs}
 
-@bp.get('/<int:year>/<show>/qualifiers')
-def qualifiers(year: int, show: str):
-    show_data = get_show_id(show, year)
+@bp.get('/<year>/<show>/qualifiers')
+def qualifiers(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template('error.html', error="Show not found"), 404
@@ -248,9 +258,13 @@ def qualifiers(year: int, show: str):
     
     return render_template('year/qualifiers.html', show=show, year=year, show_name=show_data.name)
 
-@bp.get('/<int:year>/<show>/qualifiers/votes')
-def qualifiers_scores(year: int, show: str):
-    show_data = get_show_id(show, year)
+@bp.get('/<year>/<show>/qualifiers/votes')
+def qualifiers_scores(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
 
     if not show_data:
         return {"error": "Show not found"}, 404

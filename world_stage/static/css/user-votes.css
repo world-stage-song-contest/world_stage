@@ -39,11 +39,6 @@ td {
     background-color: var(--background3);
 }
 
-.flag {
-    height: 1.5em;
-    border: 1px solid grey;
-}
-
 .user-votes {
     align-self: stretch;
 }

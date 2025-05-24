@@ -1,16 +1,26 @@
 @keyframes winner {
     from {
-        background: var(--background1);
+        color: #ae2900;
     }
 
     to {
-        background: gold;
+        color: #ae6300;
+    }
+}
+
+@keyframes voting {
+    from {
+        background-color: black;
+    }
+
+    to {
+        background-color: white;
     }
 }
 
 #container {
     position: relative;
-    width: 1000px;
+    width: 805px;
     height: 600px;
 }
 
@@ -57,6 +67,7 @@
 }
 
 .voting-card-user-wrapper {
+    font-family: 'Eurostile', sans-serif;
     display: flex;
     flex-direction: column;
 }
@@ -68,8 +79,71 @@
 }
 
 .voting-card-country {
-    font-size: 1.5em;
+    font-size: 0.75em;
     font-weight: bold;
+}
+
+#points-row {
+    /*display: flex;*/
+    display: none;
+    gap: 0.5em;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1em;
+    width: 805px;
+    margin-left: 1em;
+}
+
+.points-value {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    font-family: 'DSEG7 Classic Mini', sans-serif;
+    background-color: black;
+    color: #ae2900;
+    font-size: 150%;
+    transition: filter 1.5s;
+    border-radius: 4px;
+
+    border: 2px solid var(--foreground1);
+    border-radius: 8px;
+    width: 2ch;
+    height: 2ch;
+    font-weight: bold;
+
+    filter: brightness(2);
+}
+
+/*
+.voting-card-points-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(0,0,0,0) 20%, rgba(0,0,0,0.1));
+    border-radius: 8px;
+}*/
+
+.points-value.spent {
+    filter: brightness(0.5);
+}
+
+.gold {
+    border-color: gold;
+}
+
+.silver {
+    border-color: #CCC;
+}
+
+.bronze {
+    border-color: #C96;
+}
+
+.wooden-spoon {
+    border-color: #FE8080;
 }
 
 .unloaded {
@@ -83,39 +157,120 @@
 .element {
     box-sizing: border-box;
     position: absolute;
-    width: 50%;
-    border: 1px solid var(--foreground1);
-    display: flex;
-    gap: 0.25em;
-    padding: 2px;
-    height: 42px;
+    width: 400px;
+    border: 2px solid var(--foreground1);
+    height: 40px;
+    border-radius: 6px;
 
-    transition: top 1s, left 1s, background 1s;
-    background: var(--background1);
+    transition: top 1s, left 1s, border-color 1s;
+    background: var(--background3);
+    font-weight: bold;
+    font-variant: small-caps;
+
+    overflow: hidden;
 }
 
+.inner-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 4px 4px 4px 0;
+}
+
+.element-overlay {
+    display: none;
+}
+
+/*
+.element-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(0,0,0,0) 20%, rgba(0,0,0,0.1));
+}*/
+
 .name-container {
+    font-family: 'Eurostile', sans-serif;
+    font-size: 1.25em;
     flex-grow: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
+    font-weight: 600;
+    font-variant-caps: petite-caps;
+    line-height: 1;
+}
+
+.name {
+    text-box: trim-both cap alphabetic;
 }
 
 .title-container {
     display: flex;
 }
 
+.element-place {
+    display: none;
+    box-sizing: border-box;
+    padding-right: 0;
+    width: 0;
+    font-size: 1.5em;
+    opacity: 0;
+    transition: width 1s, opacity 2.5s;
+}
+
+.element-place.visible {
+    padding-right: 0.5ch;
+    width: 2.5ch;
+}
+
+.element-place.solid {
+    opacity: 1;
+}
+
 .flag-container {
+    position: relative;
     height: 36px;
-    min-width: 36px;
+    width: 36px;
     display: flex;
     justify-content: center;
     align-items: center;
+    border-right: 1px solid grey;
+}
+
+.flag-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.flag-overlay.simple-gradient {
+    background-image: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.2));
+}
+
+.flag-overlay.dot-mask {
+  background-image: 
+    radial-gradient(
+      circle, 
+      transparent 0, transparent 0.5px,
+      black 0.5px, black 1px
+    );
+  background-size: 2px 2px;
+  background-repeat: repeat;
 }
 
 .flag {
-    height: 32px;
-    border: 1px solid grey;
+    width: 100%;
+    height: 100%;
+    border: none;
 }
 
 .subtitle {
@@ -134,22 +289,69 @@
     font-variant-numeric: tabular-nums;
 }
 
-.current-points {
-    font-size: 200%;
-    opacity: 0%;
-    transition: opacity 1s;
-    min-width: 3ch;
-    font-variant-numeric: tabular-nums;
+.point-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    font-family: 'DSEG7 Classic Mini', sans-serif;
+    background-color: black;
+    color: #ae2900;
+    font-size: 1.5em;
+    transition: filter 1s;
+    border-radius: 4px;
+    filter: brightness(1.1);
 }
 
-.current-points.visible {
-    opacity: 100%;
+/*
+.currently-voting {
+    border-radius: 50%;
+    height: 16px;
+    width: 16px;
+    background-color: black;
+    border: 2px solid black;
+    margin-right: 0.5em;
+}
+
+.own-entry .currently-voting {
+    animation: voting 1s infinite alternate;
+}
+*/
+
+.current-points {
+    min-width: 2ch;
+    filter: brightness(0.3);
 }
 
 .total-points {
-    font-size: 200%;
-    min-width: 4ch;
-    font-variant-numeric: tabular-nums;
+    min-width: 3ch;
+    filter: brightness(1.75);
+}
+
+.inactive .total-points {
+    filter: brightness(0.75);
+}
+
+.active .point-display {
+    animation: winner 0.3s 2 alternate linear;
+    filter: brightness(2.5);
+}
+
+.active .point-display .zero-value {
+    filter: brightness(0.75);
+}
+
+.current-points.showing-place {
+    filter: brightness(1.5);
+}
+
+.own-entry .current-points {
+    filter: brightness(0.1);
+}
+
+.winner .total-points {
+    animation: winner 1.5s infinite alternate linear;
+    filter: brightness(3);
 }
 
 .main-moving {
@@ -160,34 +362,45 @@
     z-index: -50;
 }
 
-.active {
-    background: var(--active-entry-color);
-}
-
-.own-entry {
-    background: var(--own-entry-color);
-}
-
-.no-win {
-    background: gray;
-}
-
-.active.no-win {
-    background: darkblue;
-    color: white;
-}
-
-.winner {
-    animation: ease-out winner 2s infinite alternate;
-}
-
 .hidden {
     display: none;
 }
 
+#jury-container {
+    font-family: 'Eurostile', sans-serif;
+    position: absolute;
+    bottom: 1em;
+    width: 95vw;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    box-sizing: border-box;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
 #jury-counter {
-    float: right;
+    text-align: right;
     font-weight: bold;
     font-size: 2em;
     margin: 0;
+}
+
+#jury-progress {
+    border: 1px solid var(--foreground1);
+    width: 100%;
+    height: 1em;
+    overflow: hidden;
+    background-color: var(--background1);
+}
+
+#jury-bar {
+    background: green;
+    height: 100%;
+    width: 0;
+    transition: width 2s, filter 1s;
+}
+
+#jury-bar.animating {
+    filter: brightness(1.5);
 }

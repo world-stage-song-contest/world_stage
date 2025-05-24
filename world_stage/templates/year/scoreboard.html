@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Scoreboard: {{ year}} {{ show_name }}{% endblock %}
 {% block headercontents %}
+    <link rel="stylesheet" href="/static/css/font-dseg.css">
+    <link rel="stylesheet" href="/static/css/font-eurostile.css">
+    <link rel="stylesheet" href="/static/css/font-london-underground.css">
     <link rel="stylesheet" href="/static/css/scoreboard.css">
+    <link rel="stylesheet" href="/static/css/scoreboard-cards.css">
     <script src="/static/js/scoreboard.js"></script>
 {% endblock %}
 {% block navigation %}
@@ -16,14 +20,19 @@
     <p>The scoreboard is a secret until the end of the show.</p>
 </div>
 {% else %}
-<p id="jury-counter">Jury <span id="jury-count">0</span> out of <span id="total-juries">0</span></p>
 <div id="controls">
-    <button onclick="togglePause()">Pause</button>
-    <button onclick="speedUp()">Faster</button>
-    <button onclick="speedDown()">Slower</button>
-    <button id="reset">Reset</button>
+    <button onclick="togglePause()" aria-label="Play/Pause"><i class="ph-fill ph-play-pause"></i></button>
+    <button onclick="speedDown()" aria-label="Slower"><i class="ph-fill ph-rewind"></i></button>
+    <button onclick="speedUp()" aria-label="Faster"><i class="ph-fill ph-fast-forward"></i></button>
+    <button id="reset" aria-label="Reset"><i class="ph-fill ph-clock-clockwise"></i></button>
+    <button onclick="toggleHeader()" aria-label="Toggle Header"><i class="ph-fill ph-arrows-in"></i></button>
 </div>
 <div id="from"></div>
+<div id="points-row"></div>
 <div id="container"></div>
+<div id="jury-container">
+    <p id="jury-counter">Jury <span id="jury-count">0</span> out of <span id="total-juries">0</span></p>
+    <div id="jury-progress"><div id="jury-bar"></div></div>
+</div>
 {% endif %}
 {% endblock %}

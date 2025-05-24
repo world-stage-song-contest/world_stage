@@ -44,10 +44,9 @@
     white-space: nowrap;
 }
 
-.flag {
-    height: 1em;
-    border: 1px solid grey;
-    margin-right: 0.25em;
+.country {
+    display: flex;
+    gap: 0.25em;
 }
 
 th.plain {
@@ -58,4 +57,20 @@ th.plain {
 td.header-like {
     font-weight: bold;
     text-align: center;
+}
+
+.first {
+    background: gold;
+}
+
+.second {
+    background: #CCC;
+}
+
+.third {
+    background: #C96;
+}
+
+.last {
+    background: #FE8080;
 }

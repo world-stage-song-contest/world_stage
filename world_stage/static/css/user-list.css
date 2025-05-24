@@ -8,7 +8,7 @@
 }
 
 .user-item {
-    background-color: var(--background2);
+    background-color: var(--background3);
     border: 2px solid var(--foreground2);
     gap: 0.5em;
     padding: 0.5em;

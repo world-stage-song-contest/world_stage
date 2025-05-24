@@ -10,7 +10,7 @@
 <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results summary</a>
 <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
 {% endblock %}
-{% block onload %}onLoad({{ year }}, '{{ show }}'){% endblock %}
+{% block onload %}onLoad('{{ year }}', '{{ show }}'){% endblock %}
 {% block content %}
 <svg style="display: none;">
     <symbol id="envelope-top" viewBox="0 0 180 60">

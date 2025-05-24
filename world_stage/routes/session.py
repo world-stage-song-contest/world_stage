@@ -1,6 +1,8 @@
-from flask import Blueprint, render_template, request, make_response
+from flask import Blueprint, request, make_response
 import hashlib, datetime, os, unicodedata, uuid
+
 from ..db import get_db
+from ..utils import render_template
 
 bp = Blueprint('session', __name__, url_prefix='/')
 
@@ -46,7 +48,7 @@ def login():
     else:
         username = ""
 
-    return render_template('session/login.html', username=username)
+    return render_template('session/login.html', username=username, message="Please log in to your account.")
 
 @bp.post('/login')
 def login_post():
@@ -146,7 +148,7 @@ def set_password_post():
     return render_template('session/set_password_success.html', state="success")
 
 @bp.get('/signup')
-def signup():
+def sign_up():
     username = request.cookies.get('username') or ''
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
@@ -159,7 +161,7 @@ def signup():
     return render_template('session/request_account.html', username=username)
 
 @bp.post('/signup')
-def signup_post():
+def sign_up_post():
     username = request.form.get('username')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
@@ -180,7 +182,7 @@ def signup_post():
     cursor.execute('SELECT id FROM user WHERE username = ?', (username,))
     user = cursor.fetchone()
     if user:
-        return render_template('session/request_account.html', message="User already exists.")
+        return render_template('session/request_account.html', message="Your account already exists as you have either voted or submitted entries before. Instead of signing up, please <a href='/setpassword'>set your password</a>.")
     
     hashed, salt = hash_password(password)
     cursor.execute('''

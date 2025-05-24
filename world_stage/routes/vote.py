@@ -1,10 +1,10 @@
 from collections import defaultdict
 from typing import Optional
-from flask import make_response, render_template, request, Blueprint
+from flask import make_response, request, Blueprint
 import datetime
 import unicodedata
 
-from ..utils import format_timedelta, get_show_id, get_countries, dt_now
+from ..utils import format_timedelta, get_show_id, get_countries, dt_now, render_template
 from ..db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
@@ -16,7 +16,7 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes):
     cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
     vote_set_id = cursor.fetchone()[0]
 
-    cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id, vote_set_id))
+    cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id or 'XXX', vote_set_id))
 
     for point, song_id in votes.items():
         cursor.execute('''
@@ -45,7 +45,7 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
         cursor.execute('''
             INSERT INTO vote_set (voter_id, show_id, country_id, nickname, created_at)
             VALUES (?, ?, ?, ?, datetime('now'))
-            ''', (voter_id, show_id, country_id, nickname))
+            ''', (voter_id, show_id, country_id or 'XXX', nickname))
         cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
         vote_set_id = cursor.fetchone()[0]
         for point, song_id in votes.items():
@@ -64,9 +64,8 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
 
     return action
 
-
 @bp.get('/')
-def vote_index():
+def index():
     open_votings = []
 
     db = get_db()
@@ -83,12 +82,88 @@ def vote_index():
         open_votings.append({
             'id': id,
             'name': f"{year} {name}" if year else name,
-            'short_name': short_name,
+            'short_name': f"{year}-{short_name}" if year else short_name,
             'voting_opens': voting_opens,
             'voting_closes': voting_closes,
             'left': format_timedelta(left),
         })
     return render_template('vote/index.html', shows=open_votings)
+
+@bp.get('/<show>')
+def vote(show: str):
+    username = request.cookies.get('username')
+    session_id = request.cookies.get('session')
+    nickname = None
+    country = ''
+    country_id = ''
+
+    selected = {}
+
+    show_data = get_show_id(show)
+
+    if not show_data or not show_data.id:
+        return render_template('error.html', error="Show not found"), 404
+    
+    if (show_data.voting_opens > dt_now()
+        or show_data.voting_closes < dt_now()):
+        return render_template('error.html', error="Voting is closed"), 400
+    
+    db = get_db()
+    cursor = db.cursor()
+
+    if session_id:
+        cursor.execute('''
+            SELECT user.username FROM session
+            JOIN user ON session.user_id = user.id
+            WHERE session.session_id = ? AND session.expires_at > datetime('now')
+        ''', (session_id,))
+        row = cursor.fetchone()
+        if row:
+            username = row[0]
+
+    vote_set_id = None
+    if username:
+        cursor.execute('''
+            SELECT vote_set.id, vote_set.nickname, vote_set.country_id
+            FROM vote_set
+            JOIN user ON vote_set.voter_id = user.id
+            WHERE user.username = ? AND vote_set.show_id = ?
+        ''', (username, show_data.id))
+        vote_set_id = cursor.fetchone()
+        if vote_set_id:
+            vote_set_id, nickname, country_id = vote_set_id
+
+    if vote_set_id:
+        cursor.execute('''
+            SELECT song_id, score FROM vote
+            JOIN point ON vote.point_id = point.id
+            WHERE vote_set_id = ?
+        ''', (vote_set_id,))
+        for song_id, pts in cursor.fetchall():
+            selected[pts] = song_id
+
+    cursor.execute('''
+        SELECT song.id, title, artist, running_order
+        FROM song
+        JOIN song_show ON song.id = song_show.song_id
+        WHERE song_show.show_id = ?
+        ORDER BY song_show.running_order
+    ''', (show_data.id,))
+    songs = []
+    for id, title, artist, running_order in cursor.fetchall():
+        val = {
+            'id': id,
+            'title': title,
+            'artist': artist,
+            'running_order': running_order
+        }
+        songs.append(val)
+    
+    return render_template('vote/vote.html',
+                           songs=songs, points=show_data.points, selected=selected,
+                           username=username, nickname=nickname, country=country,
+                           year=show_data.year, show_name=show_data.name, show=show,
+                           selected_country=country_id, countries=get_countries())
 
 @bp.post('/<show>')
 def vote_post(show: str):
@@ -99,7 +174,7 @@ def vote_post(show: str):
 
     show_data = get_show_id(show)
 
-    if not show_data.id:
+    if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
     
     if (show_data.voting_opens > dt_now()
@@ -192,81 +267,5 @@ def vote_post(show: str):
                            songs=songs, points=show_data.points, errors=errors,
                            selected=votes, invalid=invalid,
                            username=(username, username_invalid and "invalid"), nickname=nickname,
-                           year=show_data.year, show_name=show_data.name, show=show,
-                           selected_country=country_id, countries=get_countries())
-
-@bp.get('/<show>')
-def vote(show: str):
-    username = request.cookies.get('username')
-    session_id = request.cookies.get('session')
-    nickname = None
-    country = ''
-    country_id = ''
-
-    selected = {}
-
-    show_data = get_show_id(show)
-
-    if not show_data.id:
-        return render_template('error.html', error="Show not found"), 404
-    
-    if (show_data.voting_opens > dt_now()
-        or show_data.voting_closes < dt_now()):
-        return render_template('error.html', error="Voting is closed"), 400
-    
-    db = get_db()
-    cursor = db.cursor()
-
-    if session_id:
-        cursor.execute('''
-            SELECT user.username FROM session
-            JOIN user ON session.user_id = user.id
-            WHERE session.session_id = ? AND session.expires_at > datetime('now')
-        ''', (session_id,))
-        row = cursor.fetchone()
-        if row:
-            username = row[0]
-
-    vote_set_id = None
-    if username:
-        cursor.execute('''
-            SELECT vote_set.id, vote_set.nickname, vote_set.country_id
-            FROM vote_set
-            JOIN user ON vote_set.voter_id = user.id
-            WHERE user.username = ? AND vote_set.show_id = ?
-        ''', (username, show_data.id))
-        vote_set_id = cursor.fetchone()
-        if vote_set_id:
-            vote_set_id, nickname, country_id = vote_set_id
-
-    if vote_set_id:
-        cursor.execute('''
-            SELECT song_id, score FROM vote
-            JOIN point ON vote.point_id = point.id
-            WHERE vote_set_id = ?
-        ''', (vote_set_id,))
-        for song_id, pts in cursor.fetchall():
-            selected[pts] = song_id
-
-    cursor.execute('''
-        SELECT song.id, title, artist, running_order
-        FROM song
-        JOIN song_show ON song.id = song_show.song_id
-        WHERE song_show.show_id = ?
-        ORDER BY song_show.running_order
-    ''', (show_data.id,))
-    songs = []
-    for id, title, artist, running_order in cursor.fetchall():
-        val = {
-            'id': id,
-            'title': title,
-            'artist': artist,
-            'running_order': running_order
-        }
-        songs.append(val)
-    
-    return render_template('vote/vote.html',
-                           songs=songs, points=show_data.points, selected=selected,
-                           username=username, nickname=nickname, country=country,
                            year=show_data.year, show_name=show_data.name, show=show,
                            selected_country=country_id, countries=get_countries())

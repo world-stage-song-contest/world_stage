@@ -40,6 +40,7 @@ def create_app():
     from .routes import member
     from .routes import year
     from .routes import user
+    from .routes import admin
     
     app.register_blueprint(index.bp)
     app.register_blueprint(vote.bp)
@@ -48,5 +49,6 @@ def create_app():
     app.register_blueprint(member.bp)
     app.register_blueprint(year.bp)
     app.register_blueprint(user.bp)
+    app.register_blueprint(admin.bp)
 
     return app

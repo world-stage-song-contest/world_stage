@@ -10,24 +10,29 @@
 </div>
 {% endif %}
 
-<table class="songs-table">
+<table class="songs-table sortable">
     <thead>
         <tr>
-            <th>Year</th>
-            <th>Country</th>
-            <th>Artist</th>
-            <th>Title</th>
-            <th>Language</th>
+            <th><div>Year</div></th>
+            <th><div>Country</div></th>
+            <th><div>Artist</div></th>
+            <th><div>Title</div></th>
+            <th><div>Language</div></th>
         </tr>
     </thead>
     <tbody>
     {% for song in songs %}
         <tr class="{{ "placeholder" if song.placeholder else "" }}">
-            <td><a href="/year/{{ song.year }}">{{ song.year }}</a></td>
-            <td><div class="country">{{ flag(song.cc, song.country) }}
-                <span href="/country/{{ song.cc }}">{{ song.country }}</span></div></td>
+            <td><a href="{{ url_for('year.year', year=song.year) }}">{{ song.year }}</a></td>
+            <td><div class="country">{{ flag(song.country.cc, 40, song.country.name) }}
+                <span href="/country/{{ song.country.cc }}">{{ song.country.name }}</span></div></td>
             <td>{{ song.artist }}</td>
-            <td>{{ song.title }}</td>
+            <td><div class="song-title">
+                    <span lang="{{song.title_lang.str()}}">{{ song.title }}</span>
+                    {% if song.native_title %}
+                    <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
+                    {% endif %}
+                </div></td>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
         </tr>
     {% endfor %}

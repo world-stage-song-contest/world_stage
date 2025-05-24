@@ -9,7 +9,7 @@
 {% for error in errors %}
     <p class="error">{{ error }}</p>
 {% endfor %}
-<form method="POST" action="/vote/{{ show }}">
+<form method="POST">
     <fieldset>
         <legend>User data</legend>
             <label class="req" title="Your submitter name. Doesn't change." for="username">Voter Name</label>

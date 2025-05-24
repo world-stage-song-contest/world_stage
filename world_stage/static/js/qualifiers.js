@@ -191,7 +191,7 @@ function createEnvelope(n, country, isSecondChance) {
         card.appendChild(front);
         
         const flag = document.createElement("img");
-        flag.src = `/static/flags/${code}/rect.svg`;
+        flag.src = `/flags/${code}.svg?type=rect`;
         flag.classList.add("card-flag");
         front.appendChild(flag);
 
@@ -250,7 +250,7 @@ function createCountry(country, countryClass) {
 
     const flag = document.createElement("img");
     flag.classList.add("reveal-flag");
-    flag.src = `/static/flags/${country.cc}/square.svg`;
+    flag.src = `/flags/${country.cc}.svg?type=square&size=s`;
     countryEl.appendChild(flag);
 
     const heading = document.createElement("h2");

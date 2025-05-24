@@ -2,6 +2,7 @@
 {% block title %}Years{% endblock %}
 {% block headercontents %}
 <link rel="stylesheet" href="/static/css/year.css">
+    <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block content %}
 
@@ -9,7 +10,7 @@
 <div class="year-container">
     {% for year in upcoming %}
         <div class="upcoming-year">
-            <a href="/year/{{ year.id }}">
+            <a href="{{ url_for('year.year', year=year.id) }}">
                 <div class="year-number">{{ year.id }}</div>
             </a>
         </div>
@@ -18,27 +19,69 @@
 
 <h2>Done years</h2>
 <div class="sticky-header-table-container">
-    <table class="results-table sticky-header-table">
+    <table class="results-table sticky-header-table sortable">
         <thead>
             <tr>
-                <th>Year</th>
-                <th>Winner</th>
-                <th>Artist</th>
-                <th>Title</th>
-                <th>Language</th>
-                <th>Points</th>
-                <th>% of Max</th>
-                <th>Submitter</th>
+                <th class="sortable"><div>Year</div></th>
+                <th><div>Winner</div></th>
+                <th><div>Artist</div></th>
+                <th><div>Title</div></th>
+                <th><div>Language</div></th>
+                <th class="sortable"><div>Points</div></th>
+                <th class="sortable"><div>% of Max</div></th>
+                <th><div>Submitter</div></th>
             </tr>
         </thead>
         <tbody>
         {% for year in years %}
         {% set winner = year.winner %}
             <tr>
-                <td class="year"><a href="/year/{{ year.id }}"><b>{{ year.id }}</b></a></td>
+                <td class="year"><a href="{{ url_for('year.year', year=year.id) }}"><b>{{ year.id }}</b></a></td>
                 <td><div class="country">
-                    {{ flag(winner.cc, winner.country) }}
-                    <span href="/country/{{ winner.cc }}">{{ winner.country }}</span>
+                    {{ flag(winner.country.cc, 40, winner.country.name) }}
+                    <span href="/country/{{ winner.country.cc }}">{{ winner.country.name }}</span>
+                </div></td>
+                <td class="artist">{{ winner.artist }}</td>
+                <td class="title"><div class="song-title">
+                    <span lang="{{winner.title_lang.str()}}">{{ winner.title }}</span>
+                    {% if winner.native_title %}
+                    <bdi lang="{{winner.title_lang.str()}}">{{ winner.native_title }}</bdi>
+                    {% endif %}
+                </div></td>
+                <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
+                <td class="points">{{ winner.vote_data.sum }}</td>
+                <td class="percent">{{ winner.vote_data.pct() }}</td>
+                <td class="submitter">{{ winner.submitter }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+
+<h2>Specials</h2>
+<div class="sticky-header-table-container">
+    <table class="results-table sticky-header-table sortable">
+        <thead>
+            <tr>
+                <th class="sortable">Special</div></th>
+                <th><div>Winner</div></th>
+                <th><div>Artist</div></th>
+                <th><div>Title</div></th>
+                <th><div>Language</div></th>
+                <th class="sortable">Points</th>
+                <th class="sortable">% of Max</th>
+                <th><div>Submitter</div></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for special in specials %}
+        {% set winner = special.winner %}
+            <tr>
+                <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.results', year='special', show=special.short_name) }}"><b>{{ special.name }}</b></a></td>
+                <td><div class="country">
+                    {{ flag(winner.country.cc, winner.country.name) }}
+                    <span href="/country/{{ winner.country.cc }}">{{ winner.country.name }}</span>
                 </div></td>
                 <td class="artist">{{ winner.artist }}</td>
                 <td class="title">{{ winner.title }}</td>
