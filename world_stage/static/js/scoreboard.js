@@ -28,19 +28,42 @@ async function loadVotes(year, show) {
 }
 
 function makeRow(country) {
-    function makeElementDigits(el) {
-        const digits = String(0).padStart(el.dataset.pad, "0");
+    function makeElementDigits(el, className, start, padWith) {
+        const digits = String(start).padStart(el.dataset.pad, padWith);
         for (const d of digits) {
             const digitEl = document.createElement("span");
-            digitEl.classList.add("scoreboard-digit", "zero-value");
+            digitEl.classList.add(className);
+            if (d == 0) {
+                digitEl.classList.add("zero-value");
+            }
             digitEl.textContent = d;
             el.appendChild(digitEl);
         }
     }
 
+    function makePointDisplay(padding, className) {
+        const currentEl = document.createElement("div");
+        currentEl.classList.add(className, "number", "point-display");
+
+        const bgEl = document.createElement("div");
+        bgEl.classList.add("background-digits", "digits-container");
+        bgEl.dataset.pad = padding;
+        makeElementDigits(bgEl, "background-digit", 8, "8");
+        currentEl.appendChild(bgEl);
+
+        const fgEl = document.createElement("div");
+        fgEl.classList.add("foreground-digits", "digits-container");
+        fgEl.dataset.pad = padding;
+        makeElementDigits(fgEl, "foreground-digit", 0, "0");
+        currentEl.appendChild(fgEl);
+        //makeElementDigits(currentEl, "foreground-digit");
+
+        return [currentEl, fgEl];
+    }
+
     const superContainer = document.createElement("div");
-    superContainer.classList.add("element", "inactive", "metal", "linear");
-    superContainer.classList.add(`background-${country.bg}`, `text-${country.text}`, `foreground-${country.fg1}`, `foreground2-${country.fg2}`);
+    superContainer.classList.add("element", "inactive");
+    //superContainer.classList.add(`background-${country.bg}`, `text-${country.text}`, `foreground-${country.fg1}`, `foreground2-${country.fg2}`);
     superContainer.dataset.country = country.name;
     superContainer.dataset.id = country.id;
 
@@ -103,17 +126,11 @@ function makeRow(country) {
     currentlyVotingEl.classList.add("currently-voting");
     container.appendChild(currentlyVotingEl);
 
-    const currentEl = document.createElement("div");
-    currentEl.classList.add("current-points", "number", "point-display");
-    currentEl.dataset.pad = "2";
-    container.appendChild(currentEl);
-    makeElementDigits(currentEl);
+    const [currentContEl, currentEl] = makePointDisplay(2, "current-points");
+    container.appendChild(currentContEl);
 
-    const totalEl = document.createElement("div");
-    totalEl.classList.add("total-points", "number", "point-display");
-    totalEl.dataset.pad = "3";
-    container.appendChild(totalEl);
-    makeElementDigits(totalEl);
+    const [totalContEl, totalEl] = makePointDisplay(3, "total-points");
+    container.appendChild(totalContEl);
 
     return [nameEl, currentEl, totalEl, superContainer, currentlyVotingEl];
 }
@@ -181,17 +198,21 @@ function makeVotingCard(from, code, country) {
     return container;
 }
 
+function setDigitClasses(el, value, setZero) {
+    if (setZero && value == 0) {
+        el.classList.add("zero-value");
+        el.classList.remove("nonzero-value");
+    } else {
+        el.classList.remove("zero-value");
+        el.classList.add("nonzero-value");
+    }
+}
+
 /**
  * @param {HTMLElement} el 
  * @param {number} value 
  */
 function setDigitValue(el, value) {
-    console.log(el, value);
-    /*if (value == 0) {
-        el.classList.add("zero-value");
-    } else {
-        el.classList.remove("zero-value");
-    }*/
     el.textContent = value;
 }
 
@@ -199,12 +220,34 @@ function setDigitValue(el, value) {
  * @param {HTMLElement} el 
  * @param {number} value 
  */
-function setElementValue(el, value) {
+function setElementValue(el, value, setZero) {
     const digits = String(value).padStart(el.dataset.pad, "0");
+    let leadingZero = true;
     for (let i = 0; i < el.children.length; i++) {
         const digitEl = el.children[i];
         const d = digits[i];
+
+        const isZero = leadingZero && d == '0';
+        if (d != '0') {
+            leadingZero = false;
+        }
+        setDigitClasses(digitEl, d, setZero && isZero);
         setDigitValue(digitEl, d);
+    }
+}
+
+function prepareElement(el, value, setZero) {
+    const digits = String(value).padStart(el.dataset.pad, "0");
+    let leadingZero = true;
+    for (let i = 0; i < el.children.length; i++) {
+        const digitEl = el.children[i];
+        const d = digits[i];
+
+        const isZero = leadingZero && d == '0';
+        if (d != '0') {
+            leadingZero = false;
+        }
+        setDigitClasses(digitEl, d, setZero && isZero);
     }
 }
 
@@ -214,8 +257,9 @@ const duration = 1250;
  * @param {HTMLElement} element 
  * @param {number} end 
  */
-function animatePoints(element, end) {
+function animatePoints(element, end, setZero) {
     end = +end;
+    //prepareElement(element, end, setZero);
     let start = parseInt(element.textContent) || 0;
     const direction = end > start ? 1 : -1;
     const stepDuration = duration / (maxPoints - 1);
@@ -229,7 +273,7 @@ function animatePoints(element, end) {
 
             if (start !== end) {
                 start += direction;
-                setElementValue(element, start);
+                setElementValue(element, start, setZero);
             }
         }
 
@@ -245,7 +289,7 @@ function animatePoints(element, end) {
  * @param {HTMLElement} element 
  * @param {number} end 
  */
-function animateDigit(element, end, allowCountDown = false) {
+function animateDigit(element, end, allowCountDown = false, setZero = false) {
     end = +end;
     let start = parseInt(element.textContent) || 0;
     let direction;
@@ -266,7 +310,7 @@ function animateDigit(element, end, allowCountDown = false) {
             if (start !== end) {
                 start += direction;
                 start %= 10;
-                setDigitValue(element, start);
+                setDigitValue(element, start, setZero);
             }
         }
 
@@ -292,7 +336,7 @@ function animatePointsSeparately(element, end, allowCountDown = true) {
     });
 }
 
-function countDownPointValue(pt, animateEachDigit = false, allowCountDown = true) {
+function countDownPointValue(pt, animateEachDigit = false, allowCountDown = true, setZero) {
     const el = document.querySelector(`.points-value[data-value="${pt}"]`);
     el.classList.add("spent");
     if (animateEachDigit) {
@@ -413,12 +457,15 @@ class Country {
      */
     refresh(pt) {
         if (pt == null) {
-            animatePoints(this.currentEl, 0);
+            setTimeout(() => {
+                setElementValue(this.currentEl, 0, true);
+            }, 1100);
             this.currentEl.classList.remove("visible");
+            this.element.classList.add("inactive");
             this.element.classList.remove("gold", "silver", "bronze", "active", "own-entry");
         } else {
-            animatePoints(this.totalEl, this.points);
-            animatePoints(this.currentEl, pt);
+            animatePoints(this.totalEl, this.points, true);
+            animatePoints(this.currentEl, pt, true);
             this.element.classList.remove("inactive");
             this.currentEl.classList.add("visible");
             this.element.classList.add("main-moving");
@@ -441,7 +488,9 @@ class Country {
     setPlace(place) {
         this.currentEl.classList.add("showing-place");
         this.element.classList.remove("own-entry", "active");
-        animatePoints(this.currentEl, place);
+        const parent = this.element.parentElement;
+        parent.insertBefore(this.element, parent.childNodes[place]);
+        animatePoints(this.currentEl, place, true);
     }
 
     finalise() {
@@ -481,7 +530,9 @@ class Country {
      */
     setCanWin(leftVotes, leaderPts) {
         if (!this.win) return;
-        if (this.points + leftVotes * Math.max(points) <= leaderPts) {
+        const left = this.points + leftVotes * Math.max(points);
+        if (left <= leaderPts) {
+            debugger;
             this.win = false;
             this.element.classList.add("no-win");
         }

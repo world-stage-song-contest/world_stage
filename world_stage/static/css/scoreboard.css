@@ -3,6 +3,14 @@
         color: #ae2900;
     }
 
+    20% {
+        color: #ae2900;
+    }
+
+    80% {
+        color: #ae6300;
+    }
+
     to {
         color: #ae6300;
     }
@@ -290,17 +298,15 @@
 }
 
 .point-display {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
     padding: 2px;
     font-family: 'DSEG7 Classic Mini', sans-serif;
     background-color: black;
     color: #ae2900;
     font-size: 1.5em;
+    height: 1em;
     transition: filter 1s;
     border-radius: 4px;
-    filter: brightness(1.1);
 }
 
 /*
@@ -320,29 +326,58 @@
 
 .current-points {
     min-width: 2ch;
-    filter: brightness(0.3);
 }
 
 .total-points {
     min-width: 3ch;
-    filter: brightness(1.75);
 }
 
-.inactive .total-points {
+.point-display .digits-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.point-display .background-digits {
+    filter: brightness(0.4);
+    pointer-events: none;
+}
+
+.point-display .foreground-digits span {
+    transition: filter 1s;
+}
+
+.inactive .total-points .foreground-digits .nonzero-value {
+    filter: brightness(2);
+}
+
+.inactive .current-points .foreground-digits span.nonzero-value {
+    filter: brightness(0.4);
+}
+
+.inactive .foreground-digits .zero-value {
     filter: brightness(0.75);
 }
 
 .active .point-display {
-    animation: winner 0.3s 2 alternate linear;
+    animation: winner 0.5s 2 alternate linear;
+}
+
+.active .point-display .nonzero-value {
     filter: brightness(2.5);
 }
 
-.active .point-display .zero-value {
-    filter: brightness(0.75);
+.point-display .foreground-digits .zero-value {
+    filter: brightness(0.4);
 }
 
 .current-points.showing-place {
-    filter: brightness(1.5);
+    filter: brightness(2);
 }
 
 .own-entry .current-points {
@@ -350,8 +385,7 @@
 }
 
 .winner .total-points {
-    animation: winner 1.5s infinite alternate linear;
-    filter: brightness(3);
+    animation: winner 2s infinite alternate linear;
 }
 
 .main-moving {
