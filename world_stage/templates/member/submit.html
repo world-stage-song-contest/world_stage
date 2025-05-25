@@ -155,15 +155,16 @@
         <input type="time" id="snippet_end" name="snippet_end" placeholder="00:00" maxlength="5" size="5" value="{{ data.snippet_end }}">
         </div>
     </fieldset>
-
-    <div class="banner">
-        Make sure that each version of the lyrics has the same number of lines and that
-        all the different parts of the lyrics (verses, chorus, bridge and so on) are
-        separated with a double blank line (i.e. you hit the Enter/Return key twice).
-    </div>
     
     <fieldset class="hidable nongrid">
         <legend>Lyrics</legend>
+        <div class="banner long-text">
+            <div>
+                Make sure that each version of the lyrics has the same number of lines and that
+                all the different parts of the lyrics (verses, chorus, bridge and so on) are
+                separated with a double blank line (i.e. you hit the Enter/Return key twice).
+            </div>
+        </div>
         <details>
             <summary>English lyrics</summary>
             <textarea id="english_lyrics" name="english_lyrics" rows="15" cols="50" placeholder="English lyrics">{{ data.english_lyrics }}</textarea>
@@ -178,7 +179,11 @@
         </details>
     </fieldset>
     <div class="hidable">
-        <button type="submit">Submit</button>
+        <button type="submit" name="action" value="submit">Submit</button>
+        <button type="submit" name="action" value="delete"
+                onclick="return confirm('Are you sure you want to delete yout song?')">
+            DELETE
+        </button>
     </div>
 </form>
 {% endblock %}

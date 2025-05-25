@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Submit Success{% endblock %}
 {% block content %}
-    <p>Your song has been submitted successfully!</p>
+    <p>{{ message }}</p>
     <p>If you want to submit another song, you can click <a href="{{ url_for('member.submit') }}">HERE</a>.</p>
 {% endblock %}

@@ -55,6 +55,43 @@ class SongData:
                 res[attr] = getattr(self, attr)
         return res
 
+def delete_song(song_data: SongData, user_id: int):
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT id, submitter_id FROM song
+        WHERE year_id = ? AND country_id = ?
+    ''', (song_data.year, song_data.country))
+    song_id = cursor.fetchone()
+    if not song_id:
+        return {'error': 'Song not found.'}
+    song_id, submitter_id = song_id
+
+    if submitter_id != user_id:
+        return {'error': 'You are not the submitter.'}
+    
+    cursor.execute('''
+        UPDATE song
+        SET title = NULL, native_title = NULL, artist = NULL,
+            is_placeholder = 1, title_language_id = NULL,
+            native_language_id = NULL, video_link = NULL,
+            snippet_start = NULL, snippet_end = NULL,
+            translated_lyrics = NULL, romanized_lyrics = NULL,
+            native_lyrics = NULL, submitter_id = NULL,
+            modified_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    ''', (song_id,))
+
+    cursor.execute('''
+        DELETE FROM song_language
+        WHERE song_id = ?
+        ''', (song_id,))
+
+    db.commit()
+
+    return {'success': True, 'message': f"The song \"{song_data.artist} — {song_data.title}\" hass been deleted from {song_data.year}"}
+
 def update_song(song_data: SongData, user_id: int) -> dict:
     db = get_db()
     cursor = db.cursor()
@@ -108,7 +145,7 @@ def update_song(song_data: SongData, user_id: int) -> dict:
 
     db.commit()
 
-    return {'success': True}
+    return {'success': True, 'message': f"The song \"{song_data.artist} — {song_data.title}\" hass been submitted for {song_data.year}"}
 
 @bp.get('/')
 def index():
@@ -271,7 +308,11 @@ def submit_song_post():
     languages = []
     invalid_languages = []
     other_data = {}
+    action = request.form['action']
     for key, value in request.form.items():
+        if key == 'action':
+            continue
+
         if key.startswith('language'):
             n = int(key.removeprefix('language'))
             try:
@@ -319,7 +360,13 @@ def submit_song_post():
 
     song_data = SongData(languages=languages, **other_data)
 
-    res = update_song(song_data, user_id)
+    if action == 'delete':
+        res = delete_song(song_data, user_id)
+    elif action == 'submit':
+        res = update_song(song_data, user_id)
+    else:
+        res = {'error': f"Unknown action: '{action}'."}
+    
     if 'error' in res:
         return render_template('member/submit.html', years=get_years(), data=other_data,
                                languages=get_languages(), countries=get_countries(other_data['year'], user_id),
@@ -327,4 +374,4 @@ def submit_song_post():
                                selected_languages=languages, invalid_languages=invalid_languages,
                                error=res['error'], missing_fields=missing_fields_internal, onLoad=False)
 
-    return render_template('member/submit_success.html')
+    return render_template('member/submit_success.html', message=res['message'])
