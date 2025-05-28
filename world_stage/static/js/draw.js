@@ -67,9 +67,9 @@ function nextChildOrFirst(node, parent) {
  */
 async function selectRandomChild(pot) {
     let current = null;
-    let totalCycles = lcg.next(1) + 1; // total "flashes"
-    const minDelay = 20;
-    const maxDelay = 150;
+    let totalCycles = lcg.next(40) + 15; // total "flashes"
+    const minDelay = 10;
+    const maxDelay = 175;
 
     for (let i = 0; i < totalCycles; i++) {
         const progress = i / totalCycles; // 0 to 1
@@ -141,12 +141,16 @@ async function next() {
     country.classList.add("selected");
 
     const emptyCountry = currentShow.querySelector(".empty");
+
     const countryFlag = emptyCountry.querySelector(".flag");
     const countryFlagContainer = emptyCountry.querySelector(".flag-container");
     const countryName = emptyCountry.querySelector(".country-name");
+
     countryFlag.src = country.querySelector(".flag").src;
     countryName.textContent = country.querySelector(".country-name").textContent;
     countryFlagContainer.classList.remove("transparent");
+
+    emptyCountry.dataset.code = country.dataset.code;
     emptyCountry.classList.remove("empty");
     countryName.classList.remove("transparent");
 
@@ -245,4 +249,17 @@ function animateNumberRoll(element, finalNumber, maxNumber, delay = 0) {
             }, intervalTime);
         }, delay);
     });
+}
+
+function logDraw() {
+    const data = {};
+    for (const show of document.querySelectorAll('.show')) {
+        const ro = [];
+        for (const country of show.querySelectorAll(".show-country")) {
+            ro.push({cc: country.dataset.code, ro: country.dataset.index});
+        }
+        ro.sort((a, b) => a.ro - b.ro);
+        data[show.dataset.name] = ro.map(e => e.cc);
+    }
+    return data;
 }
