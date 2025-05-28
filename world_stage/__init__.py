@@ -17,6 +17,9 @@ def create_app():
         app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
     )
 
+    app.jinja_env.globals.update(zip=zip)
+    app.jinja_env.globals.update(round=round)
+
     @app.before_request
     def clear_trailing():
         from flask import redirect, request

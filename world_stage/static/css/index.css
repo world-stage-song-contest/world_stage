@@ -10,6 +10,9 @@
 
     --active-entry-color: rgb(99, 146, 234);
     --own-entry-color: rgb(249, 127, 113);
+
+    --dtf-color: #FFDEAD;
+    --sc-color: #AFEEEE;
 }
 
 @media (prefers-color-scheme: dark) {

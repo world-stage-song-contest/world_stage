@@ -861,6 +861,53 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
             song.languages = get_song_languages(song.id)
     return songs
 
+def get_years() -> list[int]:
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT id FROM year
+        WHERE closed = 0
+    ''')
+    return list(map(lambda x: x[0], cursor.fetchall()))
+
+def get_year_countries(year: int, exclude: list[str] = []) -> list[dict]:
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT country.id, country.name, country.pot FROM song
+        JOIN country ON song.country_id = country.id
+        WHERE song.year_id = ?
+        ORDER BY country.name
+    ''', (year,))
+    countries = []
+    for id, name, pot in cursor.fetchall():
+        if id in exclude: continue
+        countries.append({
+            'cc': id,
+            'name': name,
+            'pot': pot
+        })
+
+    return countries
+
+def get_year_shows(year: int, pattern: str = '') -> list[dict]:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT show_name, short_name FROM show
+        WHERE year_id = ? AND short_name LIKE ?
+    ''', (year, pattern + '%'))
+
+    shows = []
+    for name, short in cursor.fetchall():
+        shows.append({
+            'name': name,
+            'short_name': short
+        })
+    
+    return shows
+
 def render_template(template: str, **kwargs):
     if request.accept_mimetypes.accept_html:
         return flask.render_template(template, **kwargs)

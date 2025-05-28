@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Administrator Utilities{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+<form method="POST">
+    <fieldset class="grid">
+        <legend>Year</legend>
+        <label for="year">Year</label>
+        <select name="year" id="year">
+            <option value=""></option>
+            {% for year in years %}
+                <option value="{{ year }}">{{ year }}</option>
+            {% endfor %}
+        </select>
+        <label for="show_name">Full Show Name</label>
+        <input name="show_name" id="show_name" required>
+        <label for="show_name">Short Show Name</label>
+        <input name="short_name" id="short_name">
+        <label for="dtf">Qualifiers</label>
+        <input type="number" name="dtf" id="dtf">
+    </fieldset>
+    <div>
+        <button type="submit">Create</button>
+    </div>
+</form>
+{% endblock %}

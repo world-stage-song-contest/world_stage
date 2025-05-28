@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Administrator Utilities{% endblock %}
+{% block headercontents %}
+    <script>
+        const year = {{ year }}
+    </script>
+    <script src="/static/js/draw.js"></script>
+    <link rel="stylesheet" href="/static/css/draw.css">
+{% endblock %}
+{% block content %}
+<div id="controls">
+    <button onclick="next()" aria-label="Faster"><i class="ph-fill ph-fast-forward"></i></button>
+    <button onclick="makeRo()" id="reset" aria-label="Reset"><i class="ph-fill ph-person-simple-run"></i></button>
+    <button onclick="sortCountriesInShow()" id="reset" aria-label="Sort"><i class="ph-fill ph-arrows-down-up"></i></button>
+    <button onclick="toggleHeader()" aria-label="Toggle Header"><i class="ph-fill ph-arrows-in"></i></button>
+</div>
+
+<div id="shows">
+{% for show, num, lim in zip(shows, songs, limits) %}
+    <div class="show {% if loop.index == 1 %}active1{% endif %}"
+         data-name="{{ show.short_name }}"
+         data-songs="{{ num }}">
+        <h2>{{ show.name }}</h2>
+        <div class="show-countries"
+             data-limit="{{ lim }}"
+             style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
+        {% for _ in range(num) %}
+            <div class="show-country empty"
+                 data-code="XXX"
+                 data-index="{{ loop.index0 }}"
+                 style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
+                <div class="running-order value unfilled"></div>
+                <div class="flag-container value transparent">{{ flag("XXX", 25, "Unknown") }}</div>
+                <div class="country-name value transparent"></div>
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+{% endfor %}
+</div>
+
+<div id="pots">
+{% for pot, countries in pots.items() %}
+    <div class="pot {% if loop.index == 1 %}active1{% endif %}">
+        <h2>Pot {{loop.index}}</h2>
+        <div class="pot-container">
+        {% for country in countries %}
+            <div class="pot-item" data-code="{{ country.cc }}">
+                <div class="flag-container">{{ flag(country.cc, 25, country.name) }}</div>
+                <div class="country-name">{{ country.name }}</div>
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+{% endfor %}
+</div>
+{% endblock %}

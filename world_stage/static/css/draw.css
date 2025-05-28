@@ -1,0 +1,97 @@
+#controls, #navigation {
+    clear: both;
+    float: right;
+    background: lightblue;
+    border: 1px solid black;
+    padding: 0.5em;
+}
+
+#pots, #shows {
+    display: flex;
+    gap: 0.5em;
+}
+
+#pots {
+    margin-top: 1em;
+}
+
+.pot, .show {
+    border: 1px solid black;
+}
+
+.pot {
+    width: 200px;
+}
+
+.show {
+    padding: 4px;
+}
+
+.pot {
+    padding: 0.1em;
+}
+
+.pot > h2, .show > h2 {
+    text-align: center;
+}
+
+.pot-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1em;
+}
+
+.show-countries {
+    position: relative;
+    width: 460px;
+    height: calc(var(--rows) * 36px);
+}
+
+.pot-item, .show-country {
+    box-sizing: border-box;
+    border: 1px solid black;
+    display: flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 3.5px;
+    height: 32px;
+    background: white;
+}
+
+.pot-item {
+    width: 200px;
+}
+
+.show-country {
+    position: absolute;
+    width: 228px;
+    top: calc(var(--row) * 36px);
+    left: calc(var(--column) * 232px);
+    transition: top 2s, left 2s;
+}
+
+.pot-item:last-child {
+    border-bottom: 1px solid black;
+}
+
+.active1 {
+    background-color: beige;
+}
+
+.active2 {
+    background-color: var(--dtf-color);
+}
+
+.running-order {
+    text-align: right;
+    width: 20px;
+    font-weight: bold;
+}
+
+.value {
+    transition: opacity 1s;
+}
+
+.transparent {
+    opacity: 0;
+}

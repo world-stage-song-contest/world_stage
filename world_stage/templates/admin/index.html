@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Administrator Utilities{% endblock %}
+{% block content %}
+<div class="cards-container">
+    <a href="{{ url_for('admin.create_show') }}" class="card">
+        <h3>Create Show</h3>
+        <img src="/static/images/submit.png" alt="Submit Icon">
+        <p>Create new shows for World Stage</p>
+    </a>
+</div>
+{% endblock %}

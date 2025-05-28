@@ -4,7 +4,7 @@ from flask import Blueprint, redirect, request, url_for
 from typing import Optional
 
 from ..db import get_db
-from ..utils import get_user_id_from_session, format_seconds, parse_seconds, render_template
+from ..utils import get_user_id_from_session, format_seconds, get_years, parse_seconds, render_template
 
 bp = Blueprint('member', __name__, url_prefix='/member')
 
@@ -170,15 +170,6 @@ def index():
     username = username[0]
 
     return render_template('member/index.html', username=username)
-
-def get_years() -> list[int]:
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute('''
-        SELECT id FROM year
-        WHERE closed = 0
-    ''')
-    return list(map(lambda x: x[0], cursor.fetchall()))
 
 def get_languages() -> list[dict]:
     db = get_db()
