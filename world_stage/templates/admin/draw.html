@@ -12,8 +12,11 @@
     <button onclick="next()" aria-label="Faster"><i class="ph-fill ph-fast-forward"></i></button>
     <button onclick="makeRo()" id="reset" aria-label="Reset"><i class="ph-fill ph-person-simple-run"></i></button>
     <button onclick="sortCountriesInShow()" id="reset" aria-label="Sort"><i class="ph-fill ph-arrows-down-up"></i></button>
+    <button onclick="save()" aria-label="Save"><i class="ph-fill ph-floppy-disk"></i></button>
     <button onclick="toggleHeader()" aria-label="Toggle Header"><i class="ph-fill ph-arrows-in"></i></button>
 </div>
+
+<p class="error hidden"></p>
 
 <div id="shows">
 {% for show, num, lim in zip(shows, songs, limits) %}

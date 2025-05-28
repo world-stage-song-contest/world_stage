@@ -119,6 +119,7 @@ function setFirstActive() {
 
 let allDrawn = false;
 let lockedIntoShow = true;
+let finalised = false;
 let runningOrders = [];
 
 function createRunningOrders(show) {
@@ -189,9 +190,13 @@ async function sortCountriesInShow() {
     await new Promise (r => setTimeout(r, 1500));
     
     currentShow.classList.remove("active1");
-    const [nextShow, _] = nextChildOrFirst(currentShow);
-    nextShow.classList.add("active1");
-    createRunningOrders(nextShow);
+    const [nextShow, loopedAround] = nextChildOrFirst(currentShow);
+    if (loopedAround) {
+        finalised = true;
+    } else {
+        nextShow.classList.add("active1");
+        createRunningOrders(nextShow);
+    }
     clicked = false;
     lockedIntoShow = true;
 }
@@ -221,7 +226,6 @@ function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = lcg.next(i + 1);
         [array[i], array[j]] = [array[j], array[i]];
-        console.log(i, j, array.join(","));
     }
     return array;
 }
@@ -262,4 +266,34 @@ function logDraw() {
         data[show.dataset.name] = ro.map(e => e.cc);
     }
     return data;
+}
+
+async function save() {
+    if (!finalised) return;
+    const error = document.querySelector(".error");
+    const data = {};
+    for (const show of document.querySelectorAll('.show')) {
+        const ro = [];
+        for (const country of show.querySelectorAll(".show-country")) {
+            ro.push({cc: country.dataset.code, ro: country.dataset.index});
+        }
+        ro.sort((a, b) => a.ro - b.ro);
+        data[show.dataset.name] = ro.map(e => e.cc);
+    }
+    const res = await fetch(`/admin/draw/${year}`, {
+        method: "POST",
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+
+    const body = await res.json();
+    if (!res.ok) {
+        error.classList.remove("hidden");
+        error.textContent = body.error;
+    } else {
+        error.classList.add("hidden");
+    }
 }
