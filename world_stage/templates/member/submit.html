@@ -104,6 +104,7 @@
         </div>
         <label for="native_title">Native title</label>
         <input type="text" id="native_title_id" name="native_title" placeholder="Native title" maxlength="100" value="{{ data.native_title }}">
+        <div class="span-fieldset"><small>Please only enter this if the title is natively wrriten in a non-Latin script (Cyrillic, Greek, Chinese, Devanagari, Arabic etc).</small></div>
         <div class="span-fieldset">
             <div>
                 <input type="checkbox" id="does_match" name="does_match" onchange="toggleTitleLanguageSelect(this)" {% if data.does_match %}checked{% endif %}>
@@ -167,14 +168,26 @@
         </div>
         <details>
             <summary>English lyrics</summary>
+            <div class="limit-length">
+                If the song is fully in English, enter the lyrics only here. Otherwise, enter a full translation here.
+            </div>
             <textarea id="english_lyrics" name="english_lyrics" rows="15" cols="50" placeholder="English lyrics">{{ data.english_lyrics }}</textarea>
         </details>
         <details>
             <summary>Native lyrics (Latin alphabet)</summary>
+            <div class="limit-length">
+                Leave blank if the song is natively in English.
+                If the song is partially in English and a different language, enter full lyrics here.
+                If the song lyrics are natively written in a script other than Latin, enter a transliteration here.
+            </div>
             <textarea id="romanized_lyrics" name="romanized_lyrics" rows="15" cols="50" placeholder="Native lyrics (Latin alphabet)">{{ data.romanized_lyrics }}</textarea>
         </details>
         <details>
-            <summary>Native lyrics</summary>
+            <summary>Native lyrics (non-Latin alphabet)</summary>
+            <div class="limit-length">
+                If the song lyrics are already written in a Latin script, leave blank.
+                Otherwise, enter song lyrics in their native non-Latin script (Cyrillic, Greek, Chinese, Devanagari, Arabic etc).
+            </div>
             <textarea id="native_lyrics" name="native_lyrics" rows="15" cols="50" placeholder="Native lyrics">{{ data.native_lyrics }}</textarea>
         </details>
     </fieldset>

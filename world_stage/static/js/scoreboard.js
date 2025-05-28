@@ -449,7 +449,7 @@ class Country {
     vote(pt) {
         this.votes[pt]++;
         this.refresh(pt);
-        countDownPointValue(pt);
+        //countDownPointValue(pt);
     }
 
     /**
@@ -488,6 +488,7 @@ class Country {
     setPlace(place) {
         this.currentEl.classList.add("showing-place");
         this.element.classList.remove("own-entry", "active");
+        this.element.classList.add("inactive");
         const parent = this.element.parentElement;
         parent.insertBefore(this.element, parent.childNodes[place]);
         animatePoints(this.currentEl, place, true);
@@ -552,10 +553,16 @@ let countries = {};
 let ro = [];
 let perColumn = 0;
 
-function populate() {
+function setColumnLimit() {
     const cnt = data.length;
+    const style = window.getComputedStyle(document.body);
+    const lim = style.getPropertyValue('--columns');
+    perColumn = Math.ceil(cnt / lim);
+    return [cnt, lim, perColumn]
+}
+
+function populate() {
     const container = document.querySelector("#container");
-    perColumn = Math.ceil(cnt / 2);
     for (const [i, c] of data.entries()) {
         const country = new Country({
             index: i,
@@ -752,6 +759,11 @@ async function onLoad(year, show) {
     loaded = true;
 
     await loadVotes(year, show);
+
+    window.addEventListener('resize', () => {
+        setColumnLimit();
+    }, true);
+    setColumnLimit();
 
     document.querySelector("#total-juries").innerHTML = voteOrder.length;
 

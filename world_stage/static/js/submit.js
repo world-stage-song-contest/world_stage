@@ -147,6 +147,7 @@ async function populateSongData() {
 
     const form = document.forms.submit_song;
     for (const [key, value] of Object.entries(songData)) {
+        if (key == "is_placeholder") continue;
         const newVal = value === null ? '' : value;
         const element = form.querySelector(`[name="${key}"]`);
         if (element) {

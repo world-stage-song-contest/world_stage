@@ -26,6 +26,16 @@
     }
 }
 
+:root {
+    --columns: 2;
+}
+
+@media (max-width: 900px) {
+    :root {
+        --columns: 1;
+    }
+}
+
 #container {
     position: relative;
     width: 805px;
@@ -356,7 +366,7 @@
     filter: brightness(2);
 }
 
-.inactive .current-points .foreground-digits span.nonzero-value {
+.inactive .current-points .foreground-digits .nonzero-value {
     filter: brightness(0.4);
 }
 
@@ -368,6 +378,10 @@
     animation: winner 0.5s 2 alternate linear;
 }
 
+.inactive .current-points .foreground-digits.showing-place span.nonzero-value {
+    filter: brightness(2);
+}
+
 .active .point-display .nonzero-value {
     filter: brightness(2.5);
 }
@@ -376,16 +390,12 @@
     filter: brightness(0.4);
 }
 
-.current-points.showing-place {
-    filter: brightness(2);
-}
-
 .own-entry .current-points {
     filter: brightness(0.1);
 }
 
 .winner .total-points {
-    animation: winner 2s infinite alternate linear;
+    animation: winner 1.5s infinite alternate linear;
 }
 
 .main-moving {
@@ -402,7 +412,7 @@
 
 #jury-container {
     font-family: 'Eurostile', sans-serif;
-    position: absolute;
+    position: fixed;
     bottom: 1em;
     width: 95vw;
     display: flex;

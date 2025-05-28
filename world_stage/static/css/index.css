@@ -241,8 +241,8 @@ h1 {
     margin: 0;
 }
 
-.banner.long-text > div {
-    max-width: 80ch;
+.banner.long-text > div, .limit-length {
+    max-width: 70ch;
     text-wrap: balance;
 }
 
@@ -279,4 +279,8 @@ table.sortable thead th[aria-sort="descending"] > div::after {
 
 bdi {
     text-align: left;
+}
+
+.collapsed {
+    visibility: collapse !important;
 }
