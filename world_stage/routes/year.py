@@ -85,17 +85,38 @@ def results(year: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
-        return render_template('error.html', error="Voting hasn't closed yet."), 400
+    if show_data.access_type == 'none' and not permissions.can_view_restricted:
+        return render_template('error.html', error="This show has no songs"), 400
 
-    songs = get_show_songs(_year, show, select_votes=True)
+    access = show_data.access_type
+    if permissions.can_view_restricted:
+        if access == 'none' or access == 'draw':
+            access = 'draw'
+        else:
+            access = 'full'
+
+    songs = get_show_songs(_year, show, select_votes=True, access_type=access)
 
     if not songs:
         return render_template('error.html', error="No songs found for this show."), 404
 
     songs.sort(reverse=True)
+    off = show_data.dtf - 1 if show_data.dtf else 0
+    if access == 'partial':
+        songs = songs[off:]
 
-    return render_template('year/summary.html', songs=songs, points=show_data.points, show=show, show_name=show_data.name, show_id=show_data.id, year=year, participants=len(songs))
+        if songs[0].vote_data:
+            songs[0].vote_data.ro = 0
+        songs[0].artist = ''
+        songs[0].title = ''
+        songs[0].country.name = ''
+        songs[0].country.cc = 'XXX'
+    elif access == 'draw':
+        songs.reverse()
+
+    return render_template('year/summary.html',
+                           songs=songs, points=show_data.points, show=show, access=access, offset=off,
+                           show_name=show_data.name, show_id=show_data.id, year=year, participants=len(songs))
 
 @bp.get('/<year>/<show>/detailed')
 def detailed_results(year: str, show: str):
@@ -111,7 +132,14 @@ def detailed_results(year: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
+    print(show_data.access_type != 'full', permissions.can_view_restricted)
+
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access the detailed results yet"), 400
+    
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
         return render_template('error.html', error="Voting hasn't closed yet."), 400
     
     songs = get_show_songs(_year, show, select_votes=True)
@@ -163,7 +191,12 @@ def scoreboard(year: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access the scoreboard yet"), 400
+
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
         return render_template('error.html', error="Voting hasn't closed yet."), 400
     
     return render_template('year/scoreboard.html', show=show, year=year, show_name=show_data.name)
@@ -182,7 +215,12 @@ def scores(year: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return {'error': "You aren't allowed to access the scoreboard"}, 400
+
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
         return {'error': "Voting hasn't closed yet."}, 400
 
     db = get_db()
@@ -245,14 +283,16 @@ def qualifiers(year: str, show: str):
     
     if show_data.dtf is None:
         return render_template('error.html', error="Not a semi-final."), 400
-    
-    if show_data.access_type == 'none':
-        return render_template('error.html', error="This show is not public."), 400
 
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access the qualifiers")
+    
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
         return render_template('error.html', error="Voting hasn't closed yet."), 400
     
     return render_template('year/qualifiers.html', show=show, year=year, show_name=show_data.name)
@@ -270,14 +310,16 @@ def qualifiers_scores(year: str, show: str):
 
     if show_data.dtf is None:
         return {"error": "Not a semi-final."}, 400
-    
-    if show_data.access_type == 'none':
-        return {"error": "This show is not public."}, 400
 
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.voting_closes > dt_now() and not permissions.can_view_restricted:
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return {'error': "You aren't allowed to access the qualifiers"}, 400
+    
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
         return {'error': "Voting hasn't closed yet."}, 400
 
     db = get_db()

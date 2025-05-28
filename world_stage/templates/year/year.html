@@ -41,7 +41,7 @@
                 <span href="/country/{{ song.country.cc }}">{{ song.country.name }}</span></div></td>
             <td>{{ song.artist or '' }}</td>
             <td><div class="song-title">
-                <span lang="{{song.title_lang.str()}}">{{ song.title or '' }}</span>
+                <span lang="{{song.title_lang.str('Latn')}}">{{ song.title or '' }}</span>
                 {% if song.native_title %}
                 <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
                 {% endif %}

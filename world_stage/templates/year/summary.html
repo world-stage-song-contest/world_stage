@@ -22,30 +22,35 @@
             <th class="sticky">Country</th>
             <th>Artist</th>
             <th>Title</th>
+        {% if access != 'none' and access != 'draw' %}
             <th>Place</th>
             <th>Points</th>
             <th>Voters</th>
         {% for point in points %}
             <th class="point-header"><div>{{ point }}</th>
         {% endfor %}
+        {% endif %}
         </tr>
     </thead>
     <tbody>
         {% for song in songs %}
-            <tr data-value="{{ loop.index }}"
-                class="{% if loop.index == 1 %}first{% elif loop.index == 2 %}second{% elif loop.index == 3 %}third{% elif loop.index == participants%}last{% endif %}"
-                data-value="{{ loop.index }}">
-                <th class="number">{{ song.vote_data.ro }}</td>
+        {% set place = loop.index + offset %}
+        {% set class = {1: 'first', 2: 'second', 3:'third', participants: 'last'}.get(loop.index, '') if access == 'full' else '' %}
+            <tr data-value="{{ place }}"
+                class="{{ class }}">
+                <th class="number">{{ song.vote_data.ro or '' }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 25, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
                 <td>{{ song.title }}</td>
-                <td class="number">{{ loop.index }}</td>
+            {% if access != 'draw' %}
+                <td class="number">{{ place }}</td>
                 <td class="number">{{ song.vote_data.sum }}</td>
                 <td class="number">{{ song.vote_data.count }}</td>
             {% for point in points %}
                 {% set pts = song.get_pt(point) %}
                 <td class="number">{{ pts if pts != 0 else '' }}</td>
             {% endfor %}
+            {% endif %}
             </tr>
         {% endfor %}
 </table>

@@ -226,7 +226,7 @@ class UserPermissions(Enum):
 
 @dataclass
 class Country:
-    cc: int
+    cc: str
     name: str
     is_participating: bool
     bg: str
@@ -234,7 +234,7 @@ class Country:
     fg2: str
     text: str
 
-    def __init__(self, *, cc: int, name: str, is_participating: bool, bg: str, fg1: str, fg2: str, text: str):
+    def __init__(self, *, cc: str, name: str, is_participating: bool, bg: str, fg1: str, fg2: str, text: str):
         self.cc = cc
         self.name = name
         self.is_participating = is_participating
@@ -247,9 +247,9 @@ class Country:
 @dataclass
 class VoteData:
     ro: int
-    total_votes: int
-    max_pts: int
-    show_voters: int
+    total_votes: int | None
+    max_pts: int | None
+    show_voters: int | None
     sum: int = 0
     count: int = 0
     pts: dict[int, int] = field(default_factory=lambda: defaultdict(int))
@@ -263,8 +263,8 @@ class VoteData:
             return self.count < other.count
         this_keys = sorted(self.pts.keys())
         other_keys = sorted(other.pts.keys())
-        this_max = max(this_keys)
-        other_max = max(other_keys)
+        this_max = max(this_keys, default=0)
+        other_max = max(other_keys, default=0)
         if this_max != other_max:
             return this_max < other_max
         for i in range(len(this_keys)):
@@ -280,7 +280,7 @@ class VoteData:
         return self.ro == other.ro and self.sum == other.sum and self.count == other.count and self.pts == other.pts
     
     def pct(self) -> str:
-        if self.show_voters == 0 or self.max_pts == 0:
+        if not self.show_voters or not self.max_pts:
             return "0.00%"
         return f"{(self.sum / (self.show_voters * self.max_pts)) * 100:.2f}%"
 
@@ -365,6 +365,8 @@ class Song:
         self.native_lang = get_language(native_lang) if native_lang else Language()
         if show_id is not None and ro is not None:
             self.vote_data = get_votes_for_song(self.id, show_id, ro)
+        elif ro is not None:
+            self.vote_data = VoteData(ro, None, None, None)
         else:
             self.vote_data = None
 
@@ -694,7 +696,7 @@ def get_song_languages(song_id: int) -> list[Language]:
 
     return languages
 
-def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False) -> Optional[list[Song]]:
+def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False, access_type='draw') -> Optional[list[Song]]:
     db = get_db()
     cursor = db.cursor()
     data = get_show_id(short_name, year)
@@ -733,7 +735,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
                   ro=song['running_order'],
-                  show_id=show_id if select_votes else None)
+                  show_id=show_id if select_votes and access_type != 'draw' else None)
                 for song in cursor.fetchall()]
 
     if select_languages:
