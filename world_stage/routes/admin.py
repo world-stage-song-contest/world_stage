@@ -109,8 +109,6 @@ def draw_post(year: int):
             if not show_data:
                 return {'error': f"Invalid show {show} for {year}"}, 400
             
-            print(show_data.id)
-            
             for i, cc in enumerate(ro):
                 cursor.execute('''
                     SELECT id FROM song

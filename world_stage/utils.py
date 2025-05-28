@@ -660,7 +660,7 @@ def format_seconds(seconds: int) -> str:
 
 def parse_seconds(td: str | None) -> int | None:
     """Parse a string in the format MM:SS into seconds."""
-    if not td:
+    if td is None:
         return None
     parts = list(map(int, td.split(':')))
     if len(parts) == 2:
@@ -696,7 +696,8 @@ def get_song_languages(song_id: int) -> list[Language]:
 
     return languages
 
-def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False, access_type='draw') -> Optional[list[Song]]:
+def get_show_songs(year: Optional[int], short_name: str, *,
+                   select_languages=False, select_votes=False, access_type:str|None=None) -> Optional[list[Song]]:
     db = get_db()
     cursor = db.cursor()
     data = get_show_id(short_name, year)
@@ -735,7 +736,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
                   ro=song['running_order'],
-                  show_id=show_id if select_votes and access_type != 'draw' else None)
+                  show_id=show_id if select_votes and access_type == 'full' else None)
                 for song in cursor.fetchall()]
 
     if select_languages:
@@ -745,7 +746,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
     return songs
 
 def get_show_winner(year: Optional[int], show: str) -> Optional[Song]:
-    songs = get_show_songs(year, show, select_votes=True)
+    songs = get_show_songs(year, show, select_votes=True, access_type='full')
     if not songs:
         return None
 

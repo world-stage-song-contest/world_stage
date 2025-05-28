@@ -17,6 +17,17 @@
     {% endfor %}
 </div>
 
+<h2>Ongoing years</h2>
+<div class="year-container">
+    {% for year in ongoing %}
+        <div class="upcoming-year">
+            <a href="{{ url_for('year.year', year=year.id) }}">
+                <div class="year-number">{{ year.id }}</div>
+            </a>
+        </div>
+    {% endfor %}
+</div>
+
 <h2>Done years</h2>
 <div class="sticky-header-table-container">
     <table class="results-table sticky-header-table sortable">
@@ -57,7 +68,6 @@
         </tbody>
     </table>
 </div>
-
 
 <h2>Specials</h2>
 <div class="sticky-header-table-container">

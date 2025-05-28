@@ -28,13 +28,17 @@ def index():
 
     years = []
     upcoming = []
+    ongoing = []
 
     cursor.execute('SELECT id, closed FROM year ORDER BY id DESC')
     for id, closed in cursor.fetchall():
-        if closed:
-            years.append({'id': id, 'closed': closed})
+        data = {'id': id, 'closed': closed}
+        if closed == 1:
+            years.append(data)
+        elif closed == 2:
+            ongoing.append(data)
         else:
-            upcoming.append({'id': id, 'closed': closed})
+            upcoming.append(data)
 
     upcoming.reverse()
 
@@ -43,7 +47,7 @@ def index():
 
     specials = get_specials()
 
-    return render_template('year/index.html', years=years, upcoming=upcoming, specials=specials)
+    return render_template('year/index.html', years=years, upcoming=upcoming, specials=specials, ongoing=ongoing)
 
 @bp.get('/<year>')
 def year(year: str):
@@ -131,8 +135,6 @@ def detailed_results(year: str, show: str):
 
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
-
-    print(show_data.access_type != 'full', permissions.can_view_restricted)
 
     if show_data.access_type != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the detailed results yet"), 400

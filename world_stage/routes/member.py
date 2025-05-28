@@ -358,6 +358,9 @@ def submit_song_post():
     else:
         res = {'error': f"Unknown action: '{action}'."}
     
+    if dur := (other_data['snippet_end'] - other_data['snippet_start'] > 20):
+        res = {'error': f"The maximum length of the recap snippet is 20 seconds. Yours is {dur} seconds long."}
+    
     if 'error' in res:
         return render_template('member/submit.html', years=get_years(), data=other_data,
                                languages=get_languages(), countries=get_countries(other_data['year'], user_id),
