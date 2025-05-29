@@ -19,6 +19,20 @@ function onLoad() {
     const doesMatchCb = document.getElementById('does_match');
     doesMatchCb.checked = true;
     toggleTitleLanguageSelect(doesMatchCb);
+
+    document.querySelectorAll('.time-input').forEach(el => {
+        el.addEventListener('input', function (e) {
+            let value = el.value.replace(/\D/g, '');
+
+            if (value.length >= 3) {
+                value = value.slice(0, 4);
+                value = value.slice(0, 2) + ':' + value.slice(2);
+            }
+
+            console.log(value)
+            el.value = value;
+        });
+    });
 }
 
 function toggleTitleLanguageSelect(checkbox) {

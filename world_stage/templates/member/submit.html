@@ -146,14 +146,16 @@
     <fieldset class="grid hidable">
         <legend>Song video</legend>
         <label class="req" for="video">Video URL</label>
-        <input class="stretchable" type="text" id="video_link" name="video_link" placeholder="Put N/A if you'll upload later" maxlength="50" required value="{{ data.video_link }}">
+        <input class="stretchable" id="video_link" name="video_link" placeholder="Put N/A if you'll upload later" maxlength="50" required value="{{ data.video_link }}">
         <label for="snippet_start">Recap snippet start</label>
         <div>
-        <input type="time" id="snippet_start" name="snippet_start" placeholder="00:00" maxlength="5" size="5" value="{{ data.snippet_start }}">
+        <input class="time-input" id="snippet_start" name="snippet_start" placeholder="00:00"
+               maxlength="5" size="5" value="{{ data.snippet_start }}" pattern="\d{2}:\d{2}">
         </div>
         <label for="snippet_end">Recap snippet end</label>
         <div>
-        <input type="time" id="snippet_end" name="snippet_end" placeholder="00:00" maxlength="5" size="5" value="{{ data.snippet_end }}">
+        <input class="time-input" id="snippet_end" name="snippet_end" placeholder="00:00"
+               maxlength="5" size="5" value="{{ data.snippet_end }}" pattern="\d{2}:\d{2}">
         </div>
     </fieldset>
     
