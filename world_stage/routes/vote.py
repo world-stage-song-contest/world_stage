@@ -4,17 +4,18 @@ from flask import make_response, request, Blueprint
 import datetime
 import unicodedata
 
-from ..utils import format_timedelta, get_show_id, get_countries, dt_now, render_template
+from ..utils import format_timedelta, get_show_id, get_countries, dt_now, get_user_id_from_session, render_template
 from ..db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
 
-def update_votes(voter_id, nickname, country_id, point_system_id, votes):
+def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
+    cursor.execute('SELECT id FROM vote_set WHERE voter_id = ? AND show_id = ?', (voter_id,show_id))
     vote_set_id = cursor.fetchone()[0]
+    print(vote_set_id)
 
     cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id or 'XXX', vote_set_id))
 
@@ -31,6 +32,7 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes):
         ''', (song_id, vote_set_id, point_id))
 
 def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
+    print(username, nickname, country_id, show_id, point_system_id, votes)
     db = get_db()
     cursor = db.cursor()
 
@@ -45,8 +47,8 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
         cursor.execute('''
             INSERT INTO vote_set (voter_id, show_id, country_id, nickname, created_at)
             VALUES (?, ?, ?, ?, datetime('now'))
+            RETURNING id
             ''', (voter_id, show_id, country_id or 'XXX', nickname))
-        cursor.execute('SELECT id FROM vote_set WHERE voter_id = ?', (voter_id,))
         vote_set_id = cursor.fetchone()[0]
         for point, song_id in votes.items():
             cursor.execute('''
@@ -57,7 +59,7 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
             cursor.execute('INSERT INTO vote (vote_set_id, song_id, point_id) VALUES (?, ?, ?)', (vote_set_id, song_id, point_id))
         action = "added"
     else:
-        update_votes(voter_id, nickname, country_id, point_system_id, votes)
+        update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id)
         action = "updated"
     
     db.commit()
@@ -112,14 +114,9 @@ def vote(show: str):
     cursor = db.cursor()
 
     if session_id:
-        cursor.execute('''
-            SELECT user.username FROM session
-            JOIN user ON session.user_id = user.id
-            WHERE session.session_id = ? AND session.expires_at > datetime('now')
-        ''', (session_id,))
-        row = cursor.fetchone()
-        if row:
-            username = row[0]
+        d = get_user_id_from_session(session_id)
+        if d:
+            _, username = d
 
     vote_set_id = None
     if username:

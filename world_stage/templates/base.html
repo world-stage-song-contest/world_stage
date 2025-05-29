@@ -2,8 +2,8 @@
 <img
     src="{{ url_for('main.flag', country=cc, t=type, w=width) }}"
     width="{{ width }}"
-    {% if country %}alt="{{ country }}"{% endif %}
-    class="flag {{ class }}">
+    {% if country -%}alt="{{ country }}"{%- endif %}
+    class="{{ class }}">
 {%- endmacro %}
 {% macro title(title, native_title, lang, native_lang) -%}
 {%- endmacro %}
@@ -21,6 +21,7 @@
               href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/fill/style.css">
         <link rel="stylesheet" href="/static/css/index.css">
         <script src="/static/js/index.js"></script>
+        <meta name="google" content="nopagereadaloud">
         {% block headercontents %}{% endblock %}
     </head>
     <body onload="{% block onload %}{% endblock %}">

@@ -558,20 +558,20 @@ def get_countries(only_participating: bool = False) -> list[Country]:
     ]
     return countries
 
-def get_user_id_from_session(session_id: str | None) -> int | None:
+def get_user_id_from_session(session_id: str) -> tuple[int, str] | None:
     if not session_id:
         return None
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT user.id FROM session
+        SELECT user.id, user.username FROM session
         JOIN user ON session.user_id = user.id
         WHERE session.session_id = ? AND session.expires_at > datetime('now')
     ''', (session_id,))
     row = cursor.fetchone()
     if row:
-        return row[0]
+        return (row[0], row[1])
     return None
 
 def get_user_role_from_session(session_id: str | None) -> UserPermissions:

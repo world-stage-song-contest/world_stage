@@ -64,7 +64,7 @@ function addTableListeners() {
         const ths = table.querySelectorAll('th');
         ths.forEach((th, i) => {
             const div = document.createElement("div");
-            div.textContent = th.textContent;
+            div.innerHTML = th.innerHTML;
             th.innerHTML = '';
             th.appendChild(div);
             th.addEventListener('click', () => {

@@ -9,13 +9,26 @@
 {% for error in errors %}
     <p class="error">{{ error }}</p>
 {% endfor %}
+
+<div class="banner">
+    <dl>
+        <dt><strong>Voter Name</strong> (Mandatory)</dt>
+        <dd>The username you use to log in. Will be automatically filled if you're logged in.</dd>
+        <dt><strong>Display Name</strong></dt>
+        <dd>The name you want to be displayed on the scoreboard. If left blank, will default to the username.</dd>
+        <dt><strong>Country</strong> (Required)</dt>
+        <dd>The flag you're voting under. Check in with the jury list spreadsheet for more information.
+            You may not vote for this country (or any of your submissions) while voting.</dd>
+    </dl>
+</div>
+
 <form method="POST">
-    <fieldset>
+    <fieldset class="grid">
         <legend>User data</legend>
             <label class="req" title="Your submitter name. Doesn't change." for="username">Voter Name</label>
-            <input type="text" name="username" value="{{ username.0 or "" }}" {% if username.1 %}class="{{ username.1 }}"{% endif %} maxlength="64" required>
-            <label class="req" title="The name you want to be displayed on the scoreboard." for="nickname">Display Name</label>
-            <input type="text" name="nickname" value="{{ nickname or ""}}" maxlength="64">
+            <input type="text" name="username" value="{{ username or "" }}" maxlength="64" required>
+            <label title="The name you want to be displayed on the scoreboard." for="nickname">Display Name</label>
+            <input type="text" name="nickname" value="{{ nickname or "" }}" maxlength="64">
             <label class="req" title="The country to display on the scoreboard." for="country">Country</label>
             <select name="country" id="country">
                 <option value="XXX">Select a country</option>
@@ -24,7 +37,7 @@
             {% endfor %}
             </select>
         </fieldset>
-        <fieldset>
+        <fieldset class="grid">
             <legend>Songs</legend>
         {% for point in points %}
             {% set pl = loop %}
