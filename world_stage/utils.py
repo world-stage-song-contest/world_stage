@@ -869,7 +869,7 @@ def get_years() -> list[int]:
     cursor = db.cursor()
     cursor.execute('''
         SELECT id FROM year
-        WHERE closed = 0
+        WHERE closed <> 1
     ''')
     return list(map(lambda x: x[0], cursor.fetchall()))
 
