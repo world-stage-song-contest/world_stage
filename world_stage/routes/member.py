@@ -222,7 +222,9 @@ def submit():
 
 @bp.get('/submit/<year>')
 def get_countries_for_year(year):
-    user_id = get_user_id_from_session(request.cookies.get('session'))
+    d = get_user_id_from_session(request.cookies.get('session'))
+    if d:
+        user_id = d[0]
 
     return {'countries': get_countries(year, user_id)}
 

@@ -144,7 +144,7 @@ def detailed_results(year: str, show: str):
         and not permissions.can_view_restricted):
         return render_template('error.html', error="Voting hasn't closed yet."), 400
     
-    songs = get_show_songs(_year, show, select_votes=True)
+    songs = get_show_songs(_year, show, select_votes=True, access_type='full')
     if not songs:
         return render_template('error.html', error="No songs found for this show."), 404
 
@@ -174,7 +174,7 @@ def detailed_results(year: str, show: str):
 
         for pts, username in cursor.fetchall():
             results[username][song.id] = pts
-
+            
     songs.sort(reverse=True)
 
     return render_template('year/detailed.html', songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))

@@ -15,7 +15,6 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id
 
     cursor.execute('SELECT id FROM vote_set WHERE voter_id = ? AND show_id = ?', (voter_id,show_id))
     vote_set_id = cursor.fetchone()[0]
-    print(vote_set_id)
 
     cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id or 'XXX', vote_set_id))
 
@@ -32,7 +31,6 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id
         ''', (song_id, vote_set_id, point_id))
 
 def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
-    print(username, nickname, country_id, show_id, point_system_id, votes)
     db = get_db()
     cursor = db.cursor()
 
@@ -93,7 +91,7 @@ def index():
 
 @bp.get('/<show>')
 def vote(show: str):
-    username = request.cookies.get('username')
+    username = request.cookies.get('username', '')
     session_id = request.cookies.get('session')
     nickname = None
     country = ''
@@ -263,6 +261,6 @@ def vote_post(show: str):
     return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, errors=errors,
                            selected=votes, invalid=invalid,
-                           username=(username, username_invalid and "invalid"), nickname=nickname,
+                           username=username, username_invalid=username_invalid, nickname=nickname,
                            year=show_data.year, show_name=show_data.name, show=show,
                            selected_country=country_id, countries=get_countries())

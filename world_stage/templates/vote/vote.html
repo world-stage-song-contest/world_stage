@@ -33,7 +33,7 @@
             <select name="country" id="country">
                 <option value="XXX">Select a country</option>
             {% for country in countries %}
-                <option value="{{ country.id }}" {% if country.id == selected_country %}selected{% endif %}>{{ country.name }}</option>
+                <option value="{{ country.cc }}" {% if country.id == selected_country %}selected{% endif %}>{{ country.name }}</option>
             {% endfor %}
             </select>
         </fieldset>

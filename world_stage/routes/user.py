@@ -55,7 +55,7 @@ def votes(username: str):
         SELECT vote_set.id, user.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id FROM vote_set
         JOIN user ON vote_set.voter_id = user.id
         JOIN show ON vote_set.show_id = show.id
-        WHERE vote_set.voter_id = ?
+        WHERE vote_set.voter_id = ? AND show.allow_access_type = 'full'
         ORDER BY show.date DESC
     ''', (user_id,))
     votes = []
