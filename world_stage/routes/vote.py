@@ -4,7 +4,7 @@ from flask import make_response, request, Blueprint
 import datetime
 import unicodedata
 
-from ..utils import format_timedelta, get_show_id, get_countries, dt_now, get_user_id_from_session, render_template
+from ..utils import format_timedelta, get_show_id, get_countries, dt_now, get_show_songs, get_user_id_from_session, render_template
 from ..db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
@@ -137,22 +137,7 @@ def vote(show: str):
         for song_id, pts in cursor.fetchall():
             selected[pts] = song_id
 
-    cursor.execute('''
-        SELECT song.id, title, artist, running_order
-        FROM song
-        JOIN song_show ON song.id = song_show.song_id
-        WHERE song_show.show_id = ?
-        ORDER BY song_show.running_order
-    ''', (show_data.id,))
-    songs = []
-    for id, title, artist, running_order in cursor.fetchall():
-        val = {
-            'id': id,
-            'title': title,
-            'artist': artist,
-            'running_order': running_order
-        }
-        songs.append(val)
+    songs = get_show_songs(show_data.year, show_data.short_name)
     
     return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, selected=selected,

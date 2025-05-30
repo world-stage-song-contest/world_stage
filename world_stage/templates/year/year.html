@@ -5,6 +5,9 @@
     <script src="/static/js/sort-table.js"></script>
     <script src="/static/js/year.js"></script>
 {% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('year.index') }}">Years</a>
+{% endblock %}
 {% block content %}
 {% if not closed %}
 <div class="banner compact">

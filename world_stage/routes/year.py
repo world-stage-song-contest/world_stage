@@ -104,7 +104,10 @@ def results(year: str, show: str):
     if access == 'draw' and reveal:
         access = 'partial'
 
-    songs = get_show_songs(_year, show, select_votes=True)
+    if access == 'draw':
+        songs = get_show_songs(_year, show, select_votes=False)
+    else:
+        songs = get_show_songs(_year, show, select_votes=True)
 
     if not songs:
         return render_template('error.html', error="No songs found for this show."), 404
@@ -122,8 +125,6 @@ def results(year: str, show: str):
         songs[0].title = ''
         songs[0].country.name = ''
         songs[0].country.cc = 'XXX'
-    elif access == 'draw':
-        songs.reverse()
 
     return render_template('year/summary.html', hidden=reveal and "unrevealed",
                            songs=songs, points=show_data.points, show=show, access=access, offset=off,

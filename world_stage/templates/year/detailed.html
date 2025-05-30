@@ -5,6 +5,7 @@
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block navigation %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
 {% endblock %}
@@ -22,6 +23,7 @@
                 <th>Country</th>
                 <th>Artist</th>
                 <th>Title</th>
+                <th>Place</th>
                 <th>Total</th>
             {% for voter, result in results.items() %}
                 <th class="user-vote"><div>
@@ -39,7 +41,8 @@
                 <td class="number header-like">{{ song.vote_data.ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 25, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
-                <th class="plain">{{ song.title }}</td>
+                <td>{{ song.title }}</td>
+                <td class="number">{{ loop.index }}</td>
                 <td class="number" data-value="{{ loop.revindex }}">{{ song.vote_data.sum }}</td>
             {% for voter in results.keys() %}
             {% set pts = results[voter].get(song.id, 0) %}

@@ -2,9 +2,11 @@
 {% block title %}Results: {{ year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
+    <script src="/static/js/year.js"></script>
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block navigation %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{% if year == 'special'%}Specials{%else%}{{year}}{%endif%}</a>
     <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
 {% endblock %}
@@ -37,7 +39,8 @@
         {% set place = loop.index + offset %}
         {% set class = {1: 'first', 2: 'second', 3:'third', participants: 'last'}.get(loop.index, '') if access == 'full' else '' %}
             <tr data-value="{{ place }}"
-                class="{{ class }}">
+                {%if hidden%}onclick="revealRow(this)"{%endif%}
+                class="{{ class }} {{ hidden }}">
                 <th class="number">{{ song.vote_data.ro or '' }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 25, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>

@@ -8,3 +8,11 @@ function hideNonPlaceholders(cb) {
         document.querySelectorAll('tr.finalised').forEach(el => el.classList.remove('collapsed'));
     }
 }
+
+/**
+ * 
+ * @param {HTMLTableRowElement} row 
+ */
+function revealRow(row) {
+    row.classList.remove("unrevealed");
+}

@@ -5,14 +5,15 @@
     setTimeout(function() {
         window.location.href = "/";
     }, 5000);
+</script>
 {% endblock %}
 {% block content %}
 
 <p>Thank you for voting!</p>
 {% if action == "updated" %}
-<p>Your vote has been successfully edited.</p>
+<p>Your vote has been successfully <u>edited</u>.</p>
 {% else %}
-<p>Your vote has been successfully recorded.</p>
+<p>Your vote has been successfully <u>recorded</u>.</p>
 {% endif %}
 <p>You will be redirected to the home page in a few seconds.</p>
 

@@ -273,7 +273,7 @@ class VoteData:
                 return this_keys[i] < other_keys[i]
         if self.ro is None or other.ro is None:
             return False
-        return self.ro < other.ro
+        return self.ro > other.ro
     
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VoteData):
@@ -494,7 +494,7 @@ def get_show_id(show: str, year: Optional[int] = None) -> Optional[ShowData]:
     else:
         cursor.execute('''
             SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, allow_access_type FROM show
-            WHERE short_name = ? AND year IS NULL
+            WHERE short_name = ? AND year_id IS NULL
         ''', (short_show_name,))
 
     show_id = cursor.fetchone()
@@ -918,4 +918,4 @@ def render_template(template: str, **kwargs):
     elif request.accept_mimetypes.accept_json:
         return kwargs
     else:
-        raise ValueError(f"Invalid format. Accepted MIME types are: {request.accept_mimetypes} for UA '{request.headers.get("User-Agent", '')}'")
+        return f"Invalid format. Accepted MIME types are: [{request.accept_mimetypes}] for UA '{request.headers.get("User-Agent", '')}'"

@@ -74,3 +74,11 @@ td.header-like {
 .last {
     background: #FE8080;
 }
+
+tr {
+    transition: opacity 2s;
+}
+
+.unrevealed {
+    opacity: 0;
+}
