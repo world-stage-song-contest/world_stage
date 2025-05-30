@@ -180,6 +180,7 @@ class ShowData:
     points: list[int]
     point_system_id: int
     name: str
+    short_name: str
     voting_opens: datetime.datetime
     voting_closes: datetime.datetime
     year: Optional[int]
@@ -493,7 +494,7 @@ def get_show_id(show: str, year: Optional[int] = None) -> Optional[ShowData]:
     else:
         cursor.execute('''
             SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, allow_access_type FROM show
-            WHERE short_name = ?
+            WHERE short_name = ? AND year IS NULL
         ''', (short_show_name,))
 
     show_id = cursor.fetchone()
@@ -509,6 +510,7 @@ def get_show_id(show: str, year: Optional[int] = None) -> Optional[ShowData]:
         points=list(points),
         point_system_id=point_system_id,
         name=show_name,
+        short_name=short_show_name,
         voting_opens=voting_opens,
         voting_closes=voting_closes,
         year=year,
@@ -696,8 +698,7 @@ def get_song_languages(song_id: int) -> list[Language]:
 
     return languages
 
-def get_show_songs(year: Optional[int], short_name: str, *,
-                   select_languages=False, select_votes=False, access_type:str|None=None) -> Optional[list[Song]]:
+def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False) -> Optional[list[Song]]:
     db = get_db()
     cursor = db.cursor()
     data = get_show_id(short_name, year)
@@ -736,7 +737,7 @@ def get_show_songs(year: Optional[int], short_name: str, *,
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
                   ro=song['running_order'],
-                  show_id=show_id if select_votes and access_type == 'full' else None)
+                  show_id=show_id if select_votes else None)
                 for song in cursor.fetchall()]
 
     if select_languages:
@@ -746,7 +747,7 @@ def get_show_songs(year: Optional[int], short_name: str, *,
     return songs
 
 def get_show_winner(year: Optional[int], show: str) -> Optional[Song]:
-    songs = get_show_songs(year, show, select_votes=True, access_type='full')
+    songs = get_show_songs(year, show, select_votes=True)
     if not songs:
         return None
 
@@ -917,4 +918,4 @@ def render_template(template: str, **kwargs):
     elif request.accept_mimetypes.accept_json:
         return kwargs
     else:
-        raise ValueError("Invalid format. Use 'html' or 'json'.")
+        raise ValueError(f"Invalid format. Accepted MIME types are: {request.accept_mimetypes} for UA '{request.headers.get("User-Agent", '')}'")

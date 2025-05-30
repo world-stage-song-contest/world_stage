@@ -294,9 +294,10 @@ def submit_song_post():
     session_id = request.cookies.get('session')
     if not session_id:
         return redirect(url_for('session.login'))
-    user_id = get_user_id_from_session(session_id)
-    if not user_id:
+    user_id_raw = get_user_id_from_session(session_id)
+    if not user_id_raw:
         return redirect(url_for('session.login'))
+    user_id = user_id_raw[0]
 
     languages = []
     invalid_languages = []
@@ -325,13 +326,13 @@ def submit_song_post():
     is_translation = other_data.pop('is_translation', False) == "on"
     does_match = other_data.pop('does_match', False) == "on"
 
-    if does_match or not other_data.get('native_title', None):
+    if languages and (does_match or not other_data.get('native_title', None)):
         other_data['native_language_id'] = languages[0]
 
     if is_translation:
         other_data['title_language_id'] = 20 # English
     else:
-        other_data['title_language_id'] = other_data['native_language_id']
+        other_data['title_language_id'] = other_data.get('native_language_id')
 
     missing_fields = []
     missing_fields_internal = []

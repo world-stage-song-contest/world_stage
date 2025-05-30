@@ -92,6 +92,8 @@ def results(year: str, show: str):
     if show_data.access_type == 'none' and not permissions.can_view_restricted:
         return render_template('error.html', error="This show has no songs"), 400
 
+    reveal = request.args.get("reveal")
+
     access = show_data.access_type
     if permissions.can_view_restricted:
         if access == 'none' or access == 'draw':
@@ -99,14 +101,19 @@ def results(year: str, show: str):
         else:
             access = 'full'
 
-    songs = get_show_songs(_year, show, select_votes=True, access_type=access)
+    if access == 'draw' and reveal:
+        access = 'partial'
+
+    songs = get_show_songs(_year, show, select_votes=True)
 
     if not songs:
         return render_template('error.html', error="No songs found for this show."), 404
 
     songs.sort(reverse=True)
-    off = show_data.dtf - 1 if show_data.dtf else 0
+    off = 0
     if access == 'partial':
+        if show_data.dtf:
+            off = show_data.dtf - 1
         songs = songs[off:]
 
         if songs[0].vote_data:
@@ -118,7 +125,7 @@ def results(year: str, show: str):
     elif access == 'draw':
         songs.reverse()
 
-    return render_template('year/summary.html',
+    return render_template('year/summary.html', hidden=reveal and "unrevealed",
                            songs=songs, points=show_data.points, show=show, access=access, offset=off,
                            show_name=show_data.name, show_id=show_data.id, year=year, participants=len(songs))
 
@@ -144,7 +151,7 @@ def detailed_results(year: str, show: str):
         and not permissions.can_view_restricted):
         return render_template('error.html', error="Voting hasn't closed yet."), 400
     
-    songs = get_show_songs(_year, show, select_votes=True, access_type='full')
+    songs = get_show_songs(_year, show, select_votes=True)
     if not songs:
         return render_template('error.html', error="No songs found for this show."), 404
 
@@ -174,7 +181,7 @@ def detailed_results(year: str, show: str):
 
         for pts, username in cursor.fetchall():
             results[username][song.id] = pts
-            
+
     songs.sort(reverse=True)
 
     return render_template('year/detailed.html', songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
