@@ -11,10 +11,20 @@
         <img src="/static/images/ballot-box.png" alt="Vote Icon">
         <p>Cast your vote for one of the ongoing votings.</p>
     </a>
-    <a href="{{ url_for('results.index') }}" class="card">
-        <h3>Results</h3>
-        <img src="/static/images/podium.png" alt="Results Icon">
-        <p>Check out the past results.</p>
+    <a href="{{ url_for('year.index') }}" class="card">
+        <h3>Years</h3>
+        <img src="/static/images/calendar.png" alt="Calendar Icon">
+        <p>Check information about previous years.</p>
+    </a>
+    <a href="{{ url_for('user.index') }}" class="card">
+        <h3>Users</h3>
+        <img src="/static/images/user.png" alt="User Icon">
+        <p>Check information about other users.</p>
+    </a>
+    <a href="{{ url_for('country.index') }}" class="card">
+        <h3>Countries</h3>
+        <img src="/static/images/globe.png" alt="Globe Icon">
+        <p>Check information for each country.</p>
     </a>
 </div>
 {% endblock %}

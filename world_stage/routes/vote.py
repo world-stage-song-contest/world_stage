@@ -4,7 +4,7 @@ from flask import make_response, request, Blueprint
 import datetime
 import unicodedata
 
-from ..utils import format_timedelta, get_show_id, get_countries, dt_now, get_show_songs, get_user_id_from_session, render_template
+from ..utils import format_timedelta, get_show_id, get_countries, dt_now, get_show_songs, get_user_id_from_session, get_vote_count_for_show, render_template
 from ..db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
@@ -143,7 +143,8 @@ def vote(show: str):
                            songs=songs, points=show_data.points, selected=selected,
                            username=username, nickname=nickname, country=country,
                            year=show_data.year, show_name=show_data.name, show=show,
-                           selected_country=country_id, countries=get_countries())
+                           selected_country=country_id, countries=get_countries(),
+                           vote_count=get_vote_count_for_show(show_data.id))
 
 @bp.post('/<show>')
 def vote_post(show: str):

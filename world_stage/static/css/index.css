@@ -288,3 +288,8 @@ bdi {
 .collapsed {
     visibility: collapse !important;
 }
+
+.big {
+    font-size: 1.5em;
+    font-weight: bold;
+}

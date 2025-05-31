@@ -10,8 +10,7 @@ bp = Blueprint('country', __name__, url_prefix='/country')
 
 @bp.get('/')
 def index():
-    year = get_current_year()
-    countries = get_countries(year, only_participating=True)
+    countries = get_countries(only_participating=True)
     res = defaultdict(list)
     for c in countries:
         l = c.name[0]

@@ -1060,6 +1060,17 @@ def get_year_shows(year: int, pattern: str = '') -> list[dict]:
 
     return shows
 
+def get_vote_count_for_show(show_id: int) -> int:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT COUNT(*) FROM vote_set
+        WHERE show_id = ?
+    ''', (show_id,))
+    count = cursor.fetchone()[0]
+    return count
+
 def render_template(template: str, **kwargs):
     if request.accept_mimetypes.accept_html:
         return flask.render_template(template, **kwargs)
