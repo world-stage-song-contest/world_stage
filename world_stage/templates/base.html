@@ -2,7 +2,6 @@
 <img
     src="{{ url_for('main.flag', country=cc, t=type, w=width) }}"
     width="{{ width }}"
-    {% if country -%}alt="{{ country }}"{%- endif %}
     class="{{ class }}">
 {%- endmacro %}
 {% macro title(title, native_title, lang, native_lang) -%}

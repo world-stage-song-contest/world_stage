@@ -1,3 +1,11 @@
+#controls, #navigation {
+    clear: both;
+    float: right;
+    background: lightblue;
+    border: 1px solid black;
+    padding: 0.5em;
+}
+
 #wrapper {
     height: 98vh;
     display: grid;

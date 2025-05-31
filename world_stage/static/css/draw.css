@@ -15,12 +15,16 @@
     margin-top: 1em;
 }
 
+#pots.single {
+    margin-top: 0;
+}
+
 .pot, .show {
     border: 1px solid black;
 }
 
 .pot {
-    width: 200px;
+    min-width: 200px;
 }
 
 .show {
@@ -41,7 +45,7 @@
     gap: 0.1em;
 }
 
-.show-countries {
+.show-countries, .pot-big .pot-container {
     position: relative;
     width: 460px;
     height: calc(var(--rows) * 36px);
@@ -60,14 +64,15 @@
 
 .pot-item {
     width: 200px;
+    transition: background-color 0.1s;
 }
 
-.show-country {
+.show-country, .pot-big .pot-item {
     position: absolute;
     width: 228px;
     top: calc(var(--row) * 36px);
     left: calc(var(--column) * 232px);
-    transition: top 2s, left 2s;
+    transition: top 2s, left 2s, background-color 0.1s;;
 }
 
 .pot-item:last-child {

@@ -38,10 +38,11 @@
         {% for song in songs %}
         {% set place = loop.index + offset %}
         {% set class = {1: 'first', 2: 'second', 3:'third', participants: 'last'}.get(loop.index, '') if access == 'full' else '' %}
+        {% set ro = song.vote_data.ro if song.vote_data.ro is not none and song.vote_data.ro != -1 else '' %}
             <tr data-value="{{ place }}"
                 {%if hidden%}onclick="revealRow(this)"{%endif%}
                 class="{{ class }} {{ hidden }}">
-                <th class="number">{{ song.vote_data.ro or '' }}</td>
+                <th class="number">{{ ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 25, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
                 <td>{{ song.title }}</td>

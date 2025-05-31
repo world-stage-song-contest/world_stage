@@ -537,6 +537,19 @@ def get_points_for_system(point_system_id: int) -> list[int]:
 
     return points
 
+def get_current_year() -> int:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT id FROM year
+        WHERE closed > 0
+        ORDER BY id DESC
+        LIMIT 1
+    ''')
+    year = cursor.fetchone()[0]
+    return year
+
 def get_countries(only_participating: bool = False) -> list[Country]:
     if only_participating:
         query = 'SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE is_participating = 1 ORDER BY name'
@@ -719,6 +732,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
         WHERE show.id = ?
+        ORDER BY song_show.running_order, song_show.id
         ''', (show_id,))
     songs = [Song(id=song['id'],
                   title=song['title'],
@@ -826,7 +840,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    user.username, song.year_id
             FROM song
             JOIN country ON song.country_id = country.id
-            JOIN user on song.submitter_id = user.id
+            LEFT OUTER JOIN user on song.submitter_id = user.id
             WHERE song.submitter_id = ? AND song.year_id = ? AND song.year_id IS NOT NULL
             ORDER BY song.year_id, country.name
         ''', (user_id, year))
@@ -839,7 +853,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    user.username, song.year_id
             FROM song
             JOIN country ON song.country_id = country.id
-            JOIN user on song.submitter_id = user.id
+            LEFT OUTER JOIN user on song.submitter_id = user.id
             WHERE song.submitter_id = ? AND song.year_id IS NOT NULL
             ORDER BY song.year_id, country.name
         ''', (user_id,))

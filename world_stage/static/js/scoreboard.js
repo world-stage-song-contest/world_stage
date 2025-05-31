@@ -12,7 +12,7 @@ function toggleHeader() {
 }
 
 async function loadVotes(year, show) {
-    const res = await fetch(`/year/${year}/${show}/scoreboard/votes`);
+    const res = await fetch(window.location.pathname + '/votes');
     const json = await res.json();
     points = json.points;
     userSongs = json.user_songs;

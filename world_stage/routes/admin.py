@@ -8,7 +8,7 @@ from typing import Optional
 import math
 
 from ..db import get_db
-from ..utils import LCG, get_show_id, get_user_id_from_session, format_seconds, get_user_role_from_session, get_year_countries, get_year_shows, get_year_songs, get_years, parse_seconds, render_template
+from ..utils import LCG, get_show_id, get_show_songs, get_user_id_from_session, format_seconds, get_user_role_from_session, get_year_countries, get_year_shows, get_year_songs, get_years, parse_seconds, render_template
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -70,10 +70,14 @@ def draw(year: int):
     if resp:
         return resp
     
-    countries = get_year_countries(year, exclude=["ARG"])
-    pots: dict[int, list[dict]] = defaultdict(list)
+    countries = get_year_countries(year)
+    pots_raw: dict[int, list[dict]] = defaultdict(list)
     for country in countries:
-        pots[country['pot']].append(country)
+        pots_raw[country['pot']].append(country)
+
+    pots: dict[int, list[dict]] = {}
+    for k in sorted(pots_raw.keys()):
+        pots[k] = pots_raw[k]
 
     shows = get_year_shows(year, pattern='sf')
     count = len(shows)
@@ -126,5 +130,59 @@ def draw_post(year: int):
     except sqlite3.IntegrityError:
         return {'error': "Duplicate data"}, 400
     
+    db.commit()
+    return {}, 204
+
+@bp.get('/draw/<int:year>/final')
+def draw_final(year: int):
+    resp = verify_user()
+    if resp:
+        return resp
+    
+    songs = get_show_songs(year, 'f')
+
+    if not songs:
+        return render_template('error.html', error="No final show found for this year"), 404
+    countries = list(map(lambda s: s.country, songs))
+
+    return render_template('admin/draw_final.html', countries=countries, show='f', year=year, num=len(countries), lim=(len(countries) // 2) or 1)
+
+@bp.post('/draw/<int:year>/final')
+def draw_final_post(year: int):
+    resp = verify_user()
+    if resp:
+        return {'error': "Not an admin"}, 401
+    
+    data: dict[str, list[str]] | None = request.json
+    if not data:
+        return {'error': "Empty request"}, 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    show_data = get_show_id('f', year)
+    if not show_data:
+        return {'error': f"Invalid final show for {year}"}, 400
+    
+    ro = data.get('f')
+    if ro is None:
+        return {'error': "No running order provided"}, 400
+    
+    for i, cc in enumerate(ro):
+        cursor.execute('''
+            SELECT id FROM song
+            WHERE year_id = ? AND country_id = ?
+        ''', (year, cc))
+        song_id = cursor.fetchone()
+        if not song_id:
+            return {'error': f'No song for country {cc} in year {year}'}
+        song_id = song_id[0]
+
+        cursor.execute('''
+            UPDATE song_show
+            SET running_order = ?
+            WHERE song_id = ? AND show_id = ?
+        ''', (i+1, song_id, show_data.id))
+
     db.commit()
     return {}, 204

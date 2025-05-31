@@ -49,7 +49,7 @@ function easeOutCubic(t) {
  * @param {Element} node 
  * @param {Element} parent 
  */
-function nextChildOrFirst(node, parent) {
+function nextChildOrFirstHelper(node, parent) {
     if (node && node.nextElementSibling) {
         return [node.nextElementSibling, false];
     } else {
@@ -62,12 +62,32 @@ function nextChildOrFirst(node, parent) {
 }
 
 /**
+ * @param {Element} node 
+ * @param {Element} parent 
+ * @param {string} [skipClass=""] 
+ */
+function nextChildOrFirst(node, parent, skipClass = "+") {
+    debugger;
+    let looped = false;
+    let currentNode = node;
+    while (true) {
+        const [nextNode, loopedAround] = nextChildOrFirstHelper(currentNode, parent);
+        currentNode = nextNode;
+        looped = looped || loopedAround;
+        if (currentNode == node) return [null, true];
+        if (!currentNode.classList.contains(skipClass)) return [currentNode, looped];
+    }
+}
+
+/**
  * @param {Element} pot 
  * @returns {Promise<Element>}
  */
-async function selectRandomChild(pot) {
+async function selectRandomChild(pot, skipClass = "q") {
+    const children = Array.from(pot.querySelectorAll(`.item:not(.${skipClass})`));
+    const elems = children.length;
     let current = null;
-    let totalCycles = lcg.next(40) + 15; // total "flashes"
+    let totalCycles = Math.floor(lcg.next(elems * 2.5) + elems * 1.5); // total "flashes"
     const minDelay = 10;
     const maxDelay = 175;
 
@@ -77,7 +97,7 @@ async function selectRandomChild(pot) {
         const delay = minDelay + eased * (maxDelay - minDelay);
 
         if (current) current.classList.remove("active2");
-        [current, _] = nextChildOrFirst(current, pot);
+        current = children[i % elems];
         current.classList.add("active2");
 
         await new Promise(r => setTimeout(r, delay));
@@ -110,26 +130,23 @@ function getSuitableShow(activeShow, loopedAround) {
     return ret;
 }
 
-function setFirstActive() {
-    document.querySelector(".show.active1").classList.remove("active1");
-    const show = document.querySelector(".show");
-    show.classList.add("active1");
-    createRunningOrders(show);
-}
-
 let allDrawn = false;
-let lockedIntoShow = true;
-let finalised = false;
-let runningOrders = [];
 
-function createRunningOrders(show) {
-    const songs = +show.dataset.songs;
-    const ros = Array.from(Array(songs).keys());
-    shuffle(ros);
-    runningOrders = ros;
+function transfer(dest, src) {
+    const countryFlag = dest.querySelector(".flag");
+    const countryFlagContainer = dest.querySelector(".flag-container");
+    const countryName = dest.querySelector(".country-name");
+
+    countryFlag.src = src.querySelector(".flag").src;
+    countryName.textContent = src.querySelector(".country-name").textContent;
+    countryFlagContainer.classList.remove("transparent");
+
+    dest.dataset.code = src.dataset.code;
+    dest.classList.remove("empty");
+    countryName.classList.remove("transparent");
 }
 
-async function next() {
+async function next(selectRandomFromPot = true) {
     if (clicked || allDrawn) return;
     clicked = true;
 
@@ -138,138 +155,77 @@ async function next() {
     const currentPotElement = document.querySelector(".pot.active1");
     const currentPot = currentPotElement.querySelector(".pot-container");
 
-    const country = await selectRandomChild(currentPot);
+    let country;
+    if (selectRandomFromPot) {
+        country = await selectRandomChild(currentPot);
+    } else {
+        country = currentPot.firstElementChild;
+    }
     country.classList.add("selected");
 
-    const emptyCountry = currentShow.querySelector(".empty");
+    await new Promise(r => setTimeout(r, 500));
 
-    const countryFlag = emptyCountry.querySelector(".flag");
-    const countryFlagContainer = emptyCountry.querySelector(".flag-container");
-    const countryName = emptyCountry.querySelector(".country-name");
+    const dest = await selectRandomChild(currentShow, "filled");
+    dest.classList.add("selected");
 
-    countryFlag.src = country.querySelector(".flag").src;
-    countryName.textContent = country.querySelector(".country-name").textContent;
-    countryFlagContainer.classList.remove("transparent");
+    transfer(dest, country);
 
-    emptyCountry.dataset.code = country.dataset.code;
-    emptyCountry.classList.remove("empty");
-    countryName.classList.remove("transparent");
-
-    //await new Promise(r => setTimeout(r, 1100));
+    await new Promise(r => setTimeout(r, 1100));
     country.remove();
+    dest.classList.remove("selected", "active2");
+    dest.classList.add("filled");
 
-    currentPotElement.classList.remove("active1");
-    const [nextPot, loopedAround] = getNextNonEmptyPot(currentPotElement);
-    if (nextPot != null) {
-        nextPot.classList.add("active1");
-        currentShowElement.classList.remove("active1");
-        const nextShow = getSuitableShow(currentShowElement, loopedAround);
-        nextShow.classList.add("active1");
+    if (selectRandomFromPot) {
+        currentPotElement.classList.remove("active1");
+        const [nextPot, loopedAround] = getNextNonEmptyPot(currentPotElement);
+        if (nextPot != null) {
+            nextPot.classList.add("active1");
+            currentShowElement.classList.remove("active1");
+            const nextShow = getSuitableShow(currentShowElement, loopedAround);
+            nextShow.classList.add("active1");
+        }
     }
 
     if (document.querySelectorAll(".pot-item").length == 0) {
         allDrawn = true;
-        lockedIntoShow = true;
+    }
+
+    clicked = false;
+}
+
+async function nextAll() {
+    if (clicked || allDrawn) return;
+    clicked = true;
+
+    const currentShowElement = document.querySelector(".show.active1");
+    const currentShow = currentShowElement.querySelector(".show-countries");
+    const allPots = document.querySelector("#pots");
+
+    const country = await selectRandomChild(allPots);
+    country.classList.add("selected");
+
+    await new Promise(r => setTimeout(r, 500));
+
+    const dest = await selectRandomChild(currentShow, "filled");
+    dest.classList.add("selected");
+
+    transfer(dest, country);
+
+    await new Promise(r => setTimeout(r, 1100));
+    country.remove();
+    dest.classList.remove("selected", "active2");
+    dest.classList.add("filled");
+
+    if (document.querySelectorAll(".pot-item").length == 0) {
+        allDrawn = true;
         setFirstActive();
     }
 
     clicked = false;
 }
 
-async function sortCountriesInShow() {
-    if (clicked || lockedIntoShow) return;
-    clicked = true;
-
-    const currentShow = document.querySelector(".show.active1");
-    const container = currentShow.querySelector(".show-countries");
-    const lim = +container.dataset.limit;
-    [...container.children].forEach((el) => {
-        el.style.setProperty("--column", Math.floor(el.dataset.index / lim));
-        el.style.setProperty("--row", el.dataset.index % lim);
-    });
-    await new Promise (r => setTimeout(r, 1500));
-    
-    currentShow.classList.remove("active1");
-    const [nextShow, loopedAround] = nextChildOrFirst(currentShow);
-    if (loopedAround) {
-        finalised = true;
-    } else {
-        nextShow.classList.add("active1");
-        createRunningOrders(nextShow);
-    }
-    clicked = false;
-    lockedIntoShow = true;
-}
-
-async function makeRo() {
-    if (clicked) return;
-    clicked = true;
-    const currentShow = document.querySelector(".show.active1");
-    const songs = +currentShow.dataset.songs;
-    const thisEl = currentShow.querySelector(".running-order.unfilled");
-
-    if (currentShow.querySelectorAll(".running-order.unfilled").length == 0) {
-        lockedIntoShow = false;
-    }
-
-    if (thisEl != null) {
-        await animateNumberRoll(thisEl, runningOrders.pop(), songs, 500);
-
-        thisEl.classList.remove("unfilled");
-        thisEl.classList.add("filled");
-    }
-
-    clicked = false;
-}
-
-function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = lcg.next(i + 1);
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
-
-// Animate rolling and return a promise that resolves when done
-function animateNumberRoll(element, finalNumber, maxNumber, delay = 0) {
-    element.parentElement.dataset.index = finalNumber;
-    finalNumber += 1;
-    return new Promise((resolve) => {
-        let current = 0;
-        const duration = 1000;
-        const steps = 20;
-        const intervalTime = duration / steps;
-
-        setTimeout(() => {
-            let count = 0;
-            const interval = setInterval(() => {
-                count++;
-                element.textContent = 1 + lcg.next(maxNumber);
-                if (count >= steps) {
-                    clearInterval(interval);
-                    element.textContent = finalNumber;
-                    resolve();
-                }
-            }, intervalTime);
-        }, delay);
-    });
-}
-
-function logDraw() {
-    const data = {};
-    for (const show of document.querySelectorAll('.show')) {
-        const ro = [];
-        for (const country of show.querySelectorAll(".show-country")) {
-            ro.push({cc: country.dataset.code, ro: country.dataset.index});
-        }
-        ro.sort((a, b) => a.ro - b.ro);
-        data[show.dataset.name] = ro.map(e => e.cc);
-    }
-    return data;
-}
-
 async function save() {
-    if (!finalised) return;
+    if (!allDrawn) return;
     const error = document.querySelector(".error");
     const data = {};
     for (const show of document.querySelectorAll('.show')) {
@@ -280,7 +236,7 @@ async function save() {
         ro.sort((a, b) => a.ro - b.ro);
         data[show.dataset.name] = ro.map(e => e.cc);
     }
-    const res = await fetch(`/admin/draw/${year}`, {
+    const res = await fetch(window.location.pathname, {
         method: "POST",
         headers: {
             'Accept': 'application/json',

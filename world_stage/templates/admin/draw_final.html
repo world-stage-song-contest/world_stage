@@ -6,27 +6,37 @@
     </script>
     <script src="/static/js/draw.js"></script>
     <link rel="stylesheet" href="/static/css/draw.css">
+    <style>
+        .pot-item:first-child {
+            background-color: var(--dtf-color);
+        }
+
+        #wrapper {
+            display: flex;
+            flex-direction: row;
+            gap: 1rem;
+        }
+    </style>
 {% endblock %}
 {% block content %}
 <div id="controls">
-    <button onclick="next()" aria-label="Faster"><i class="ph-fill ph-play"></i></button>
-    <button onclick="nextAll()" aria-label="Faster"><i class="ph-fill ph-fast-forward"></i></button>
+    <button onclick="next(false)" aria-label="Faster"><i class="ph-fill ph-play"></i></button>
     <button onclick="save()" aria-label="Save"><i class="ph-fill ph-floppy-disk"></i></button>
     <button onclick="toggleHeader()" aria-label="Toggle Header"><i class="ph-fill ph-arrows-in"></i></button>
 </div>
 
 <p class="error hidden"></p>
 
+<div id="wrapper">
 <div id="shows">
-{% for show, num, lim in zip(shows, songs, limits) %}
-    <div class="show {% if loop.index == 1 %}active1{% endif %}"
-         data-name="{{ show.short_name }}"
+    <div class="show active1"
+         data-name="{{ show }}"
          data-songs="{{ num }}">
-        <h2>{{ show.name }}</h2>
+        <h2>Final</h2>
         <div class="show-countries"
              data-limit="{{ lim }}"
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
-        {% for _ in range(num) %}
+        {% for _ in countries %}
             <div class="show-country item empty"
                  data-code="XXX"
                  data-index="{{ loop.index0 }}"
@@ -38,22 +48,25 @@
         {% endfor %}
         </div>
     </div>
-{% endfor %}
 </div>
 
-<div id="pots">
-{% for pot, countries in pots.items() %}
-    <div class="pot {% if loop.index == 1 %}active1{% endif %}">
-        <h2>Pot {{loop.index}}</h2>
-        <div class="pot-container">
+<div id="pots" class="single">
+    <div class="pot pot-big active1">
+        <h2>Finalists</h2>
+        <div class="pot-container"
+             data-limit="{{ lim }}"
+             style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
         {% for country in countries %}
-            <div class="pot-item item" data-code="{{ country.cc }}">
+            <div class="pot-item item"
+                 data-code="{{ country.cc }}"
+                 data-index="{{ loop.index0 }}"
+                 style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="flag-container">{{ flag(country.cc, 25, country.name) }}</div>
                 <div class="country-name">{{ country.name }}</div>
             </div>
         {% endfor %}
         </div>
     </div>
-{% endfor %}
+</div>
 </div>
 {% endblock %}

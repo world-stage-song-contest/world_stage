@@ -46,3 +46,16 @@
     flex-direction: column;
     font-style: italic;
 }
+
+.artist-name {
+    text-wrap: balance;
+    width: fit-content;
+}
+
+tr {
+    transition: opacity 2s;
+}
+
+.unrevealed {
+    opacity: 0;
+}

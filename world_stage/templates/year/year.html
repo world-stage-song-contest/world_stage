@@ -42,7 +42,7 @@
             class="{{ "placeholder" if song.placeholder else "finalised" }}" data-value="{{ loop.index }}">
             <td><div class="country">{{ flag(song.country.cc, 40, song.country.name) }}
                 <span href="/country/{{ song.country.cc }}">{{ song.country.name }}</span></div></td>
-            <td>{{ song.artist or '' }}</td>
+            <td><div class="artist-name">{{ song.artist or '' }}</div></td>
             <td><div class="song-title">
                 <span lang="{{song.title_lang.str('Latn')}}">{{ song.title or '' }}</span>
                 {% if song.native_title %}

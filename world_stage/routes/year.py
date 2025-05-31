@@ -92,17 +92,15 @@ def results(year: str, show: str):
     if show_data.access_type == 'none' and not permissions.can_view_restricted:
         return render_template('error.html', error="This show has no songs"), 400
 
-    reveal = request.args.get("reveal")
-
+    reveal = ''
     access = show_data.access_type
+    
     if permissions.can_view_restricted:
-        if access == 'none' or access == 'draw':
-            access = 'draw'
+        if access == 'draw':
+            access = 'partial'
+            reveal = "unrevealed"
         else:
             access = 'full'
-
-    if access == 'draw' and reveal:
-        access = 'partial'
 
     if access == 'draw':
         songs = get_show_songs(_year, show, select_votes=False)
@@ -113,6 +111,7 @@ def results(year: str, show: str):
         return render_template('error.html', error="No songs found for this show."), 404
 
     songs.sort(reverse=True)
+
     off = 0
     if access == 'partial':
         if show_data.dtf:
@@ -120,13 +119,13 @@ def results(year: str, show: str):
         songs = songs[off:]
 
         if songs[0].vote_data:
-            songs[0].vote_data.ro = 0
+            songs[0].vote_data.ro = -1
         songs[0].artist = ''
         songs[0].title = ''
         songs[0].country.name = ''
         songs[0].country.cc = 'XXX'
 
-    return render_template('year/summary.html', hidden=reveal and "unrevealed",
+    return render_template('year/summary.html', hidden=reveal,
                            songs=songs, points=show_data.points, show=show, access=access, offset=off,
                            show_name=show_data.name, show_id=show_data.id, year=year, participants=len(songs))
 
@@ -307,6 +306,60 @@ def qualifiers(year: str, show: str):
     
     return render_template('year/qualifiers.html', show=show, year=year, show_name=show_data.name)
 
+@bp.post('/<year>/<show>/qualifiers')
+def qualifiers_post(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return {"error": "Show not found"}, 404
+
+    if show_data.dtf is None:
+        return {"error": "Not a semi-final."}, 400
+
+    final_data = get_show_id('f', _year)
+    if not final_data:
+        return {"error": "Final show not found"}, 404
+
+    if show_data.short_name == 'ac':
+        sf_number = 5
+    else:
+        sf_number = int(show_data.short_name.removeprefix('sf'))
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return {'error': "You aren't allowed to access the qualifiers"}, 400
+    
+    body = request.json
+    if not body or not isinstance(body, dict):
+        return {'error': "Invalid request body"}, 400
+    
+    action = body.get('action')
+    if action != 'save':
+        return {'error': "Invalid action"}, 400
+    
+    song_order = body.get('revealOrder')
+    if not song_order or not isinstance(song_order, list):
+        return {'error': "Reveal order not provided"}, 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    for i, song_id in enumerate(song_order):
+        n = i + 1 + sf_number / 10
+        cursor.execute('''
+            INSERT OR REPLACE INTO song_show (song_id, show_id, running_order)
+            VALUES (?, ?, ?)
+        ''', (int(song_id), final_data.id, n))
+    db.commit()
+    
+    return {'success': True, 'message': "Qualifiers saved successfully."}
+
 @bp.get('/<year>/<show>/qualifiers/votes')
 def qualifiers_scores(year: str, show: str):
     try:
@@ -344,6 +397,7 @@ def qualifiers_scores(year: str, show: str):
     countries = []
     for id, running_order, country, cc in cursor.fetchall():
         val = {
+            'id': id,
             'country': country,
             'cc': cc,
             'points': get_votes_for_song(id, show_data.id, running_order)

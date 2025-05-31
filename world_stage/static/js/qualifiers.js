@@ -28,7 +28,7 @@ let allCountries = {};
 let clicked = false;
 
 async function loadVotes(year, show) {
-    const res = await fetch(`/year/${year}/${show}/qualifiers/votes`);
+    const res = await fetch(window.location.pathname + '/votes');
     const json = await res.json();
     nTop = json.dtf;
     nSecondChance = json.sc;
@@ -176,7 +176,7 @@ async function putInPlace(envelope) {
 function createEnvelope(n, country, isSecondChance) {
     const name = country.country;
     const code = country.cc;
-    const id = country.cc;
+    const id = country.id;
 
     function createCard() {
         const card = document.createElement("div");
@@ -205,7 +205,8 @@ function createEnvelope(n, country, isSecondChance) {
 
     const envelope = document.createElement("div");
     envelope.classList.add("envelope", isSecondChance ? "second-chance" : "direct-to-final");
-    envelope.dataset.id = id;
+    envelope.dataset.id = code;
+    envelope.dataset.song = id;
 
     envelope.onclick = async () => {
         await putInPlace(envelope);
@@ -305,4 +306,20 @@ async function onLoad(year, show) {
     await loadVotes(year, show);
     createRo();
     createEnvelopes();
+}
+
+function toggleHeader() {
+    const header = document.querySelector("header");
+    header.classList.toggle("hidden");
+}
+
+async function save() {
+    const codes = revealOrder.dtf.map(v => v[0].id);
+    await fetch(window.location.pathname, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ action: "save", "revealOrder": codes })
+    });
 }
