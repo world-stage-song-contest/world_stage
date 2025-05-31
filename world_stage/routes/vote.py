@@ -20,7 +20,7 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id
 
     for point, song_id in votes.items():
         cursor.execute('''
-            SELECT id FROM point 
+            SELECT id FROM point
             WHERE point_system_id = ? AND score = ?
             ''', (point_system_id, point))
         point_id = cursor.fetchone()[0]
@@ -50,7 +50,7 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
         vote_set_id = cursor.fetchone()[0]
         for point, song_id in votes.items():
             cursor.execute('''
-                SELECT id FROM point 
+                SELECT id FROM point
                 WHERE point_system_id = ? AND score = ?
                 ''', (point_system_id, point))
             point_id = cursor.fetchone()[0]
@@ -59,7 +59,7 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
     else:
         update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id)
         action = "updated"
-    
+
     db.commit()
 
     return action
@@ -70,7 +70,7 @@ def index():
 
     db = get_db()
     cursor = db.cursor()
-    
+
     cursor.execute('''
         SELECT id, show_name, short_name, year_id, voting_opens, voting_closes
         FROM show
@@ -103,11 +103,11 @@ def vote(show: str):
 
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
-    
+
     if (show_data.voting_opens > dt_now()
         or show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
-    
+
     db = get_db()
     cursor = db.cursor()
 
@@ -138,7 +138,7 @@ def vote(show: str):
             selected[pts] = song_id
 
     songs = get_show_songs(show_data.year, show_data.short_name)
-    
+
     return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, selected=selected,
                            username=username, nickname=nickname, country=country,
@@ -156,7 +156,7 @@ def vote_post(show: str):
 
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
-    
+
     if (show_data.voting_opens > dt_now()
         or show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
@@ -230,7 +230,7 @@ def vote_post(show: str):
     invalid_votes: dict[int, list[int]] = defaultdict(list)
     for point, song_id in votes.items():
         invalid_votes[song_id].append(point)
-    
+
     invalid_votes = {k: v for k, v in invalid_votes.items() if len(v) > 1}
     invalid.extend(item for sublist in invalid_votes.values() for item in sublist)
 

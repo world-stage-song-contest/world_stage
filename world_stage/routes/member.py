@@ -70,7 +70,7 @@ def delete_song(song_data: SongData, user_id: int):
 
     if submitter_id != user_id:
         return {'error': 'You are not the submitter.'}
-    
+
     cursor.execute('''
         UPDATE song
         SET title = NULL, native_title = NULL, artist = NULL,
@@ -217,7 +217,7 @@ def submit():
     session_id = request.cookies.get('session')
     if not session_id:
         return redirect(url_for('session.login'))
-    
+
     return render_template('member/submit.html', years=get_years(), languages=get_languages(), countries={}, data={}, onLoad=True)
 
 @bp.get('/submit/<year>')
@@ -262,7 +262,7 @@ def get_country_data(year, country):
     languages = []
     for lang_id, name in cursor.fetchall():
         languages.append({'id': lang_id, 'name': name})
-    
+
     song_data = SongData(
         year=year,
         country=country,
@@ -340,7 +340,7 @@ def submit_song_post():
         if field not in other_data or other_data[field] is None:
             missing_fields.append(required_fields[field])
             missing_fields_internal.append(field)
-    
+
     if missing_fields:
         return render_template('member/submit.html', years=get_years(), data=other_data,
                                languages=get_languages(), countries=get_countries(other_data['year'], user_id),
@@ -360,14 +360,14 @@ def submit_song_post():
         res = update_song(song_data, user_id)
     else:
         res = {'error': f"Unknown action: '{action}'."}
-    
+
     dur = None
     if other_data['snippet_end'] is not None and other_data['snippet_start'] is not None:
         dur = other_data['snippet_end'] - other_data['snippet_start']
 
     if dur is not None and dur > 20:
         res = {'error': f"The maximum length of the recap snippet is 20 seconds. Yours is {dur} seconds long."}
-    
+
     if 'error' in res:
         return render_template('member/submit.html', years=get_years(), data=other_data,
                                languages=get_languages(), countries=get_countries(other_data['year'], user_id),

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Overview: {{ country }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/country.css">
+    <script src="/static/js/sort-table.js"></script>
+    <script src="/static/js/year.js"></script>
+{% endblock %}
+{% block content %}
+{% if not closed %}
+<div class="banner compact">
+    <p><u>Underlined</u> songs are placeholders and can be replaced.</p>
+</div>
+{% endif %}
+
+<div>
+    <input type="checkbox" id="hidesolid" onchange="hideNonPlaceholders(this)">
+    <label for="hidesolid">Only show placeholders</label>
+</div>
+
+<table class="songs-table sortable">
+    <thead>
+        <tr>
+            <th>Year</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Language</th>
+            <th>Submitter</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for song in songs %}
+        <tr data-value="{{ loop.index }}"
+            class="{{ "placeholder" if song.placeholder else "finalised" }}" data-value="{{ loop.index }}">
+            <td class="year"><div class="number">
+                <a href="{{ url_for('year.year', year=song.year) }}">{{ song.year }}</a>
+            </div></td>
+            <td>{{ song.artist or '' }}</td>
+            <td><a href="{{ url_for('country.details', code=song.country.cc, year=song.year) }}"><div class="song-title">
+                <span lang="{{song.title_lang.str('Latn')}}">{{ song.title or '' }}</span>
+                {% if song.native_title %}
+                <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
+                {% endif %}
+            </div></a></td>
+            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+            <td>{{ song.submitter or '' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

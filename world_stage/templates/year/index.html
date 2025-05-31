@@ -48,17 +48,19 @@
         {% set winner = year.winner %}
             <tr data-value="{{ loop.index }}">
                 <td class="year"><a href="{{ url_for('year.year', year=year.id) }}"><b>{{ year.id }}</b></a></td>
-                <td><div class="country">
+                <td><a href="{{ url_for('country.country', code=winner.country.cc) }}"><div class="country">
                     {{ flag(winner.country.cc, 40, winner.country.name) }}
-                    <span href="/country/{{ winner.country.cc }}">{{ winner.country.name }}</span>
-                </div></td>
+                    {{ winner.country.name }}
+                </div></a></td>
                 <td class="artist">{{ winner.artist }}</td>
-                <td class="title"><div class="song-title">
-                    <span lang="{{winner.title_lang.str()}}">{{ winner.title }}</span>
-                    {% if winner.native_title %}
-                    <bdi lang="{{winner.title_lang.str()}}">{{ winner.native_title }}</bdi>
-                    {% endif %}
-                </div></td>
+                <td class="title"><a href="{{ url_for('country.details', code=winner.country.cc.lower(), year=winner.year) }}">
+                    <div class="song-title">
+                        <span lang="{{winner.title_lang.str()}}">{{ winner.title }}</span>
+                        {% if winner.native_title %}
+                        <bdi lang="{{winner.title_lang.str()}}">{{ winner.native_title }}</bdi>
+                        {% endif %}
+                    </div>
+                </a></td>
                 <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
                 <td class="points">{{ winner.vote_data.sum }}</td>
                 <td class="percent">{{ winner.vote_data.pct() }}</td>

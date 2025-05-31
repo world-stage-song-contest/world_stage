@@ -1,7 +1,7 @@
 from collections import defaultdict
 from flask import request, Blueprint
 
-from ..utils import (LCG, Show, Song, SuspensefulVoteSequencer, 
+from ..utils import (LCG, Show, Song, SuspensefulVoteSequencer,
                      get_show_id, dt_now, get_user_role_from_session,
                      get_votes_for_song, get_year_songs, get_year_winner,
                      get_special_winner, render_template, get_show_songs)
@@ -94,7 +94,7 @@ def results(year: str, show: str):
 
     reveal = ''
     access = show_data.access_type
-    
+
     if permissions.can_view_restricted:
         if access == 'draw':
             access = 'partial'
@@ -145,19 +145,19 @@ def detailed_results(year: str, show: str):
 
     if show_data.access_type != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the detailed results yet"), 400
-    
+
     if (show_data.voting_closes
         and show_data.voting_closes > dt_now()
         and not permissions.can_view_restricted):
         return render_template('error.html', error="Voting hasn't closed yet."), 400
-    
+
     songs = get_show_songs(_year, show, select_votes=True)
     if not songs:
         return render_template('error.html', error="No songs found for this show."), 404
 
     db = get_db()
     cursor = db.cursor()
-    
+
     results: dict = {}
     cursor.execute('''
         SELECT username, country_id, country.name FROM vote_set
@@ -196,7 +196,7 @@ def scoreboard(year: str, show: str):
 
     if not show_data:
         return render_template('error.html', error="Show not found"), 404
-    
+
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
@@ -207,7 +207,7 @@ def scoreboard(year: str, show: str):
         and show_data.voting_closes > dt_now()
         and not permissions.can_view_restricted):
         return render_template('error.html', error="Voting hasn't closed yet."), 400
-    
+
     return render_template('year/scoreboard.html', show=show, year=year, show_name=show_data.name)
 
 @bp.get('/<year>/<show>/scoreboard/votes')
@@ -289,7 +289,7 @@ def qualifiers(year: str, show: str):
 
     if not show_data:
         return render_template('error.html', error="Show not found"), 404
-    
+
     if show_data.dtf is None:
         return render_template('error.html', error="Not a semi-final."), 400
 
@@ -298,12 +298,12 @@ def qualifiers(year: str, show: str):
 
     if show_data.access_type != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the qualifiers")
-    
+
     if (show_data.voting_closes
         and show_data.voting_closes > dt_now()
         and not permissions.can_view_restricted):
         return render_template('error.html', error="Voting hasn't closed yet."), 400
-    
+
     return render_template('year/qualifiers.html', show=show, year=year, show_name=show_data.name)
 
 @bp.post('/<year>/<show>/qualifiers')
@@ -334,15 +334,15 @@ def qualifiers_post(year: str, show: str):
 
     if show_data.access_type != 'full' and not permissions.can_view_restricted:
         return {'error': "You aren't allowed to access the qualifiers"}, 400
-    
+
     body = request.json
     if not body or not isinstance(body, dict):
         return {'error': "Invalid request body"}, 400
-    
+
     action = body.get('action')
     if action != 'save':
         return {'error': "Invalid action"}, 400
-    
+
     song_order = body.get('revealOrder')
     if not song_order or not isinstance(song_order, list):
         return {'error': "Reveal order not provided"}, 400
@@ -357,7 +357,7 @@ def qualifiers_post(year: str, show: str):
             VALUES (?, ?, ?)
         ''', (int(song_id), final_data.id, n))
     db.commit()
-    
+
     return {'success': True, 'message': "Qualifiers saved successfully."}
 
 @bp.get('/<year>/<show>/qualifiers/votes')
@@ -379,7 +379,7 @@ def qualifiers_scores(year: str, show: str):
 
     if show_data.access_type != 'full' and not permissions.can_view_restricted:
         return {'error': "You aren't allowed to access the qualifiers"}, 400
-    
+
     if (show_data.voting_closes
         and show_data.voting_closes > dt_now()
         and not permissions.can_view_restricted):

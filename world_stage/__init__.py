@@ -24,7 +24,7 @@ def create_app():
     def clear_trailing():
         from flask import redirect, request
 
-        rp = request.path 
+        rp = request.path
         if rp != '/' and rp.endswith('/'):
             return redirect(rp[:-1])
 
@@ -44,7 +44,8 @@ def create_app():
     from .routes import year
     from .routes import user
     from .routes import admin
-    
+    from .routes import country
+
     app.register_blueprint(index.bp)
     app.register_blueprint(vote.bp)
     app.register_blueprint(results.bp)
@@ -53,5 +54,6 @@ def create_app():
     app.register_blueprint(year.bp)
     app.register_blueprint(user.bp)
     app.register_blueprint(admin.bp)
+    app.register_blueprint(country.bp)
 
     return app

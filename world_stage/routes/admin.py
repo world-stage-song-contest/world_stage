@@ -40,7 +40,7 @@ def create_show_post():
     resp = verify_user()
     if resp:
         return resp
-    
+
     data = {}
     for key, value in request.form.items():
         try:
@@ -52,7 +52,7 @@ def create_show_post():
             value = None
 
         data[key] = value
-    
+
     db = get_db()
     cur = db.cursor()
 
@@ -69,7 +69,7 @@ def draw(year: int):
     resp = verify_user()
     if resp:
         return resp
-    
+
     countries = get_year_countries(year)
     pots_raw: dict[int, list[dict]] = defaultdict(list)
     for country in countries:
@@ -99,11 +99,11 @@ def draw_post(year: int):
     resp = verify_user()
     if resp:
         return {'error': "Not an admin"}, 401
-    
+
     data: dict[str, list[str]] | None = request.json
     if not data:
         return {'error': "Empty request"}, 400
-    
+
     db = get_db()
     cursor = db.cursor()
 
@@ -112,7 +112,7 @@ def draw_post(year: int):
             show_data = get_show_id(show, year)
             if not show_data:
                 return {'error': f"Invalid show {show} for {year}"}, 400
-            
+
             for i, cc in enumerate(ro):
                 cursor.execute('''
                     SELECT id FROM song
@@ -129,7 +129,7 @@ def draw_post(year: int):
                 ''', (song_id, show_data.id, i+1))
     except sqlite3.IntegrityError:
         return {'error': "Duplicate data"}, 400
-    
+
     db.commit()
     return {}, 204
 
@@ -138,7 +138,7 @@ def draw_final(year: int):
     resp = verify_user()
     if resp:
         return resp
-    
+
     songs = get_show_songs(year, 'f')
 
     if not songs:
@@ -152,7 +152,7 @@ def draw_final_post(year: int):
     resp = verify_user()
     if resp:
         return {'error': "Not an admin"}, 401
-    
+
     data: dict[str, list[str]] | None = request.json
     if not data:
         return {'error': "Empty request"}, 400
@@ -163,11 +163,11 @@ def draw_final_post(year: int):
     show_data = get_show_id('f', year)
     if not show_data:
         return {'error': f"Invalid final show for {year}"}, 400
-    
+
     ro = data.get('f')
     if ro is None:
         return {'error': "No running order provided"}, 400
-    
+
     for i, cc in enumerate(ro):
         cursor.execute('''
             SELECT id FROM song

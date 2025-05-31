@@ -1,0 +1,17 @@
+.placeholder {
+    text-decoration: underline;
+}
+
+.year {
+    text-align: right;
+    height: 28px;
+    vertical-align: center;
+}
+
+.song-title {
+    padding: 0.25em 0;
+    display: flex;
+    gap: 0.25em;
+    flex-direction: column;
+    font-style: italic;
+}

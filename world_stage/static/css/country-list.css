@@ -1,0 +1,17 @@
+.country-list {
+    list-style: none;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1em;
+    width: 100%;
+}
+
+.country-item {
+    background-color: var(--background3);
+    border: 2px solid var(--foreground2);
+    gap: 0.5em;
+    padding: 0.5em;
+    display: flex;
+    align-items: center;
+}

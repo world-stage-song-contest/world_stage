@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Overview: {{ year }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/song-overview.css">
+    <script src="/static/js/sort-table.js"></script>
+    <script src="/static/js/year.js"></script>
+{% endblock %}
+{% block content %}
+
+<div class="basic-song-info">
+    <table>
+        <tr>
+            <th>Artist</th>
+            <td>{{ song.artist }}</td>
+        </tr>
+        <tr>
+            <th>Title</th>
+            <td><div class="song-title">
+                <span lang="{{song.title_lang.str('Latn')}}">{{ song.title or '' }}</span>
+                {% if song.native_title %}
+                <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
+                {% endif %}
+            </div></td>
+        </tr>
+        <tr>
+            <th>Language</th>
+            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+        </tr>
+        <tr>
+            <th>Submitter</th>
+            <td>{{ song.submitter }}</td>
+        </tr>
+        <tr>
+            <th>Recap start</th>
+            <td>{{ song.recap_start }}</td>
+        </tr>
+        <tr>
+            <th>Recap end</th>
+            <td>{{ song.recap_end }}</td>
+    </table>
+</div>
+
+<div class="video">
+    {{ embed|safe }}
+</div>
+
+<div class="all-lyrics">
+    {% if english_lyrics %}
+    <div class="english-lyrics lyrics">
+        <h2>English lyrics</h2>
+        {% for line in english_lyrics %}
+        <div class="line" lang="en">{{ line }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if latin_lyrics %}
+    <div class="latin-lyrics lyrics">
+        <h2>Transliterated lyrics</h2>
+        {% for line in latin_lyrics %}
+        <div class="line" lang="{{ song.native_lang.str("Latn") }}">{{ line }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if native_lyrics %}
+    <div class="native-lyrics lyrics">
+        <h2>Native lyrics</h2>
+        {% for line in native_lyrics %}
+        <div class="line" lang="{{ song.native_lang.str() }}">{{ line }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

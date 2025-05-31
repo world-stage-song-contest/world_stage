@@ -24,18 +24,18 @@ class LCG:
     def next(self) -> int:
         self.state = (self.state * self.a + self.c) % self.m
         return self.state
-    
+
     def shuffle(self, arr: list):
         n = len(arr)
         for i in range(n - 1, 0, -1):
             j = self.next() % (i + 1)
             arr[i], arr[j] = arr[j], arr[i]
-    
+
     def sample[T](self, arr: list[T], k: int) -> list[T]:
         indices = list(range(len(arr)))
         self.shuffle(indices)
         return [arr[i] for i in indices[:k]]
-    
+
     def lightly_shuffle[T](self, arr: list[T], num_swaps: int):
         n = len(arr)
         indices = self.sample(list(range(n-1)), 2*num_swaps)
@@ -208,7 +208,7 @@ class UserPermissions(Enum):
             return UserPermissions.OWNER
         else:
             return UserPermissions.NONE
-        
+
     def __str__(self) -> str:
         if self == UserPermissions.USER:
             return 'user'
@@ -220,7 +220,7 @@ class UserPermissions(Enum):
             return 'owner'
         else:
             return 'none'
-        
+
     @property
     def can_view_restricted(self):
         return self == UserPermissions.ADMIN or self == UserPermissions.OWNER
@@ -274,12 +274,12 @@ class VoteData:
         if self.ro is None or other.ro is None:
             return False
         return self.ro > other.ro
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VoteData):
             return False
         return self.ro == other.ro and self.sum == other.sum and self.count == other.count and self.pts == other.pts
-    
+
     def pct(self) -> str:
         if not self.show_voters or not self.max_pts:
             return "0.00%"
@@ -330,7 +330,7 @@ class Language:
             'subvariant': self.subvariant,
             'suppress_script': self.suppress_script,
         }
-    
+
 @total_ordering
 @dataclass
 class Song:
@@ -346,12 +346,20 @@ class Song:
     native_title: Optional[str]
     title_lang: Optional[Language]
     native_lang: Optional[Language]
+    english_lyrics: Optional[str]
+    latin_lyrics: Optional[str]
+    native_lyrics: Optional[str]
+    video_link: Optional[str]
+    recap_start: Optional[str]
+    recap_end: Optional[str]
 
     def __init__(self, *,
                  id: int, title: str, native_title: Optional[str], artist: str,
                  country: Country, year: Optional[int],
                  placeholder: bool, submitter: Optional[str],
                  title_lang: Optional[int], native_lang: Optional[int],
+                 english_lyrics: Optional[str], latin_lyrics: Optional[str], native_lyrics: Optional[str],
+                 video_link: Optional[str], recap_start: Optional[int], recap_end: Optional[int],
                  languages: list['Language'] = [], show_id: Optional[int] = None, ro: Optional[int] = None):
         self.id = id
         self.title = title
@@ -362,6 +370,12 @@ class Song:
         self.languages = languages
         self.placeholder = placeholder
         self.submitter = submitter
+        self.english_lyrics = english_lyrics
+        self.latin_lyrics = latin_lyrics
+        self.native_lyrics = native_lyrics
+        self.video_link = video_link
+        self.recap_start = format_seconds(recap_start) if recap_start is not None else None
+        self.recap_end = format_seconds(recap_end) if recap_end is not None else None
         self.title_lang = get_language(title_lang) if title_lang else Language()
         self.native_lang = get_language(native_lang) if native_lang else Language()
         if show_id is not None and ro is not None:
@@ -378,12 +392,12 @@ class Song:
             return self.id < other.id
         else:
             return self.vote_data < other.vote_data
-    
+
     def __eq__(self, other):
         if not isinstance(other, Song):
             return NotImplemented
         return self.id == other.id
-    
+
     def as_dict(self):
         return {
             'id': self.id,
@@ -399,7 +413,7 @@ class Song:
             'native_lang': self.native_lang.as_dict(),
             'vote_data': self.vote_data.as_dict() if self.vote_data else None
         }
-    
+
     def get_pt(self, points: int) -> Optional[int]:
         if self.vote_data is None:
             return None
@@ -429,10 +443,10 @@ class Show:
                 return 2
             else:
                 return 3
-            
+
         if not isinstance(other, Show):
             return NotImplemented
-        
+
         if self.year != other.year:
             return self.year < other.year
 
@@ -617,7 +631,7 @@ def parse_cookie(cookie: str) -> dict[str, str]:
     cookie_dict: dict[str, str] = defaultdict(str)
     if not cookie:
         return cookie_dict
-    
+
     for item in cookie.split('&'):
         key, value = item.split('=')
         cookie_dict[key] = urllib.parse.unquote(value)
@@ -647,7 +661,7 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         WHERE show_id = ?
     ''', (show_id,))
     show_voters = cursor.fetchone()[0]
-                   
+
     cursor.execute('''
         SELECT score FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
@@ -682,7 +696,7 @@ def parse_seconds(td: str | None) -> int | None:
         return parts[0] * 60 + parts[1]
     else:
         raise ValueError("Invalid time format. Use 'MM:SS'.")
-    
+
 def get_language(lang_id: int) -> Optional[Language]:
     db = get_db()
     cursor = db.cursor()
@@ -725,7 +739,9 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                song.country_id, country.name, country.is_participating,
                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
                song.year_id, song_show.running_order, song.is_placeholder,
-               user.username, song.title_language_id, song.native_language_id
+               song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
+               user.username, song.title_language_id, song.native_language_id,
+               song.video_link, song.snippet_start, song.snippet_end
         FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN show ON song_show.show_id = show.id
@@ -738,6 +754,9 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                   title=song['title'],
                   native_title=song['native_title'],
                   artist=song['artist'],
+                  video_link=song['video_link'],
+                  recap_start=song['snippet_start'],
+                  recap_end=song['snippet_end'],
                   country=Country(cc=song['country_id'],
                                     name=song['name'],
                                     is_participating=bool(song['is_participating']),
@@ -750,6 +769,9 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                   submitter=song['username'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
+                  english_lyrics=song['translated_lyrics'],
+                  latin_lyrics=song['romanized_lyrics'],
+                  native_lyrics=song['native_lyrics'],
                   ro=song['running_order'],
                   show_id=show_id if select_votes else None)
                 for song in cursor.fetchall()]
@@ -779,11 +801,11 @@ def get_year_winner(year: int) -> Optional[Song]:
         SELECT closed FROM year
         WHERE id = ?
         ''', (year,))
-    
+
     closed = cursor.fetchone()[0]
     if not closed:
         return None
-    
+
     return get_show_winner(year, 'f')
 
 def get_special_winner(show: str) -> Optional[Song]:
@@ -798,7 +820,9 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                song.country_id, country.name, country.is_participating,
                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
                song.is_placeholder, user.username, song.year_id,
-               song.title_language_id, song.native_language_id
+               song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
+               song.title_language_id, song.native_language_id,
+               song.video_link, song.snippet_start, song.snippet_end
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -809,6 +833,9 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                   title=song['title'],
                   native_title=song['native_title'],
                   artist=song['artist'],
+                  video_link=song['video_link'],
+                  recap_start=song['snippet_start'],
+                  recap_end=song['snippet_end'],
                   country=Country(cc=song['country_id'],
                                     name=song['name'],
                                     is_participating=bool(song['is_participating']),
@@ -820,6 +847,9 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                   year=song['year_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
+                  english_lyrics=song['translated_lyrics'],
+                  latin_lyrics=song['romanized_lyrics'],
+                  native_lyrics=song['native_lyrics'],
                   submitter=song['username']) for song in cursor.fetchall()]
 
     if select_languages:
@@ -835,9 +865,12 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
     if year:
         cursor.execute('''
             SELECT song.id, song.title, song.artist, song.native_title,
-                   song.country_id, country.name, song.is_placeholder,
-                   song.native_language_id, song.title_language_id,
-                   user.username, song.year_id
+                   song.country_id, country.name, country.is_participating,
+                   country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+                   song.is_placeholder, song.native_language_id, song.title_language_id,
+                   song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
+                   user.username, song.year_id,
+                   song.video_link, song.snippet_start, song.snippet_end
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -850,7 +883,9 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    song.country_id, country.name, country.is_participating,
                    country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
-                   user.username, song.year_id
+                   song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
+                   user.username, song.year_id,
+                   song.video_link, song.snippet_start, song.snippet_end
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -861,6 +896,9 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                   title=song['title'],
                   native_title=song['native_title'],
                   artist=song['artist'],
+                  video_link=song['video_link'],
+                  recap_start=song['snippet_start'],
+                  recap_end=song['snippet_end'],
                   country=Country(cc=song['country_id'],
                                     name=song['name'],
                                     is_participating=bool(song['is_participating']),
@@ -872,12 +910,108 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                   year=song['year_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
+                  english_lyrics=song['translated_lyrics'],
+                  latin_lyrics=song['romanized_lyrics'],
+                  native_lyrics=song['native_lyrics'],
                   submitter=song['username']) for song in cursor.fetchall()]
 
     if select_languages:
         for song in songs:
             song.languages = get_song_languages(song.id)
     return songs
+
+def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT song.id, song.title, song.artist, song.native_title,
+                song.country_id, country.name, country.is_participating,
+                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+                song.is_placeholder, song.native_language_id, song.title_language_id,
+                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
+                user.username, song.year_id,
+                song.video_link, song.snippet_start, song.snippet_end
+        FROM song
+        JOIN country ON song.country_id = country.id
+        LEFT OUTER JOIN user on song.submitter_id = user.id
+        WHERE song.country_id = ? AND song.year_id IS NOT NULL
+        ORDER BY song.year_id, country.name
+    ''', (code,))
+    songs = [Song(id=song['id'],
+                  title=song['title'],
+                  native_title=song['native_title'],
+                  artist=song['artist'],
+                  video_link=song['video_link'],
+                  recap_start=song['snippet_start'],
+                  recap_end=song['snippet_end'],
+                  country=Country(cc=song['country_id'],
+                                    name=song['name'],
+                                    is_participating=bool(song['is_participating']),
+                                    bg=song['bgr_colour'],
+                                    fg1=song['fg1_colour'],
+                                    fg2=song['fg2_colour'],
+                                    text=song['txt_colour']),
+                  placeholder=bool(song['is_placeholder']),
+                  year=song['year_id'],
+                  title_lang=song['title_language_id'],
+                  native_lang=song['native_language_id'],
+                  english_lyrics=song['translated_lyrics'],
+                  latin_lyrics=song['romanized_lyrics'],
+                  native_lyrics=song['native_lyrics'],
+                  submitter=song['username']) for song in cursor.fetchall()]
+
+    if select_languages:
+        for song in songs:
+            song.languages = get_song_languages(song.id)
+    return songs
+
+def get_song(year: int, code: str, *, select_results=False) -> Song | None:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT song.id, song.title, song.artist, song.native_title,
+                song.country_id, country.name, country.is_participating,
+                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+                song.is_placeholder, song.native_language_id, song.title_language_id,
+                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
+                user.username, song.year_id,
+                song.video_link, song.snippet_start, song.snippet_end
+        FROM song
+        JOIN country ON song.country_id = country.id
+        LEFT OUTER JOIN user on song.submitter_id = user.id
+        WHERE song.country_id = ? AND song.year_id = ?
+        ORDER BY song.year_id, country.name
+    ''', (code,year))
+    song_data = cursor.fetchone()
+    if not song_data:
+        return None
+    song = Song(id=song_data['id'],
+                  title=song_data['title'],
+                  native_title=song_data['native_title'],
+                  artist=song_data['artist'],
+                  video_link=song_data['video_link'],
+                  recap_start=song_data['snippet_start'],
+                  recap_end=song_data['snippet_end'],
+                  country=Country(cc=song_data['country_id'],
+                                    name=song_data['name'],
+                                    is_participating=bool(song_data['is_participating']),
+                                    bg=song_data['bgr_colour'],
+                                    fg1=song_data['fg1_colour'],
+                                    fg2=song_data['fg2_colour'],
+                                    text=song_data['txt_colour']),
+                  placeholder=bool(song_data['is_placeholder']),
+                  year=song_data['year_id'],
+                  title_lang=song_data['title_language_id'],
+                  native_lang=song_data['native_language_id'],
+                  english_lyrics=song_data['translated_lyrics'],
+                  latin_lyrics=song_data['romanized_lyrics'],
+                  native_lyrics=song_data['native_lyrics'],
+                  submitter=song_data['username'])
+
+    song.languages = get_song_languages(song.id)
+    return song
 
 def get_years() -> list[int]:
     db = get_db()
@@ -923,7 +1057,7 @@ def get_year_shows(year: int, pattern: str = '') -> list[dict]:
             'name': name,
             'short_name': short
         })
-    
+
     return shows
 
 def render_template(template: str, **kwargs):

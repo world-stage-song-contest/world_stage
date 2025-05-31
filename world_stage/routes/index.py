@@ -34,7 +34,7 @@ def settings_post():
     settings = {}
     for key, value in request.form.items():
         settings[key] = value
-    
+
     resp = make_response(render_template('settings.html', settings=settings, message="Settings saved successfully."))
     resp.set_cookie('preferences', create_cookie(**settings), max_age=60*60*24*30)
     return resp
@@ -50,7 +50,7 @@ def flag(country: str):
 
     if type not in ['rect', 'square']:
         type = 'rect'
-    
+
     width = request.args.get('w', 40)
     try:
         width = int(width)

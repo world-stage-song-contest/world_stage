@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Country list{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="/static/css/country-list.css">
+{% endblock %}
+{% block content %}
+<div class="country-container">
+    {% for first_letter, data in countries.items() %}
+        <div class="country-category">
+            <h2>{{ first_letter }}</h2>
+            <div class="country-list">
+            {% for country in data %}
+                <div class="country-item">
+                    <div class="flag-container">{{ flag(country.cc, 50, country.name) }}</div>
+                    <div class="country-name"><a href="{{ url_for('country.country', code=country.cc.lower()) }}">{{ country.name }}</a></div>
+                </div>
+            {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+{% endblock %}

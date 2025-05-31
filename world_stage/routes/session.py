@@ -54,7 +54,7 @@ def login():
 def login_post():
     if request.cookies.get('session'):
         return render_template('session/login_success.html', state="already_logged_in")
-    
+
     username = request.form.get('username')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
@@ -66,7 +66,7 @@ def login_post():
     password_valid, password_message = validate_password(password)
     if not password_valid:
         return render_template('session/login.html', message=password_message)
-    
+
     db = get_db()
     cursor = db.cursor()
     cursor.execute('SELECT id, password, salt, approved FROM user WHERE username = ?', (username,))
@@ -77,13 +77,13 @@ def login_post():
 
     if not stored_password:
         return render_template('session/login.html', message="You need to set a password first.")
-    
+
     if not is_approved:
         return render_template('session/login.html', message="Your account is not approved yet.")
 
     if not verify_password(stored_password, stored_salt, password):
         return render_template('session/login.html', message="Invalid password.")
-    
+
     session_id = str(uuid.uuid4())
     cursor.execute('''
         INSERT INTO session (session_id, user_id, created_at, expires_at)
@@ -107,7 +107,7 @@ def set_password():
         username = unicodedata.normalize('NFKC', username)
     else:
         username = ""
-    
+
     return render_template('session/set_password.html', username=username)
 
 @bp.post('/setpassword')
@@ -183,13 +183,13 @@ def sign_up_post():
     user = cursor.fetchone()
     if user:
         return render_template('session/request_account.html', message="Your account already exists as you have either voted or submitted entries before. Instead of signing up, please <a href='/setpassword'>set your password</a>.")
-    
+
     hashed, salt = hash_password(password)
     cursor.execute('''
         INSERT INTO user (username, password, salt, approved)
         VALUES (?, ?, ?, 0)
     ''', (username, hashed, salt))
-    
+
     db.commit()
-    
+
     return render_template('session/request_account_success.html', state="success")

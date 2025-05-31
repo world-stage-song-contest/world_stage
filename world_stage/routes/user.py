@@ -71,7 +71,7 @@ def votes(username: str):
             'year': year
         }
         votes.append(val)
-    
+
     for vote in votes:
         cursor.execute('''
             SELECT point.score, song.title, song.artist, song.country_id, country.name FROM vote
