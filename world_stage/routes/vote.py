@@ -18,6 +18,8 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id
 
     cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id or 'XXX', vote_set_id))
 
+    cursor.execute('UPDATE vote SET song_id = NULL WHERE vote_set_id = ?', (vote_set_id,))
+
     for point, song_id in votes.items():
         cursor.execute('''
             SELECT id FROM point
@@ -162,25 +164,7 @@ def vote_post(show: str):
         or show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
 
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute('''
-        SELECT song.id, title, artist, running_order
-        FROM song
-        JOIN song_show ON song.id = song_show.song_id
-        WHERE song_show.show_id = ?
-        ORDER BY song_show.running_order
-    ''', (show_data.id,))
-    songs = []
-    for id, title, artist, running_order in cursor.fetchall():
-        val = {
-            'id': id,
-            'title': title,
-            'artist': artist,
-            'running_order': running_order
-        }
-        songs.append(val)
+    songs = get_show_songs(show_data.year, show_data.short_name)
 
     errors = []
 
@@ -195,6 +179,9 @@ def vote_post(show: str):
     if not username:
         username_invalid = True
         errors.append("Username is required.")
+
+    db = get_db()
+    cursor = db.cursor()
 
     cursor.execute('SELECT id FROM user WHERE username = ? COLLATE NOCASE', (username,))
     voter = cursor.fetchone()

@@ -14,3 +14,8 @@
 th, td {
     padding: 0.25em;
 }
+
+.line {
+    min-height: 1em;
+    line-height: 1.2;
+}

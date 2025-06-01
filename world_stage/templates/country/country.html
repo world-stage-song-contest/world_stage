@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Overview: {{ country }}{% endblock %}
+{% block title %}Overview: {{ country_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/country.css">
     <script src="/static/js/sort-table.js"></script>
@@ -35,7 +35,7 @@
                 <a href="{{ url_for('year.year', year=song.year) }}">{{ song.year }}</a>
             </div></td>
             <td>{{ song.artist or '' }}</td>
-            <td><a href="{{ url_for('country.details', code=song.country.cc, year=song.year) }}"><div class="song-title">
+            <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}"><div class="song-title">
                 <span lang="{{song.title_lang.str('Latn')}}">{{ song.title or '' }}</span>
                 {% if song.native_title %}
                 <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>

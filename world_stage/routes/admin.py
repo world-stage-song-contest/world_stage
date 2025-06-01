@@ -1,14 +1,10 @@
 from collections import defaultdict
-from dataclasses import dataclass
-import json
 import sqlite3
-import unicodedata
-from flask import Blueprint, Response, redirect, request, url_for
-from typing import Optional
+from flask import Blueprint, redirect, request, url_for
 import math
 
 from ..db import get_db
-from ..utils import LCG, get_show_id, get_show_songs, get_user_id_from_session, format_seconds, get_user_role_from_session, get_year_countries, get_year_shows, get_year_songs, get_years, parse_seconds, render_template
+from ..utils import LCG, get_show_id, get_show_songs, get_user_role_from_session, get_year_countries, get_year_shows, get_years, render_template
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 

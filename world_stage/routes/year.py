@@ -1,7 +1,7 @@
 from collections import defaultdict
 from flask import request, Blueprint
 
-from ..utils import (LCG, Show, Song, SuspensefulVoteSequencer,
+from ..utils import (LCG, Show, SuspensefulVoteSequencer,
                      get_show_id, dt_now, get_user_role_from_session,
                      get_votes_for_song, get_year_songs, get_year_winner,
                      get_special_winner, render_template, get_show_songs)

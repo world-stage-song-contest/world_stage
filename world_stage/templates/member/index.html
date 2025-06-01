@@ -7,9 +7,14 @@
         <img src="/static/images/submit.png" alt="Submit Icon">
         <p>Submit or edit a song for one of the next World Stage editions.</p>
     </a>
-    <a href="{{ url_for('user.votes', username=(username)) }}" class="card">
-        <h3>History</h3>
+    <a href="{{ url_for('user.submissions', username=(username)) }}" class="card">
+        <h3>Submissions</h3>
         <img src="/static/images/history.png" alt="History Icon">
+        <p>Check out your past submissions.</p>
+    </a>
+    <a href="{{ url_for('user.votes', username=(username)) }}" class="card">
+        <h3>Previous votes</h3>
+        <img src="/static/images/hands.png" alt="Hands Icon">
         <p>Check out your past votes.</p>
     </a>
 </div>

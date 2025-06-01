@@ -935,7 +935,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
-        WHERE song.country_id = ? AND song.year_id IS NOT NULL
+        WHERE (song.country_id = ?1 OR country.cc2 = ?1) AND song.year_id IS NOT NULL
         ORDER BY song.year_id, country.name
     ''', (code,))
     songs = [Song(id=song['id'],
@@ -981,7 +981,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
-        WHERE song.country_id = ? AND song.year_id = ?
+        WHERE (song.country_id = ?1 OR country.cc2 = ?1) AND song.year_id = ?2
         ORDER BY song.year_id, country.name
     ''', (code,year))
     song_data = cursor.fetchone()
@@ -1070,6 +1070,19 @@ def get_vote_count_for_show(show_id: int) -> int:
     ''', (show_id,))
     count = cursor.fetchone()[0]
     return count
+
+def get_country_name(country_id: str) -> str:
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT name FROM country
+        WHERE id = ?1 OR cc2 = ?1
+    ''', (country_id,))
+    country_name = cursor.fetchone()
+    if country_name:
+        return country_name[0]
+    return "Unknown"
 
 def render_template(template: str, **kwargs):
     if request.accept_mimetypes.accept_html:
