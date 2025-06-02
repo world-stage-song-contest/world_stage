@@ -1,17 +1,27 @@
-function onLoad() {
-    const yearSelect = document.getElementById('year');
-    yearSelect.value = '';
+async function onLoad() {
     const languageCount = document.querySelectorAll('.language-select').length;
     document.getElementById('remove-language-button').disabled = languageCount == 1;
-    const form = document.forms.submit_song;
-    for (const element of form.elements) {
-        if (element.tagName === 'SELECT' || element.tagName === 'TEXTAREA') {
-            element.value = '';
-        } else if (element.tagName === 'INPUT') {
-            if (element.type === 'checkbox' || element.type === 'radio') {
-                element.checked = false;
-            } else {
+    const yearSelect = document.getElementById('year');
+    const countrySelect = document.getElementById('country');
+    const yearVal = parseInt(year, 10);
+    const countryVal = country + '';
+    if (yearVal) {
+        yearSelect.value = yearVal;
+        await populateCountries(yearSelect);
+        countrySelect.value = countryVal.toUpperCase();
+        await populateSongData();
+    } else {
+        yearSelect.value = '';
+        const form = document.forms.submit_song;
+        for (const element of form.elements) {
+            if (element.tagName === 'SELECT' || element.tagName === 'TEXTAREA') {
                 element.value = '';
+            } else if (element.tagName === 'INPUT') {
+                if (element.type === 'checkbox' || element.type === 'radio') {
+                    element.checked = false;
+                } else {
+                    element.value = '';
+                }
             }
         }
     }
@@ -29,7 +39,6 @@ function onLoad() {
                 value = value.slice(0, 2) + ':' + value.slice(2);
             }
 
-            console.log(value)
             el.value = value;
         });
     });
@@ -119,7 +128,7 @@ async function populateCountries(yearSelect) {
     } else {
         clearError();
     }
-    console.log(countriesData);
+
     const countries = countriesData.countries;
     clearCountriesSelect();
     const ownGroup = document.getElementById('own-countries');
@@ -149,13 +158,14 @@ async function fetchSongData(year, country) {
 async function populateSongData() {
     const yearSelect = document.getElementById('year');
     const countrySelect = document.getElementById('country');
+
     const year = yearSelect.value;
     const country = countrySelect.value;
     if (year === '' || country === '') {
         return;
     }
     const songData = await fetchSongData(year, country);
-    
+
     const languages = songData.languages;
     delete songData.languages;
 

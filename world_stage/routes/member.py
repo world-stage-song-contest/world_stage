@@ -4,7 +4,7 @@ from flask import Blueprint, redirect, request, url_for
 from typing import Optional
 
 from ..db import get_db
-from ..utils import get_user_id_from_session, format_seconds, get_years, parse_seconds, render_template
+from ..utils import get_user_id_from_session, format_seconds, get_user_permissions, get_user_role_from_session, get_years, parse_seconds, render_template
 
 bp = Blueprint('member', __name__, url_prefix='/member')
 
@@ -55,14 +55,14 @@ class SongData:
                 res[attr] = getattr(self, attr)
         return res
 
-def delete_song(song_data: SongData, user_id: int):
+def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute('''
         SELECT id, submitter_id FROM song
         WHERE year_id = ? AND country_id = ?
-    ''', (song_data.year, song_data.country))
+    ''', (year, country))
     song_id = cursor.fetchone()
     if not song_id:
         return {'error': 'Song not found.'}
@@ -90,47 +90,74 @@ def delete_song(song_data: SongData, user_id: int):
 
     db.commit()
 
-    return {'success': True, 'message': f"The song \"{song_data.artist} — {song_data.title}\" hass been deleted from {song_data.year}"}
+    return {'success': True, 'message': f"The song \"{artist} — {title}\" hass been deleted from {year}"}
 
 def update_song(song_data: SongData, user_id: int) -> dict:
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id FROM song
+        SELECT id, is_placeholder FROM song
         WHERE year_id = ? AND country_id = ?
     ''', (song_data.year, song_data.country))
     song_id = cursor.fetchone()
     if not song_id:
         return {'error': 'Song not found.'}
-    song_id = song_id[0]
+    song_id, is_placeholder = song_id
 
-    cursor.execute('''
-        UPDATE song
-        SET title = ?, native_title = ?, artist = ?,
-            is_placeholder = ?, title_language_id = ?,
-            native_language_id = ?, video_link = ?,
-            snippet_start = ?, snippet_end = ?,
-            translated_lyrics = ?, romanized_lyrics = ?,
-            native_lyrics = ?, submitter_id = ?,
-            modified_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    ''', (
-        song_data.title,
-        song_data.native_title,
-        song_data.artist,
-        int(song_data.is_placeholder),
-        song_data.title_language_id,
-        song_data.native_language_id,
-        song_data.video_link,
-        song_data.snippet_start,
-        song_data.snippet_end,
-        song_data.english_lyrics,
-        song_data.romanized_lyrics,
-        song_data.native_lyrics,
-        user_id,
-        song_id
-    ))
+    if is_placeholder:
+        cursor.execute('''
+            UPDATE song
+            SET title = ?, native_title = ?, artist = ?,
+                is_placeholder = ?, title_language_id = ?,
+                native_language_id = ?, video_link = ?,
+                snippet_start = ?, snippet_end = ?,
+                translated_lyrics = ?, romanized_lyrics = ?,
+                native_lyrics = ?, submitter_id = ?,
+                modified_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (
+            song_data.title,
+            song_data.native_title,
+            song_data.artist,
+            int(song_data.is_placeholder),
+            song_data.title_language_id,
+            song_data.native_language_id,
+            song_data.video_link,
+            song_data.snippet_start,
+            song_data.snippet_end,
+            song_data.english_lyrics,
+            song_data.romanized_lyrics,
+            song_data.native_lyrics,
+            user_id,
+            song_id
+        ))
+    else:
+        cursor.execute('''
+            UPDATE song
+            SET title = ?, native_title = ?, artist = ?,
+                is_placeholder = ?, title_language_id = ?,
+                native_language_id = ?, video_link = ?,
+                snippet_start = ?, snippet_end = ?,
+                translated_lyrics = ?, romanized_lyrics = ?,
+                native_lyrics = ?,
+                modified_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (
+            song_data.title,
+            song_data.native_title,
+            song_data.artist,
+            int(song_data.is_placeholder),
+            song_data.title_language_id,
+            song_data.native_language_id,
+            song_data.video_link,
+            song_data.snippet_start,
+            song_data.snippet_end,
+            song_data.english_lyrics,
+            song_data.romanized_lyrics,
+            song_data.native_lyrics,
+            song_id
+        ))
 
     cursor.execute('''
         DELETE FROM song_language
@@ -180,9 +207,10 @@ def get_languages() -> list[dict]:
     ''')
     return list(map(lambda x: {'id': x[0], 'name': x[1]}, cursor.fetchall()))
 
-def get_countries(year: int, user_id: int) -> dict[str, list[dict]]:
+def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[dict]]:
     db = get_db()
     cursor = db.cursor()
+
     cursor.execute('''
         SELECT COUNT(*) FROM song
         WHERE submitter_id = ? AND year_id = ? AND is_placeholder = 0
@@ -196,11 +224,20 @@ def get_countries(year: int, user_id: int) -> dict[str, list[dict]]:
         JOIN country ON song.country_id = country.id
         WHERE song.year_id = ? AND song.submitter_id = ?
         ORDER BY country.name
-    ''', (year,user_id))
+    ''', (year, user_id))
     for name, cc in cursor.fetchall():
         countries['own'].append({'name': name, 'cc': cc})
 
-    if count < 2:
+    if all:
+        cursor.execute('''
+            SELECT country.name, country.id FROM song
+            JOIN country ON song.country_id = country.id
+            WHERE song.year_id = ?
+            ORDER BY country.name
+        ''', (year,))
+        for name, cc in cursor.fetchall():
+            countries['placeholder'].append({'name': name, 'cc': cc})
+    elif count < 2:
         cursor.execute('''
             SELECT country.name, country.id FROM song
             JOIN country ON song.country_id = country.id
@@ -218,15 +255,24 @@ def submit():
     if not session_id:
         return redirect(url_for('session.login'))
 
-    return render_template('member/submit.html', years=get_years(), languages=get_languages(), countries={}, data={}, onLoad=True)
+    year = request.args.get('year')
+    country = request.args.get('country')
+    permissions = get_user_role_from_session(session_id)
+
+    return render_template('member/submit.html', year=year, country=country, elevated=permissions.can_edit,
+                           years=get_years(), languages=get_languages(), countries={}, data={}, onLoad=True)
 
 @bp.get('/submit/<year>')
 def get_countries_for_year(year):
     d = get_user_id_from_session(request.cookies.get('session'))
+    user_id = None
     if d:
         user_id = d[0]
 
-    return {'countries': get_countries(year, user_id)}
+    permissions = get_user_permissions(user_id)
+    countries = get_countries(year, user_id, all=permissions.can_edit)
+
+    return {'countries': countries}
 
 @bp.get('/submit/<year>/<country>')
 def get_country_data(year, country):
@@ -326,6 +372,9 @@ def submit_song_post():
     is_translation = other_data.pop('is_translation', False) == "on"
     does_match = other_data.pop('does_match', False) == "on"
 
+    if not languages:
+        res = {'error': 'At least one language must be selected.'}
+
     if languages and (does_match or not other_data.get('native_title', None)):
         other_data['native_language_id'] = languages[0]
 
@@ -336,10 +385,11 @@ def submit_song_post():
 
     missing_fields = []
     missing_fields_internal = []
-    for field in required_fields.keys():
-        if field not in other_data or other_data[field] is None:
-            missing_fields.append(required_fields[field])
-            missing_fields_internal.append(field)
+    if action == 'submit':
+        for field in required_fields.keys():
+            if field not in other_data or other_data[field] is None:
+                missing_fields.append(required_fields[field])
+                missing_fields_internal.append(field)
 
     if missing_fields:
         return render_template('member/submit.html', years=get_years(), data=other_data,
@@ -352,14 +402,8 @@ def submit_song_post():
     other_data['snippet_start'] = parse_seconds(other_data['snippet_start'])
     other_data['snippet_end'] = parse_seconds(other_data['snippet_end'])
 
-    song_data = SongData(languages=languages, **other_data)
-
-    if action == 'delete':
-        res = delete_song(song_data, user_id)
-    elif action == 'submit':
-        res = update_song(song_data, user_id)
-    else:
-        res = {'error': f"Unknown action: '{action}'."}
+    if action == 'submit':
+        song_data = SongData(languages=languages, **other_data)
 
     dur = None
     if other_data['snippet_end'] is not None and other_data['snippet_start'] is not None:
@@ -367,6 +411,13 @@ def submit_song_post():
 
     if dur is not None and dur > 20:
         res = {'error': f"The maximum length of the recap snippet is 20 seconds. Yours is {dur} seconds long."}
+
+    if action == 'delete':
+        res = delete_song(other_data['year'], other_data['country'], other_data['title'], other_data['artist'], user_id)
+    elif action == 'submit':
+        res = update_song(song_data, user_id)
+    else:
+        res = {'error': f"Unknown action: '{action}'."}
 
     if 'error' in res:
         return render_template('member/submit.html', years=get_years(), data=other_data,

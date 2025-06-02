@@ -225,6 +225,10 @@ class UserPermissions(Enum):
     def can_view_restricted(self):
         return self == UserPermissions.ADMIN or self == UserPermissions.OWNER
 
+    @property
+    def can_edit(self):
+        return self == UserPermissions.EDITOR or self == UserPermissions.ADMIN or self == UserPermissions.OWNER
+
 @dataclass
 class Country:
     cc: str
@@ -343,6 +347,7 @@ class Song:
     languages: list[Language]
     vote_data: Optional[VoteData]
     submitter: Optional[str]
+    submitter_id: Optional[int]
     native_title: Optional[str]
     title_lang: Optional[Language]
     native_lang: Optional[Language]
@@ -356,7 +361,7 @@ class Song:
     def __init__(self, *,
                  id: int, title: str, native_title: Optional[str], artist: str,
                  country: Country, year: Optional[int],
-                 placeholder: bool, submitter: Optional[str],
+                 placeholder: bool, submitter: Optional[str], submitter_id: Optional[int],
                  title_lang: Optional[int], native_lang: Optional[int],
                  english_lyrics: Optional[str], latin_lyrics: Optional[str], native_lyrics: Optional[str],
                  video_link: Optional[str], recap_start: Optional[int], recap_end: Optional[int],
@@ -370,6 +375,7 @@ class Song:
         self.languages = languages
         self.placeholder = placeholder
         self.submitter = submitter
+        self.submitter_id = submitter_id
         self.english_lyrics = english_lyrics
         self.latin_lyrics = latin_lyrics
         self.native_lyrics = native_lyrics
@@ -587,7 +593,7 @@ def get_countries(only_participating: bool = False) -> list[Country]:
     ]
     return countries
 
-def get_user_id_from_session(session_id: str) -> tuple[int, str] | None:
+def get_user_id_from_session(session_id: str | None) -> tuple[int, str] | None:
     if not session_id:
         return None
     db = get_db()
@@ -614,6 +620,21 @@ def get_user_role_from_session(session_id: str | None) -> UserPermissions:
         JOIN user ON session.user_id = user.id
         WHERE session.session_id = ? AND session.expires_at > datetime('now')
     ''', (session_id,))
+    row = cursor.fetchone()
+    if row:
+        role = row[0]
+        return UserPermissions.from_str(role)
+    return UserPermissions.NONE
+
+def get_user_permissions(user_id: int | None) -> UserPermissions:
+    if user_id is None:
+        return UserPermissions.NONE
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT role FROM user WHERE id = ?
+    ''', (user_id,))
     row = cursor.fetchone()
     if row:
         role = row[0]
@@ -741,7 +762,8 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                song.year_id, song_show.running_order, song.is_placeholder,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                user.username, song.title_language_id, song.native_language_id,
-               song.video_link, song.snippet_start, song.snippet_end
+               song.video_link, song.snippet_start, song.snippet_end,
+               song.submitter_id
         FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN show ON song_show.show_id = show.id
@@ -767,6 +789,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                   year=song['year_id'],
                   placeholder=bool(song['is_placeholder']),
                   submitter=song['username'],
+                  submitter_id=song['submitter_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
                   english_lyrics=song['translated_lyrics'],
@@ -822,7 +845,8 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                song.is_placeholder, user.username, song.year_id,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
-               song.video_link, song.snippet_start, song.snippet_end
+               song.video_link, song.snippet_start, song.snippet_end,
+               song.submitter_id
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -845,6 +869,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                                     text=song['txt_colour']),
                   placeholder=bool(song['is_placeholder']),
                   year=song['year_id'],
+                  submitter_id=song['submitter_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
                   english_lyrics=song['translated_lyrics'],
@@ -870,7 +895,8 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    user.username, song.year_id,
-                   song.video_link, song.snippet_start, song.snippet_end
+                   song.video_link, song.snippet_start, song.snippet_end,
+                   song.submitter_id
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -885,7 +911,8 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    user.username, song.year_id,
-                   song.video_link, song.snippet_start, song.snippet_end
+                   song.video_link, song.snippet_start, song.snippet_end,
+                   song.submitter_id
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -908,6 +935,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                                     text=song['txt_colour']),
                   placeholder=bool(song['is_placeholder']),
                   year=song['year_id'],
+                  submitter_id=song['submitter_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
                   english_lyrics=song['translated_lyrics'],
@@ -931,7 +959,8 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 user.username, song.year_id,
-                song.video_link, song.snippet_start, song.snippet_end
+                song.video_link, song.snippet_start, song.snippet_end,
+                song.submitter_id
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -955,6 +984,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                   placeholder=bool(song['is_placeholder']),
                   year=song['year_id'],
                   title_lang=song['title_language_id'],
+                  submitter_id=song['submitter_id'],
                   native_lang=song['native_language_id'],
                   english_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
@@ -977,7 +1007,8 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 user.username, song.year_id,
-                song.video_link, song.snippet_start, song.snippet_end
+                song.video_link, song.snippet_start, song.snippet_end,
+                song.submitter_id
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -1003,6 +1034,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                                     text=song_data['txt_colour']),
                   placeholder=bool(song_data['is_placeholder']),
                   year=song_data['year_id'],
+                  submitter_id=song_data['submitter_id'],
                   title_lang=song_data['title_language_id'],
                   native_lang=song_data['native_language_id'],
                   english_lyrics=song_data['translated_lyrics'],
@@ -1018,7 +1050,6 @@ def get_years() -> list[int]:
     cursor = db.cursor()
     cursor.execute('''
         SELECT id FROM year
-        WHERE closed <> 1
     ''')
     return list(map(lambda x: x[0], cursor.fetchall()))
 

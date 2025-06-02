@@ -7,6 +7,12 @@
 {% endblock %}
 {% block content %}
 
+{% if can_edit %}
+<div>
+    <a class="button" href="{{ url_for('member.submit', country=song.country.cc.lower(), year=song.year) }}">Edit</a>
+</div>
+{% endif %}
+
 <div class="basic-song-info">
     <table>
         <tr>

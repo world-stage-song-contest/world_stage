@@ -1,8 +1,8 @@
 from collections import defaultdict
 import re
-from flask import Blueprint
+from flask import Blueprint, request
 
-from ..utils import get_countries, get_country_name, get_country_songs, get_song, render_template
+from ..utils import get_countries, get_country_name, get_country_songs, get_song, get_user_id_from_session, get_user_permissions, get_user_role_from_session, render_template
 
 bp = Blueprint('country', __name__, url_prefix='/country')
 
@@ -52,16 +52,24 @@ def details(code: str, year: int):
         embed = generate_iframe(url)
     name = get_country_name(code.upper())
 
+    session_id = request.cookies.get('session')
+    user_data = get_user_id_from_session(session_id)
+    user_id = None
+    if user_data:
+        user_id = user_data[0]
+    permissions = get_user_permissions(user_id)
+
+    can_edit = permissions.can_edit or user_id == song.submitter_id
     english_lyrics = []
     latin_lyrics = []
     native_lyrics = []
 
     if song.english_lyrics:
         english_lyrics = song.english_lyrics.split('\n')
-        print(english_lyrics)
     if song.latin_lyrics:
         latin_lyrics = song.latin_lyrics.split('\n')
     if song.native_lyrics:
         native_lyrics = song.native_lyrics.split('\n')
     return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year,
-                           native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics)
+                           native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
+                           can_edit=can_edit)
