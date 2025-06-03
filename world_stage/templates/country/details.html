@@ -62,7 +62,7 @@
 
     {% if latin_lyrics %}
     <div class="latin-lyrics lyrics">
-        <h2>Transliterated lyrics</h2>
+        <h2>Native lyrics (Latin alphabet)</h2>
         {% for line in latin_lyrics %}
         <div class="line" lang="{{ song.native_lang.str("Latn") }}">{{ line }}</div>
         {% endfor %}
@@ -71,7 +71,7 @@
 
     {% if native_lyrics %}
     <div class="native-lyrics lyrics">
-        <h2>Native lyrics</h2>
+        <h2>Native lyrics (non-Latin alphabet)</h2>
         {% for line in native_lyrics %}
         <div class="line" lang="{{ song.native_lang.str() }}">{{ line }}</div>
         {% endfor %}

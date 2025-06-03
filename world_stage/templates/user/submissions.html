@@ -24,15 +24,17 @@
     {% for song in songs %}
         <tr data-value="{{ loop.index }}" class="{{ "placeholder" if song.placeholder else "" }}">
             <td><a href="{{ url_for('year.year', year=song.year) }}">{{ song.year }}</a></td>
-            <td><div class="country">{{ flag(song.country.cc, 40, song.country.name) }}
-                <span href="/country/{{ song.country.cc }}">{{ song.country.name }}</span></div></td>
+            <td><a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">
+                    {{ flag(song.country.cc, 40, song.country.name) }}
+                    <span>{{ song.country.name }}</span>
+            </div></a></td>
             <td>{{ song.artist }}</td>
-            <td><div class="song-title">
-                    <span lang="{{song.title_lang.str()}}">{{ song.title }}</span>
-                    {% if song.native_title %}
-                    <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
-                    {% endif %}
-                </div></td>
+            <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}"><div class="song-title">
+                <span lang="{{song.title_lang.str('Latn')}}">{{ song.title or '' }}</span>
+                {% if song.native_title %}
+                <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
+                {% endif %}
+            </div></a></td>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
         </tr>
     {% endfor %}

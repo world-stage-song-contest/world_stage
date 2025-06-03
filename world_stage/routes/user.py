@@ -111,6 +111,6 @@ def submissions(username: str):
         return render_template('error.html', error="User not found"), 404
     user_id = user_id[0]
 
-    songs = get_user_songs(user_id)
+    songs = get_user_songs(user_id, select_languages=True)
 
     return render_template('user/submissions.html', songs=songs, username=username)
