@@ -68,7 +68,9 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
         return {'error': 'Song not found.'}
     song_id, submitter_id = song_id
 
-    if submitter_id != user_id:
+    permissions = get_user_permissions(user_id)
+
+    if not permissions.can_edit and submitter_id != user_id:
         return {'error': 'You are not the submitter.'}
 
     cursor.execute('''
