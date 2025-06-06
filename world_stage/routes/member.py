@@ -24,7 +24,9 @@ class SongData:
     english_lyrics: Optional[str]
     romanized_lyrics: Optional[str]
     native_lyrics: Optional[str]
+    notes: Optional[str]
     languages: list[dict]
+    user_id: Optional[int] = None
 
     def __init__(self, *, year: int, country: str, title: str,
                  native_title: Optional[str], artist: str,
@@ -32,7 +34,8 @@ class SongData:
                  native_language_id: Optional[int], video_link: Optional[str],
                  snippet_start: Optional[str], snippet_end: Optional[str],
                  english_lyrics: Optional[str], romanized_lyrics: Optional[str],
-                 native_lyrics: Optional[str], languages: list[dict]):
+                 native_lyrics: Optional[str], languages: list[dict], notes: Optional[str],
+                 user_id: Optional[int] = None):
         self.year = year
         self.country = country
         self.title = title
@@ -48,6 +51,8 @@ class SongData:
         self.romanized_lyrics = romanized_lyrics
         self.native_lyrics = native_lyrics
         self.languages = languages
+        self.notes = notes
+        self.user_id = user_id
 
     def as_dict(self) -> dict:
         res = {}
@@ -81,6 +86,7 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
             snippet_start = NULL, snippet_end = NULL,
             translated_lyrics = NULL, romanized_lyrics = NULL,
             native_lyrics = NULL, submitter_id = NULL,
+            notes = NULL,
             modified_at = CURRENT_TIMESTAMP
         WHERE id = ?
     ''', (song_id,))
@@ -94,7 +100,7 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
 
     return {'success': True, 'message': f"The song \"{artist} — {title}\" hass been deleted from {year}"}
 
-def update_song(song_data: SongData, user_id: int) -> dict:
+def update_song(song_data: SongData, user_id: int, set_claim: bool) -> dict:
     db = get_db()
     cursor = db.cursor()
 
@@ -107,7 +113,7 @@ def update_song(song_data: SongData, user_id: int) -> dict:
         return {'error': 'Song not found.'}
     song_id, is_placeholder = song_id
 
-    if is_placeholder:
+    if is_placeholder or set_claim:
         cursor.execute('''
             UPDATE song
             SET title = ?, native_title = ?, artist = ?,
@@ -116,6 +122,7 @@ def update_song(song_data: SongData, user_id: int) -> dict:
                 snippet_start = ?, snippet_end = ?,
                 translated_lyrics = ?, romanized_lyrics = ?,
                 native_lyrics = ?, submitter_id = ?,
+                notes = ?,
                 modified_at = CURRENT_TIMESTAMP
             WHERE id = ?
         ''', (
@@ -132,6 +139,7 @@ def update_song(song_data: SongData, user_id: int) -> dict:
             song_data.romanized_lyrics,
             song_data.native_lyrics,
             user_id,
+            song_data.notes,
             song_id
         ))
     else:
@@ -142,7 +150,7 @@ def update_song(song_data: SongData, user_id: int) -> dict:
                 native_language_id = ?, video_link = ?,
                 snippet_start = ?, snippet_end = ?,
                 translated_lyrics = ?, romanized_lyrics = ?,
-                native_lyrics = ?,
+                native_lyrics = ?, notes = ?,
                 modified_at = CURRENT_TIMESTAMP
             WHERE id = ?
         ''', (
@@ -158,6 +166,7 @@ def update_song(song_data: SongData, user_id: int) -> dict:
             song_data.english_lyrics,
             song_data.romanized_lyrics,
             song_data.native_lyrics,
+            song_data.notes,
             song_id
         ))
 
@@ -251,6 +260,15 @@ def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[
 
     return countries
 
+def get_users():
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT id, username FROM user
+        ORDER BY username
+    ''')
+    return [{'id': id, 'username': username} for id, username in cursor.fetchall()]
+
 @bp.get('/submit')
 def submit():
     session_id = request.cookies.get('session')
@@ -261,8 +279,11 @@ def submit():
     country = request.args.get('country')
     permissions = get_user_role_from_session(session_id)
 
+    users = get_users()
+
     return render_template('member/submit.html', year=year, country=country, elevated=permissions.can_edit,
-                           years=get_years(), languages=get_languages(), countries={}, data={}, onLoad=True)
+                           years=get_years(), languages=get_languages(), countries={}, data={}, onLoad=True,
+                           users=users)
 
 @bp.get('/submit/<year>')
 def get_countries_for_year(year):
@@ -285,7 +306,8 @@ def get_country_data(year, country):
         SELECT id, title, native_title, artist, is_placeholder,
                    title_language_id, native_language_id,
                    video_link, snippet_start, snippet_end,
-                   translated_lyrics, romanized_lyrics, native_lyrics
+                   translated_lyrics, romanized_lyrics, native_lyrics,
+                   notes, submitter_id
         FROM song
         WHERE year_id = ? AND country_id = ?
     ''', (year, country))
@@ -296,7 +318,8 @@ def get_country_data(year, country):
     (id, title, native_title, artist, is_placeholder,
      title_language_id, native_language_id,
      video_link, snippet_start, snippet_end,
-     translated_lyrics, romanized_lyrics, native_lyrics) = song
+     translated_lyrics, romanized_lyrics, native_lyrics,
+     notes, submitter_id) = song
 
     snippet_start = format_seconds(snippet_start) if snippet_start is not None else None
     snippet_end = format_seconds(snippet_end) if snippet_end is not None else None
@@ -326,7 +349,9 @@ def get_country_data(year, country):
         english_lyrics=translated_lyrics,
         romanized_lyrics=romanized_lyrics,
         native_lyrics=native_lyrics,
-        languages=languages
+        languages=languages,
+        notes=notes,
+        user_id=submitter_id
     )
 
     return song_data.as_dict()
@@ -345,14 +370,21 @@ def submit_song_post():
     user_id_raw = get_user_id_from_session(session_id)
     if not user_id_raw:
         return redirect(url_for('session.login'))
-    user_id = user_id_raw[0]
+
+    force_submitter = request.form.get('force_submitter', None)
+    if force_submitter:
+        user_id = int(force_submitter.strip())
+        set_claim = True
+    else:
+        user_id = user_id_raw[0]
+        set_claim = False
 
     languages = []
     invalid_languages = []
     other_data = {}
     action = request.form['action']
     for key, value in request.form.items():
-        if key == 'action':
+        if key == 'action' or key == 'force_submitter':
             continue
 
         if key.startswith('language'):
@@ -363,7 +395,7 @@ def submit_song_post():
                 invalid_languages.append(key)
         else:
             other_data[key] = value.strip()
-            other_data[key] = unicodedata.normalize('NFKC', other_data[key])
+            other_data[key] = unicodedata.normalize('NFC', other_data[key])
             other_data[key] = other_data[key].replace('\r', '')
             other_data[key] = None if other_data[key] == '' else other_data[key]
 
@@ -417,7 +449,7 @@ def submit_song_post():
     if action == 'delete':
         res = delete_song(other_data['year'], other_data['country'], other_data['title'], other_data['artist'], user_id)
     elif action == 'submit':
-        res = update_song(song_data, user_id)
+        res = update_song(song_data, user_id, set_claim)
     else:
         res = {'error': f"Unknown action: '{action}'."}
 
@@ -426,6 +458,7 @@ def submit_song_post():
                                languages=get_languages(), countries=get_countries(other_data['year'], user_id),
                                year=other_data['year'], country=other_data['country'],
                                selected_languages=languages, invalid_languages=invalid_languages,
-                               error=res['error'], missing_fields=missing_fields_internal, onLoad=False)
+                               error=res['error'], missing_fields=missing_fields_internal, onLoad=False,
+                               users=get_users())
 
     return render_template('member/submit_success.html', message=res['message'])

@@ -130,6 +130,19 @@
         </div>
     </fieldset>
 
+    {% if elevated %}
+    <fieldset class="grid hidable">
+        <legend>Admin options</legend>
+        <label for="force_submitter">Replacement submitter</label>
+        <select id="force_submitter" name="force_submitter">
+            <option value="">None</option>
+            {% for user in users %}
+                <option value="{{ user.id }}">{{ user.username }}</option>
+            {% endfor %}
+        </select>
+    </fieldset>
+    {% endif %}
+
     <fieldset class="grid hidable">
         <legend>Languages</legend>
         {% for lang_id in selected_languages or [''] %}
@@ -149,8 +162,9 @@
 
     <fieldset class="grid hidable">
         <legend>Song video</legend>
-        <label class="req" for="video">Video URL</label>
-        <input class="stretchable" id="video_link" name="video_link" placeholder="https://youtu.be/yxAXPIl1Ffo" maxlength="50" value="{{ data.video_link }}">
+        <label for="video">Video URL</label>
+        <input class="stretchable" id="video_link" name="video_link"
+               placeholder="https://youtu.be/yxAXPIl1Ffo" maxlength="50" value="{{ data.video_link }}">
         <label for="snippet_start">Recap snippet start</label>
         <div>
         <input class="time-input" id="snippet_start" name="snippet_start" placeholder="00:00"
@@ -165,6 +179,14 @@
 
     <fieldset class="hidable nongrid">
         <legend>Lyrics</legend>
+        <div class="banner long-text">
+            <div>
+                While entering the lyrics, you may use basic markup.
+                You can use <code>*italics*</code> or <code>**bold**</code> to format the text.
+                Additionally, you can enter a footnote by using <code>[NUMBER]</code> in the text,
+                and then provide the footnote text in the footnotes section.
+            </div>
+        </div>
         <div class="banner long-text">
             <div>
                 Make sure that each version of the lyrics has the same number of lines and that
@@ -196,8 +218,17 @@
             </div>
             <textarea id="native_lyrics" name="native_lyrics" rows="15" cols="50" placeholder="Native lyrics">{{ data.native_lyrics }}</textarea>
         </details>
+        <details>
+            <summary>Footnotes</summary>
+            <div class="limit-length">
+                When entering footnotes, do not enter the number in the text, just write the content of the footnote.
+                Separate each footnote with a blank line.
+                The footnotes will be numbered automatically.
+            </div>
+            <textarea id="notes" name="notes" rows="15" cols="50" placeholder="Footnotes">{{ data.notes }}</textarea>
+        </details>
     </fieldset>
-    <div class="hidable">
+    <div class="hidable buttons">
         <button type="submit" name="action" value="submit">Submit</button>
         <button type="submit" name="action" value="delete"
                 onclick="return confirm('Are you sure you want to delete yout song?')"

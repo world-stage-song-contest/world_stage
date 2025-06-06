@@ -11,6 +11,12 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Deque, TypeAlias
 import urllib.parse
 
+from functools import lru_cache
+from markdown_it import MarkdownIt
+from markdown_it.rules_inline import StateInline
+from markdown_it.token import Token
+import re
+
 Bucket: TypeAlias = Deque[Tuple[str, Dict[int, int]]]
 
 class LCG:
@@ -354,6 +360,7 @@ class Song:
     english_lyrics: Optional[str]
     latin_lyrics: Optional[str]
     native_lyrics: Optional[str]
+    lyrics_notes: Optional[str]
     video_link: Optional[str]
     recap_start: Optional[str]
     recap_end: Optional[str]
@@ -362,7 +369,7 @@ class Song:
                  id: int, title: str, native_title: Optional[str], artist: str,
                  country: Country, year: Optional[int],
                  placeholder: bool, submitter: Optional[str], submitter_id: Optional[int],
-                 title_lang: Optional[int], native_lang: Optional[int],
+                 title_lang: Optional[int], native_lang: Optional[int], lyrics_notes: Optional[str],
                  english_lyrics: Optional[str], latin_lyrics: Optional[str], native_lyrics: Optional[str],
                  video_link: Optional[str], recap_start: Optional[int], recap_end: Optional[int],
                  languages: list['Language'] = [], show_id: Optional[int] = None, ro: Optional[int] = None):
@@ -379,6 +386,7 @@ class Song:
         self.english_lyrics = english_lyrics
         self.latin_lyrics = latin_lyrics
         self.native_lyrics = native_lyrics
+        self.lyrics_notes = lyrics_notes
         self.video_link = video_link
         self.recap_start = format_seconds(recap_start) if recap_start is not None else None
         self.recap_end = format_seconds(recap_end) if recap_end is not None else None
@@ -763,7 +771,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                user.username, song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
-               song.submitter_id
+               song.submitter_id, song.notes
         FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN show ON song_show.show_id = show.id
@@ -795,6 +803,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                   english_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
+                  lyrics_notes=song['notes'],
                   ro=song['running_order'],
                   show_id=show_id if select_votes else None)
                 for song in cursor.fetchall()]
@@ -846,7 +855,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
-               song.submitter_id
+               song.submitter_id, song.notes
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -875,6 +884,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                   english_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
+                  lyrics_notes=song['notes'],
                   submitter=song['username']) for song in cursor.fetchall()]
 
     if select_languages:
@@ -896,7 +906,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    user.username, song.year_id,
                    song.video_link, song.snippet_start, song.snippet_end,
-                   song.submitter_id
+                   song.submitter_id, song.notes
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -912,7 +922,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    user.username, song.year_id,
                    song.video_link, song.snippet_start, song.snippet_end,
-                   song.submitter_id
+                   song.submitter_id, song.notes
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -941,6 +951,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                   english_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
+                  lyrics_notes=song['notes'],
                   submitter=song['username']) for song in cursor.fetchall()]
 
     if select_languages:
@@ -960,7 +971,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 user.username, song.year_id,
                 song.video_link, song.snippet_start, song.snippet_end,
-                song.submitter_id
+                song.submitter_id, song.notes
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -989,6 +1000,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                   english_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
+                  lyrics_notes=song['notes'],
                   submitter=song['username']) for song in cursor.fetchall()]
 
     if select_languages:
@@ -1008,42 +1020,43 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 user.username, song.year_id,
                 song.video_link, song.snippet_start, song.snippet_end,
-                song.submitter_id
+                song.submitter_id, song.notes
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
         WHERE (song.country_id = ?1 OR country.cc2 = ?1) AND song.year_id = ?2
         ORDER BY song.year_id, country.name
     ''', (code,year))
-    song_data = cursor.fetchone()
-    if not song_data:
+    song = cursor.fetchone()
+    if not song:
         return None
-    song = Song(id=song_data['id'],
-                  title=song_data['title'],
-                  native_title=song_data['native_title'],
-                  artist=song_data['artist'],
-                  video_link=song_data['video_link'],
-                  recap_start=song_data['snippet_start'],
-                  recap_end=song_data['snippet_end'],
-                  country=Country(cc=song_data['country_id'],
-                                    name=song_data['name'],
-                                    is_participating=bool(song_data['is_participating']),
-                                    bg=song_data['bgr_colour'],
-                                    fg1=song_data['fg1_colour'],
-                                    fg2=song_data['fg2_colour'],
-                                    text=song_data['txt_colour']),
-                  placeholder=bool(song_data['is_placeholder']),
-                  year=song_data['year_id'],
-                  submitter_id=song_data['submitter_id'],
-                  title_lang=song_data['title_language_id'],
-                  native_lang=song_data['native_language_id'],
-                  english_lyrics=song_data['translated_lyrics'],
-                  latin_lyrics=song_data['romanized_lyrics'],
-                  native_lyrics=song_data['native_lyrics'],
-                  submitter=song_data['username'])
+    ret = Song(id=song['id'],
+                  title=song['title'],
+                  native_title=song['native_title'],
+                  artist=song['artist'],
+                  video_link=song['video_link'],
+                  recap_start=song['snippet_start'],
+                  recap_end=song['snippet_end'],
+                  country=Country(cc=song['country_id'],
+                                    name=song['name'],
+                                    is_participating=bool(song['is_participating']),
+                                    bg=song['bgr_colour'],
+                                    fg1=song['fg1_colour'],
+                                    fg2=song['fg2_colour'],
+                                    text=song['txt_colour']),
+                  placeholder=bool(song['is_placeholder']),
+                  year=song['year_id'],
+                  submitter_id=song['submitter_id'],
+                  title_lang=song['title_language_id'],
+                  native_lang=song['native_language_id'],
+                  english_lyrics=song['translated_lyrics'],
+                  latin_lyrics=song['romanized_lyrics'],
+                  native_lyrics=song['native_lyrics'],
+                  lyrics_notes=song['notes'],
+                  submitter=song['username'])
 
-    song.languages = get_song_languages(song.id)
-    return song
+    ret.languages = get_song_languages(ret.id)
+    return ret
 
 def get_years() -> list[int]:
     db = get_db()
@@ -1122,3 +1135,52 @@ def render_template(template: str, **kwargs):
         return kwargs
     else:
         return f"Invalid format. Accepted MIME types are: [{request.accept_mimetypes}] for UA '{request.headers.get("User-Agent", '')}'"
+
+@lru_cache(maxsize=1)
+def get_markdown_parser():
+    def footnote_plugin(md: MarkdownIt):
+        def tokenize_footnote(state: StateInline, silent: bool):
+            src = state.src[state.pos:]
+            match = re.match(r'\[(\d+)\]', src)
+            if not match:
+                return False
+
+            if silent:
+                return False
+
+            number = match.group(1)
+            state.pos += match.end()
+
+            token = state.push('footnote_open', 'a', 1)
+            token.attrs = {
+                'href': f'#footnote-{number}',
+                'class': 'footnote-link'
+            }
+
+            token = state.push('sup_open', 'sup', 1)
+            token = state.push('text', '', 0)
+            token.content = f'[{number}]'
+            token = state.push('sup_close', 'sup', -1)
+
+            token = state.push('footnote_close', 'a', -1)
+
+            return True
+
+        md.inline.ruler.before('emphasis', 'footnote', tokenize_footnote)
+
+        # FIXED: include 'self' as first arg
+        def render_token(self, tokens, idx, options, env):
+            token = tokens[idx]
+            if token.type == 'footnote_open':
+                href = token.attrs['href']
+                cls = token.attrs['class']
+                return f'<a href="{href}" class="{cls}">'
+            elif token.type == 'footnote_close':
+                return '</a>'
+            return ''
+
+        md.add_render_rule('footnote_open', render_token)
+        md.add_render_rule('footnote_close', render_token)
+
+    md = MarkdownIt('zero').enable(['emphasis']).use(footnote_plugin)
+    return md

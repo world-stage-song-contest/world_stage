@@ -52,14 +52,14 @@ def votes(username: str):
     user_id = user_id[0]
 
     cursor.execute('''
-        SELECT vote_set.id, user.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id FROM vote_set
+        SELECT vote_set.id, user.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id, show.allow_access_type FROM vote_set
         JOIN user ON vote_set.voter_id = user.id
         JOIN show ON vote_set.show_id = show.id
-        WHERE vote_set.voter_id = ? AND show.allow_access_type = 'full'
+        WHERE vote_set.voter_id = ? AND (show.allow_access_type = 'full' OR show.allow_access_type = 'partial')
         ORDER BY show.date DESC
     ''', (user_id,))
     votes = []
-    for id, username, nickname, country_id, show_name, short_name, date, year in cursor.fetchall():
+    for id, username, nickname, country_id, show_name, short_name, date, year, access_type in cursor.fetchall():
         val = {
             'id': id,
             'username': username,
@@ -67,6 +67,7 @@ def votes(username: str):
             'code': country_id,
             'show_name': show_name,
             'short_name': short_name,
+            'access_type': access_type,
             'date': date.strftime("%d %b %Y"),
             'year': year
         }
@@ -74,7 +75,7 @@ def votes(username: str):
 
     for vote in votes:
         cursor.execute('''
-            SELECT point.score, song.title, song.artist, song.country_id, country.name FROM vote
+            SELECT point.score, song.title, song.artist, song.country_id, country.name, song.id FROM vote
             JOIN song ON vote.song_id = song.id
             JOIN point ON vote.point_id = point.id
             JOIN country ON song.country_id = country.id
@@ -82,7 +83,7 @@ def votes(username: str):
             ORDER BY point.score DESC
         ''', (vote['id'],))
         songs = []
-        for pts, title, artist, country_id, country in cursor.fetchall():
+        for pts, title, artist, country_id, country, id in cursor.fetchall():
             val = {
                 'pts': pts,
                 'title': title,
@@ -90,6 +91,23 @@ def votes(username: str):
                 'code': country_id,
                 'country': country
             }
+            if vote['access_type'] == 'partial':
+                cursor.execute('''
+                    SELECT id FROM show WHERE year_id = ? AND short_name = 'f'
+                ''', (vote['year'],))
+                final_show = cursor.fetchone()
+                if final_show:
+                    print(final_show[0], id)
+                    cursor.execute('''
+                        SELECT COUNT(*) FROM song_show
+                        WHERE show_id = ? AND song_id = ?
+                    ''', (final_show[0], id))
+                    if cursor.fetchone()[0] > 0:
+                        print("x")
+                        val['title'] = ''
+                        val['artist'] = ''
+                        val['country'] = ''
+                        val['code'] = 'XXX'
             songs.append(val)
         vote['points'] = songs
 

@@ -61,18 +61,22 @@ td.header-like {
 
 .first {
     background: gold;
+    color: black;
 }
 
 .second {
     background: #CCC;
+    color: black;
 }
 
 .third {
     background: #C96;
+    color: black;
 }
 
 .last {
     background: #FE8080;
+    color: black;
 }
 
 tr {

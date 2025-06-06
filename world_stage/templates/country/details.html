@@ -4,7 +4,9 @@
     <link rel="stylesheet" href="/static/css/song-overview.css">
     <script src="/static/js/sort-table.js"></script>
     <script src="/static/js/year.js"></script>
+    <script src="/static/js/footnote.js"></script>
 {% endblock %}
+{% block onload%}onLoad(){% endblock %}
 {% block content %}
 
 {% if can_edit %}
@@ -55,7 +57,7 @@
     <div class="english-lyrics lyrics">
         <h2>English lyrics</h2>
         {% for line in english_lyrics %}
-        <div class="line" lang="en">{{ line }}</div>
+        <div class="line" lang="en">{{ line|safe }}</div>
         {% endfor %}
     </div>
     {% endif %}
@@ -64,7 +66,7 @@
     <div class="latin-lyrics lyrics">
         <h2>Native lyrics (Latin alphabet)</h2>
         {% for line in latin_lyrics %}
-        <div class="line" lang="{{ song.native_lang.str("Latn") }}">{{ line }}</div>
+        <div class="line" lang="{{ song.native_lang.str("Latn") }}">{{ line|safe }}</div>
         {% endfor %}
     </div>
     {% endif %}
@@ -73,10 +75,21 @@
     <div class="native-lyrics lyrics">
         <h2>Native lyrics (non-Latin alphabet)</h2>
         {% for line in native_lyrics %}
-        <div class="line" lang="{{ song.native_lang.str() }}" dir="auto">{{ line }}</div>
+        <div class="line" lang="{{ song.native_lang.str() }}" dir="auto">{{ line|safe }}</div>
         {% endfor %}
     </div>
     {% endif %}
 </div>
+
+{% if notes %}
+<div class="notes">
+    <h2>Notes</h2>
+    <ol>
+        {% for note in notes %}
+        <li class="footnote" id="footnote-{{ loop.index }}"><span>{{ note }}</span></li>
+        {% endfor %}
+    </ol>
+</div>
+{% endif %}
 
 {% endblock %}

@@ -172,6 +172,10 @@ async function populateSongData() {
     const form = document.forms.submit_song;
     for (const [key, value] of Object.entries(songData)) {
         if (key == "is_placeholder") continue;
+        if (key == "user_id") {
+            document.getElementById('force_submitter').value = value;
+            continue;
+        }
         const newVal = value === null ? '' : value;
         const element = form.querySelector(`[name="${key}"]`);
         if (element) {

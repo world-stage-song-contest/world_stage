@@ -104,6 +104,22 @@ table {
     border-collapse: collapse;
 }
 
+table.with-sticky {
+    border-collapse: separate;
+    border-spacing: 1px;
+}
+
+td.sticky, th.sticky {
+    position: sticky;
+    left: 0;
+    background-color: inherit;
+    z-index: 1;
+}
+
+tr {
+    background-color: var(--background1);
+}
+
 table, th, td {
     border: 1px solid var(--foreground1);
 }

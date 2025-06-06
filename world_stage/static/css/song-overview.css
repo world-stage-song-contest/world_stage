@@ -19,3 +19,37 @@ th, td {
     min-height: 1em;
     line-height: 1.2;
 }
+
+li > span {
+    display: inline-block;
+    padding: 0.25em;
+}
+
+li:target > span {
+    background: yellow;
+    color: black;
+}
+
+.footnote-link {
+    position: relative;
+}
+
+.footnote-link::after {
+    content: attr(data-footnote-content);
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 1.25em;
+    color: var(--foreground2);
+    border: 1px solid var(--foreground2);
+    background-color: var(--background2);
+    display: none;
+    z-index: 100;
+    padding: 0.5rem;
+    max-width: 350px;
+    transition: display 0.5s ease-in-out;
+}
+
+.footnote-link:hover::after {
+    display: block;
+}

@@ -2,7 +2,7 @@ from collections import defaultdict
 import re
 from flask import Blueprint, request
 
-from ..utils import get_countries, get_country_name, get_country_songs, get_song, get_user_id_from_session, get_user_permissions, get_user_role_from_session, render_template
+from ..utils import get_countries, get_country_name, get_country_songs, get_song, get_user_id_from_session, get_user_permissions, render_template, get_markdown_parser
 
 bp = Blueprint('country', __name__, url_prefix='/country')
 
@@ -63,13 +63,27 @@ def details(code: str, year: int):
     english_lyrics = []
     latin_lyrics = []
     native_lyrics = []
+    notes = []
+
+    md = get_markdown_parser()
 
     if song.english_lyrics:
         english_lyrics = song.english_lyrics.split('\n')
+        for i in range(len(english_lyrics)):
+            print(english_lyrics[i])
+            english_lyrics[i] = md.renderInline(english_lyrics[i])
+            print(english_lyrics[i])
     if song.latin_lyrics:
         latin_lyrics = song.latin_lyrics.split('\n')
+        for i in range(len(latin_lyrics)):
+         latin_lyrics[i] = md.renderInline(latin_lyrics[i])
     if song.native_lyrics:
         native_lyrics = song.native_lyrics.split('\n')
+        for i in range(len(native_lyrics)):
+            native_lyrics[i] = md.renderInline(native_lyrics[i])
+    if song.lyrics_notes:
+        notes = song.lyrics_notes.split('\n')
+
     return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year,
                            native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
-                           can_edit=can_edit)
+                           can_edit=can_edit, notes=notes)

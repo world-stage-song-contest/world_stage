@@ -19,6 +19,7 @@ def create_app():
 
     app.jinja_env.globals.update(zip=zip)
     app.jinja_env.globals.update(round=round)
+    app.jinja_env.globals.update(int=int)
 
     @app.before_request
     def clear_trailing():
