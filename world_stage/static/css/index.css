@@ -13,6 +13,8 @@
 
     --dtf-color: #FFDEAD;
     --sc-color: #AFEEEE;
+
+    --qualifier-color: rgb(139, 235, 139);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,6 +30,8 @@
 
         --active-entry-color: rgb(27, 56, 112);
         --own-entry-color: rgb(130, 44, 34);
+
+        --qualifier-color: rgb(0, 101, 0);
     }
 }
 
@@ -43,6 +47,8 @@
 
     --active-entry-color: rgb(99, 146, 234);
     --own-entry-color: rgb(249, 127, 113);
+
+    --qualifier-color: rgb(139, 235, 139);
 }
 
 :root[data-theme="dark"] {
@@ -57,6 +63,8 @@
 
     --active-entry-color: rgb(27, 56, 112);
     --own-entry-color: rgb(130, 44, 34);
+
+    --qualifier-color: rgb(0, 101, 0);
 }
 
 body {

@@ -89,9 +89,11 @@ def votes(username: str):
                 'title': title,
                 'artist': artist,
                 'code': country_id,
-                'country': country
+                'country': country,
+                'class': ''
             }
-            if vote['access_type'] == 'partial':
+
+            if vote['short_name'] != 'f':
                 cursor.execute('''
                     SELECT id FROM show WHERE year_id = ? AND short_name = 'f'
                 ''', (vote['year'],))
@@ -102,10 +104,12 @@ def votes(username: str):
                         WHERE show_id = ? AND song_id = ?
                     ''', (final_show[0], id))
                     if cursor.fetchone()[0] > 0:
-                        val['title'] = ''
-                        val['artist'] = ''
-                        val['country'] = ''
-                        val['code'] = 'XXX'
+                        val['class'] = 'qualifier'
+                        if vote['access_type'] == 'partial':
+                                val['title'] = ''
+                                val['artist'] = ''
+                                val['country'] = ''
+                                val['code'] = 'XXX'
             songs.append(val)
         vote['points'] = songs
 
