@@ -1,1 +1,9 @@
-<svg height="96" width="96" xmlns="http://www.w3.org/2000/svg"><path d="m0 0h96v96h-96z" fill="#00247d" stroke-width=".32"/><path d="m0 0v13.57824l34.42368 34.42176-34.42368 34.42176v13.57824h13.57824l34.42176-34.42368 34.42176 34.42368h13.57824v-13.57824l-34.42368-34.42176 34.42368-34.42176v-13.57824h-13.57824l-34.42176 34.42368-34.42176-34.42368z" fill="#fff" stroke-width=".32"/><path d="m0 0v9l23 23h9zm87 0-23 23v9l32-32zm-55 64-32 32h9l23-23zm32 0 32 32v-9l-23-23z" fill="#cf142b" stroke-linecap="round" stroke-linejoin="round" stroke-width=".5"/><path d="m48 0v96m-48-48h96" stroke="#fff" stroke-width="32"/><path d="m48 0v96m-48-48h96" stroke="#cf142b" stroke-width="19.2"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+	<rect width="300" height="300" fill="#00247d"/>
+	<path d="M 0,0 L 300,300 M 300,0 L 0,300" stroke="#fff" stroke-width="60"/>
+	<path d="M 0,0 L 300,300 M 300,0 L 0,300" stroke="#cf142b" stroke-width="40"/>
+	<path d="M 150,150 v -30 L 30,0 H 0 z h 30 L 300,30 V 0 z v 30 L 270,300 H 300 z h -30 L 0,270 V 300 z" fill="#fff"/>
+	<path d="M 150,0 V 300 M 0,150 H 300" stroke="#fff" stroke-width="100"/>
+	<path d="M 150,0 V 300 M 0,150 H 300" stroke="#cf142b" stroke-width="60"/>
+</svg>
