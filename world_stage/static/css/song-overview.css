@@ -20,6 +20,11 @@ th, td {
     line-height: 1.2;
 }
 
+li {
+    max-width: 50%;
+    text-wrap: balance;
+}
+
 li > div {
     padding: 0.25em;
 }
@@ -38,14 +43,14 @@ li:target > div {
     position: absolute;
     left: 0;
     top: 0;
-    font-size: 1.25em;
+    font-size: 1.05em;
     color: var(--foreground2);
     border: 1px solid var(--foreground2);
     background-color: var(--background2);
     display: none;
     z-index: 100;
-    padding: 0.5rem;
-    max-width: 350px;
+    padding: 0.25rem;
+    max-width: 500px;
     transition: display 0.5s ease-in-out;
 }
 

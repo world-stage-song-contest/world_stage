@@ -97,13 +97,11 @@ def votes(username: str):
                 ''', (vote['year'],))
                 final_show = cursor.fetchone()
                 if final_show:
-                    print(final_show[0], id)
                     cursor.execute('''
                         SELECT COUNT(*) FROM song_show
                         WHERE show_id = ? AND song_id = ?
                     ''', (final_show[0], id))
                     if cursor.fetchone()[0] > 0:
-                        print("x")
                         val['title'] = ''
                         val['artist'] = ''
                         val['country'] = ''

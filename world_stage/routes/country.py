@@ -70,9 +70,7 @@ def details(code: str, year: int):
     if song.english_lyrics:
         english_lyrics = song.english_lyrics.split('\n')
         for i in range(len(english_lyrics)):
-            print(english_lyrics[i])
             english_lyrics[i] = md.renderInline(english_lyrics[i])
-            print(english_lyrics[i])
     if song.latin_lyrics:
         latin_lyrics = song.latin_lyrics.split('\n')
         for i in range(len(latin_lyrics)):
