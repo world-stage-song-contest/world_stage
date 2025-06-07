@@ -100,7 +100,7 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
 
     return {'success': True, 'message': f"The song \"{artist} — {title}\" hass been deleted from {year}"}
 
-def update_song(song_data: SongData, user_id: int, set_claim: bool) -> dict:
+def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> dict:
     db = get_db()
     cursor = db.cursor()
 
@@ -373,7 +373,10 @@ def submit_song_post():
 
     force_submitter = request.form.get('force_submitter', None)
     if force_submitter:
-        user_id = int(force_submitter.strip())
+        if force_submitter == 'none':
+            user_id = None
+        else:
+            user_id = int(force_submitter.strip())
         set_claim = True
     else:
         user_id = user_id_raw[0]

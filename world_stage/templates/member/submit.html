@@ -135,7 +135,7 @@
         <legend>Admin options</legend>
         <label for="force_submitter">Replacement submitter</label>
         <select id="force_submitter" name="force_submitter">
-            <option value="">None</option>
+            <option value="none">None</option>
             {% for user in users %}
                 <option value="{{ user.id }}">{{ user.username }}</option>
             {% endfor %}
