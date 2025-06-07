@@ -50,7 +50,8 @@ li:target > div {
     display: none;
     z-index: 100;
     padding: 0.25rem;
-    max-width: 500px;
+    min-width: 40vw;
+    max-width: 60vw;
     transition: display 0.5s ease-in-out;
 }
 
