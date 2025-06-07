@@ -6,7 +6,7 @@
    version="1.1"
    id="svg39"
    sodipodi:docname="rect-small.svg"
-   inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
+   inkscape:version="1.2.2 (732a01da63, 2022-12-09)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
@@ -22,7 +22,20 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:current-layer="svg39" />
+     inkscape:current-layer="svg39"
+     showgrid="false"
+     inkscape:zoom="0.89276764"
+     inkscape:cx="372.99739"
+     inkscape:cy="141.13415"
+     inkscape:window-width="2560"
+     inkscape:window-height="1377"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1">
+    <inkscape:grid
+       type="xygrid"
+       id="grid2278" />
+  </sodipodi:namedview>
   <path
      d="m0 650h975v-649.99998375h-975z"
      fill="#fff"
@@ -31,34 +44,42 @@
   <g
      fill="#b22234"
      transform="matrix(1.3345415 0 0 -1.3333333 0 650.00001)"
-     id="g8">
+     id="g8"
+     style="fill:#b31942;fill-opacity:1">
     <path
        d="m0 450h730.588v37.5h-730.588z"
-       id="path2" />
+       id="path2"
+       style="fill:#b31942;fill-opacity:1" />
     <path
        d="m0 375h730.588v37.499h-730.588z"
-       id="path3" />
+       id="path3"
+       style="fill:#b31942;fill-opacity:1" />
     <path
        d="m0 300h730.588v37.5h-730.588z"
-       id="path4" />
+       id="path4"
+       style="fill:#b31942;fill-opacity:1" />
     <path
        d="m0 225h730.588v37.5h-730.588z"
-       id="path5" />
+       id="path5"
+       style="fill:#b31942;fill-opacity:1" />
     <path
        d="m0 150h730.588v37.499h-730.588z"
-       id="path6" />
+       id="path6"
+       style="fill:#b31942;fill-opacity:1" />
     <path
        d="m0 75h730.588v37.5h-730.588z"
-       id="path7" />
+       id="path7"
+       style="fill:#b31942;fill-opacity:1" />
     <path
        d="m0 0h730.588v37.5h-730.588z"
-       id="path8" />
+       id="path8"
+       style="fill:#b31942;fill-opacity:1" />
   </g>
   <path
      d="M 0,350.00001 H 487.49999 V 1.625e-5 H 0 Z"
      fill="#3c3b6e"
      id="path9"
-     style="stroke-width:1.33333" />
+     style="stroke-width:1.33333;fill:#0a3161;fill-opacity:1" />
   <g
      id="g1">
     <path
