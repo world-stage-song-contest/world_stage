@@ -122,8 +122,9 @@ def results(year: str, show: str):
         if show_data.dtf:
             off = show_data.dtf - 1
         songs = songs[off:]
-        for s in songs:
-            s.hidden = True
+        if reveal:
+            for s in songs:
+                s.hidden = True
 
         if songs[0].vote_data:
             songs[0].vote_data.ro = -1
@@ -135,8 +136,9 @@ def results(year: str, show: str):
         print('a')
         if show_data.dtf:
             off = show_data.dtf - 1
-        for i in range(off + 1):
-            songs[i].hidden = True
+        if reveal:
+            for i in range(off + 1):
+                songs[i].hidden = True
         off = 0
 
     return render_template('year/summary.html', hidden=reveal,
