@@ -53,7 +53,7 @@ class SongData:
         self.romanized_lyrics = romanized_lyrics
         self.native_lyrics = native_lyrics
         self.languages = languages
-        if languages:
+        if languages and isinstance(languages[0], dict):
             first_language_id = languages[0]['id']
             self.is_translation = first_language_id != title_language_id
             self.does_match = first_language_id == native_language_id
@@ -224,7 +224,7 @@ def get_languages() -> list[dict]:
         SELECT id, name FROM language
         ORDER BY name
     ''')
-    return list(map(lambda x: {'id': x[0], 'name': x[1]}, cursor.fetchall()))
+    return [{'id': id, 'name': name} for id, name in cursor.fetchall()]
 
 def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[dict]]:
     db = get_db()
