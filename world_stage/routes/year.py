@@ -99,8 +99,13 @@ def results(year: str, show: str):
         if access == 'draw':
             access = 'partial'
             reveal = "unrevealed"
+        elif access == 'partial':
+            access = 'full'
+            reveal = "unrevealed"
         else:
             access = 'full'
+
+    print(access, reveal)
 
     if access == 'draw':
         songs = get_show_songs(_year, show, select_votes=False)
@@ -117,6 +122,8 @@ def results(year: str, show: str):
         if show_data.dtf:
             off = show_data.dtf - 1
         songs = songs[off:]
+        for s in songs:
+            s.hidden = True
 
         if songs[0].vote_data:
             songs[0].vote_data.ro = -1
@@ -124,6 +131,13 @@ def results(year: str, show: str):
         songs[0].title = ''
         songs[0].country.name = ''
         songs[0].country.cc = 'XXX'
+    elif access == 'full' and reveal:
+        print('a')
+        if show_data.dtf:
+            off = show_data.dtf - 1
+        for i in range(off + 1):
+            songs[i].hidden = True
+        off = 0
 
     return render_template('year/summary.html', hidden=reveal,
                            songs=songs, points=show_data.points, show=show, access=access, offset=off,

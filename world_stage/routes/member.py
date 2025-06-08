@@ -26,6 +26,8 @@ class SongData:
     native_lyrics: Optional[str]
     notes: Optional[str]
     languages: list[dict]
+    is_translation: bool
+    does_match: bool
     user_id: Optional[int] = None
 
     def __init__(self, *, year: int, country: str, title: str,
@@ -51,13 +53,19 @@ class SongData:
         self.romanized_lyrics = romanized_lyrics
         self.native_lyrics = native_lyrics
         self.languages = languages
+        if languages:
+            first_language_id = languages[0]['id']
+            self.is_translation = first_language_id != title_language_id
+            self.does_match = first_language_id == native_language_id
         self.notes = notes
         self.user_id = user_id
 
     def as_dict(self) -> dict:
         res = {}
         for attr in self.__dict__:
+                print(attr)
                 res[attr] = getattr(self, attr)
+        print(res)
         return res
 
 def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
@@ -177,7 +185,7 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
 
     for i, lang_id in enumerate(song_data.languages):
         cursor.execute('''
-            INSERT INTO song_language (song_id, language_id, priority)
+            INSERT OR IGNORE INTO song_language (song_id, language_id, priority)
             VALUES (?, ?, ?)
         ''', (song_id, lang_id, i))
 
