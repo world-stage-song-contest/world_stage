@@ -27,6 +27,7 @@
         {% if access != 'none' and access != 'draw' %}
             <th>Place</th>
             <th>Points</th>
+            <th>% of Max</th>
             <th>Voters</th>
         {% for point in points %}
             <th class="point-header"><div>{{ point }}</th>
@@ -49,6 +50,7 @@
             {% if access != 'draw' %}
                 <td class="number">{{ place }}</td>
                 <td class="number">{{ song.vote_data.sum }}</td>
+                <td class="number percent">{{ song.vote_data.pct() }}</td>
                 <td class="number">{{ song.vote_data.count }}</td>
             {% for point in points %}
                 {% set pts = song.get_pt(point) %}
