@@ -1,1 +1,133 @@
-<svg height="2200" viewBox="0 0 2200 2199.9999" width="2200" xmlns="http://www.w3.org/2000/svg"><path d="m0 2200.0001h2199.9999v-2200.00003h-2199.9999z" fill="#fff" stroke-width="1.63299"/><g fill="#003580"><path d="m0 1300.0007h2199.9999v-400.00136h-2199.9999z" stroke-width="1.33333"/><path d="m577.33332 2200.0001h399.99999v-2200.00003h-399.99999z" stroke-width="1.63299"/></g></svg>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="96"
+   height="96"
+   viewBox="0 0 96 96"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.2.2 (732a01da63, 2022-12-09)"
+   sodipodi:docname="square.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#505050"
+     inkscape:document-units="px"
+     showgrid="false"
+     inkscape:zoom="7.9999999"
+     inkscape:cx="34.375"
+     inkscape:cy="36.75"
+     inkscape:window-width="2560"
+     inkscape:window-height="1377"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1">
+    <inkscape:grid
+       type="xygrid"
+       id="grid2501"
+       empspacing="8"
+       originx="0"
+       originy="0" />
+  </sodipodi:namedview>
+  <defs
+     id="defs2">
+    <linearGradient
+       id="cross"
+       inkscape:swatch="solid">
+      <stop
+         style="stop-color:#003377;stop-opacity:1;"
+         offset="0"
+         id="stop1523" />
+    </linearGradient>
+    <linearGradient
+       id="background"
+       inkscape:swatch="solid">
+      <stop
+         style="stop-color:#ffffff;stop-opacity:1;"
+         offset="0"
+         id="stop1517" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#background"
+       id="linearGradient1521"
+       x1="0"
+       y1="12.7"
+       x2="38.099998"
+       y2="12.7"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#cross"
+       id="linearGradient13088"
+       x1="0"
+       y1="12.7"
+       x2="38.099998"
+       y2="12.7"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#cross"
+       id="linearGradient1161"
+       gradientUnits="userSpaceOnUse"
+       x1="0"
+       y1="12.7"
+       x2="38.099998"
+       y2="12.7" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#cross"
+       id="linearGradient1163"
+       gradientUnits="userSpaceOnUse"
+       x1="0"
+       y1="12.7"
+       x2="38.099998"
+       y2="12.7" />
+  </defs>
+  <g
+     inkscape:label="fi"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="matrix(3.7795276,0,0,3.7795276,-16,0)">
+    <rect
+       style="fill:url(#linearGradient1521);fill-opacity:1;stroke:none;stroke-width:0.264999;stroke-linecap:round;stroke-dasharray:none"
+       id="rect5982"
+       width="25.4"
+       height="25.4"
+       x="4.2333331"
+       y="0"
+       inkscape:label="background" />
+    <g
+       id="g13082"
+       style="fill:url(#linearGradient13088);fill-opacity:1;stroke:none"
+       inkscape:label="cross">
+      <rect
+         style="fill:url(#linearGradient1161);fill-opacity:1;stroke:none"
+         id="rect8946"
+         width="5.2916665"
+         height="25.4"
+         x="11.641666"
+         y="0" />
+      <rect
+         style="fill:url(#linearGradient1163);fill-opacity:1;stroke:none"
+         id="rect10452"
+         width="25.4"
+         height="5.291666"
+         x="4.2333331"
+         y="-15.345833"
+         transform="scale(1,-1)" />
+    </g>
+  </g>
+</svg>
