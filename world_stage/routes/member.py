@@ -28,6 +28,8 @@ class SongData:
     languages: list[dict]
     is_translation: bool
     does_match: bool
+    sources: str
+    admin_approved: bool
     user_id: Optional[int] = None
 
     def __init__(self, *, year: int, country: str, title: str,
@@ -37,6 +39,7 @@ class SongData:
                  snippet_start: Optional[str], snippet_end: Optional[str],
                  english_lyrics: Optional[str], romanized_lyrics: Optional[str],
                  native_lyrics: Optional[str], languages: list[dict], notes: Optional[str],
+                 sources: str, admin_approved: bool = False,
                  user_id: Optional[int] = None):
         self.year = year
         self.country = country
@@ -59,6 +62,8 @@ class SongData:
             self.does_match = first_language_id == native_language_id
         self.notes = notes
         self.user_id = user_id
+        self.sources = sources
+        self.admin_approved = admin_approved
 
     def as_dict(self) -> dict:
         res = {}
@@ -94,7 +99,7 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
             snippet_start = NULL, snippet_end = NULL,
             translated_lyrics = NULL, romanized_lyrics = NULL,
             native_lyrics = NULL, submitter_id = NULL,
-            notes = NULL,
+            notes = NULL, sources = NULL, admin_approved = 0,
             modified_at = CURRENT_TIMESTAMP
         WHERE id = ?
     ''', (song_id,))
@@ -130,7 +135,7 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
                 snippet_start = ?, snippet_end = ?,
                 translated_lyrics = ?, romanized_lyrics = ?,
                 native_lyrics = ?, submitter_id = ?,
-                notes = ?,
+                notes = ?, sources = ?, admin_approved = ?,
                 modified_at = CURRENT_TIMESTAMP
             WHERE id = ?
         ''', (
@@ -148,6 +153,8 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
             song_data.native_lyrics,
             user_id,
             song_data.notes,
+            song_data.sources,
+            int(song_data.admin_approved),
             song_id
         ))
     else:
@@ -315,7 +322,7 @@ def get_country_data(year, country):
                    title_language_id, native_language_id,
                    video_link, snippet_start, snippet_end,
                    translated_lyrics, romanized_lyrics, native_lyrics,
-                   notes, submitter_id
+                   notes, submitter_id, sources, admin_approved
         FROM song
         WHERE year_id = ? AND country_id = ?
     ''', (year, country))
@@ -327,7 +334,7 @@ def get_country_data(year, country):
      title_language_id, native_language_id,
      video_link, snippet_start, snippet_end,
      translated_lyrics, romanized_lyrics, native_lyrics,
-     notes, submitter_id) = song
+     notes, submitter_id, sources, admin_approved) = song
 
     snippet_start = format_seconds(snippet_start) if snippet_start is not None else None
     snippet_end = format_seconds(snippet_end) if snippet_end is not None else None
@@ -359,6 +366,8 @@ def get_country_data(year, country):
         native_lyrics=native_lyrics,
         languages=languages,
         notes=notes,
+        sources=sources,
+        admin_approved=bool(admin_approved),
         user_id=submitter_id
     )
 
@@ -367,7 +376,7 @@ def get_country_data(year, country):
 required_fields = {
     'artist': "Artist",
     'title': "Latin title",
-    'video_link': "Video URL"
+    "sources": "Sources",
 }
 
 @bp.post('/submit')
