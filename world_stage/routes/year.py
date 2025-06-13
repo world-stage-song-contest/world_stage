@@ -105,8 +105,6 @@ def results(year: str, show: str):
         else:
             access = 'full'
 
-    print(access, reveal)
-
     if access == 'draw':
         songs = get_show_songs(_year, show, select_votes=False)
     else:
@@ -133,7 +131,6 @@ def results(year: str, show: str):
         songs[0].country.name = ''
         songs[0].country.cc = 'XXX'
     elif access == 'full' and reveal:
-        print('a')
         if show_data.dtf:
             off = show_data.dtf - 1
         if reveal:

@@ -68,9 +68,7 @@ class SongData:
     def as_dict(self) -> dict:
         res = {}
         for attr in self.__dict__:
-                print(attr)
                 res[attr] = getattr(self, attr)
-        print(res)
         return res
 
 def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
@@ -379,6 +377,11 @@ required_fields = {
     "sources": "Sources",
 }
 
+boolean_fields = [
+    "admin_approved",
+    "is_placeholder",
+]
+
 @bp.post('/submit')
 def submit_song_post():
     session_id = request.cookies.get('session')
@@ -402,9 +405,14 @@ def submit_song_post():
     languages = []
     invalid_languages = []
     other_data = {}
+    for key in boolean_fields:
+        other_data[key] = request.form.get(key, 'off') == "on"
     action = request.form['action']
     for key, value in request.form.items():
         if key == 'action' or key == 'force_submitter':
+            continue
+
+        if key in boolean_fields:
             continue
 
         if key.startswith('language'):
@@ -422,7 +430,6 @@ def submit_song_post():
     languages.sort(key=lambda x: x[0])
     languages = list(map(lambda x: x[1], languages))
 
-    other_data['is_placeholder'] = other_data.get('is_placeholder', False) == "on"
     is_translation = other_data.pop('is_translation', False) == "on"
     does_match = other_data.pop('does_match', False) == "on"
 

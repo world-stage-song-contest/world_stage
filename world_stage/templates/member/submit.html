@@ -158,12 +158,15 @@
         <div class="banner long-text">
             <div>
                 Please provide sources for the release date of the song.
+                If the sources aren't provided before the show,
+                the song will not be approved by the admins.
             </div>
         </div>
         <div>
             <label for="sources" class="req">Sources</label>
         </div>
-        <textarea id="sources" name="sources" rows="5" cols="50" placeholder="Sources for the release date" required>{{ data.sources }}</textarea>
+        <textarea id="sources" name="sources" rows="5" cols="50"
+            placeholder="Sources for the release date">{{ data.sources }}</textarea>
     </fieldset>
 
     <fieldset class="grid hidable">
