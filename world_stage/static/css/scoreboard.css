@@ -98,7 +98,7 @@
 
 .voting-card-country {
     font-size: 0.75em;
-    font-weight: bold;
+    /*font-weight: bold;*/
 }
 
 #points-row {
