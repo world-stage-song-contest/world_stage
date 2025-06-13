@@ -79,10 +79,10 @@ td.header-like {
     color: black;
 }
 
-tr {
+td, th {
     transition: opacity 2s;
 }
 
-.unrevealed {
+.unrevealed > td, .unrevealed > th {
     opacity: 0;
 }

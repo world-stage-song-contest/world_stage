@@ -89,8 +89,8 @@
 }
 
 .country .reveal-flag {
-    width: 25px;
-    max-height: 25px;
+    width: 24px;
+    max-height: 24px;
     object-fit: contain;
     border: 1px solid lightgrey;
 }
@@ -168,8 +168,8 @@ td.revealable.revealed {
 }
 
 td.results-country .results-flag {
-    width: 25px;
-    max-height: 25px;
+    width: 24px;
+    max-height: 24px;
     border: 1px solid lightgray;
 }
 

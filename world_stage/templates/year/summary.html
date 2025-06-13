@@ -27,6 +27,7 @@
         {% if access != 'none' and access != 'draw' %}
             <th>Place</th>
             <th>Points</th>
+            <th>% of Max</th>
             <th>Voters</th>
         {% for point in points %}
             <th class="point-header"><div>{{ point }}</th>
@@ -40,8 +41,8 @@
         {% set class = {1: 'first', 2: 'second', 3:'third', participants: 'last'}.get(loop.index, '') if access == 'full' else '' %}
         {% set ro = song.vote_data.ro if song.vote_data.ro is not none and song.vote_data.ro != -1 else '' %}
             <tr data-value="{{ place }}"
-                {%if hidden%}onclick="revealRow(this)"{%endif%}
-                class="{{ class }} {{ hidden }}">
+                {%if song.hidden %}onclick="revealRow(this)"{% endif %}
+                class="{{ class }} {{ 'unrevealed' if song.hidden else '' }}">
                 <th class="number">{{ ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 25, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
@@ -49,6 +50,7 @@
             {% if access != 'draw' %}
                 <td class="number">{{ place }}</td>
                 <td class="number">{{ song.vote_data.sum }}</td>
+                <td class="number percent">{{ song.vote_data.pct() }}</td>
                 <td class="number">{{ song.vote_data.count }}</td>
             {% for point in points %}
                 {% set pts = song.get_pt(point) %}
