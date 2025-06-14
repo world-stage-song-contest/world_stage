@@ -26,6 +26,10 @@ class SongData:
     native_lyrics: Optional[str]
     notes: Optional[str]
     languages: list[dict]
+    is_translation: bool
+    does_match: bool
+    sources: str
+    admin_approved: bool
     user_id: Optional[int] = None
 
     def __init__(self, *, year: int, country: str, title: str,
@@ -35,6 +39,7 @@ class SongData:
                  snippet_start: Optional[str], snippet_end: Optional[str],
                  english_lyrics: Optional[str], romanized_lyrics: Optional[str],
                  native_lyrics: Optional[str], languages: list[dict], notes: Optional[str],
+                 sources: str, admin_approved: bool = False,
                  user_id: Optional[int] = None):
         self.year = year
         self.country = country
@@ -51,8 +56,14 @@ class SongData:
         self.romanized_lyrics = romanized_lyrics
         self.native_lyrics = native_lyrics
         self.languages = languages
+        if languages and isinstance(languages[0], dict):
+            first_language_id = languages[0]['id']
+            self.is_translation = first_language_id != title_language_id
+            self.does_match = first_language_id == native_language_id
         self.notes = notes
         self.user_id = user_id
+        self.sources = sources
+        self.admin_approved = admin_approved
 
     def as_dict(self) -> dict:
         res = {}
@@ -86,7 +97,7 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
             snippet_start = NULL, snippet_end = NULL,
             translated_lyrics = NULL, romanized_lyrics = NULL,
             native_lyrics = NULL, submitter_id = NULL,
-            notes = NULL,
+            notes = NULL, sources = NULL, admin_approved = 0,
             modified_at = CURRENT_TIMESTAMP
         WHERE id = ?
     ''', (song_id,))
@@ -100,7 +111,7 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
 
     return {'success': True, 'message': f"The song \"{artist} — {title}\" hass been deleted from {year}"}
 
-def update_song(song_data: SongData, user_id: int, set_claim: bool) -> dict:
+def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> dict:
     db = get_db()
     cursor = db.cursor()
 
@@ -122,7 +133,7 @@ def update_song(song_data: SongData, user_id: int, set_claim: bool) -> dict:
                 snippet_start = ?, snippet_end = ?,
                 translated_lyrics = ?, romanized_lyrics = ?,
                 native_lyrics = ?, submitter_id = ?,
-                notes = ?,
+                notes = ?, sources = ?, admin_approved = ?,
                 modified_at = CURRENT_TIMESTAMP
             WHERE id = ?
         ''', (
@@ -140,6 +151,8 @@ def update_song(song_data: SongData, user_id: int, set_claim: bool) -> dict:
             song_data.native_lyrics,
             user_id,
             song_data.notes,
+            song_data.sources,
+            int(song_data.admin_approved),
             song_id
         ))
     else:
@@ -177,7 +190,7 @@ def update_song(song_data: SongData, user_id: int, set_claim: bool) -> dict:
 
     for i, lang_id in enumerate(song_data.languages):
         cursor.execute('''
-            INSERT INTO song_language (song_id, language_id, priority)
+            INSERT OR IGNORE INTO song_language (song_id, language_id, priority)
             VALUES (?, ?, ?)
         ''', (song_id, lang_id, i))
 
@@ -216,7 +229,7 @@ def get_languages() -> list[dict]:
         SELECT id, name FROM language
         ORDER BY name
     ''')
-    return list(map(lambda x: {'id': x[0], 'name': x[1]}, cursor.fetchall()))
+    return [{'id': id, 'name': name} for id, name in cursor.fetchall()]
 
 def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[dict]]:
     db = get_db()
@@ -307,7 +320,7 @@ def get_country_data(year, country):
                    title_language_id, native_language_id,
                    video_link, snippet_start, snippet_end,
                    translated_lyrics, romanized_lyrics, native_lyrics,
-                   notes, submitter_id
+                   notes, submitter_id, sources, admin_approved
         FROM song
         WHERE year_id = ? AND country_id = ?
     ''', (year, country))
@@ -319,7 +332,7 @@ def get_country_data(year, country):
      title_language_id, native_language_id,
      video_link, snippet_start, snippet_end,
      translated_lyrics, romanized_lyrics, native_lyrics,
-     notes, submitter_id) = song
+     notes, submitter_id, sources, admin_approved) = song
 
     snippet_start = format_seconds(snippet_start) if snippet_start is not None else None
     snippet_end = format_seconds(snippet_end) if snippet_end is not None else None
@@ -351,6 +364,8 @@ def get_country_data(year, country):
         native_lyrics=native_lyrics,
         languages=languages,
         notes=notes,
+        sources=sources,
+        admin_approved=bool(admin_approved),
         user_id=submitter_id
     )
 
@@ -359,8 +374,13 @@ def get_country_data(year, country):
 required_fields = {
     'artist': "Artist",
     'title': "Latin title",
-    'video_link': "Video URL"
+    "sources": "Sources",
 }
+
+boolean_fields = [
+    "admin_approved",
+    "is_placeholder",
+]
 
 @bp.post('/submit')
 def submit_song_post():
@@ -373,7 +393,10 @@ def submit_song_post():
 
     force_submitter = request.form.get('force_submitter', None)
     if force_submitter:
-        user_id = int(force_submitter.strip())
+        if force_submitter == 'none':
+            user_id = None
+        else:
+            user_id = int(force_submitter.strip())
         set_claim = True
     else:
         user_id = user_id_raw[0]
@@ -382,9 +405,14 @@ def submit_song_post():
     languages = []
     invalid_languages = []
     other_data = {}
+    for key in boolean_fields:
+        other_data[key] = request.form.get(key, 'off') == "on"
     action = request.form['action']
     for key, value in request.form.items():
         if key == 'action' or key == 'force_submitter':
+            continue
+
+        if key in boolean_fields:
             continue
 
         if key.startswith('language'):
@@ -402,7 +430,6 @@ def submit_song_post():
     languages.sort(key=lambda x: x[0])
     languages = list(map(lambda x: x[1], languages))
 
-    other_data['is_placeholder'] = other_data.get('is_placeholder', False) == "on"
     is_translation = other_data.pop('is_translation', False) == "on"
     does_match = other_data.pop('does_match', False) == "on"
 

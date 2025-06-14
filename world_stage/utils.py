@@ -364,6 +364,7 @@ class Song:
     video_link: Optional[str]
     recap_start: Optional[str]
     recap_end: Optional[str]
+    hidden: bool = False
 
     def __init__(self, *,
                  id: int, title: str, native_title: Optional[str], artist: str,

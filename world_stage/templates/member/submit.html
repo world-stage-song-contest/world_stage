@@ -101,6 +101,10 @@
         <label class="req" for="song">Latin title</label>
         <input type="text" id="title" name="title" placeholder="Song title" required maxlength="100" minlength="1" value="{{ data.title }}">
         <div class="span-fieldset">
+            <div><small>Please enter the title in Latin script. If the song is natively written in a non-Latin script, please enter a transliteration.</small></div>
+            <div><small>Please keep all diacritics on Latin letters as is.</small></div>
+        </div>
+        <div class="span-fieldset">
             <div>
                 <input type="checkbox" id="is_translation" name="is_translation" {% if data.is_translation %}checked{% endif %}>
                 <label for="is_translation">Is the Latin title a translation?</label>
@@ -135,13 +139,35 @@
         <legend>Admin options</legend>
         <label for="force_submitter">Replacement submitter</label>
         <select id="force_submitter" name="force_submitter">
-            <option value="">None</option>
+            <option value="none">None</option>
             {% for user in users %}
                 <option value="{{ user.id }}">{{ user.username }}</option>
             {% endfor %}
         </select>
+        <div class="span-fieldset">
+            <div>
+                <input type="checkbox" id="admin_approved" name="admin_approved" {% if data.admin_approved %}checked{% endif %}>
+                <label for="admin_approved">Approved?</label>
+            </div>
+        </div>
     </fieldset>
     {% endif %}
+
+    <fieldset class="nongrid hidable">
+        <legend>Sources</legend>
+        <div class="banner long-text">
+            <div>
+                Please provide sources for the release date of the song.
+                If the sources aren't provided before the show,
+                the song will not be approved by the admins.
+            </div>
+        </div>
+        <div>
+            <label for="sources" class="req">Sources</label>
+        </div>
+        <textarea id="sources" name="sources" rows="5" cols="50"
+            placeholder="Sources for the release date">{{ data.sources }}</textarea>
+    </fieldset>
 
     <fieldset class="grid hidable">
         <legend>Languages</legend>

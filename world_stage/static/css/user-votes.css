@@ -39,6 +39,10 @@ td {
     background-color: var(--background3);
 }
 
+tr.qualifier > td {
+    background-color: var(--qualifier-color);
+}
+
 .user-votes {
     align-self: stretch;
 }

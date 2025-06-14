@@ -189,9 +189,9 @@ function createEnvelope(n, country, isSecondChance) {
         const front = document.createElement("div");
         front.classList.add("card-front", "flipped");
         card.appendChild(front);
-        
+
         const flag = document.createElement("img");
-        flag.src = `/flag/${code}.svg?t=rect&s=45`;
+        flag.src = `/flag/${code}.svg?t=rect&s=54`;
         flag.classList.add("card-flag");
         front.appendChild(flag);
 
@@ -211,7 +211,7 @@ function createEnvelope(n, country, isSecondChance) {
     envelope.onclick = async () => {
         await putInPlace(envelope);
     }
-    
+
     function createEnvelopePart(name, width, height) {
         const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
         use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", `#${name}`);
@@ -251,7 +251,7 @@ function createCountry(country, countryClass) {
 
     const flag = document.createElement("img");
     flag.classList.add("reveal-flag");
-    flag.src = `/flag/${country.cc}.svg?t=square&s=25`;
+    flag.src = `/flag/${country.cc}.svg?t=square&s=24`;
     countryEl.appendChild(flag);
 
     const heading = document.createElement("h2");
@@ -285,7 +285,7 @@ function createRo() {
     for (const [i, country] of allCountries.entries()) {
         const col = Math.floor(i / lim);
         const row = i - lim * col;
-        
+
         let countryClass = revealOrder.type(country);
 
         const countryEl = createCountry(country, countryClass);
