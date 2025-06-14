@@ -683,6 +683,10 @@ async function vote() {
         card.classList.remove("unloaded");
         await new Promise(r => setTimeout(r, 2000));
 
+        const ownCountry = ro.filter(c => c.code == code);
+        if (ownCountry.length > 0) {
+            ownCountry[0].setOwnEntry();
+        }
         if (entries) {
             for (const entry of entries) {
                 const country = countries[entry];

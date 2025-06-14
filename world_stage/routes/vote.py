@@ -171,7 +171,9 @@ def vote_post(show: str):
     username_invalid = False
     username = request.form['username']
     username = unicodedata.normalize('NFKC', username)
+    username = username.strip()
     nickname = request.form['nickname']
+    nickname = nickname.strip()
     country_id: Optional[str] = request.form['country']
     if not country_id:
         country_id = None

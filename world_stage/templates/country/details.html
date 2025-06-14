@@ -39,12 +39,17 @@
             <td>{{ song.submitter }}</td>
         </tr>
         <tr>
+            <th>Placeholder</th>
+            <td>{{ "Yes" if song.is_placeholder else "No" }}</td>
+        </tr>
+        <tr>
             <th>Recap start</th>
             <td>{{ song.recap_start }}</td>
         </tr>
         <tr>
             <th>Recap end</th>
             <td>{{ song.recap_end }}</td>
+        </tr>
     </table>
 </div>
 

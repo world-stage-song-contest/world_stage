@@ -111,7 +111,7 @@
             </div>
         </div>
         <label for="native_title">Native title</label>
-        <input type="text" id="native_title_id" name="native_title" placeholder="Native title" maxlength="100" value="{{ data.native_title }}">
+        <input type="text" id="native_title" name="native_title" placeholder="Native title" maxlength="100" value="{{ data.native_title }}">
         <div class="span-fieldset"><small>Please only enter this if the title is natively wrriten in a non-Latin script (Cyrillic, Greek, Chinese, Devanagari, Arabic etc).</small></div>
         <div class="span-fieldset">
             <div>
@@ -120,10 +120,10 @@
             </div>
         </div>
         <label for="song" class="hide-match">Title language</label>
-        <select id="title_language_id" name="title_language_id" class="hide-match">
+        <select id="native_language_id" name="native_language_id" class="hide-match">
             <option value="">Select a language</option>
             {% for lang in languages %}
-                <option value="{{ lang.id }}" {% if lang.id == title_language_id %}selected{% endif %}>{{ lang.name }}</option>
+                <option value="{{ lang.id }}" {% if lang.id == native_language_id %}selected{% endif %}>{{ lang.name }}</option>
             {% endfor %}
         </select>
         <div class="span-fieldset">
