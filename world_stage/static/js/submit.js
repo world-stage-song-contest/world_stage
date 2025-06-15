@@ -171,25 +171,30 @@ async function populateSongData() {
 
     const form = document.forms.submit_song;
     for (const [key, value] of Object.entries(songData)) {
-        if (key == "is_placeholder") continue;
-        if (key == "user_id") {
-            document.getElementById('force_submitter').value = value;
-            continue;
-        }
-        const newVal = value === null ? '' : value;
-        const element = form.querySelector(`[name="${key}"]`);
-        if (element) {
-            if (element.tagName === 'SELECT') {
-                element.value = newVal;
-            } else if (element.tagName === 'INPUT') {
-                if (element.type === 'checkbox') {
-                    element.checked = newVal;
-                } else {
+        try {
+            const forceSubmitter = document.getElementById('force_submitter');
+            if (key == "is_placeholder") continue;
+            if (forceSubmitter && key == "user_id") {
+                document.getElementById('force_submitter').value = value;
+                continue;
+            }
+            const newVal = value === null ? '' : value;
+            const element = form.querySelector(`[name="${key}"]`);
+            if (element) {
+                if (element.tagName === 'SELECT') {
+                    element.value = newVal;
+                } else if (element.tagName === 'INPUT') {
+                    if (element.type === 'checkbox') {
+                        element.checked = newVal;
+                    } else {
+                        element.value = newVal;
+                    }
+                } else if (element.tagName === 'TEXTAREA') {
                     element.value = newVal;
                 }
-            } else if (element.tagName === 'TEXTAREA') {
-                element.value = newVal;
             }
+        } catch (error) {
+            console.error(`Error setting value for ${key}:`, error);
         }
     }
 

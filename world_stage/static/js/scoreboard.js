@@ -493,15 +493,15 @@ class Country {
             animatePoints(this.totalEl, this.points, true);
             animatePoints(this.currentEl, pt, true);
             this.setActive();
-            /*if (pt == points[points.length - 1]) {
+            if (pt == points[points.length - 1]) {
                 this.element.classList.add("gold");
             } else if (pt == points[points.length - 2]) {
                 this.element.classList.add("silver");
             }
             else if (pt == points[points.length - 3]) {
                 this.element.classList.add("bronze");
-            } else {*/
-            //}
+            } else {
+            }
         }
     }
 
