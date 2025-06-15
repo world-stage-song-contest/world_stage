@@ -90,16 +90,7 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
         return {'error': 'You are not the submitter.'}
 
     cursor.execute('''
-        UPDATE song
-        SET title = NULL, native_title = NULL, artist = NULL,
-            is_placeholder = 1, title_language_id = NULL,
-            native_language_id = NULL, video_link = NULL,
-            snippet_start = NULL, snippet_end = NULL,
-            translated_lyrics = NULL, romanized_lyrics = NULL,
-            native_lyrics = NULL, submitter_id = NULL,
-            notes = NULL, sources = NULL, admin_approved = 0,
-            modified_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+        DELETE FROM song WHERE id = ?
     ''', (song_id,))
 
     cursor.execute('''
@@ -115,28 +106,20 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
-        SELECT id, is_placeholder FROM song
-        WHERE year_id = ? AND country_id = ?
-    ''', (song_data.year, song_data.country))
-    song_id = cursor.fetchone()
-    if not song_id:
-        return {'error': 'Song not found.'}
-    song_id, is_placeholder = song_id
-
-    if is_placeholder or set_claim:
+    if set_claim:
         cursor.execute('''
-            UPDATE song
-            SET title = ?, native_title = ?, artist = ?,
-                is_placeholder = ?, title_language_id = ?,
-                native_language_id = ?, video_link = ?,
-                snippet_start = ?, snippet_end = ?,
-                translated_lyrics = ?, romanized_lyrics = ?,
-                native_lyrics = ?, submitter_id = ?,
-                notes = ?, sources = ?, admin_approved = ?,
-                modified_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            INSERT OR REPLACE INTO song (
+            year_id, country_id,
+            title, native_title, artist, is_placeholder,
+            title_language_id, native_language_id, video_link,
+            snippet_start, snippet_end, translated_lyrics,
+            romanized_lyrics, native_lyrics, submitter_id,
+            notes, sources, admin_approved, modified_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            RETURNING id
         ''', (
+            song_data.year,
+            song_data.country,
             song_data.title,
             song_data.native_title,
             song_data.artist,
@@ -152,21 +135,22 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
             user_id,
             song_data.notes,
             song_data.sources,
-            int(song_data.admin_approved),
-            song_id
+            int(song_data.admin_approved)
         ))
     else:
         cursor.execute('''
-            UPDATE song
-            SET title = ?, native_title = ?, artist = ?,
-                is_placeholder = ?, title_language_id = ?,
-                native_language_id = ?, video_link = ?,
-                snippet_start = ?, snippet_end = ?,
-                translated_lyrics = ?, romanized_lyrics = ?,
-                native_lyrics = ?, notes = ?,
-                modified_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            INSERT OR REPLACE INTO song (
+            year_id, country_id,
+            title, native_title, artist, is_placeholder,
+            title_language_id, native_language_id, video_link,
+            snippet_start, snippet_end, translated_lyrics,
+            romanized_lyrics, native_lyrics, submitter_id,
+            notes, sources, admin_approved, modified_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            RETURNING id
         ''', (
+            song_data.year,
+            song_data.country,
             song_data.title,
             song_data.native_title,
             song_data.artist,
@@ -179,9 +163,13 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
             song_data.english_lyrics,
             song_data.romanized_lyrics,
             song_data.native_lyrics,
+            song_data.user_id or user_id,
             song_data.notes,
-            song_id
+            song_data.sources,
+            int(song_data.admin_approved)
         ))
+
+    song_id = cursor.fetchone()[0]
 
     cursor.execute('''
         DELETE FROM song_language

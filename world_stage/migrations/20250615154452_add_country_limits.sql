@@ -127,11 +127,11 @@ UPDATE country
 SET is_participating = 0
 WHERE id IN (
     'ALA', 'ASM', 'AIA', 'BMU', 'VGB', 'CYM', 'CXR', 'CCK', 'COK', 'CUW',
-    'FRO', 'GIB', 'GUM', 'GGY', 'IMN', 'JEY', 'MSR', 'NFK', 'MNP',
+    'GIB', 'GUM', 'GGY', 'IMN', 'JEY', 'MSR', 'NFK', 'MNP',
     'PCN', 'SBM', 'SHN', 'MAF', 'SPM', 'SXM', 'ATA', 'TKL', 'EUE',
     'SGS', 'TCA', 'VIR', 'PRK', 'VAT', 'WLF', 'ESP-PV', 'STP',
     'SLB', 'MHL', 'XRW', 'XXX', 'GLP', 'REU', 'GBR-NIR', 'GUF',
-    'NIU', 'MYT', 'ABW'
+    'NIU', 'MYT', 'ABW', 'BVT'
 );
 
 
