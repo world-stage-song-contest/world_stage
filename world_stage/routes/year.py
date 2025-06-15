@@ -140,7 +140,7 @@ def results(year: str, show: str):
 
     return render_template('year/summary.html', hidden=reveal,
                            songs=songs, points=show_data.points, show=show, access=access, offset=off,
-                           show_name=show_data.name, show_id=show_data.id, year=year, participants=len(songs))
+                           show_name=show_data.name, short_name=show_data.short_name, show_id=show_data.id, year=year, participants=len(songs))
 
 @bp.get('/<year>/<show>/detailed')
 def detailed_results(year: str, show: str):
