@@ -133,12 +133,13 @@ def set_password_post():
     user = cursor.fetchone()
     if not user:
         return render_template('session/set_password.html', message="User not found.")
+    user_id = user[0]
     hashed, salt = hash_password(password)
     cursor.execute('''
         UPDATE user
         SET password = ?, salt = ?
         WHERE id = ?
-    ''', (hashed, salt, user))
+    ''', (hashed, salt, user_id))
 
     db.commit()
 

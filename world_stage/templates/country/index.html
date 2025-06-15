@@ -11,7 +11,7 @@
             <div class="country-list">
             {% for country in data %}
                 <div class="country-item">
-                    <div class="flag-container">{{ flag(country.cc, 50, country.name) }}</div>
+                    <div class="flag-container">{{ flag(country.cc, 52, country.name) }}</div>
                     <div class="country-name"><a href="{{ url_for('country.country', code=country.cc.lower()) }}">{{ country.name }}</a></div>
                 </div>
             {% endfor %}

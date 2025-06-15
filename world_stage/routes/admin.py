@@ -182,3 +182,23 @@ def draw_final_post(year: int):
 
     db.commit()
     return {}, 204
+
+@bp.get('/changes')
+def changes():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT country_id AS cc, country.name, year_id AS year, artist, title, username AS submitter, modified_at FROM song
+        JOIN country ON song.country_id = country.id
+        JOIN user ON song.submitter_id = user.id
+        WHERE modified_at >= datetime(date('now'), '-3 days')
+        ORDER BY modified_at DESC
+    ''')
+    changes = [dict(row) for row in cursor.fetchall()]
+
+    return render_template('admin/changes.html', changes=changes)

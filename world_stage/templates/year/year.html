@@ -41,7 +41,7 @@
         <tr data-value="{{ loop.index }}"
             class="{{ "placeholder" if song.placeholder else "finalised" }}" data-value="{{ loop.index }}">
             <td><a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">
-                    {{ flag(song.country.cc, 40, song.country.name) }}
+                    {{ flag(song.country.cc, 42, song.country.name) }}
                     <span>{{ song.country.name }}</span>
             </div></a></td>
             <td>{{ song.artist or '' }}</td>
