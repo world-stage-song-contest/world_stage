@@ -226,6 +226,9 @@ def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[
     cursor.execute('SELECT closed FROM year WHERE id = ?', (year,))
     closed = cursor.fetchone()[0]
 
+    cursor.execute('SELECT COUNT(*) FROM song WHERE year_id = ?', (year,))
+    year_count = cursor.fetchone()[0]
+
     cursor.execute('''
         SELECT COUNT(*) FROM song
         WHERE submitter_id = ? AND year_id = ? AND is_placeholder = 0
@@ -262,7 +265,7 @@ def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[
             ''', (year,user_id))
         for name, cc in cursor.fetchall():
             countries['placeholder'].append({'name': name, 'cc': cc})
-    elif count < 2 and not closed:
+    elif count < 2 and not closed and year_count <= 73:
         cursor.execute('''
             SELECT name, id FROM country
             WHERE available_from <= ?1 AND available_until >= ?1
