@@ -235,6 +235,9 @@ def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[
     db = get_db()
     cursor = db.cursor()
 
+    cursor.execute('SELECT closed FROM year WHERE id = ?', (year,))
+    closed = cursor.fetchone()[0]
+
     cursor.execute('''
         SELECT COUNT(*) FROM song
         WHERE submitter_id = ? AND year_id = ? AND is_placeholder = 0
@@ -253,21 +256,34 @@ def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[
         countries['own'].append({'name': name, 'cc': cc})
 
     if all:
-        cursor.execute('''
-            SELECT country.name, country.id FROM song
-            JOIN country ON song.country_id = country.id
-            WHERE song.year_id = ?
-            ORDER BY country.name
-        ''', (year,))
+        if closed:
+            cursor.execute('''
+                SELECT country.name, country.id FROM song
+                JOIN country ON song.country_id = country.id
+                WHERE song.year_id = ? AND submitter_id <> ?
+                ORDER BY country.name
+            ''', (year,user_id))
+        else:
+            cursor.execute('''
+                SELECT name, id FROM country
+                WHERE available_from <= ?1 AND available_until >= ?1 AND is_participating = 1
+                           AND id NOT IN (
+                           SELECT country_id FROM song
+                           WHERE year_id = ?1 AND submitter_id = ?2)
+                ORDER BY name
+            ''', (year,user_id))
         for name, cc in cursor.fetchall():
             countries['placeholder'].append({'name': name, 'cc': cc})
-    elif count < 2:
+    elif count < 2 and not closed:
         cursor.execute('''
-            SELECT country.name, country.id FROM song
-            JOIN country ON song.country_id = country.id
-            WHERE song.year_id = ? AND song.is_placeholder = 1
-            ORDER BY country.name
-        ''', (year,))
+            SELECT name, id FROM country
+            WHERE available_from <= ?1 AND available_until >= ?1
+                    AND is_participating = 1 AND id NOT IN (
+                SELECT country_id FROM song
+                WHERE year_id = ?1 AND (is_placeholder = 0 OR submitter_id = ?2)
+            )
+            ORDER BY name
+        ''', (year,user_id))
         for name, cc in cursor.fetchall():
             countries['placeholder'].append({'name': name, 'cc': cc})
 

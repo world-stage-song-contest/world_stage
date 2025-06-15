@@ -87,13 +87,13 @@ def login_post():
     session_id = str(uuid.uuid4())
     cursor.execute('''
         INSERT INTO session (session_id, user_id, created_at, expires_at)
-        VALUES (?, ?, datetime('now'), datetime('now', '+30 days'))
+        VALUES (?, ?, datetime('now'), datetime('now', '+365 days'))
     ''', (session_id, user_id))
 
     db.commit()
 
     resp = make_response(render_template('session/login_success.html', state="success"))
-    resp.set_cookie('session', session_id, max_age=datetime.timedelta(days=30))
+    resp.set_cookie('session', session_id, max_age=datetime.timedelta(days=365))
 
     return resp
 
@@ -129,19 +129,16 @@ def set_password_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id, password FROM user WHERE username = ?', (username,))
+    cursor.execute('SELECT id FROM user WHERE username = ?', (username,))
     user = cursor.fetchone()
     if not user:
         return render_template('session/set_password.html', message="User not found.")
-    user_id, stored_password = user
-    if stored_password:
-        return render_template('session/set_password.html', message="Password already set.")
     hashed, salt = hash_password(password)
     cursor.execute('''
         UPDATE user
         SET password = ?, salt = ?
         WHERE id = ?
-    ''', (hashed, salt, user_id))
+    ''', (hashed, salt, user))
 
     db.commit()
 
