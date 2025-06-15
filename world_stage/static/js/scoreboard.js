@@ -470,14 +470,13 @@ class Country {
     setActive() {
         this.element.classList.remove("inactive");
         this.currentEl.classList.add("visible");
-        this.element.classList.add("main-moving");
-        this.element.classList.add("active");
+        this.element.classList.add("main-moving", "active", "received-points");
     }
 
     setInactive() {
         this.currentEl.classList.remove("visible");
         this.element.classList.add("inactive");
-        this.element.classList.remove("gold", "silver", "bronze", "active", "own-entry");
+        this.element.classList.remove("received-gold", "received-silver", "received-bronze", "received-points", "active", "own-entry");
     }
 
     /**
@@ -494,12 +493,12 @@ class Country {
             animatePoints(this.currentEl, pt, true);
             this.setActive();
             if (pt == points[points.length - 1]) {
-                this.element.classList.add("gold");
+                this.element.classList.add("received-gold");
             } else if (pt == points[points.length - 2]) {
-                this.element.classList.add("silver");
+                this.element.classList.add("received-silver");
             }
             else if (pt == points[points.length - 3]) {
-                this.element.classList.add("bronze");
+                this.element.classList.add("received-bronze");
             } else {
             }
         }
