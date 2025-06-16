@@ -1,54 +1,7 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-
-<svg
-   width="96"
-   height="96"
-   viewBox="0 0 96 96"
-   version="1.1"
-   id="svg5"
-   inkscape:version="1.2.2 (732a01da63, 2022-12-09)"
-   sodipodi:docname="square.svg"
-   xml:space="preserve"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg"><sodipodi:namedview
-     id="namedview7"
-     pagecolor="#505050"
-     bordercolor="#eeeeee"
-     borderopacity="1"
-     inkscape:showpageshadow="0"
-     inkscape:pageopacity="0"
-     inkscape:pagecheckerboard="0"
-     inkscape:deskcolor="#505050"
-     inkscape:document-units="px"
-     showgrid="false"
-     inkscape:zoom="5.6568542"
-     inkscape:cx="19.26866"
-     inkscape:cy="10.606602"
-     inkscape:window-width="2560"
-     inkscape:window-height="1377"
-     inkscape:window-x="1912"
-     inkscape:window-y="-8"
-     inkscape:window-maximized="1"
-     inkscape:current-layer="svg5"><inkscape:grid
-       type="xygrid"
-       id="grid2501"
-       empspacing="6"
-       originx="0"
-       originy="0" /></sodipodi:namedview><defs
-     id="defs2" /><g
-     inkscape:label="xi"
-     id="layer1"
-     transform="translate(24)"><rect
-       style="fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:1.00157;stroke-linecap:round;stroke-dasharray:none"
-       id="rect5982"
-       width="96"
-       height="96"
-       x="-24"
-       y="0" /><path
-       id="path562558"
-       style="display:inline;fill:#dd1133;fill-opacity:1;stroke-width:6;stroke-linecap:square"
-       d="m -24,0 v 12 l 36,36 -36,36 v 12 h 12 L 24,60 60,96 H 72 V 84 L 36,48 72,12 72,0 H 60 L 24,36 -12,0 Z"
-       sodipodi:nodetypes="ccccccccccccccccc" /></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96">
+<path fill="#fff" d="M0 0h96v96H0z"/>
+<g fill="#d13">
+	<path d="M0 0v12l84 84h12V84L12 0z"/>
+	<path d="M0 84v12h12l84-84V0H84z"/>
+	</g>
+</svg>

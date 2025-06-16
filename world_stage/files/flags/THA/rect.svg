@@ -1,1 +1,5 @@
-<svg height="800" viewBox="0 0 1200 800" width="1200" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1.3333333 0 0 -1.3333333 0 800)"><path d="m0 0h900v600h-900z" fill="#ed1c24"/><path d="m0 100h900v400h-900z" fill="#fff"/><path d="m0 200h900v200h-900z" fill="#241d4f"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
+<path fill="#a13" d="M0 0h144v96H0z"/>
+<path fill="#fff" d="M0 16h144v64H0z"/>
+<path fill="#325" d="M0 32h144v32H0z"/>
+</svg>

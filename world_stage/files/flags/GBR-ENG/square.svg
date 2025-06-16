@@ -1,61 +1,7 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
-   height="96"
-   viewBox="0 0 96 96"
-   width="96"
-   version="1.1"
-   id="svg12542"
-   sodipodi:docname="square.svg"
-   inkscape:version="1.2.2 (732a01da63, 2022-12-09)"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg">
-  <defs
-     id="defs12546" />
-  <sodipodi:namedview
-     id="namedview12544"
-     pagecolor="#505050"
-     bordercolor="#eeeeee"
-     borderopacity="1"
-     inkscape:showpageshadow="0"
-     inkscape:pageopacity="0"
-     inkscape:pagecheckerboard="0"
-     inkscape:deskcolor="#505050"
-     showgrid="true"
-     inkscape:zoom="9.6716494"
-     inkscape:cx="39.083303"
-     inkscape:cy="56.143474"
-     inkscape:window-width="2560"
-     inkscape:window-height="1377"
-     inkscape:window-x="1912"
-     inkscape:window-y="-8"
-     inkscape:window-maximized="1"
-     inkscape:current-layer="layer1">
-    <inkscape:grid
-       empspacing="5"
-       originx="48"
-       originy="48"
-       type="xygrid"
-       id="grid18117" />
-  </sodipodi:namedview>
-  <g
-     inkscape:groupmode="layer"
-     id="layer1"
-     inkscape:label="Layer 1"
-     transform="matrix(6.4,0,0,6.4,-24,0)">
-    <path
-       d="m 3.75,0 h 15 v 15 h -15 z"
-       fill="#ffffff"
-       stroke-width="0.948683"
-       id="path12534"
-       inkscape:label="white"
-       sodipodi:nodetypes="ccccc" />
-    <path
-       id="path12536"
-       d="M 9.6875,0 V 5.9375 H 3.75 v 3.125 H 9.6875 V 15 H 12.75 L 12.8125,9.0625 H 18.75 V 5.9375 H 12.8125 V 0 Z"
-       style="fill:#cc1122;fill-opacity:1"
-       inkscape:label="red"
-       sodipodi:nodetypes="ccccccccccccc" />
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96">
+<path fill="#fff" d="M0 0h96v96H0z"/>
+<g fill="#c12">
+	<rect width="20" height="96" x="38"/>
+	<rect width="96" height="20" y="38"/>
+	</g>
 </svg>

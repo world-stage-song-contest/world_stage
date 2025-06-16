@@ -1,1 +1,6 @@
-<svg height="640" viewBox="0 0 960 640" width="960" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><clipPath id="a"><path d="m0 480h720v-480h-720z" transform="translate(-390.00001 -320.00001)"/></clipPath><clipPath id="b"><path d="m0 480h720v-480h-720z" transform="translate(-420.00001 -320.00001)"/></clipPath><path d="m0 0h720v480h-720z" fill="#d21034" transform="matrix(1.3333333 0 0 -1.3333333 0 640)"/><path d="m120 360h480v-240h-480z" fill="#007e3a" transform="matrix(1.3333333 0 0 -1.3333333 0 640)"/><path clip-path="url(#a)" d="m0 0c44.183 0 80-35.817 80-80s-35.817-80-80-80-80 35.817-80 80 35.817 80 80 80" fill="#fff" transform="matrix(1.3333333 0 0 -1.3333333 520 213.33333)"/><path clip-path="url(#b)" d="m0 0c44.183 0 80-35.817 80-80s-35.817-80-80-80-80 35.817-80 80 35.817 80 80 80" fill="#007e3a" transform="matrix(1.3333333 0 0 -1.3333333 560 213.33333)"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
+<path fill="#d13" d="M0 0h144v96H0z"/>
+<path fill="#073" d="M24 24h96v48H24z"/>
+<circle fill="#fff" cx="78" cy="48" r="16"/>
+<circle fill="#073" cx="84" cy="48" r="16"/>
+</svg>
