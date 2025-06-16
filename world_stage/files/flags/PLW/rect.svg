@@ -1,1 +1,4 @@
-<svg height="666.66669" viewBox="0 0 1000 666.66669" width="1000" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><clipPath id="a"><path d="m0 500h750v-500h-750z" transform="translate(-325.00001 -400.00001)"/></clipPath><path d="m0 0h750v500h-750z" fill="#4aadd6" transform="matrix(1.3333333 0 0 -1.3333333 0 666.66667)"/><path clip-path="url(#a)" d="m0 0c82.843 0 150-67.157 150-150s-67.157-150-150-150-150 67.157-150 150 67.157 150 150 150" fill="#ffde00" transform="matrix(1.3333333 0 0 -1.3333333 433.33333 133.33333)"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
+<path fill="#07c" d="M0 0h144v96H0z"/>
+<circle fill="#fc0" cx="64" cy="48" r="28"/>
+</svg>
