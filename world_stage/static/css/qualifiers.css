@@ -26,7 +26,7 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: repeat(5, 1fr);
-    gap: 2em;
+    gap: 1em;
     align-items: center;
     justify-items: center;
     align-content: space-evenly;
@@ -60,7 +60,7 @@
 
 .country {
     height: 30px;
-    /*width: 270px;*/
+    width: 300px;
     box-sizing: content-box;
 
     border: 2px solid grey;

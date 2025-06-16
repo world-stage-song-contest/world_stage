@@ -38,7 +38,7 @@ async function loadVotes(year, show) {
         revealOrder.dtf.push([country, false]);
     }
     for (const country of json.reveal_order.sc) {
-        revealOrder.sc.push([country, false]);
+        revealOrder.sc.push([country, true]);
     }
 }
 

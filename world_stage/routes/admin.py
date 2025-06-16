@@ -53,8 +53,8 @@ def create_show_post():
     cur = db.cursor()
 
     cur.execute('''
-        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf)
-        VALUES (:year, 1, :show_name, :short_name, :dtf)
+        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf, sc)
+        VALUES (:year, 1, :show_name, :short_name, :dtf, :sc)
     ''', data)
     db.commit()
 
@@ -72,7 +72,7 @@ def draw(year: int):
         pots_raw[country['pot']].append(country)
 
     pots: dict[int, list[dict]] = {}
-    for k in sorted(pots_raw.keys()):
+    for k in pots_raw.keys():
         pots[k] = pots_raw[k]
 
     shows = get_year_shows(year, pattern='sf')
@@ -129,22 +129,22 @@ def draw_post(year: int):
     db.commit()
     return {}, 204
 
-@bp.get('/draw/<int:year>/final')
-def draw_final(year: int):
+@bp.get('/draw/<int:year>/<show>')
+def draw_final(year: int, show: str):
     resp = verify_user()
     if resp:
         return resp
 
-    songs = get_show_songs(year, 'f')
+    songs = get_show_songs(year, show)
 
     if not songs:
-        return render_template('error.html', error="No final show found for this year"), 404
+        return render_template('error.html', error="No show '{show}' found for {year}"), 404
     countries = list(map(lambda s: s.country, songs))
 
-    return render_template('admin/draw_final.html', countries=countries, show='f', year=year, num=len(countries), lim=(len(countries) // 2) or 1)
+    return render_template('admin/draw_final.html', countries=countries, show=show, year=year, num=len(countries), lim=(len(countries) // 2) or 1)
 
-@bp.post('/draw/<int:year>/final')
-def draw_final_post(year: int):
+@bp.post('/draw/<int:year>/<show>')
+def draw_final_post(year: int, show: str):
     resp = verify_user()
     if resp:
         return {'error': "Not an admin"}, 401
@@ -156,11 +156,11 @@ def draw_final_post(year: int):
     db = get_db()
     cursor = db.cursor()
 
-    show_data = get_show_id('f', year)
+    show_data = get_show_id(show, year)
     if not show_data:
-        return {'error': f"Invalid final show for {year}"}, 400
+        return {'error': f"Invalid show '{show}' for {year}"}, 400
 
-    ro = data.get('f')
+    ro = data.get(show)
     if ro is None:
         return {'error': "No running order provided"}, 400
 

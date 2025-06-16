@@ -37,8 +37,8 @@ function toggleHeader() {
 }
 
 /**
- * 
- * @param {number} t 
+ *
+ * @param {number} t
  * @returns {number}
  */
 function easeOutCubic(t) {
@@ -46,8 +46,8 @@ function easeOutCubic(t) {
 }
 
 /**
- * @param {Element} node 
- * @param {Element} parent 
+ * @param {Element} node
+ * @param {Element} parent
  */
 function nextChildOrFirstHelper(node, parent) {
     if (node && node.nextElementSibling) {
@@ -62,12 +62,11 @@ function nextChildOrFirstHelper(node, parent) {
 }
 
 /**
- * @param {Element} node 
- * @param {Element} parent 
- * @param {string} [skipClass=""] 
+ * @param {Element} node
+ * @param {Element} parent
+ * @param {string} [skipClass=""]
  */
 function nextChildOrFirst(node, parent, skipClass = "+") {
-    debugger;
     let looped = false;
     let currentNode = node;
     while (true) {
@@ -80,14 +79,14 @@ function nextChildOrFirst(node, parent, skipClass = "+") {
 }
 
 /**
- * @param {Element} pot 
+ * @param {Element} pot
  * @returns {Promise<Element>}
  */
 async function selectRandomChild(pot, skipClass = "q") {
     const children = Array.from(pot.querySelectorAll(`.item:not(.${skipClass})`));
     const elems = children.length;
     let current = null;
-    let totalCycles = Math.floor(lcg.next(elems * 2.5) + elems * 1.5); // total "flashes"
+    let totalCycles = 1 //Math.floor(lcg.next(elems * 2.5) + elems * 1.5); // total "flashes"
     const minDelay = 10;
     const maxDelay = 175;
 

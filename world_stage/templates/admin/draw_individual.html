@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Administrator Utilities{% endblock %}
+{% block title %}Draw Final{% endblock %}
 {% block headercontents %}
     <script>
         const year = {{ year }}
@@ -32,7 +32,7 @@
     <div class="show active1"
          data-name="{{ show }}"
          data-songs="{{ num }}">
-        <h2>Final</h2>
+        <h2>{{ show_name }}</h2>
         <div class="show-countries"
              data-limit="{{ lim }}"
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
@@ -42,7 +42,7 @@
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
-                <div class="flag-container value transparent">{{ flag("XXX", 25, "Unknown") }}</div>
+                <div class="flag-container value transparent">{{ flag("XXX", 24, "Unknown") }}</div>
                 <div class="country-name value transparent"></div>
             </div>
         {% endfor %}
@@ -61,7 +61,7 @@
                  data-code="{{ country.cc }}"
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
-                <div class="flag-container">{{ flag(country.cc, 25, country.name) }}</div>
+                <div class="flag-container">{{ flag(country.cc, 24, country.name) }}</div>
                 <div class="country-name">{{ country.name }}</div>
             </div>
         {% endfor %}
