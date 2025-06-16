@@ -144,7 +144,8 @@ def vote(show: str):
     return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, selected=selected,
                            username=username, nickname=nickname, country=country,
-                           year=show_data.year, show_name=show_data.name, show=show,
+                           year=show_data.year, show_name=show_data.name, 
+                           short_name=show_data.short_name, show=show,
                            selected_country=country_id, countries=get_countries(),
                            vote_count=get_vote_count_for_show(show_data.id))
 
