@@ -314,12 +314,13 @@ function toggleHeader() {
 }
 
 async function save() {
-    const codes = revealOrder.dtf.map(v => v[0].id);
+    const dtf = revealOrder.dtf.map(v => v[0].id);
+    const sc = revealOrder.sc.map(v => v[0].id);
     await fetch(window.location.pathname, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ action: "save", "revealOrder": codes })
+        body: JSON.stringify({ action: "save", dtf, sc })
     });
 }

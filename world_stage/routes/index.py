@@ -65,6 +65,8 @@ def flag(country: str):
     file = os.path.join(root, 'files', 'flags', country, f'{type}-{size}.svg')
     if not os.path.exists(file):
         file = os.path.join(root, 'files', 'flags', country, f'{type}.svg')
+    if not os.path.exists(file):
+        file = os.path.join(root, 'files', 'flags', 'XXX', f'{type}.svg')
 
     resp = make_response(send_file(file))
     resp.headers['Content-Type'] = 'image/svg+xml'

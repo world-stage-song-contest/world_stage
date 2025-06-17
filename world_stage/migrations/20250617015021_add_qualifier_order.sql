@@ -1,0 +1,5 @@
+BEGIN TRANSACTION;
+
+ALTER TABLE song_show ADD COLUMN qualifier_order INTEGER;
+
+COMMIT;

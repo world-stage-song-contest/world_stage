@@ -333,20 +333,22 @@ def qualifiers_post(year: str, show: str):
     if show_data.dtf is None:
         return {"error": "Not a semi-final."}, 400
 
-    final_data = get_show_id('f', _year)
-    if not final_data:
-        return {"error": "Final show not found"}, 404
-
-    if show_data.short_name == 'ac':
-        sf_number = 5
-    else:
-        sf_number = int(show_data.short_name.removeprefix('sf'))
-
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
     if show_data.access_type != 'full' and not permissions.can_view_restricted:
         return {'error': "You aren't allowed to access the qualifiers"}, 400
+
+    final_data = get_show_id('f', _year)
+    if not final_data:
+        return {"error": "Final show not found"}, 404
+
+    sc_data = get_show_id('sc', _year)
+
+    if show_data.short_name == 'sc':
+        sf_number = 9
+    else:
+        sf_number = int(show_data.short_name.removeprefix('sf'))
 
     body = request.json
     if not body or not isinstance(body, dict):
@@ -356,19 +358,31 @@ def qualifiers_post(year: str, show: str):
     if action != 'save':
         return {'error': "Invalid action"}, 400
 
-    song_order = body.get('revealOrder')
-    if not song_order or not isinstance(song_order, list):
-        return {'error': "Reveal order not provided"}, 400
-
     db = get_db()
     cursor = db.cursor()
 
-    for i, song_id in enumerate(song_order):
-        n = i + 1 + sf_number / 10
+    final_order = body.get('dtf')
+    if not final_order or not isinstance(final_order, list):
+        return {'error': "Reveal order not provided"}, 400
+
+    for i, song_id in enumerate(final_order):
+        n = sf_number + (i + 1) / 100
         cursor.execute('''
-            INSERT OR REPLACE INTO song_show (song_id, show_id, running_order)
-            VALUES (?, ?, ?)
-        ''', (int(song_id), final_data.id, n))
+            INSERT OR REPLACE INTO song_show (song_id, show_id, running_order, qualifier_order)
+            VALUES (?, ?, ?, ?)
+        ''', (int(song_id), final_data.id, n, i + 1))
+
+    if sc_data:
+        second_chance_order = body.get('sc')
+        if second_chance_order and not isinstance(second_chance_order, list):
+            return {'error': "Second chance order must be a list"}, 400
+
+        for i, song_id in enumerate(second_chance_order):
+            n = sf_number + (i + 1) / 100
+            cursor.execute('''
+                INSERT OR REPLACE INTO song_show (song_id, show_id, running_order, qualifier_order)
+                VALUES (?, ?, ?, ?)
+            ''', (int(song_id), sc_data.id, n, i + 1))
     db.commit()
 
     return {'success': True, 'message': "Qualifiers saved successfully."}
