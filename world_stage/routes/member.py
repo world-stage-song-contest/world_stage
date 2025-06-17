@@ -106,17 +106,31 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
     db = get_db()
     cursor = db.cursor()
 
+    cursor.execute('''
+        SELECT id FROM song
+        WHERE year_id = ? AND country_id = ?
+    ''', (song_data.year, song_data.country))
+    song_id = cursor.fetchone()
+    if song_id:
+        song_id = song_id[0]
+
     if set_claim:
+        new_id = user_id
+    else:
+        new_id = song_data.user_id or user_id
+
+    if song_id:
         cursor.execute('''
-            INSERT OR REPLACE INTO song (
-            year_id, country_id,
-            title, native_title, artist, is_placeholder,
-            title_language_id, native_language_id, video_link,
-            snippet_start, snippet_end, translated_lyrics,
-            romanized_lyrics, native_lyrics, submitter_id,
-            notes, sources, admin_approved, modified_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            RETURNING id
+            UPDATE song
+            SET title = ?, native_title = ?, artist = ?,
+                is_placeholder = ?,
+                title_language_id = ?, native_language_id = ?,
+                video_link = ?, snippet_start = ?, snippet_end = ?,
+                translated_lyrics = ?, romanized_lyrics = ?, native_lyrics = ?,
+                submitter_id = ?, notes = ?, sources = ?,
+                admin_approved = ?,
+                modified_at = CURRENT_TIMESTAMP
+            WHERE id = ?
         ''', (
             song_data.year,
             song_data.country,
@@ -132,14 +146,15 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
             song_data.english_lyrics,
             song_data.romanized_lyrics,
             song_data.native_lyrics,
-            user_id,
+            new_id,
             song_data.notes,
             song_data.sources,
-            int(song_data.admin_approved)
+            int(song_data.admin_approved),
+            song_id
         ))
     else:
         cursor.execute('''
-            INSERT OR REPLACE INTO song (
+            INSERT INTO song (
             year_id, country_id,
             title, native_title, artist, is_placeholder,
             title_language_id, native_language_id, video_link,
@@ -168,8 +183,7 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
             song_data.sources,
             int(song_data.admin_approved)
         ))
-
-    song_id = cursor.fetchone()[0]
+        song_id = cursor.fetchone()[0]
 
     cursor.execute('''
         DELETE FROM song_language
