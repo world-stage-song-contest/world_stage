@@ -11,3 +11,7 @@
     flex-direction: column;
     font-style: italic;
 }
+
+.placeholder {
+    background-color: var(--background2);
+}

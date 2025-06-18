@@ -132,8 +132,6 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
                 modified_at = CURRENT_TIMESTAMP
             WHERE id = ?
         ''', (
-            song_data.year,
-            song_data.country,
             song_data.title,
             song_data.native_title,
             song_data.artist,
@@ -240,7 +238,7 @@ def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[
     cursor.execute('SELECT closed FROM year WHERE id = ?', (year,))
     closed = cursor.fetchone()[0]
 
-    cursor.execute('SELECT COUNT(*) FROM song WHERE year_id = ?', (year,))
+    cursor.execute('SELECT COUNT(*) FROM song WHERE year_id = ? AND is_placeholder = 0', (year,))
     year_count = cursor.fetchone()[0]
 
     cursor.execute('''
@@ -412,8 +410,10 @@ def submit_song_post():
     if not user_id_raw:
         return redirect(url_for('session.login'))
 
+    permissions = get_user_permissions(user_id_raw[0])
+
     force_submitter = request.form.get('force_submitter', None)
-    if force_submitter:
+    if force_submitter and permissions.can_edit:
         if force_submitter == 'none':
             user_id = None
         else:
