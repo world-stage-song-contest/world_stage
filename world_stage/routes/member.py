@@ -277,7 +277,7 @@ def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[
             ''', (year,user_id))
         for name, cc in cursor.fetchall():
             countries['placeholder'].append({'name': name, 'cc': cc})
-    elif count < 2 and not closed and year_count <= 73:
+    elif count < 2 and not closed and year_count < 73:
         cursor.execute('''
             SELECT name, id FROM country
             WHERE available_from <= ?1 AND available_until >= ?1
@@ -456,14 +456,17 @@ def submit_song_post():
 
     if not languages:
         res = {'error': 'At least one language must be selected.'}
-
-    if languages and (does_match or not other_data.get('native_title', None)):
-        other_data['native_language_id'] = languages[0]
-
-    if is_translation:
-        other_data['title_language_id'] = 20 # English
     else:
-        other_data['title_language_id'] = other_data.get('native_language_id')
+        if languages and (does_match or not other_data.get('native_title', None)):
+            other_data['native_language_id'] = languages[0]
+
+        if is_translation:
+            other_data['title_language_id'] = 20 # English
+        else:
+            other_data['title_language_id'] = other_data.get('native_language_id')
+
+    if not other_data.get('country_id', None):
+        res = {'error': 'Sorry, an unknown error occurred. Please try again.'}
 
     missing_fields = []
     missing_fields_internal = []

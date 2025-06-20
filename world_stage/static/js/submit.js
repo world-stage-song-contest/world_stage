@@ -198,8 +198,6 @@ async function populateSongData() {
         }
     }
 
-    console.log(languages);
-
     for (const [i, {id, name}] of languages.entries()) {
         if (i != 0) {
             addLanguageRow();

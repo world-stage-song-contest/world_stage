@@ -1,20 +1,26 @@
-class LCG {
-  constructor(seed, modulus = 2 ** 31, multiplier = 1103515245, increment = 12345) {
-    this.seed = seed;
-    this.modulus = modulus;
-    this.multiplier = multiplier;
-    this.increment = increment;
+function makeSFC32(seed) {
+  function splitmix32(z) {
+    z = (z + 0x9E3779B9) >>> 0;
+    z = Math.imul(z ^ (z >>> 16), 0x21F0AAAD) >>> 0;
+    z = Math.imul(z ^ (z >>> 15), 0x735A2D97) >>> 0;
+    return (z ^ (z >>> 16)) >>> 0;
   }
+  let a = 0, b = splitmix32(seed), c = 0, d = 1;
 
-  next(limit) {
-    this.seed = (this.multiplier * this.seed + this.increment) % this.modulus;
-    if (limit) return this.seed % limit;
-    else return this.seed;
-  }
-
-  nextFloat() {
-    return this.next() / this.modulus;
-  }
+  return {
+    next(limit) {
+      const t = (a + b + d) >>> 0;
+      d = (d + 1) >>> 0;
+      a = b ^ (b >>> 9);
+      b = (c + (c << 3)) >>> 0;
+      c = ((c << 21) | (c >>> 11)) >>> 0;
+      c = (c + t) >>> 0;
+      return limit ? t % limit : t;
+    },
+    nextFloat() {
+      return this.nextInt32() / 0x1_0000_0000;
+    }
+  };
 }
 
 function simpleHash(num) {
@@ -29,7 +35,7 @@ function simpleHash(num) {
   return hash >>> 0;
 }
 
-const lcg = new LCG(year);
+const lcg = makeSFC32(year);
 
 function toggleHeader() {
     const header = document.querySelector("header");
@@ -86,7 +92,8 @@ async function selectRandomChild(pot, skipClass = "q") {
     const children = Array.from(pot.querySelectorAll(`.item:not(.${skipClass})`));
     const elems = children.length;
     let current = null;
-    let totalCycles = 1 //Math.floor(lcg.next(elems * 2.5) + elems * 1.5); // total "flashes"
+    let totalCycles = Math.floor(lcg.next(elems * 2.5) + elems); // total "flashes"
+    console.log(`Total cycles: ${totalCycles}, elems: ${elems}`);
     const minDelay = 10;
     const maxDelay = 175;
 

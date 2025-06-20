@@ -69,22 +69,24 @@ def draw(year: int):
     countries = get_year_countries(year)
     pots_raw: dict[int, list[dict]] = defaultdict(list)
     for country in countries:
-        pots_raw[country['pot']].append(country)
+        pot: int | None = country.get('pot', None)
+        if pot is not None:
+            pots_raw[pot].append(country)
 
     pots: dict[int, list[dict]] = {}
-    for k in pots_raw.keys():
+    semifinalists = 0
+    for k in sorted(pots_raw.keys()):
         pots[k] = pots_raw[k]
+        semifinalists += len(pots[k])
 
     shows = get_year_shows(year, pattern='sf')
     count = len(shows)
-    semifinalists = len(countries)
     per = semifinalists // count
     songs = [per] * count
     deficit = semifinalists - per * count
     lcg = LCG(year)
-    for _ in range(deficit):
-        n = lcg.next() % count
-        songs[n] += 1
+    for i in range(deficit):
+        songs[i] += 1
 
     limits = list(map(lambda n: math.ceil(n / 2), songs))
 
