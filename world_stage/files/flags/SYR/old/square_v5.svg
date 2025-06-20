@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96">
+	<path fill="#fff" d="M0 0h144v96H0z"/>
+	<path fill="#073" d="M0 0h144v32H0z"/>
+	<path fill="#111" d="M0 64h144v32H0z"/>
+	<g fill="#d13">
+		<path d="M 40.946577,57.708204 48,36 55.053423,57.708204 36.587322,44.291796 h 22.825356 z" id="x"/>
+		<use xlink:href="#x" transform="translate(30 0)"/>
+		<use xlink:href="#x" transform="translate(-30 0)"/>
+	</g>
+</svg>

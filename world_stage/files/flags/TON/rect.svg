@@ -1,1 +1,8 @@
-<svg height="640" viewBox="0 0 960 640" width="960" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1.3333333 0 0 -1.3333333 0 640)"><path d="m0 0h720v480h-720z" fill="#c10000"/><path d="m0 240h340v239.999h-340z" fill="#fff"/><g fill="#c10000"><path d="m146 450h60v-180h-60z"/><path d="m86 390h180v-60h-180z"/></g></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 72 48">
+<g fill="#c12">
+<rect width="72" height="48"/>
+<rect width="30" fill="#fff" height="24"/>
+<rect x="11.5" y="3" width="6" height="18"/>
+<rect x="5.5" y="9" width="18" height="6"/>
+</g>
+</svg>
