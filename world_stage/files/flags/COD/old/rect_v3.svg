@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   version="1.1"
+   width="900"
+   height="600"
+   id="svg4"
+   sodipodi:docname="rect_v3.svg"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs4" />
+  <sodipodi:namedview
+     id="namedview4"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="1.41"
+     inkscape:cx="380.14184"
+     inkscape:cy="261.70213"
+     inkscape:window-width="2560"
+     inkscape:window-height="1368"
+     inkscape:window-x="1920"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg4">
+    <inkscape:grid
+       id="grid4"
+       units="px"
+       originx="0"
+       originy="0"
+       spacingx="1"
+       spacingy="1"
+       empcolor="#000000"
+       empopacity="0.53333333"
+       color="#000000"
+       opacity="0.13333333"
+       empspacing="30"
+       enabled="true"
+       visible="false" />
+  </sodipodi:namedview>
+  <path
+     d="M0 0h900v600H0z"
+     fill="#007fff"
+     id="path1"
+     style="fill:#0077cc;fill-opacity:1" />
+  <path
+     d="M 840,0 0,420 V 600 H 60 L 900,180 V 0 Z"
+     fill="#f7d618"
+     id="path2"
+     style="fill:#ffcc00;fill-opacity:1"
+     sodipodi:nodetypes="ccccccc" />
+  <path
+     d="M 900,0 0,450 V 600 H 0.08 L 900,150 Z"
+     fill="#ce1021"
+     id="path3"
+     style="fill:#cc1122;fill-opacity:1"
+     sodipodi:nodetypes="cccccc" />
+  <path
+     style="fill:#ffcc00;fill-opacity:1;stroke:none;stroke-width:2;stroke-linecap:square;paint-order:stroke fill markers"
+     d="M 79.465767,247.08204 264.12678,112.91796 H 35.873219 L 220.53423,247.08204 150,30 Z"
+     id="path7" />
+</svg>
