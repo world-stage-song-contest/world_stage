@@ -353,8 +353,10 @@ def qualifiers_post(year: str, show: str):
 
     if show_data.short_name == 'sc':
         sf_number = 9
-    else:
+    elif show_data.short_name.startswith('sf'):
         sf_number = int(show_data.short_name.removeprefix('sf'))
+    else:
+        return {'error': "Invalid semi-final show name"}, 400
 
     body = request.json
     if not body or not isinstance(body, dict):
@@ -373,10 +375,14 @@ def qualifiers_post(year: str, show: str):
 
     for i, song_id in enumerate(final_order):
         n = sf_number + (i + 1) / 100
+        if sf_number == 9:
+            add = 20
+        else:
+            add = 1
         cursor.execute('''
             INSERT OR REPLACE INTO song_show (song_id, show_id, running_order, qualifier_order)
             VALUES (?, ?, ?, ?)
-        ''', (int(song_id), final_data.id, n, i + 1))
+        ''', (int(song_id), final_data.id, n, i + add))
 
     if sc_data:
         second_chance_order = body.get('sc')
