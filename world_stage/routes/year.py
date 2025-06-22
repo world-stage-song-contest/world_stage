@@ -113,6 +113,8 @@ def results(year: str, show: str):
     if not songs:
         return render_template('error.html', error="No songs found for this show."), 404
 
+    participants = len(songs)
+
     db = get_db()
     cursor = db.cursor()
     cursor.execute('SELECT count(voter_id) FROM vote_set WHERE show_id = ?', (show_data.id,))
@@ -149,7 +151,7 @@ def results(year: str, show: str):
 
     return render_template('year/summary.html', hidden=reveal, qualifiers=qualifiers, sc_qualifiers=sc_qualifiers,
                            songs=songs, points=show_data.points, show=show, access=access, offset=off,
-                           show_name=show_data.name, short_name=show_data.short_name, show_id=show_data.id, year=year, participants=len(songs), voters=voter_count)
+                           show_name=show_data.name, short_name=show_data.short_name, show_id=show_data.id, year=year, participants=participants, voters=voter_count)
 
 @bp.get('/<year>/<show>/detailed')
 def detailed_results(year: str, show: str):
