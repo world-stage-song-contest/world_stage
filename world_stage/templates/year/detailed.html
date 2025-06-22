@@ -37,7 +37,9 @@
         </thead>
         <tbody>
         {% for song in songs %}
-            <tr data-value="{{ loop.index }}" class="{%if loop.index == 1%}first{%elif loop.index == 2%}second{%elif loop.index == 3%}third{%elif loop.index == participants%}last{% endif %}">
+            {% set class = {1: 'first', 2: 'second', 3:'third', participants: 'last'}.get(loop.index, '') %}
+            {% set qclass = "direct-to-final" if (loop.index <= qualifiers) else "second-chance" if (qualifiers < loop.index <= sc_qualifiers) else "non-qualifier" %}
+            <tr data-value="{{ loop.index }}" class="{{ class }} {{ qclass }}">
                 <td class="number header-like">{{ song.vote_data.ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>

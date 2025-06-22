@@ -59,6 +59,16 @@ td.header-like {
     text-align: center;
 }
 
+.direct-to-final {
+    background: navajowhite;
+    color: black;
+}
+
+.second-chance {
+    background: paleturquoise;
+    color: black;
+}
+
 .first {
     background: gold;
     color: black;

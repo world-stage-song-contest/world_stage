@@ -144,7 +144,10 @@ def results(year: str, show: str):
                 songs[i].hidden = True
         off = 0
 
-    return render_template('year/summary.html', hidden=reveal,
+    qualifiers = show_data.dtf or 0
+    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+
+    return render_template('year/summary.html', hidden=reveal, qualifiers=qualifiers, sc_qualifiers=sc_qualifiers,
                            songs=songs, points=show_data.points, show=show, access=access, offset=off,
                            show_name=show_data.name, short_name=show_data.short_name, show_id=show_data.id, year=year, participants=len(songs), voters=voter_count)
 
@@ -203,7 +206,11 @@ def detailed_results(year: str, show: str):
 
     songs.sort(reverse=True)
 
-    return render_template('year/detailed.html', songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
+    qualifiers = show_data.dtf or 0
+    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+
+    return render_template('year/detailed.html', qualifiers=qualifiers, sc_qualifiers=sc_qualifiers,
+                           songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
 
 @bp.get('/<year>/<show>/scoreboard')
 def scoreboard(year: str, show: str):

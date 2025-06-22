@@ -16,6 +16,9 @@
     <p>The results summary is a secret until the end of the show.</p>
 </div>
 {% else %}
+<div>
+    <strong><big>Total voters:{{voters}}</big></strong>
+</div>
 <div id="scroll-container">
 <table class="sortable">
     <thead>
@@ -38,11 +41,12 @@
     <tbody>
         {% for song in songs %}
         {% set place = loop.index + offset %}
-        {% set class = {1: 'first', 2: 'second', 3:'third', participants: 'last'}.get(loop.index, '') if access == 'full' else '' %}
+        {% set class = {1: 'first', 2: 'second', 3:'third', participants: 'last'}.get(place, '') %}
+        {% set qclass = "direct-to-final" if (place <= qualifiers) else "second-chance" if (qualifiers < place <= sc_qualifiers) else "non-qualifier" %}
         {% set ro = song.vote_data.ro if song.vote_data.ro is not none and song.vote_data.ro != -1 else '' %}
             <tr data-value="{{ place }}"
                 {%if song.hidden %}onclick="revealRow(this)"{% endif %}
-                class="{{ class }} {{ 'unrevealed' if song.hidden else '' }}">
+                class="{{ class }} {{ qclass }} {{ 'unrevealed' if song.hidden else '' }}">
                 <th class="number">{{ ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
@@ -59,13 +63,12 @@
             {% endif %}
             </tr>
         {% endfor %}
-    <td colspan="18">Total voters:{{voters}}</td>
 </table>
-     <fieldset class="grid">
-            <legend>Recap</legend>
-            {% set url = "https://funcall.me/data/recaps/" ~ year ~ short_name ~ ".mp4" %}
-            <video width="560" height="315" controls><source src="{{ url }}" type="video/mp4">Your browser does not support the video tag.</video>
-    </fieldset>
 </div>
+<fieldset class="grid">
+    <legend>Recap</legend>
+    {% set url = "https://funcall.me/data/recaps/" ~ year ~ short_name ~ ".mp4" %}
+    <video width="560" height="315" controls><source src="{{ url }}" type="video/mp4">Your browser does not support the video tag.</video>
+</fieldset>
 {% endif %}
 {% endblock %}
