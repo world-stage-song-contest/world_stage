@@ -581,9 +581,9 @@ def get_current_year() -> int:
 
 def get_countries(only_participating: bool = False) -> list[Country]:
     if only_participating:
-        query = 'SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE is_participating = 1 ORDER BY name'
+        query = "SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE is_participating = 1 AND id <> 'XXX' ORDER BY name"
     else:
-        query = 'SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country ORDER BY name'
+        query = "SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE id <> 'XXX' ORDER BY name"
     db = get_db()
     cursor = db.cursor()
 
@@ -755,7 +755,7 @@ def get_song_languages(song_id: int) -> list[Language]:
 
     return languages
 
-def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False) -> Optional[list[Song]]:
+def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False, sort_reveal = False) -> Optional[list[Song]]:
     db = get_db()
     cursor = db.cursor()
     data = get_show_id(short_name, year)
@@ -764,7 +764,11 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
         return None
     show_id = data.id
 
-    cursor.execute('''
+    additional_sort = ''
+    if sort_reveal:
+        additional_sort = 'song_show.qualifier_order,'
+
+    cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, country.name, country.is_participating,
                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
@@ -779,7 +783,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
         WHERE show.id = ?
-        ORDER BY song_show.running_order, song_show.id
+        ORDER BY {additional_sort} song_show.running_order, song_show.id
         ''', (show_id,))
     songs = [Song(id=song['id'],
                   title=song['title'],
@@ -848,7 +852,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, country.name, country.is_participating,
                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,

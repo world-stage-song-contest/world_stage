@@ -123,6 +123,8 @@ def results(year: str, show: str):
     if access == 'partial':
         if show_data.dtf:
             off = show_data.dtf - 1
+        if show_data.sc:
+            off += show_data.sc
         songs = songs[off:]
         if reveal:
             for s in songs:

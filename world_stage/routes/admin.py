@@ -141,10 +141,11 @@ def draw_final(year: int, show: str):
     if not show_data:
         return render_template('error.html', error=f"Invalid show '{show}' for {year}"), 404
 
-    songs = get_show_songs(year, show)
+    songs = get_show_songs(year, show, sort_reveal=True)
 
     if not songs:
         return render_template('error.html', error="No show '{show}' found for {year}"), 404
+
     countries = list(map(lambda s: s.country, songs))
 
     return render_template('admin/draw_individual.html', countries=countries, show=show, show_name=show_data.name, year=year, num=len(countries), lim=math.ceil((len(countries) / 2) or 1))
