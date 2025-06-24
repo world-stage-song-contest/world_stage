@@ -58,3 +58,7 @@ li:target > div {
 .footnote-link:hover::after {
     display: block;
 }
+
+.video {
+    padding: 1em 0;
+}
