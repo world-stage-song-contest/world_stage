@@ -57,32 +57,30 @@
     {{ embed|safe }}
 </div>
 
-<div class="all-lyrics">
+<div class="all-lyrics" style="--rows: {{ rows }}; --columns: {{ columns }};">
+    {% set column = 1%}
     {% if english_lyrics %}
-    <div class="english-lyrics lyrics">
-        <h2>English lyrics</h2>
+        <h2 style="--row: 1; --column: {{ column }};">English lyrics</h2>
         {% for line in english_lyrics %}
-        <div class="line" lang="en">{{ line|safe }}</div>
+        <div class="line eng-line" lang="en" style="--row: {{ loop.index + 1 }}; --column: {{ column }};">{{ line|safe }}</div>
         {% endfor %}
-    </div>
+        {% set column = column + 1%}
     {% endif %}
 
     {% if latin_lyrics %}
-    <div class="latin-lyrics lyrics">
-        <h2>Native lyrics (Latin alphabet)</h2>
+        <h2 style="--row: 1; --column: {{ column }};">Native lyrics (Latin alphabet)</h2>
         {% for line in latin_lyrics %}
-        <div class="line" lang="{{ song.native_lang.str("Latn") }}">{{ line|safe }}</div>
+        <div class="line lat-line" lang="{{ song.native_lang.str("Latn") }}" style="--row: {{ loop.index + 1 }}; --column: {{ column }};">{{ line|safe }}</div>
         {% endfor %}
-    </div>
+        {% set column = column + 1%}
     {% endif %}
 
     {% if native_lyrics %}
-    <div class="native-lyrics lyrics">
-        <h2>Native lyrics (non-Latin alphabet)</h2>
+        <h2 style="--row: 1; --column: {{ column }};">Native lyrics (non-Latin alphabet)</h2>
         {% for line in native_lyrics %}
-        <div class="line" lang="{{ song.native_lang.str() }}" dir="auto">{{ line|safe }}</div>
+        <div class="line nat-line" lang="{{ song.native_lang.str() }}" dir="auto" style="--row: {{ loop.index + 1 }}; --column: {{ column }};">{{ line|safe }}</div>
         {% endfor %}
-    </div>
+        {% set column = column + 1%}
     {% endif %}
 </div>
 

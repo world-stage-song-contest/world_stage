@@ -97,6 +97,10 @@ def details(code: str, year: int):
     if song.lyrics_notes:
         notes = song.lyrics_notes.split('\n')
 
-    return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year,
-                           native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
-                           can_edit=can_edit, notes=notes)
+    rows = max(len(english_lyrics), len(latin_lyrics), len(native_lyrics))
+    columns = (english_lyrics and 1 or 0) + (latin_lyrics and 1 or 0) + (native_lyrics and 1 or 0)
+
+    return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year, rows=rows,
+                            columns=columns,
+                            native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
+                            can_edit=can_edit, notes=notes)
