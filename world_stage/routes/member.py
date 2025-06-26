@@ -71,7 +71,7 @@ class SongData:
                 res[attr] = getattr(self, attr)
         return res
 
-def delete_song(year: int, country: str, artist: str, title: str, user_id: int):
+def delete_song(year: int, country: str, artist: str, title: str, user_id: int | None):
     db = get_db()
     cursor = db.cursor()
 
