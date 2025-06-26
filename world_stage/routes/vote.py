@@ -119,6 +119,7 @@ def vote(show: str):
             _, username = d
 
     vote_set_id = None
+    countries = []
     if username:
         cursor.execute('SELECT id FROM user WHERE username = ? COLLATE NOCASE', (username,))
         user_id = cursor.fetchone()
@@ -134,7 +135,8 @@ def vote(show: str):
             vote_set_id = cursor.fetchone()
             if vote_set_id:
                 vote_set_id, nickname, country_id = vote_set_id
-    else:
+
+    if not countries:
         countries = get_countries()
 
     if vote_set_id:

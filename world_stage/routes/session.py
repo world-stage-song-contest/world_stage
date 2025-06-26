@@ -133,7 +133,7 @@ def set_password_post():
     user = cursor.fetchone()
     if not user:
         return render_template('session/set_password.html', message="User not found.")
-    user_id, approved = user[0]
+    user_id, approved = user
     if not approved:
         return render_template('session/set_password.html', message="Your account is not approved yet.")
     hashed, salt = hash_password(password)

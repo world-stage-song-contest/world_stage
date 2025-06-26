@@ -44,6 +44,14 @@ def generate_iframe(url: str):
             video_id = match.group(1)
             return f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
 
+    elif 'drive.google.com/file/d/' in url:
+        print(url)
+        match = re.search(r'/d/([^/]+)', url)
+        if match:
+            print(match)
+            file_id = match.group(1)
+            return f'<iframe src="https://drive.google.com/file/d/{file_id}/preview" width="560" height="315"></iframe>'
+
     elif (suffix := url.rsplit('.', 1)[-1].lower()) in allow_video_extensions:
         if suffix in mime_types:
             return f'''<video width="560" height="315" controls>
