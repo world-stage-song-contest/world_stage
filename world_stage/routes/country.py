@@ -106,7 +106,7 @@ def details(code: str, year: int):
         notes = song.lyrics_notes.split('\n')
 
     rows = max(len(english_lyrics), len(latin_lyrics), len(native_lyrics))
-    columns = (english_lyrics and 1 or 0) + (latin_lyrics and 1 or 0) + (native_lyrics and 1 or 0)
+    columns = (1 if english_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)
 
     return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year, rows=rows,
                             columns=columns,

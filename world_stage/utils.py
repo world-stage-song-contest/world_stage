@@ -300,6 +300,17 @@ class VoteData:
             return 0
         return self.pts[pt]
 
+    def as_dict(self) -> dict:
+        return {
+            'ro': self.ro,
+            'total_votes': self.total_votes,
+            'max_pts': self.max_pts,
+            'show_voters': self.show_voters,
+            'sum': self.sum,
+            'count': self.count,
+            'pts': dict(self.pts)
+        }
+
 @dataclass
 class Language:
     name: str
@@ -424,8 +435,8 @@ class Song:
             'languages': [lang.as_dict() for lang in self.languages],
             'submitter': self.submitter,
             'native_title': self.native_title,
-            'title_lang': self.title_lang.as_dict(),
-            'native_lang': self.native_lang.as_dict(),
+            'title_lang': self.title_lang.as_dict() if self.title_lang else None,
+            'native_lang': self.native_lang.as_dict() if self.native_lang else None,
             'vote_data': self.vote_data.as_dict() if self.vote_data else None
         }
 
@@ -461,6 +472,9 @@ class Show:
 
         if not isinstance(other, Show):
             return NotImplemented
+
+        if self.year is None or other.year is None:
+            return self.date < other.date
 
         if self.year != other.year:
             return self.year < other.year

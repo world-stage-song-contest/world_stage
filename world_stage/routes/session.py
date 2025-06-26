@@ -55,10 +55,10 @@ def login_post():
     if request.cookies.get('session'):
         return render_template('session/login_success.html', state="already_logged_in")
 
-    username = request.form.get('username')
+    username = request.form.get('username', '')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
-    password = request.form.get('password')
+    password = request.form.get('password', '')
 
     username_valid, username_message = validate_username(username)
     if not username_valid:
@@ -112,11 +112,11 @@ def set_password():
 
 @bp.post('/setpassword')
 def set_password_post():
-    username = request.form.get('username')
+    username = request.form.get('username', '')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
-    password = request.form.get('password')
-    password2 = request.form.get('password2')
+    password = request.form.get('password', '')
+    password2 = request.form.get('password2', '')
 
     username_valid, username_message = validate_username(username)
     if not username_valid:
@@ -162,11 +162,11 @@ def sign_up():
 
 @bp.post('/signup')
 def sign_up_post():
-    username = request.form.get('username')
+    username = request.form.get('username', '')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
-    password = request.form.get('password')
-    password2 = request.form.get('password2')
+    password = request.form.get('password', '')
+    password2 = request.form.get('password2', '')
 
     username_valid, username_message = validate_username(username)
     if not username_valid:

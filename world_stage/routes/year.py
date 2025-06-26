@@ -1,5 +1,6 @@
 from collections import defaultdict
 from flask import request, Blueprint
+import typing
 
 from ..utils import (LCG, Show, SuspensefulVoteSequencer,
                      get_show_id, dt_now, get_user_role_from_session,
@@ -132,12 +133,13 @@ def results(year: str, show: str):
             for s in songs:
                 s.hidden = True
 
-        if songs[0].vote_data:
-            songs[0].vote_data.ro = -1
-        songs[0].artist = ''
-        songs[0].title = ''
-        songs[0].country.name = ''
-        songs[0].country.cc = 'XXX'
+        if songs:
+            if songs[0].vote_data:
+                songs[0].vote_data.ro = -1
+            songs[0].artist = ''
+            songs[0].title = ''
+            songs[0].country.name = ''
+            songs[0].country.cc = 'XXX'
     elif access == 'full' and reveal:
         if show_data.dtf:
             off = show_data.dtf - 1
@@ -394,7 +396,7 @@ def qualifiers_post(year: str, show: str):
         ''', (int(song_id), final_data.id, n, i + add))
 
     if sc_data:
-        second_chance_order = body.get('sc')
+        second_chance_order = typing.cast(list[int], body.get('sc'))
         if second_chance_order and not isinstance(second_chance_order, list):
             return {'error': "Second chance order must be a list"}, 400
 

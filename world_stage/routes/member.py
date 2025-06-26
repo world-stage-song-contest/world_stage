@@ -231,7 +231,7 @@ def get_languages() -> list[dict]:
     ''')
     return [{'id': id, 'name': name} for id, name in cursor.fetchall()]
 
-def get_countries(year: int, user_id: int, all: bool = False) -> dict[str, list[dict]]:
+def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str, list[dict]]:
     db = get_db()
     cursor = db.cursor()
 
@@ -487,6 +487,7 @@ def submit_song_post():
     other_data['snippet_start'] = parse_seconds(other_data['snippet_start'])
     other_data['snippet_end'] = parse_seconds(other_data['snippet_end'])
 
+    song_data = None
     if action == 'submit':
         song_data = SongData(languages=languages, **other_data)
 
@@ -499,7 +500,7 @@ def submit_song_post():
 
     if action == 'delete':
         res = delete_song(other_data['year'], other_data['country'], other_data['title'], other_data['artist'], user_id)
-    elif action == 'submit':
+    elif action == 'submit' and song_data:
         res = update_song(song_data, user_id, set_claim)
     else:
         res = {'error': f"Unknown action: '{action}'."}
