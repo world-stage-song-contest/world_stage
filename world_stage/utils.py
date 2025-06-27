@@ -187,12 +187,12 @@ class ShowData:
     point_system_id: int
     name: str
     short_name: str
-    voting_opens: datetime.datetime
-    voting_closes: datetime.datetime
-    year: Optional[int]
-    dtf: Optional[int]
-    sc: Optional[int]
-    special: Optional[int]
+    voting_opens: datetime.datetime | None
+    voting_closes: datetime.datetime | None
+    year: int | None
+    dtf: int | None
+    sc: int | None
+    special: int | None
     access_type: str
 
 class UserPermissions(Enum):

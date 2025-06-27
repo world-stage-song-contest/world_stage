@@ -35,20 +35,24 @@ def profile(username: str):
 
     return render_template('user/page.html', username=username)
 
-def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type: str) -> dict:
+def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type: str) -> tuple[bool, bool]:
     db = get_db()
     cursor = db.cursor()
+    show_exists = False
+    song_modified = False
 
     cursor.execute('''
         SELECT id FROM show WHERE year_id = ? AND short_name = ?
     ''', (year, show_short_name))
     show = cursor.fetchone()
     if show:
+        show_exists = True
         cursor.execute('''
             SELECT COUNT(*) FROM song_show
             WHERE show_id = ? AND song_id = ?
         ''', (show[0], song['id']))
         if cursor.fetchone()[0] > 0:
+            song_modified = True
             song['class'] = f'qualifier {show_short_name}-qualifier'
             if access_type == 'partial':
                     song['title'] = ''
@@ -56,7 +60,7 @@ def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type
                     song['country'] = ''
                     song['code'] = 'XXX'
 
-    return song
+    return (show_exists, song_modified)
 
 
 @bp.get('/<username>/votes')
@@ -119,8 +123,6 @@ def votes(username: str):
             }
 
             if vote['short_name'] != 'f':
-                if vote['short_name'] == 'sc':
-                    print(f"Redacting song {val['title']} for show {vote['short_name']} in year {vote['year']}")
                 redact_song_if_show(val, vote['year'], 'f', vote['access_type'])
                 if vote['short_name'] != 'sc':
                     redact_song_if_show(val, vote['year'], 'sc', vote['access_type'])

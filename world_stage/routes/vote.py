@@ -106,8 +106,8 @@ def vote(show: str):
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
 
-    if (show_data.voting_opens > dt_now()
-        or show_data.voting_closes < dt_now()):
+    if (show_data.voting_opens and show_data.voting_opens > dt_now()
+        or show_data.voting_closes and show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
 
     db = get_db()
@@ -170,8 +170,8 @@ def vote_post(show: str):
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
 
-    if (show_data.voting_opens > dt_now()
-        or show_data.voting_closes < dt_now()):
+    if (show_data.voting_opens and show_data.voting_opens > dt_now()
+        or show_data.voting_closes and show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
 
     songs = get_show_songs(show_data.year, show_data.short_name)
