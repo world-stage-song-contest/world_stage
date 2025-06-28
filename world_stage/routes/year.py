@@ -143,6 +143,8 @@ def results(year: str, show: str):
     elif access == 'full' and reveal:
         if show_data.dtf:
             off = show_data.dtf - 1
+        if show_data.sc:
+            off += show_data.sc
         if reveal:
             for i in range(off + 1):
                 songs[i].hidden = True

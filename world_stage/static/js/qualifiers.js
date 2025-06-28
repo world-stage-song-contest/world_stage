@@ -23,6 +23,40 @@ let revealOrder = {
     }
 }
 
+function swapReveal(type, a, b) {
+    function swapDom(a,b) {
+        var aParent = a.parentNode;
+        var bParent = b.parentNode;
+
+        var aHolder = document.createElement("div");
+        var bHolder = document.createElement("div");
+
+        aParent.replaceChild(aHolder,a);
+        bParent.replaceChild(bHolder,b);
+
+        aParent.replaceChild(b,aHolder);
+        bParent.replaceChild(a,bHolder);
+    }
+
+    const arr = revealOrder[type];
+    const indexA = arr.findIndex(v => v[0].cc == a);
+    const indexB = arr.findIndex(v => v[0].cc == b);
+    console.log(`Swapping ${a} (${indexA}) with ${b} (${indexB})`);
+    if (indexA === -1 || indexB === -1) return;
+    [arr[indexA], arr[indexB]] = [arr[indexB], arr[indexA]];
+
+    const aEl = document.querySelector(`.envelope[data-id="${a}"]`);
+    const bEl = document.querySelector(`.envelope[data-id="${b}"]`);
+    console.log(aEl, bEl);
+    if (aEl && bEl) {
+        swapDom(aEl, bEl);
+        const aNum = aEl.querySelector(".envelope-number");
+        const bNum = bEl.querySelector(".envelope-number");
+        aNum.textContent = indexB + 1;
+        bNum.textContent = indexA + 1;
+    }
+}
+
 let allCountries = {};
 
 let clicked = false;
