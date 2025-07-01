@@ -210,10 +210,32 @@
         <legend>Lyrics</legend>
         <div class="banner long-text">
             <div>
-                While entering the lyrics, you may use basic markup.
-                You can use <code>*italics*</code> or <code>**bold**</code> to format the text.
-                Additionally, you can enter a footnote by using <code>[NUMBER]</code> in the text,
-                and then provide the footnote text in the footnotes section.
+                While entering the lyrics, you may use basic BBCode-like markup.
+                <details>
+                    <summary>Markup guide</summary>
+                    <ul>
+                        <li><strong>Bold</strong> - use <code>[b]bold text[/b]</code></li>
+                        <li><em>Italic</em> - use <code>[i]italic text[/i]</code></li>
+                        <li><ins>Underline</ins> - use <code>[u]underlined text[/u]</code></li>
+                        <li><del>Strikethrough</del> - use <code>[s]strikethrough text[/s]</code></li>
+                        <li><small>Small text</small> - use <code>[sm]small text[/sm]</code></li>
+                        <li><big>Big text</big> - use <code>[xl]big text[/xl]</code></li>
+                        <li><div><span class="colour-red">Coloured</span> <span class="colour-green">text</span> - use <code>[c=COLOUR]Coloured text[/c]</code> for colours.</div>
+                            <div>Available colours:</div>
+                            <ul style="background: var(--background1);">
+                                <li><code class="colour-red">red</code></li>
+                                <li><code class="colour-green">green</code></li>
+                                <li><code class="colour-blue">blue</code></li>
+                                <li><code class="colour-yellow">yellow</code></li>
+                                <li><code class="colour-cyan">cyan</code></li>
+                                <li><code class="colour-magenta">magenta</code></li>
+                            </ul>
+                            <div>For example, to make text red, use <code>[c=red]red text[/c]</code>.</div>
+                        </li>
+                    </ul>
+                    <p>You can also use <code>[NUMBER]</code> to insert a footnote number, which will be automatically generated.</p>
+                    <p>For example, to insert a footnote number 1, use <code>[1]</code>.</p>
+                </details>
             </div>
         </div>
         <div class="banner long-text">

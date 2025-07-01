@@ -91,19 +91,13 @@ def details(code: str, year: int):
     md = get_markdown_parser()
 
     if song.english_lyrics:
-        english_lyrics = song.english_lyrics.split('\n')
-        for i in range(len(english_lyrics)):
-            english_lyrics[i] = md.renderInline(english_lyrics[i])
+        english_lyrics = md.renderInline(song.english_lyrics).split('\n')
     if song.latin_lyrics:
-        latin_lyrics = song.latin_lyrics.split('\n')
-        for i in range(len(latin_lyrics)):
-         latin_lyrics[i] = md.renderInline(latin_lyrics[i])
+        latin_lyrics = md.renderInline(song.latin_lyrics).split('\n')
     if song.native_lyrics:
-        native_lyrics = song.native_lyrics.split('\n')
-        for i in range(len(native_lyrics)):
-            native_lyrics[i] = md.renderInline(native_lyrics[i])
+        native_lyrics = md.renderInline(song.native_lyrics).split('\n')
     if song.lyrics_notes:
-        notes = song.lyrics_notes.split('\n')
+        notes = md.renderInline(song.lyrics_notes).split('\n')
 
     rows = max(len(english_lyrics), len(latin_lyrics), len(native_lyrics))
     columns = (1 if english_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)

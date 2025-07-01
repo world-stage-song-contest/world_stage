@@ -43,7 +43,10 @@ function swapReveal(type, a, b) {
     const indexB = arr.findIndex(v => v[0].cc == b);
     console.log(`Swapping ${a} (${indexA}) with ${b} (${indexB})`);
     if (indexA === -1 || indexB === -1) return;
-    [arr[indexA], arr[indexB]] = [arr[indexB], arr[indexA]];
+    const vA = arr[indexA];
+    const vB = arr[indexB];
+    arr[indexA] = vB;
+    arr[indexB] = vA;
 
     const aEl = document.querySelector(`.envelope[data-id="${a}"]`);
     const bEl = document.querySelector(`.envelope[data-id="${b}"]`);

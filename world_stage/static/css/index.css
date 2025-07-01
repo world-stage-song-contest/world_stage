@@ -1,21 +1,25 @@
+
 :root {
     --background1: rgb(247, 247, 247);
     --foreground1: rgb(51, 51, 51);
     --background2: rgb(239, 214, 164);
     --foreground2: rgb(11, 25, 43);
     --background3: rgb(229, 229, 229);
-    --background3-r: 229, 229, 229;
     --link: rgb(19, 86, 187);
     --visited-link: rgb(162, 19, 187);
 
     --active-entry-color: rgb(99, 146, 234);
     --own-entry-color: rgb(249, 127, 113);
 
-    --dtf-color: #FFDEAD;
-    --sc-color: #AFEEEE;
-
     --qualifier-color: rgb(139, 235, 139);
     --sc-qualifier-color: rgb(163, 235, 235);
+
+    --red: rgb(163, 21, 21);
+    --green: rgb(0, 100, 0);
+    --yellow: rgb(181, 137, 0);
+    --blue: rgb(0, 122, 204);
+    --magenta: rgb(137, 59, 135);
+    --cyan: rgb(43, 145, 175);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,7 +29,6 @@
         --background1: rgb(17, 17, 17);
         --foreground1: rgb(238, 238, 238);
         --background3: rgb(29, 29, 29);
-        --background3-r: 29, 29, 29;
         --link: rgb(39, 121, 224);
         --visited-link: rgb(2000, 39, 224);
 
@@ -34,6 +37,13 @@
 
         --qualifier-color: rgb(0, 101, 0);
         --sc-qualifier-color: rgb(81, 122, 122);
+
+        --red: rgb(244, 71, 71);
+        --green: rgb(106, 153, 85);
+        --yellow: rgb(220, 220, 170);
+        --blue: rgb(86, 156, 214);
+        --magenta: rgb(197, 134, 192);
+        --cyan: rgb(78, 201, 176);
     }
 }
 
@@ -43,7 +53,6 @@
     --background2: rgb(239, 214, 164);
     --foreground2: rgb(11, 25, 43);
     --background3: rgb(229, 229, 229);
-    --background3-r: 229, 229, 229;
     --link: rgb(19, 86, 187);
     --visited-link: rgb(162, 19, 187);
 
@@ -52,6 +61,13 @@
 
     --qualifier-color: rgb(139, 235, 139);
     --sc-qualifier-color: rgb(163, 235, 235);
+
+    --red: rgb(163, 21, 21);
+    --green: rgb(0, 100, 0);
+    --yellow: rgb(181, 137, 0);
+    --blue: rgb(0, 122, 204);
+    --magenta: rgb(137, 59, 135);
+    --cyan: rgb(43, 145, 175);
 }
 
 :root[data-theme="dark"] {
@@ -60,7 +76,6 @@
     --background1: rgb(17, 17, 17);
     --foreground1: rgb(238, 238, 238);
     --background3: rgb(29, 29, 29);
-    --background3-r: 29, 29, 29;
     --link: rgb(39, 121, 224);
     --visited-link: rgb(2000, 39, 224);
 
@@ -69,6 +84,13 @@
 
     --qualifier-color: rgb(0, 101, 0);
     --sc-qualifier-color: rgb(81, 122, 122);
+
+    --red: rgb(244, 71, 71);
+    --green: rgb(106, 153, 85);
+    --yellow: rgb(220, 220, 170);
+    --blue: rgb(86, 156, 214);
+    --magenta: rgb(197, 134, 192);
+    --cyan: rgb(78, 201, 176);
 }
 
 body {
@@ -320,4 +342,23 @@ bdi {
 .big {
     font-size: 1.5em;
     font-weight: bold;
+}
+
+.colour-red {
+    color: var(--red);
+}
+.colour-green {
+    color: var(--green);
+}
+.colour-yellow {
+    color: var(--yellow);
+}
+.colour-blue {
+    color: var(--blue);
+}
+.colour-magenta {
+    color: var(--magenta);
+}
+.colour-cyan {
+    color: var(--cyan);
 }
