@@ -173,7 +173,6 @@ async function populateSongData() {
     for (const [key, value] of Object.entries(songData)) {
         try {
             const forceSubmitter = document.getElementById('force_submitter');
-            if (key == "is_placeholder") continue;
             if (forceSubmitter && key == "user_id") {
                 document.getElementById('force_submitter').value = value;
                 continue;

@@ -330,7 +330,13 @@ def get_countries_for_year(year):
     return {'countries': countries}
 
 @bp.get('/submit/<year>/<country>')
-def get_country_data(year, country):
+def get_country_data(year: int, country: str):
+    session_id = request.cookies.get('session')
+    d = get_user_id_from_session(session_id)
+    user_id = None
+    if d:
+        user_id = d[0]
+
     db = get_db()
     cursor = db.cursor()
 
@@ -347,6 +353,7 @@ def get_country_data(year, country):
     if not song:
         return {'error': 'Song not found'}, 404
 
+    submitter_id: int = 0
     (id, title, native_title, artist, is_placeholder,
      title_language_id, native_language_id,
      video_link, snippet_start, snippet_end,
@@ -372,7 +379,7 @@ def get_country_data(year, country):
         title=title,
         native_title=native_title,
         artist=artist,
-        is_placeholder=bool(is_placeholder),
+        is_placeholder=bool(is_placeholder) and user_id is not None and user_id != submitter_id,
         title_language_id=title_language_id,
         native_language_id=native_language_id,
         video_link=video_link,

@@ -1250,8 +1250,6 @@ def make_bbcode_plugin(allowed_colours):
             m = c_re.match(src, pos)
             if m:
                 colour = m.group(1)
-                if colour not in allowed_colours:
-                    return False
 
                 open_len = m.end()
                 close_tag = close_re['c']
@@ -1266,7 +1264,8 @@ def make_bbcode_plugin(allowed_colours):
                 state.posMax = end_pos
 
                 token = state.push('bb_colour_open', 'span', 1)
-                token.attrs = {'class': f'colour-{colour}'}
+                if colour in allowed_colours:
+                    token.attrs = {'class': f'colour-{colour}'}
                 state.md.inline.tokenize(state)
                 state.push('bb_colour_close', 'span', -1)
 
