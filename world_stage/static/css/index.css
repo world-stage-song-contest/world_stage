@@ -11,6 +11,9 @@
     --active-entry-color: rgb(99, 146, 234);
     --own-entry-color: rgb(249, 127, 113);
 
+    --dtf-color: #FFDEAD;
+    --sc-color: #AFEEEE;
+
     --qualifier-color: rgb(139, 235, 139);
     --sc-qualifier-color: rgb(163, 235, 235);
 
@@ -358,7 +361,4 @@ bdi {
 }
 .colour-magenta {
     color: var(--magenta);
-}
-.colour-cyan {
-    color: var(--cyan);
 }
