@@ -76,11 +76,13 @@ def index():
     cursor.execute('''
         SELECT id, show_name, short_name, year_id, voting_opens, voting_closes
         FROM show
-        WHERE voting_opens <= datetime('now') AND voting_closes >= datetime('now')
+        WHERE voting_opens <= datetime('now') AND (voting_closes IS NULL OR voting_closes >= datetime('now'))
     ''')
 
     for id, name, short_name, year, voting_opens, voting_closes in cursor.fetchall():
-        left = voting_closes - dt_now()
+        left = None
+        if voting_closes:
+            left = voting_closes - dt_now()
         open_votings.append({
             'id': id,
             'name': f"{year} {name}" if year else name,

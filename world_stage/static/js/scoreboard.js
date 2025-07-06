@@ -536,12 +536,14 @@ class Country {
         }
 
         const ptsDiff = this.points - other.points;
-        const votersDiff = this.voters - other.voters;
-        const vtsDiff = compareArrays(this.votes, other.votes);
-
         if (ptsDiff != 0) return ptsDiff;
+
+        const votersDiff = this.voters - other.voters;
         if (votersDiff != 0) return votersDiff;
+
+        const vtsDiff = compareArrays(this.votes, other.votes);
         if (vtsDiff != 0) return vtsDiff;
+
         return other.ro - this.ro;
     }
 
@@ -566,6 +568,7 @@ class Country {
 
     setOwnEntry() {
         this.setActive();
+        this.element.classList.add("own-entry");
         setElementText(this.currentEl, "()");
     }
 

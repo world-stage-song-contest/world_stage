@@ -483,7 +483,9 @@ class Show:
         v2 = value_map(other.short_name)
         return v1 < v2
 
-def format_timedelta(td: datetime.timedelta):
+def format_timedelta(td: datetime.timedelta | None) -> str | None:
+    if td is None:
+        return None
     days, seconds = td.days, td.seconds
     hours = seconds // 3600
     seconds %= 3600

@@ -46,7 +46,7 @@
             <legend>Songs</legend>
         {% for point in points %}
             {% set pl = loop %}
-            <label for="pts-{{point}}">{{point}} points<span class="req">*</span></label>
+            <label for="pts-{{point}}" class="req">{{point}} points</label>
             <select name="pts-{{point}}" id="pts-{{point}}" class="{% if point in invalid %}invalid{% else %}valid{% endif %}">
                 <option value=""></option>
             {% for song in songs %}

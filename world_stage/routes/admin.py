@@ -2,9 +2,12 @@ from collections import defaultdict
 import sqlite3
 from flask import Blueprint, redirect, request, url_for
 import math
+import datetime
 
 from ..db import get_db
 from ..utils import LCG, get_show_id, get_show_songs, get_user_role_from_session, get_year_countries, get_year_shows, get_years, render_template
+import shutil
+import os
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -53,8 +56,8 @@ def create_show_post():
     cur = db.cursor()
 
     cur.execute('''
-        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf, sc)
-        VALUES (:year, 1, :show_name, :short_name, :dtf, :sc)
+        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date)
+        VALUES (:year, 1, :show_name, :short_name, :dtf, :sc, :date)
     ''', data)
     db.commit()
 
@@ -294,3 +297,122 @@ def move_post():
     db.commit()
     return render_template('admin/move.html', message="Songs moved successfully.",
                            years=years, countries=countries)
+
+@bp.get('/manage/<int:year>')
+def manage(year: int):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT show_name, short_name, date, allow_access_type FROM show WHERE year_id = ?
+    ''', (year,))
+    shows = [dict(r) for r in cursor.fetchall()]
+
+    return render_template('admin/manage_shows.html', year=year, shows=shows)
+
+@bp.post('/manage/<int:year>/<show>')
+def manage_post(year: int, show: str):
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    body = request.get_json()
+    if not body:
+        return render_template('error.html', error="Empty request body"), 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    action = body.get('action')
+    if not action:
+        return render_template('error.html', error="No action specified"), 400
+
+    match action:
+        case 'open_voting':
+            cursor.execute('''
+                UPDATE show
+                SET voting_opens = datetime('now')
+                WHERE year_id = ? AND short_name = ?
+            ''', (year, show))
+        case 'close_voting':
+            cursor.execute('''
+                UPDATE show
+                SET voting_closes = datetime('now')
+                WHERE year_id = ? AND short_name = ?
+            ''', (year, show))
+        case 'set_access_type':
+            access_type = body.get('access_type')
+            if access_type not in ['none', 'draw', 'partial', 'full']:
+                return render_template('error.html', error="Invalid access type"), 400
+
+            cursor.execute('''
+                UPDATE show
+                SET allow_access_type = ?
+                WHERE year_id = ? AND short_name = ?
+            ''', (access_type, year, show))
+        case 'change_date':
+            date_str = body.get('date')
+            if not date_str:
+                return render_template('error.html', error="No date provided"), 400
+            try:
+                date = datetime.date.fromisoformat(date_str)
+            except ValueError:
+                return render_template('error.html', error="Invalid date format"), 400
+            if not date:
+                return render_template('error.html', error="Invalid date format"), 400
+
+            cursor.execute('''
+                UPDATE show
+                SET date = ?
+                WHERE year_id = ? AND short_name = ?
+            ''', (date, year, show))
+        case _:
+            return render_template('error.html', error=f"Unknown action '{action}'"), 400
+
+    db.commit()
+
+    return {'status': 'success'}, 200
+
+@bp.get('/fuckupdb')
+def fuckup_db():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    return render_template('admin/fuckupdb.html')
+
+@bp.post('/fuckupdb')
+def fuckup_db_post():
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    db = get_db()
+    cursor = db.cursor()
+
+    body = request.get_json()
+    if not body:
+        return render_template('error.html', error="Empty request body"), 400
+
+    query = body.get('query')
+    if not query:
+        return render_template('error.html', error="No query provided"), 400
+
+    backup_path = f"backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    shutil.copy2(db.execute("PRAGMA database_list").fetchone()[2], backup_path)
+
+    try:
+        cursor.execute(query)
+        db.commit()
+    except Exception as e:
+        return render_template('error.html', error=f"Query failed: {str(e)}"), 400
+
+    data = cursor.fetchall()
+    headers = [description[0] for description in cursor.description] if cursor.description else []
+    rows = [dict(row) for row in data]
+
+    return {'headers': headers, 'rows': rows}, 200
