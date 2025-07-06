@@ -259,7 +259,6 @@ def move_post():
     from_cc = request.form.get('from_cc')
     to_cc = request.form.get('to_cc')
 
-
     if not from_year_txt or not from_cc:
         return render_template('admin/move.html', error="From year and from country must be specificed",
                                from_year=from_year_txt, to_year=to_year_txt,
@@ -288,12 +287,18 @@ def move_post():
                                from_cc=from_cc, to_cc=to_cc,
                                years=years, countries=countries), 400
 
-    cursor.execute('''
-        UPDATE song
-        SET year_id = COALESCE(?, year_id),
-            country_id = COALESCE(?, country_id)
-        WHERE year_id = ? AND country_id = ?
-    ''', (to_year, to_cc, from_year, from_cc))
+    try:
+        cursor.execute('''
+            UPDATE song
+            SET year_id = COALESCE(?, year_id),
+                country_id = COALESCE(?, country_id)
+            WHERE year_id = ? AND country_id = ?
+        ''', (to_year, to_cc, from_year, from_cc))
+    except sqlite3.IntegrityError as e:
+        return render_template('admin/move.html', error=f"Database error: {str(e)}",
+                               from_year=from_year_txt, to_year=to_year_txt,
+                               from_cc=from_cc, to_cc=to_cc,
+                               years=years, countries=countries), 400
     db.commit()
     return render_template('admin/move.html', message="Songs moved successfully.",
                            years=years, countries=countries)
