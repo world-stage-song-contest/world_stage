@@ -68,11 +68,14 @@ def year(year: str):
 
         songs = get_year_songs(_year, select_languages=True)
 
+        cursor.execute('SELECT COUNT(*) FROM song WHERE year_id = ? AND is_placeholder = 0', (_year,))
+        total_entries = cursor.fetchone()[0]
+        total_placeholders = len(songs)-total_entries
         cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = ?', (year,))
         shows = [Show(year=_year, short_name=show[0], name=show[1], date=show[2]) for show in cursor.fetchall()]
         shows.sort()
 
-        return render_template('year/year.html', year=year, songs=songs, closed=closed[0], shows=shows)
+        return render_template('year/year.html', year=year, songs=songs, closed=closed[0], shows=shows, total=total_entries, placeholders=total_placeholders)
     else:
         return render_template('year/specials.html', specials=get_specials())
 
