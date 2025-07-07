@@ -70,10 +70,7 @@ def year(year: str):
 
         cursor.execute('SELECT COUNT(*) FROM song WHERE year_id = ? AND is_placeholder = 0', (_year,))
         total_entries = cursor.fetchone()[0]
-
-        cursor.execute('SELECT COUNT(*) FROM song WHERE year_id = ? AND is_placeholder = 1', (_year,))
-        total_placeholders = cursor.fetchone()[0]
-
+        total_placeholders = len(songs)-total_entries
         cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = ?', (year,))
         shows = [Show(year=_year, short_name=show[0], name=show[1], date=show[2]) for show in cursor.fetchall()]
         shows.sort()
