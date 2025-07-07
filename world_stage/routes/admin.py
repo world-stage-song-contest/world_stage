@@ -313,11 +313,18 @@ def manage(year: int):
     cursor = db.cursor()
 
     cursor.execute('''
+        SELECT id, closed FROM year WHERE id = ?
+    ''', (year,))
+    year_data = cursor.fetchone()
+    if not year_data:
+        return render_template('error.html', error=f"Year {year} not found"), 404
+
+    cursor.execute('''
         SELECT show_name, short_name, date, allow_access_type FROM show WHERE year_id = ?
     ''', (year,))
     shows = [dict(r) for r in cursor.fetchall()]
 
-    return render_template('admin/manage_shows.html', year=year, shows=shows)
+    return render_template('admin/manage_shows.html', year=year_data, shows=shows)
 
 @bp.post('/manage/<int:year>/<show>')
 def manage_post(year: int, show: str):
@@ -375,6 +382,16 @@ def manage_post(year: int, show: str):
                 SET date = ?
                 WHERE year_id = ? AND short_name = ?
             ''', (date, year, show))
+        case 'change_year_status':
+            closed = body.get('year_status')
+            if closed is None:
+                return render_template('error.html', error="No closed status provided"), 400
+
+            cursor.execute('''
+                UPDATE year
+                SET closed = ?
+                WHERE id = ?
+            ''', (closed, year))
         case _:
             return render_template('error.html', error=f"Unknown action '{action}'"), 400
 

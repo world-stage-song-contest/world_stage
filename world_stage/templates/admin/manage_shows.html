@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Manage shows: {{year}}{% endblock %}
+{% block title %}Manage shows: {{year.id}}{% endblock %}
 {% block headercontents %}
     <script src="/static/js/manage_show.js"></script>
 {% endblock %}
@@ -46,4 +46,19 @@
         {% endfor %}
     </tbody>
 </table>
+
+<div>
+    <div>
+        <label for"year_status">Year Status:</label>
+        <select name="year_status" id="year_status">
+            {% set status_names = ['Upcoming', 'Finished', 'Ongoing'] %}
+            {% for status in status_names %}
+            <option value="{{ loop.index0 }}" {% if loop.index0 == year.closed %}selected{% endif %}>
+                {{ status }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <button onclick="changeYearStatus()">Change Year Status</button>
+</div>
 {% endblock %}

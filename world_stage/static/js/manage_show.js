@@ -86,3 +86,20 @@ async function changeDate(el, showId) {
     const data = await fetchHelper(url, body);
     setError(data.error);
 }
+
+async function changeYearStatus() {
+    const select = document.getElementById('year_status');
+    if (!select) {
+        const msg = `Select element with ID year_status not found.`;
+        setError(msg);
+        console.error(msg);
+        return;
+    }
+    const url = window.location.href;
+    const body = {
+        'action': 'change_year_status',
+        'year_status': select.value
+    };
+    const data = await fetchHelper(url, body);
+    setError(data.error);
+}
