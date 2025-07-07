@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Manage shows: {{year}}{% endblock %}
+{% block headercontents %}
+    <script src="/static/js/manage_show.js"></script>
+{% endblock %}
+{% block content %}
+
+<div class="error" id="error">
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Show</th>
+            <th>Open Voting</th>
+            <th>Close Voting</th>
+            <th>Change Access Type</th>
+            <th>Change Date</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% set access_types = ['none', 'draw', 'partial', 'full'] %}
+        {% for show in shows %}
+        <tr>
+            <td>{{ show.show_name }}</td>
+            <td><button onclick="openVoting('{{ show.short_name }}')">Open Voting</td></td>
+            <td><button onclick="closeVoting('{{ show.short_name }}')">Close Voting</td></td>
+            <td>
+                <select id="access_type_{{ show.short_name }}">
+                    {% for access_type in access_types %}
+                    <option value="{{ access_type }}"
+                            {% if show.allow_access_type == access_type %}selected{% endif %}>
+                        {{ access_type }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <button data-select="access_type_{{ show.short_name }}"
+                        onclick="changeAccessType(this, '{{ show.short_name }}')">Change</button>
+            </td>
+            <td>
+                <input type="date" id="date_{{ show.short_name }}" value="{{ show.date.strftime('%Y-%m-%d') if show.date else '' }}">
+                <button data-input="date_{{ show.short_name }}"
+                        onclick="changeDate(this, '{{ show.short_name }}')">Change</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

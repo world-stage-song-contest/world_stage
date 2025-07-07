@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Move submission{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+{% if error %}
+    <p class="error">{{ error }}</p>
+{% endif %}
+
+{% if message %}
+    <p class="message">{{ message }}</p>
+{% endif %}
+<form method="POST">
+    <fieldset class="grid">
+        <legend>From</legend>
+        <label for="from_cc">Country</label>
+        <select name="from_cc" id="from_cc" required>
+            <option value=""></option>
+            {% for country in countries %}
+                <option value="{{ country.id }}" {% if country.id == from_cc %}selected{%endif%}>{{ country.name }}</option>
+            {% endfor %}
+        </select>
+        <label for="from_year">Year</label>
+        <select name="from_year" id="from_year" required>
+            <option value=""></option>
+            {% for year in years %}
+                <option value="{{ year }}" {% if year == from_year %}selected{%endif%}>{{ year }}</option>
+            {% endfor %}
+        </select>
+    </fieldset>
+    <fieldset class="grid">
+        <legend>To</legend>
+        <label for="to_cc">Country</label>
+        <select name="to_cc" id="to_cc">
+            <option value=""></option>
+            {% for country in countries %}
+                <option value="{{ country.id }}" {% if country.id == to_cc %}selected{%endif%}>{{ country.name }}</option>
+            {% endfor %}
+        </select>
+        <label for="to_year">Year</label>
+        <select name="to_year" id="to_year">
+            <option value=""></option>
+            {% for year in years %}
+                <option value="{{ year }}" {% if year == to_year %}selected{%endif%}>{{ year }}</option>
+            {% endfor %}
+        </select>
+        </fieldset>
+    <div>
+        <button type="submit">Move</button>
+    </div>
+</form>
+{% endblock %}

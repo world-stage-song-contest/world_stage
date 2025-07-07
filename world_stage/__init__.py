@@ -2,18 +2,21 @@ import os
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-def create_app():
+def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY='dev',
         DATABASE=os.path.join(app.instance_path, 'songs.db'),
     )
 
+    if config is not None:
+        app.config.update(config)
+
     app.config.from_envvar('WORLD_STAGE_CONFIG', silent=True)
 
     app.config.from_pyfile('config.py', silent=True)
     app.url_map.strict_slashes = False
-    app.wsgi_app = ProxyFix(
+    app.wsgi_app = ProxyFix( # type: ignore[method-assign]
         app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
     )
 

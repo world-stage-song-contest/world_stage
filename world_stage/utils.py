@@ -187,12 +187,12 @@ class ShowData:
     point_system_id: int
     name: str
     short_name: str
-    voting_opens: datetime.datetime
-    voting_closes: datetime.datetime
-    year: Optional[int]
-    dtf: Optional[int]
-    sc: Optional[int]
-    special: Optional[int]
+    voting_opens: datetime.datetime | None
+    voting_closes: datetime.datetime | None
+    year: int | None
+    dtf: int | None
+    sc: int | None
+    special: int | None
     access_type: str
 
 class UserPermissions(Enum):
@@ -299,6 +299,17 @@ class VoteData:
         if pt not in self.pts:
             return 0
         return self.pts[pt]
+
+    def as_dict(self) -> dict:
+        return {
+            'ro': self.ro,
+            'total_votes': self.total_votes,
+            'max_pts': self.max_pts,
+            'show_voters': self.show_voters,
+            'sum': self.sum,
+            'count': self.count,
+            'pts': dict(self.pts)
+        }
 
 @dataclass
 class Language:
@@ -424,8 +435,8 @@ class Song:
             'languages': [lang.as_dict() for lang in self.languages],
             'submitter': self.submitter,
             'native_title': self.native_title,
-            'title_lang': self.title_lang.as_dict(),
-            'native_lang': self.native_lang.as_dict(),
+            'title_lang': self.title_lang.as_dict() if self.title_lang else None,
+            'native_lang': self.native_lang.as_dict() if self.native_lang else None,
             'vote_data': self.vote_data.as_dict() if self.vote_data else None
         }
 
@@ -462,6 +473,9 @@ class Show:
         if not isinstance(other, Show):
             return NotImplemented
 
+        if self.year is None or other.year is None:
+            return self.date < other.date
+
         if self.year != other.year:
             return self.year < other.year
 
@@ -469,7 +483,9 @@ class Show:
         v2 = value_map(other.short_name)
         return v1 < v2
 
-def format_timedelta(td: datetime.timedelta):
+def format_timedelta(td: datetime.timedelta | None) -> str | None:
+    if td is None:
+        return None
     days, seconds = td.days, td.seconds
     hours = seconds // 3600
     seconds %= 3600
@@ -581,9 +597,9 @@ def get_current_year() -> int:
 
 def get_countries(only_participating: bool = False) -> list[Country]:
     if only_participating:
-        query = 'SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE is_participating = 1 ORDER BY name'
+        query = "SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE is_participating = 1 AND id <> 'XXX' ORDER BY name"
     else:
-        query = 'SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country ORDER BY name'
+        query = "SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE id <> 'XXX' ORDER BY name"
     db = get_db()
     cursor = db.cursor()
 
@@ -755,7 +771,7 @@ def get_song_languages(song_id: int) -> list[Language]:
 
     return languages
 
-def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False) -> Optional[list[Song]]:
+def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False, sort_reveal = False) -> Optional[list[Song]]:
     db = get_db()
     cursor = db.cursor()
     data = get_show_id(short_name, year)
@@ -764,7 +780,11 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
         return None
     show_id = data.id
 
-    cursor.execute('''
+    additional_sort = ''
+    if sort_reveal:
+        additional_sort = 'song_show.qualifier_order,'
+
+    cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, country.name, country.is_participating,
                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
@@ -779,7 +799,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
         WHERE show.id = ?
-        ORDER BY song_show.running_order, song_show.id
+        ORDER BY {additional_sort} song_show.running_order, song_show.id
         ''', (show_id,))
     songs = [Song(id=song['id'],
                   title=song['title'],
@@ -848,7 +868,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, country.name, country.is_participating,
                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
@@ -1137,51 +1157,159 @@ def render_template(template: str, **kwargs):
     else:
         return f"Invalid format. Accepted MIME types are: [{request.accept_mimetypes}] for UA '{request.headers.get("User-Agent", '')}'"
 
+def footnote_plugin(md: MarkdownIt):
+    def tokenize_footnote(state: StateInline, silent: bool):
+        src = state.src[state.pos:]
+        match = re.match(r'\[(\d+)\]', src)
+        if not match:
+            return False
+
+        if silent:
+            return False
+
+        number = match.group(1)
+        state.pos += match.end()
+
+        token = state.push('footnote_open', 'a', 1)
+        token.attrs = {
+            'href': f'#footnote-{number}',
+            'class': 'footnote-link'
+        }
+
+        token = state.push('sup_open', 'sup', 1)
+        token = state.push('text', '', 0)
+        token.content = f'[{number}]'
+        token = state.push('sup_close', 'sup', -1)
+
+        token = state.push('footnote_close', 'a', -1)
+
+        return True
+
+    md.inline.ruler.before('emphasis', 'footnote', tokenize_footnote)
+
+    def render_token(self, tokens, idx, options, env):
+        token = tokens[idx]
+        if token.type == 'footnote_open':
+            href = token.attrs['href']
+            cls = token.attrs['class']
+            return f'<a href="{href}" class="{cls}">'
+        elif token.type == 'footnote_close':
+            return '</a>'
+        return ''
+
+    md.add_render_rule('footnote_open', render_token)
+    md.add_render_rule('footnote_close', render_token)
+
+def make_bbcode_plugin(allowed_colours):
+    tags = {
+        'b': 'strong',
+        'i': 'em',
+        'u': 'ins',
+        's': 'del',
+        'sm': 'small',
+        'xl': 'big'
+    }
+
+    c_re = re.compile(r'\[c=([a-zA-Z]+)\]')
+    close_re = {
+        'b': '[/b]',
+        'i': '[/i]',
+        'u': '[/u]',
+        's': '[/s]',
+        'sm': '[/sm]',
+        'xl': '[/xl]',
+        'c': '[/c]',
+    }
+
+    def bbcode_plugin(md: MarkdownIt):
+
+        def tokenizer(state: StateInline, silent: bool):
+            src = state.src
+            pos = state.pos
+
+            for tag, html_tag in tags.items():
+                open_tag = f'[{tag}]'
+                close_tag = close_re[tag]
+                if src.startswith(open_tag, pos):
+                    end_pos = src.find(close_tag, pos + len(open_tag))
+                    if end_pos == -1:
+                        return False
+                    if silent:
+                        return True
+
+                    old_pos, old_max = state.pos, state.posMax
+                    state.pos = pos + len(open_tag)
+                    state.posMax = end_pos
+
+                    state.push(f'bb_{tag}_open', html_tag, 1)
+                    state.md.inline.tokenize(state)
+                    state.push(f'bb_{tag}_close', html_tag, -1)
+
+                    state.pos = end_pos + len(close_tag)
+                    state.posMax = old_max
+                    return True
+
+            m = c_re.match(src, pos)
+            if m:
+                colour = m.group(1)
+
+                open_len = m.end()
+                close_tag = close_re['c']
+                end_pos = src.find(close_tag, open_len)
+                if end_pos == -1:
+                    return False
+                if silent:
+                    return True
+
+                old_pos, old_max = state.pos, state.posMax
+                state.pos = open_len
+                state.posMax = end_pos
+
+                token = state.push('bb_colour_open', 'span', 1)
+                if colour in allowed_colours:
+                    token.attrs = {'class': f'colour-{colour}'}
+                state.md.inline.tokenize(state)
+                state.push('bb_colour_close', 'span', -1)
+
+                state.pos = end_pos + len(close_tag)
+                state.posMax = old_max
+                return True
+
+            return False
+
+        md.inline.ruler.before('emphasis', 'bbcode_all', tokenizer)
+
+        def simple_open(tag):
+            def render(self, tokens, idx, opts, env):
+                return f'<{tag}>'
+            return render
+
+        def simple_close(tag):
+            def render(self, tokens, idx, opts, env):
+                return f'</{tag}>'
+            return render
+
+        for tag, html_tag in tags.items():
+            md.add_render_rule(f'bb_{tag}_open', simple_open(html_tag))
+            md.add_render_rule(f'bb_{tag}_close', simple_close(html_tag))
+
+        # Register colour
+        def render_colour_open(self, tokens, idx, opts, env):
+            klass = tokens[idx].attrs['class']
+            return f'<span class="{klass}">'
+
+        md.add_render_rule('bb_colour_open', render_colour_open)
+        md.add_render_rule('bb_colour_close', simple_close('span'))
+
+    return bbcode_plugin
+
 @lru_cache(maxsize=1)
 def get_markdown_parser():
-    def footnote_plugin(md: MarkdownIt):
-        def tokenize_footnote(state: StateInline, silent: bool):
-            src = state.src[state.pos:]
-            match = re.match(r'\[(\d+)\]', src)
-            if not match:
-                return False
-
-            if silent:
-                return False
-
-            number = match.group(1)
-            state.pos += match.end()
-
-            token = state.push('footnote_open', 'a', 1)
-            token.attrs = {
-                'href': f'#footnote-{number}',
-                'class': 'footnote-link'
-            }
-
-            token = state.push('sup_open', 'sup', 1)
-            token = state.push('text', '', 0)
-            token.content = f'[{number}]'
-            token = state.push('sup_close', 'sup', -1)
-
-            token = state.push('footnote_close', 'a', -1)
-
-            return True
-
-        md.inline.ruler.before('emphasis', 'footnote', tokenize_footnote)
-
-        # FIXED: include 'self' as first arg
-        def render_token(self, tokens, idx, options, env):
-            token = tokens[idx]
-            if token.type == 'footnote_open':
-                href = token.attrs['href']
-                cls = token.attrs['class']
-                return f'<a href="{href}" class="{cls}">'
-            elif token.type == 'footnote_close':
-                return '</a>'
-            return ''
-
-        md.add_render_rule('footnote_open', render_token)
-        md.add_render_rule('footnote_close', render_token)
-
-    md = MarkdownIt('zero').enable(['emphasis']).use(footnote_plugin)
+    colours = {'red', 'green', 'blue', 'yellow', 'magenta', 'cyan'}
+    md = (
+        MarkdownIt('zero')
+        .enable(['emphasis'])
+        .use(footnote_plugin)
+        .use(make_bbcode_plugin(colours))
+        )
     return md

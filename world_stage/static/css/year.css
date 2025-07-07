@@ -13,7 +13,7 @@
 }
 
 .placeholder {
-    text-decoration: underline;
+    background-color: var(--background2);
 }
 
 .upcoming-year {

@@ -55,10 +55,10 @@ def login_post():
     if request.cookies.get('session'):
         return render_template('session/login_success.html', state="already_logged_in")
 
-    username = request.form.get('username')
+    username = request.form.get('username', '')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
-    password = request.form.get('password')
+    password = request.form.get('password', '')
 
     username_valid, username_message = validate_username(username)
     if not username_valid:
@@ -87,13 +87,13 @@ def login_post():
     session_id = str(uuid.uuid4())
     cursor.execute('''
         INSERT INTO session (session_id, user_id, created_at, expires_at)
-        VALUES (?, ?, datetime('now'), datetime('now', '+30 days'))
+        VALUES (?, ?, datetime('now'), datetime('now', '+365 days'))
     ''', (session_id, user_id))
 
     db.commit()
 
     resp = make_response(render_template('session/login_success.html', state="success"))
-    resp.set_cookie('session', session_id, max_age=datetime.timedelta(days=30))
+    resp.set_cookie('session', session_id, max_age=datetime.timedelta(days=365))
 
     return resp
 
@@ -112,11 +112,11 @@ def set_password():
 
 @bp.post('/setpassword')
 def set_password_post():
-    username = request.form.get('username')
+    username = request.form.get('username', '')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
-    password = request.form.get('password')
-    password2 = request.form.get('password2')
+    password = request.form.get('password', '')
+    password2 = request.form.get('password2', '')
 
     username_valid, username_message = validate_username(username)
     if not username_valid:
@@ -129,13 +129,13 @@ def set_password_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id, password FROM user WHERE username = ?', (username,))
+    cursor.execute('SELECT id, approved FROM user WHERE username = ?', (username,))
     user = cursor.fetchone()
     if not user:
         return render_template('session/set_password.html', message="User not found.")
-    user_id, stored_password = user
-    if stored_password:
-        return render_template('session/set_password.html', message="Password already set.")
+    user_id, approved = user
+    if not approved:
+        return render_template('session/set_password.html', message="Your account is not approved yet.")
     hashed, salt = hash_password(password)
     cursor.execute('''
         UPDATE user
@@ -162,11 +162,11 @@ def sign_up():
 
 @bp.post('/signup')
 def sign_up_post():
-    username = request.form.get('username')
+    username = request.form.get('username', '')
     username = username.strip()
     username = unicodedata.normalize('NFKC', username)
-    password = request.form.get('password')
-    password2 = request.form.get('password2')
+    password = request.form.get('password', '')
+    password2 = request.form.get('password2', '')
 
     username_valid, username_message = validate_username(username)
     if not username_valid:

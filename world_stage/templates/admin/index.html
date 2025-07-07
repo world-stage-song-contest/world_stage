@@ -7,5 +7,14 @@
         <img src="/static/images/submit.png" alt="Submit Icon">
         <p>Create new shows for World Stage</p>
     </a>
+    <a href="{{ url_for('admin.changes') }}" class="card">
+        <h3>Changes</h3>
+        <img src="/static/images/history.png" alt="History Icon">
+        <p>Recent changes</p>
+    </a>
+    <a href="{{ url_for('admin.move') }}" class="card">
+        <h3>Move</h3>
+        <p>Change years and countries for entries</p>
+    </a>
 </div>
 {% endblock %}
