@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Recent changes{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/changes.css">
+{% endblock %}
+{% block content %}
+<table>
+    <thead>
+        <tr>
+        <th>Country</th>
+        <th>Year</th>
+        <th>Artist</th>
+        <th>Title</th>
+        <th>Submitter</th>
+        <th>Datetime modified</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for change in changes %}
+        <tr>
+            <td><a href="{{ url_for('country.country', code=change.cc.lower()) }}">{{ flag(change.cc, 24, change.name) }} {{ change.name }}</a></td>
+            <td><a href="{{ url_for('year.year', year=(change.year)) }}">{{ change.year }}</a></td>
+            <td>{{ change.artist }}</td>
+            <td>{{ change.title }}</td>
+            <td>{{ change.submitter }}</td>
+            <td>{{ change.modified_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        </tr>
+    {% endfor %}
+{% endblock %}

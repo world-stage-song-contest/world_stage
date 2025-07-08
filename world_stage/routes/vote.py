@@ -4,7 +4,7 @@ from flask import make_response, request, Blueprint
 import datetime
 import unicodedata
 
-from ..utils import format_timedelta, get_show_id, get_countries, dt_now, get_show_songs, get_user_id_from_session, get_vote_count_for_show, render_template
+from ..utils import format_timedelta, get_show_id, get_countries, dt_now, get_show_songs, get_user_id_from_session, get_user_songs, get_vote_count_for_show, render_template
 from ..db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
@@ -76,11 +76,13 @@ def index():
     cursor.execute('''
         SELECT id, show_name, short_name, year_id, voting_opens, voting_closes
         FROM show
-        WHERE voting_opens <= datetime('now') AND voting_closes >= datetime('now')
+        WHERE voting_opens <= datetime('now') AND (voting_closes IS NULL OR voting_closes >= datetime('now'))
     ''')
 
     for id, name, short_name, year, voting_opens, voting_closes in cursor.fetchall():
-        left = voting_closes - dt_now()
+        left = None
+        if voting_closes:
+            left = voting_closes - dt_now()
         open_votings.append({
             'id': id,
             'name': f"{year} {name}" if year else name,
@@ -106,8 +108,8 @@ def vote(show: str):
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
 
-    if (show_data.voting_opens > dt_now()
-        or show_data.voting_closes < dt_now()):
+    if (show_data.voting_opens and show_data.voting_opens > dt_now()
+        or show_data.voting_closes and show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
 
     db = get_db()
@@ -119,16 +121,25 @@ def vote(show: str):
             _, username = d
 
     vote_set_id = None
+    countries = []
     if username:
-        cursor.execute('''
-            SELECT vote_set.id, vote_set.nickname, vote_set.country_id
-            FROM vote_set
-            JOIN user ON vote_set.voter_id = user.id
-            WHERE user.username = ? AND vote_set.show_id = ?
-        ''', (username, show_data.id))
-        vote_set_id = cursor.fetchone()
-        if vote_set_id:
-            vote_set_id, nickname, country_id = vote_set_id
+        cursor.execute('SELECT id FROM user WHERE username = ? COLLATE NOCASE', (username,))
+        user_id = cursor.fetchone()
+        if user_id:
+            user_songs = get_user_songs(user_id[0], show_data.year)
+            countries = list(map(lambda s: s.country, user_songs))
+            cursor.execute('''
+                SELECT vote_set.id, vote_set.nickname, vote_set.country_id
+                FROM vote_set
+                JOIN user ON vote_set.voter_id = user.id
+                WHERE user.username = ? AND vote_set.show_id = ?
+            ''', (username, show_data.id))
+            vote_set_id = cursor.fetchone()
+            if vote_set_id:
+                vote_set_id, nickname, country_id = vote_set_id
+
+    if not countries:
+        countries = get_countries()
 
     if vote_set_id:
         cursor.execute('''
@@ -144,8 +155,9 @@ def vote(show: str):
     return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, selected=selected,
                            username=username, nickname=nickname, country=country,
-                           year=show_data.year, show_name=show_data.name, show=show,
-                           selected_country=country_id, countries=get_countries(),
+                           year=show_data.year, show_name=show_data.name,
+                           short_name=show_data.short_name, show=show,
+                           selected_country=country_id, countries=countries,
                            vote_count=get_vote_count_for_show(show_data.id))
 
 @bp.post('/<show>')
@@ -160,8 +172,8 @@ def vote_post(show: str):
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
 
-    if (show_data.voting_opens > dt_now()
-        or show_data.voting_closes < dt_now()):
+    if (show_data.voting_opens and show_data.voting_opens > dt_now()
+        or show_data.voting_closes and show_data.voting_closes < dt_now()):
         return render_template('error.html', error="Voting is closed"), 400
 
     songs = get_show_songs(show_data.year, show_data.short_name)
@@ -171,7 +183,9 @@ def vote_post(show: str):
     username_invalid = False
     username = request.form['username']
     username = unicodedata.normalize('NFKC', username)
+    username = username.strip()
     nickname = request.form['nickname']
+    nickname = nickname.strip()
     country_id: Optional[str] = request.form['country']
     if not country_id:
         country_id = None
@@ -189,6 +203,18 @@ def vote_post(show: str):
         voter_id = voter[0]
     else:
         voter_id = 0
+
+    country_codes = []
+    country_names = []
+    if voter_id:
+        user_songs = get_user_songs(voter_id, show_data.year)
+        countries = list(map(lambda s: s.country, user_songs))
+        country_codes = [c.cc for c in countries]
+        country_names = [c.name for c in countries]
+
+    if country_codes and country_id not in country_codes:
+        errors.append(f"You can only vote as one of the countries you submitted: ({', '.join(country_names)})")
+        country_id = None
 
     cursor.execute('''
         SELECT id FROM song WHERE submitter_id = ?

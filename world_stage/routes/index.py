@@ -10,7 +10,38 @@ def home():
 
 @bp.get('/favicon.ico')
 def favicon():
-    return send_file('files/favicon.ico')
+    return send_file('files/favicons/favicon.ico')
+
+@bp.get('/favicons/<name>')
+def favicons(name: str):
+    valid_names = ['favicon.ico', 'favicon-16x16.png', 'favicon-32x32.png', 'favicon.svg',
+                   'apple-touch-icon.png', 'android-chrome-192x192.png', 'android-chrome-512x512.png',
+                   'site.webmanifest']
+    if name not in valid_names:
+        return render_template('error.html', error="Invalid favicon name."), 404
+
+    file_path = os.path.join(current_app.root_path, 'files', 'favicons', name)
+    if not os.path.exists(file_path):
+        return render_template('error.html', error="Favicon not found."), 404
+
+    resp = make_response(send_file(file_path))
+    match name:
+        case 'favicon.ico':
+            resp.headers['Content-Type'] = 'image/x-icon'
+        case 'favicon-16x16.png' | 'favicon-32x32.png':
+            resp.headers['Content-Type'] = 'image/png'
+        case 'favicon.svg':
+            resp.headers['Content-Type'] = 'image/svg+xml'
+        case 'apple-touch-icon.png':
+            resp.headers['Content-Type'] = 'image/png'
+        case 'android-chrome-192x192.png' | 'android-chrome-512x512.png':
+            resp.headers['Content-Type'] = 'image/png'
+        case 'site.webmanifest':
+            resp.headers['Content-Type'] = 'application/manifest+json'
+    resp.cache_control.max_age = 60 * 60 * 24 * 30
+    resp.cache_control.public = True
+    resp.cache_control.immutable = True
+    return resp
 
 @bp.get('/error')
 def error():
@@ -65,6 +96,8 @@ def flag(country: str):
     file = os.path.join(root, 'files', 'flags', country, f'{type}-{size}.svg')
     if not os.path.exists(file):
         file = os.path.join(root, 'files', 'flags', country, f'{type}.svg')
+    if not os.path.exists(file):
+        file = os.path.join(root, 'files', 'flags', 'XXX', f'{type}.svg')
 
     resp = make_response(send_file(file))
     resp.headers['Content-Type'] = 'image/svg+xml'

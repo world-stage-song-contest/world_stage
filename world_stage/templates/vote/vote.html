@@ -12,16 +12,19 @@
 
 <div class="big">{{ vote_count }} people have already voted</div>
 
-<div class="banner">
-    <dl>
-        <dt><strong>Voter Name</strong> (Mandatory)</dt>
-        <dd>The username you use to log in. Will be automatically filled if you're logged in.</dd>
-        <dt><strong>Display Name</strong></dt>
-        <dd>The name you want to be displayed on the scoreboard. If left blank, will default to the username.</dd>
-        <dt><strong>Country</strong> (Required)</dt>
-        <dd>The flag you're voting under. Check in with the jury list spreadsheet for more information.
-            You may not vote for this country (or any of your submissions) while voting.</dd>
-    </dl>
+<div class="banner long-text">
+    <div>
+        <dl>
+            <dt><strong>Voter Name</strong> (Mandatory)</dt>
+            <dd>The username you use to log in. Will be automatically filled if you're logged in.</dd>
+            <dt><strong>Display Name</strong></dt>
+            <dd>The name you want to be displayed on the scoreboard. If left blank, will default to the username.</dd>
+            <dt><strong>Country</strong> (Required)</dt>
+            <dd>The flag you're voting under. If you submitted an entry, you may only choose a flag of the country you've submitted admins.
+                Otherwise, you can choose any country. If you haven't submitted an entry, you're allowed to vote for anything.</dd>
+            </dd>
+        </dl>
+    </div>
 </div>
 
 <form method="POST">
@@ -43,7 +46,7 @@
             <legend>Songs</legend>
         {% for point in points %}
             {% set pl = loop %}
-            <label for="pts-{{point}}">{{point}} points<span class="req">*</span></label>
+            <label for="pts-{{point}}" class="req">{{point}} points</label>
             <select name="pts-{{point}}" id="pts-{{point}}" class="{% if point in invalid %}invalid{% else %}valid{% endif %}">
                 <option value=""></option>
             {% for song in songs %}
@@ -55,6 +58,11 @@
         {% endfor %}
         </fieldset>
     </div>
+     <fieldset class="grid">
+            <legend>Recap</legend>
+            {% set url = "https://funcall.me/data/recaps/" ~ year ~ short_name ~ ".mp4" %}
+            <video width="560" height="315" controls><source src="{{ url }}" type="video/mp4">Your browser does not support the video tag.</video>
+    </fieldset>
     <div>
         <button type="submit">Submit</button>
     </div>

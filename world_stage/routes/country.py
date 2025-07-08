@@ -24,6 +24,15 @@ def country(code: str):
     name = get_country_name(code.upper())
     return render_template('country/country.html', songs=songs, country=code, country_name=name)
 
+allow_video_extensions = ('mp4', 'm4v', 'webm', 'ogg', 'mov')
+mime_types = {
+    'mp4': 'video/mp4',
+    'm4v': 'video/x-m4v',
+    'webm': 'video/webm',
+    'ogg': 'video/ogg',
+    'mov': 'video/quicktime'
+}
+
 def generate_iframe(url: str):
     if 'youtu.be' in url:
         video_id = url.split('/')[-1]
@@ -35,11 +44,25 @@ def generate_iframe(url: str):
             video_id = match.group(1)
             return f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
 
-    elif url.endswith('.mp4'):
-        return f'<video width="560" height="315" controls><source src="{url}" type="video/mp4">Your browser does not support the video tag.</video>'
+    elif 'drive.google.com/file/d/' in url:
+        print(url)
+        match = re.search(r'/d/([^/]+)', url)
+        if match:
+            print(match)
+            file_id = match.group(1)
+            return f'<iframe src="https://drive.google.com/file/d/{file_id}/preview" width="560" height="315"></iframe>'
+
+    elif (suffix := url.rsplit('.', 1)[-1].lower()) in allow_video_extensions:
+        if suffix in mime_types:
+            return f'''<video width="560" height="315" controls>
+            <source src="{url}" type="{mime_types[suffix]}">
+            This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.
+            </video>'''
+        else:
+            return f'''This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.'''
 
     else:
-        return f'<!-- Unsupported URL: {url} -->'
+        return f'''This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.'''
 
 @bp.get('/<code>/<int:year>')
 def details(code: str, year: int):
@@ -68,20 +91,18 @@ def details(code: str, year: int):
     md = get_markdown_parser()
 
     if song.english_lyrics:
-        english_lyrics = song.english_lyrics.split('\n')
-        for i in range(len(english_lyrics)):
-            english_lyrics[i] = md.renderInline(english_lyrics[i])
+        english_lyrics = md.renderInline(song.english_lyrics).split('\n')
     if song.latin_lyrics:
-        latin_lyrics = song.latin_lyrics.split('\n')
-        for i in range(len(latin_lyrics)):
-         latin_lyrics[i] = md.renderInline(latin_lyrics[i])
+        latin_lyrics = md.renderInline(song.latin_lyrics).split('\n')
     if song.native_lyrics:
-        native_lyrics = song.native_lyrics.split('\n')
-        for i in range(len(native_lyrics)):
-            native_lyrics[i] = md.renderInline(native_lyrics[i])
+        native_lyrics = md.renderInline(song.native_lyrics).split('\n')
     if song.lyrics_notes:
-        notes = song.lyrics_notes.split('\n')
+        notes = md.renderInline(song.lyrics_notes).split('\n')
 
-    return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year,
-                           native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
-                           can_edit=can_edit, notes=notes)
+    rows = max(len(english_lyrics), len(latin_lyrics), len(native_lyrics))
+    columns = (1 if english_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)
+
+    return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year, rows=rows,
+                            columns=columns,
+                            native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
+                            can_edit=can_edit, notes=notes)

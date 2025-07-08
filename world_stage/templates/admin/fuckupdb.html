@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Fuck Up The Database{% endblock %}
+{% block headercontents %}
+    <script src="/static/js/database.js"></script>
+{% endblock %}
+{% block content %}
+
+<div class="error" id="error">
+</div>
+
+<div>
+    <textarea id="query" cols="80" rows="25">
+    </textarea>
+</div>
+
+<div>
+<button onclick="submitQuery()">Submit Query</button>
+</div>
+
+<table id="result">
+</table>
+{% endblock %}

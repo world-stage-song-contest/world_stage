@@ -1,5 +1,6 @@
 from collections import defaultdict
 from flask import request, Blueprint
+import typing
 
 from ..utils import (LCG, Show, SuspensefulVoteSequencer,
                      get_show_id, dt_now, get_user_role_from_session,
@@ -113,34 +114,48 @@ def results(year: str, show: str):
     if not songs:
         return render_template('error.html', error="No songs found for this show."), 404
 
+    participants = len(songs)
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT count(voter_id) FROM vote_set WHERE show_id = ?', (show_data.id,))
+    voter_count = cursor.fetchone()[0]
     songs.sort(reverse=True)
 
     off = 0
     if access == 'partial':
         if show_data.dtf:
             off = show_data.dtf - 1
+        if show_data.sc:
+            off += show_data.sc
         songs = songs[off:]
         if reveal:
             for s in songs:
                 s.hidden = True
 
-        if songs[0].vote_data:
-            songs[0].vote_data.ro = -1
-        songs[0].artist = ''
-        songs[0].title = ''
-        songs[0].country.name = ''
-        songs[0].country.cc = 'XXX'
+        if songs:
+            if songs[0].vote_data:
+                songs[0].vote_data.ro = -1
+            songs[0].artist = ''
+            songs[0].title = ''
+            songs[0].country.name = ''
+            songs[0].country.cc = 'XXX'
     elif access == 'full' and reveal:
         if show_data.dtf:
             off = show_data.dtf - 1
+        if show_data.sc:
+            off += show_data.sc
         if reveal:
             for i in range(off + 1):
                 songs[i].hidden = True
         off = 0
 
-    return render_template('year/summary.html', hidden=reveal,
+    qualifiers = show_data.dtf or 0
+    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+
+    return render_template('year/summary.html', hidden=reveal, qualifiers=qualifiers, sc_qualifiers=sc_qualifiers,
                            songs=songs, points=show_data.points, show=show, access=access, offset=off,
-                           show_name=show_data.name, show_id=show_data.id, year=year, participants=len(songs))
+                           show_name=show_data.name, short_name=show_data.short_name, show_id=show_data.id, year=year, participants=participants, voters=voter_count)
 
 @bp.get('/<year>/<show>/detailed')
 def detailed_results(year: str, show: str):
@@ -197,7 +212,11 @@ def detailed_results(year: str, show: str):
 
     songs.sort(reverse=True)
 
-    return render_template('year/detailed.html', songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
+    qualifiers = show_data.dtf or 0
+    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+
+    return render_template('year/detailed.html', qualifiers=qualifiers, sc_qualifiers=sc_qualifiers,
+                           songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
 
 @bp.get('/<year>/<show>/scoreboard')
 def scoreboard(year: str, show: str):
@@ -333,20 +352,24 @@ def qualifiers_post(year: str, show: str):
     if show_data.dtf is None:
         return {"error": "Not a semi-final."}, 400
 
-    final_data = get_show_id('f', _year)
-    if not final_data:
-        return {"error": "Final show not found"}, 404
-
-    if show_data.short_name == 'ac':
-        sf_number = 5
-    else:
-        sf_number = int(show_data.short_name.removeprefix('sf'))
-
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
     if show_data.access_type != 'full' and not permissions.can_view_restricted:
         return {'error': "You aren't allowed to access the qualifiers"}, 400
+
+    final_data = get_show_id('f', _year)
+    if not final_data:
+        return {"error": "Final show not found"}, 404
+
+    sc_data = get_show_id('sc', _year)
+
+    if show_data.short_name == 'sc':
+        sf_number = 9
+    elif show_data.short_name.startswith('sf'):
+        sf_number = int(show_data.short_name.removeprefix('sf'))
+    else:
+        return {'error': "Invalid semi-final show name"}, 400
 
     body = request.json
     if not body or not isinstance(body, dict):
@@ -356,19 +379,35 @@ def qualifiers_post(year: str, show: str):
     if action != 'save':
         return {'error': "Invalid action"}, 400
 
-    song_order = body.get('revealOrder')
-    if not song_order or not isinstance(song_order, list):
-        return {'error': "Reveal order not provided"}, 400
-
     db = get_db()
     cursor = db.cursor()
 
-    for i, song_id in enumerate(song_order):
-        n = i + 1 + sf_number / 10
+    final_order = body.get('dtf')
+    if not final_order or not isinstance(final_order, list):
+        return {'error': "Reveal order not provided"}, 400
+
+    for i, song_id in enumerate(final_order):
+        n = sf_number + (i + 1) / 100
+        if sf_number == 9:
+            add = 20
+        else:
+            add = 1
         cursor.execute('''
-            INSERT OR REPLACE INTO song_show (song_id, show_id, running_order)
-            VALUES (?, ?, ?)
-        ''', (int(song_id), final_data.id, n))
+            INSERT OR REPLACE INTO song_show (song_id, show_id, running_order, qualifier_order)
+            VALUES (?, ?, ?, ?)
+        ''', (int(song_id), final_data.id, n, i + add))
+
+    if sc_data:
+        second_chance_order = typing.cast(list[int], body.get('sc'))
+        if second_chance_order and not isinstance(second_chance_order, list):
+            return {'error': "Second chance order must be a list"}, 400
+
+        for i, song_id in enumerate(second_chance_order):
+            n = sf_number + (i + 1) / 100
+            cursor.execute('''
+                INSERT OR REPLACE INTO song_show (song_id, show_id, running_order, qualifier_order)
+                VALUES (?, ?, ?, ?)
+            ''', (int(song_id), sc_data.id, n, i + 1))
     db.commit()
 
     return {'success': True, 'message': "Qualifiers saved successfully."}

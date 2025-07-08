@@ -199,7 +199,7 @@ function makeVotingCard(from, code, country) {
 }
 
 function setDigitClasses(el, value, setZero) {
-    if (setZero && value == 0) {
+    if (setZero && (value == 0 || value == ' ')) {
         el.classList.add("zero-value");
         el.classList.remove("nonzero-value");
     } else {
@@ -209,16 +209,31 @@ function setDigitClasses(el, value, setZero) {
 }
 
 /**
- * @param {HTMLElement} el 
- * @param {number} value 
+ * @param {HTMLElement} el
+ * @param {number} value
  */
 function setDigitValue(el, value) {
     el.textContent = value;
 }
 
+
 /**
- * @param {HTMLElement} el 
- * @param {number} value 
+ * @param {HTMLElement} el
+ * @param {string} value
+ */
+function setElementText(el, value) {
+    const digits = String(value).padStart(el.dataset.pad, " ");
+    for (let i = 0; i < el.children.length; i++) {
+        const digitEl = el.children[i];
+        const char = digits[i];
+        setDigitClasses(digitEl, char, true);
+        setDigitValue(digitEl, char);
+    }
+}
+
+/**
+ * @param {HTMLElement} el
+ * @param {number} value
  */
 function setElementValue(el, value, setZero) {
     const digits = String(value).padStart(el.dataset.pad, "0");
@@ -254,8 +269,8 @@ function prepareElement(el, value, setZero) {
 const duration = 1250;
 
 /**
- * @param {HTMLElement} element 
- * @param {number} end 
+ * @param {HTMLElement} element
+ * @param {number} end
  */
 function animatePoints(element, end, setZero) {
     end = +end;
@@ -286,8 +301,8 @@ function animatePoints(element, end, setZero) {
 }
 
 /**
- * @param {HTMLElement} element 
- * @param {number} end 
+ * @param {HTMLElement} element
+ * @param {number} end
  */
 function animateDigit(element, end, allowCountDown = false, setZero = false) {
     end = +end;
@@ -323,8 +338,8 @@ function animateDigit(element, end, allowCountDown = false, setZero = false) {
 }
 
 /**
- * @param {HTMLElement} element 
- * @param {number} end 
+ * @param {HTMLElement} element
+ * @param {number} end
  */
 function animatePointsSeparately(element, end, allowCountDown = true) {
     const padding = +element.dataset.pad;
@@ -452,6 +467,18 @@ class Country {
         //countDownPointValue(pt);
     }
 
+    setActive() {
+        this.element.classList.remove("inactive");
+        this.currentEl.classList.add("visible");
+        this.element.classList.add("main-moving", "active", "received-points");
+    }
+
+    setInactive() {
+        this.currentEl.classList.remove("visible");
+        this.element.classList.add("inactive");
+        this.element.classList.remove("received-gold", "received-silver", "received-bronze", "received-points", "active", "own-entry");
+    }
+
     /**
      * @param {number} pt
      */
@@ -460,25 +487,20 @@ class Country {
             setTimeout(() => {
                 setElementValue(this.currentEl, 0, true);
             }, 1100);
-            this.currentEl.classList.remove("visible");
-            this.element.classList.add("inactive");
-            this.element.classList.remove("gold", "silver", "bronze", "active", "own-entry");
+            this.setInactive();
         } else {
             animatePoints(this.totalEl, this.points, true);
             animatePoints(this.currentEl, pt, true);
-            this.element.classList.remove("inactive");
-            this.currentEl.classList.add("visible");
-            this.element.classList.add("main-moving");
-            /*if (pt == points[points.length - 1]) {
-                this.element.classList.add("gold");
+            this.setActive();
+            if (pt == points[points.length - 1]) {
+                this.element.classList.add("received-gold");
             } else if (pt == points[points.length - 2]) {
-                this.element.classList.add("silver");
+                this.element.classList.add("received-silver");
             }
             else if (pt == points[points.length - 3]) {
-                this.element.classList.add("bronze");
-            } else {*/
-            this.element.classList.add("active");
-            //}
+                this.element.classList.add("received-bronze");
+            } else {
+            }
         }
     }
 
@@ -486,9 +508,7 @@ class Country {
      * @param {number} place
      */
     setPlace(place) {
-        this.currentEl.classList.add("showing-place");
-        this.element.classList.remove("own-entry", "active");
-        this.element.classList.add("inactive");
+        this.setActive();
         const parent = this.element.parentElement;
         parent.insertBefore(this.element, parent.childNodes[place]);
         animatePoints(this.currentEl, place, true);
@@ -516,12 +536,14 @@ class Country {
         }
 
         const ptsDiff = this.points - other.points;
-        const votersDiff = this.voters - other.voters;
-        const vtsDiff = compareArrays(this.votes, other.votes);
-
         if (ptsDiff != 0) return ptsDiff;
+
+        const votersDiff = this.voters - other.voters;
         if (votersDiff != 0) return votersDiff;
+
+        const vtsDiff = compareArrays(this.votes, other.votes);
         if (vtsDiff != 0) return vtsDiff;
+
         return other.ro - this.ro;
     }
 
@@ -542,6 +564,12 @@ class Country {
     setWinner() {
         this.element.classList.add("winner");
         this.element.classList.remove("no-win", "own-entry", "active");
+    }
+
+    setOwnEntry() {
+        this.setActive();
+        this.element.classList.add("own-entry");
+        setElementText(this.currentEl, "()");
     }
 
     toString() {
@@ -657,11 +685,15 @@ async function vote() {
         card.classList.remove("unloaded");
         await new Promise(r => setTimeout(r, 2000));
 
+        const ownCountry = ro.filter(c => c.code == code);
+        if (ownCountry.length > 0) {
+            ownCountry[0].setOwnEntry();
+        }
         if (entries) {
             for (const entry of entries) {
                 const country = countries[entry];
                 if (country) {
-                    country.element.classList.add("own-entry");
+                    country.setOwnEntry();
                 }
             }
             await new Promise(r => setTimeout(r, 500));

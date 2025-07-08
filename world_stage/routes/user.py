@@ -35,6 +35,34 @@ def profile(username: str):
 
     return render_template('user/page.html', username=username)
 
+def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type: str) -> tuple[bool, bool]:
+    db = get_db()
+    cursor = db.cursor()
+    show_exists = False
+    song_modified = False
+
+    cursor.execute('''
+        SELECT id FROM show WHERE year_id = ? AND short_name = ?
+    ''', (year, show_short_name))
+    show = cursor.fetchone()
+    if show:
+        show_exists = True
+        cursor.execute('''
+            SELECT COUNT(*) FROM song_show
+            WHERE show_id = ? AND song_id = ?
+        ''', (show[0], song['id']))
+        if cursor.fetchone()[0] > 0:
+            song_modified = True
+            song['class'] = f'qualifier {show_short_name}-qualifier'
+            if access_type == 'partial':
+                    song['title'] = ''
+                    song['artist'] = ''
+                    song['country'] = ''
+                    song['code'] = 'XXX'
+
+    return (show_exists, song_modified)
+
+
 @bp.get('/<username>/votes')
 def votes(username: str):
     username = urllib.parse.unquote(username)
@@ -85,6 +113,7 @@ def votes(username: str):
         songs = []
         for pts, title, artist, country_id, country, id in cursor.fetchall():
             val = {
+                'id': id,
                 'pts': pts,
                 'title': title,
                 'artist': artist,
@@ -94,22 +123,9 @@ def votes(username: str):
             }
 
             if vote['short_name'] != 'f':
-                cursor.execute('''
-                    SELECT id FROM show WHERE year_id = ? AND short_name = 'f'
-                ''', (vote['year'],))
-                final_show = cursor.fetchone()
-                if final_show:
-                    cursor.execute('''
-                        SELECT COUNT(*) FROM song_show
-                        WHERE show_id = ? AND song_id = ?
-                    ''', (final_show[0], id))
-                    if cursor.fetchone()[0] > 0:
-                        val['class'] = 'qualifier'
-                        if vote['access_type'] == 'partial':
-                                val['title'] = ''
-                                val['artist'] = ''
-                                val['country'] = ''
-                                val['code'] = 'XXX'
+                redact_song_if_show(val, vote['year'], 'f', vote['access_type'])
+                if vote['short_name'] != 'sc':
+                    redact_song_if_show(val, vote['year'], 'sc', vote['access_type'])
             songs.append(val)
         vote['points'] = songs
 

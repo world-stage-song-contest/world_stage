@@ -47,7 +47,7 @@
 .country {
     display: flex;
     gap: 0.25em;
-	align-items: center;
+	  align-items: center;
 }
 
 th.plain {
@@ -58,6 +58,16 @@ th.plain {
 td.header-like {
     font-weight: bold;
     text-align: center;
+}
+
+.direct-to-final {
+    background: navajowhite;
+    color: black;
+}
+
+.second-chance {
+    background: paleturquoise;
+    color: black;
 }
 
 .first {
