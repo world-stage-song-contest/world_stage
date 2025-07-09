@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewbox="0 0 96 96">
+	<defs>
+		<clipPath id="globe">
+			<circle cx="48" cy="48" r="20"/>
+			</clipPath>
+		<clipPath id="slice">
+			<path d="M48 18l30 30l-30 30l-30 -30z"/>
+			</clipPath>
+		</defs>
+	<path fill="#084" d="M0 0h96v96H0z"/>
+	<path fill="#217" d="M0 0h96v96H0z" clip-path="url(#slice)"/>
+	<circle fill="#fff" cx="36" cy="90" r="51" clip-path="url(#slice)"/>
+	<circle fill="#217" cx="36" cy="90" r="48" clip-path="url(#slice)"/>
+	<path fill="#fc0" d="M48 8l40 40l-40 40l-40 -40z" mask="url(#globe)"/>
+</svg>
