@@ -14,11 +14,18 @@ def index():
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, username FROM user
+        SELECT id, username, role FROM user
         ORDER BY username
     ''')
     users = defaultdict(list)
-    for id, username in cursor.fetchall():
+    admins = []
+    for id, username, role in cursor.fetchall():
+        if role == 'admin' or role == 'owner':
+            admins.append({
+                'id': id,
+                'username': username
+            })
+            continue
         first_letter = username[0].upper()
         val = {
             'id': id,
@@ -26,7 +33,7 @@ def index():
         }
         users[first_letter].append(val)
 
-    return render_template('user/index.html', users=users)
+    return render_template('user/index.html', users=users, admins=admins)
 
 @bp.get('/<username>')
 def profile(username: str):
