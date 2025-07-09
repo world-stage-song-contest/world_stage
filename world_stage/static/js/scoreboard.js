@@ -392,7 +392,7 @@ class Country {
     code;
     /** @type {boolean} */
     win;
-    /** @type {Array<number>} */
+    /** @type {Object<number, number>} */
     votes;
     /** @type {HTMLElement} */
     element;
@@ -426,19 +426,21 @@ class Country {
         this.fg2 = data.fg2;
         this.text = data.text;
         this.win = true;
-        this.votes = new Array(Math.max(...points) + 1).fill(0);
+        this.votes = new Proxy({}, {
+            get: (target, name) => name in target ? target[name] : 0
+        });
         [this.nameEl, this.currentEl, this.totalEl, this.element, this.currentlyVotingEl] = makeRow(this);
     }
 
     get points() {
-        return this.votes.reduce(
-            (a, v, i) => a + v * i,
+        return Object.entries(this.votes).reduce(
+            (a, v) => a + v[0] * v[1],
             0
         );
     }
 
     get voters() {
-        return this.votes.reduce((a, v) => a + v, 0);
+        return Object.keys(this.votes).length;
     }
 
     /**
@@ -523,15 +525,19 @@ class Country {
      * @returns {number}
      */
     compare(other) {
-        function compareArrays(arr1, arr2) {
-            for (let i = arr1.length - 1; i <= 0; i++) {
-                const el1 = arr1[i];
-                const el2 = arr2[i];
+        function compareDicts(dict1, dict2) {
+            const keys1 = Object.keys(dict1);
+            const keys2 = Object.keys(dict2);
+            const allKeys = [...new Set([...keys1, ...keys2])];
+            allKeys.sort((a, b) => a - b);
+            for (const key of allKeys) {
+                const val1 = dict1[key];
+                const val2 = dict2[key];
 
-                const d = el1 - el2;
-                if (d != 0) return d;
+                if (val1 !== val2) {
+                    return val1 - val2;
+                }
             }
-
             return 0;
         }
 
@@ -541,7 +547,7 @@ class Country {
         const votersDiff = this.voters - other.voters;
         if (votersDiff != 0) return votersDiff;
 
-        const vtsDiff = compareArrays(this.votes, other.votes);
+        const vtsDiff = compareDicts(this.votes, other.votes);
         if (vtsDiff != 0) return vtsDiff;
 
         return other.ro - this.ro;
