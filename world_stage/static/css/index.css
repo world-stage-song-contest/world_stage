@@ -362,3 +362,8 @@ bdi {
 .colour-magenta {
     color: var(--magenta);
 }
+
+.number.number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}

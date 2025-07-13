@@ -1,0 +1,27 @@
+.bias-very-positive {
+    background-color: hsl(120, 80%, 40%);
+}
+
+.bias-positive {
+    background-color: hsl(90, 80%, 40%);
+}
+
+.bias-neutral {
+    background-color: hsl(60, 80%, 40%);
+}
+
+.bias-negative {
+    background-color: hsl(30, 80%, 40%);
+}
+
+.bias-very-negative {
+    background-color: hsl(0, 80%, 40%);
+}
+
+.bias-value {
+    font-weight: bold;
+}
+
+.bias-value:not(.bias-inconclusive) {
+    color: white;
+}

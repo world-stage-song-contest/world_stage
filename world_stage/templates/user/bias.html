@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Bias: {{ username }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/bias.css">
+    <script src="/static/js/sort-table.js"></script>
+{% endblock %}
+{% block content %}
+<table class="sortable">
+    <thead>
+        <tr>
+            <th>Position</th>
+            <th>Country</th>
+            <th>Partici&shy;pations</th>
+            <th>Given<br>Points</th>
+            <th>Given<br>Points %</th>
+            <th>Total<br>Points</th>
+            <th>Total<br>Points %</th>
+            <th>Bias</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for bias in biases %}
+        <tr data-value="{{ loop.index }}">
+            <th>{{ loop.index }}</th>
+            <td>{{ flag(bias.country_id, 24, bias.country_name) }}
+                <a href="{{ url_for('country.country', code=bias.country_id) }}">{{ bias.country_name }}</span></td>
+            <td class="number">{{ bias.participations }}</td>
+            <td class="number">{{ bias.user_given }}</td>
+            <td class="number">{{ "{:.02f}%".format(bias.user_ratio * 100) }}</td>
+            <td class="number">{{ bias.total_given }}</td>
+            <td class="number">{{ "{:.02f}%".format(bias.total_ratio * 100) }}</td>
+            <td class="number bias-value bias-{{bias.bias_class}}">{{ "{:.02f}%".format(bias.bias * 100) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
