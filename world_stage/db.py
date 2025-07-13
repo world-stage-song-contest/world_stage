@@ -11,7 +11,6 @@ def get_db() -> sqlite3.Connection:
             detect_types=sqlite3.PARSE_DECLTYPES
         )
         g.db.row_factory = sqlite3.Row
-        g.db.set_trace_callback(print)
 
     return g.db
 

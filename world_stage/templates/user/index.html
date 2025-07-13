@@ -30,7 +30,7 @@
                     <div class="user-options">
                         <a href="{{ url_for('user.votes', username=user.username) }}">Vote history</a>
                         <a href="{{ url_for('user.submissions', username=user.username) }}">Submissions</a>
-                        <a href="{{ url_for('user.bias', username=biases) }}">Biases</a>
+                        <a href="{{ url_for('user.bias', username=user.username) }}">Biases</a>
                     </div>
                 </div>
             {% endfor %}
