@@ -103,3 +103,22 @@ async function changeYearStatus() {
     const data = await fetchHelper(url, body);
     setError(data.error);
 }
+
+const actionsWhitelist = ['approve', 'unapprove', 'annul_password'];
+async function modifyUser(userId, action, extraData) {
+    if (!actionsWhitelist.includes(action)) {
+        setError('Invalid action specified.');
+        return;
+    }
+
+    const url = window.location.href;
+    const body = {
+        'action': action,
+        'user_id': userId,
+        'extra_data': extraData || {}
+    };
+
+    const data = await fetchHelper(url, body);
+
+    setError(data.error);
+}

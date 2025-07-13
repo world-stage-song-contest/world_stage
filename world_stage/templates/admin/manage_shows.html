@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Manage shows: {{year.id}}{% endblock %}
 {% block headercontents %}
-    <script src="/static/js/manage_show.js"></script>
+    <script src="/static/js/manage.js"></script>
 {% endblock %}
 {% block content %}
 
@@ -23,8 +23,8 @@
         {% for show in shows %}
         <tr>
             <td>{{ show.show_name }}</td>
-            <td><button onclick="openVoting('{{ show.short_name }}')">Open Voting</td></td>
-            <td><button onclick="closeVoting('{{ show.short_name }}')">Close Voting</td></td>
+            <td><button onclick="openVoting('{{ show.short_name }}')">Open Voting</button></td>
+            <td><button onclick="closeVoting('{{ show.short_name }}')">Close Voting</button></td>
             <td>
                 <select id="access_type_{{ show.short_name }}">
                     {% for access_type in access_types %}

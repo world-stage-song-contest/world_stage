@@ -438,3 +438,63 @@ def fuckup_db_post():
     rows = [dict(row) for row in data]
 
     return {'headers': headers, 'rows': rows}, 200
+
+@bp.get('/users')
+def users():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT id, username, approved, role FROM user
+    ''')
+    users = [dict(row) for row in cursor.fetchall()]
+
+    return render_template('admin/users.html', users=users)
+
+@bp.post('/users')
+def users_post():
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    body = request.get_json()
+    if not body:
+        return render_template('error.html', error="Empty request body"), 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    user_id = body.get('user_id')
+    action = body.get('action')
+
+    if not user_id or not action:
+        return render_template('error.html', error="User ID and action must be provided"), 400
+
+    if action == 'approve':
+        cursor.execute('''
+            UPDATE user
+            SET approved = 1
+            WHERE id = ?
+        ''', (user_id,))
+    elif action == 'unapprove':
+        cursor.execute('''
+            UPDATE user
+            SET approved = 0
+            WHERE id = ?
+        ''', (user_id,))
+    elif action == 'annul_password':
+        cursor.execute('''
+            UPDATE user
+            SET password = NULL, salt = NULL
+            WHERE id = ?
+        ''', (user_id,))
+    else:
+        return render_template('error.html', error=f"Unknown action '{action}'"), 400
+
+    db.commit()
+
+    return {'status': 'success'}, 200

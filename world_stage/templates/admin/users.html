@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Manage users{% endblock %}
+{% block headercontents %}
+    <script src="/static/js/manage.js"></script>
+{% endblock %}
+{% block content %}
+
+<div class="error" id="error">
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>User ID</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Is Approved</th>
+            <th>Approve</th>
+            <th>Unapprove</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>{{ user.role }}</td>
+            <td>{{ 'Yes' if user.approved else 'No' }}</td>
+            <td><button onclick="modifyUser({{user.id}},'approve')">Approve</button></td>
+            <td><button onclick="modifyUser({{user.id}},'unapprove'))">Unapprove</button></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

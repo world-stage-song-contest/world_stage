@@ -25,7 +25,6 @@ def index():
                 'id': id,
                 'username': username
             })
-            continue
         first_letter = username[0].upper()
         val = {
             'id': id,
