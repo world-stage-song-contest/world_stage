@@ -5,21 +5,6 @@
 {% endblock %}
 {% block content %}
 <div class="user-container">
-    <div class="user-category">
-        <h2>Admins</h2>
-        <div class="user-list">
-            {% for user in admins %}
-            <div class="user-item">
-                <h3>{{ user.username }}</h3>
-                <div class="user-options">
-                    <a href="{{ url_for('user.votes', username=user.username) }}">Vote history</a>
-                    <a href="{{ url_for('user.submissions', username=user.username) }}">Submissions</a>
-                    <a href="{{ url_for('user.bias', username=user.username) }}">Biases</a>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
     {% for first_letter, data in users.items() %}
         <div class="user-category">
             <h2>{{ first_letter }}</h2>
@@ -30,7 +15,8 @@
                     <div class="user-options">
                         <a href="{{ url_for('user.votes', username=user.username) }}">Vote history</a>
                         <a href="{{ url_for('user.submissions', username=user.username) }}">Submissions</a>
-                        <a href="{{ url_for('user.bias', username=user.username) }}">Biases</a>
+                        <a href="{{ url_for('user.bias', username=user.username, type='country') }}">Country biases</a>
+                        <a href="{{ url_for('user.bias', username=user.username, type='user') }}">Submitter biases</a>
                     </div>
                 </div>
             {% endfor %}
