@@ -120,5 +120,9 @@ async function modifyUser(userId, action, extraData) {
 
     const data = await fetchHelper(url, body);
 
-    setError(data.error);
+    if (data.error) {
+        setError(data.error);
+    } else {
+        location.reload();
+    }
 }

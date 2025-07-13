@@ -27,7 +27,7 @@
             <td>{{ user.role }}</td>
             <td>{{ 'Yes' if user.approved else 'No' }}</td>
             <td><button onclick="modifyUser({{user.id}},'approve')">Approve</button></td>
-            <td><button onclick="modifyUser({{user.id}},'unapprove'))">Unapprove</button></td>
+            <td><button onclick="modifyUser({{user.id}},'unapprove')">Unapprove</button></td>
         </tr>
         {% endfor %}
     </tbody>
