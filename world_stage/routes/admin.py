@@ -512,6 +512,7 @@ def set_pots(year: int):
         SELECT country.id, name, pot FROM song
         JOIN country ON song.country_id = country.id
         WHERE year_id = ?
+        ORDER BY pot, name
     ''', (year,))
     countries = [dict(row) for row in cursor.fetchall()]
 
