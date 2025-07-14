@@ -498,3 +498,47 @@ def users_post():
     db.commit()
 
     return {'status': 'success'}, 200
+
+@bp.get('/setpots/<int:year>')
+def set_pots(year: int):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT country.id, name, pot FROM song
+        JOIN country ON song.country_id = country.id
+        WHERE year_id = ?
+    ''', (year,))
+    countries = [dict(row) for row in cursor.fetchall()]
+
+    return render_template('admin/set_pots.html', countries=countries, year=year)
+
+@bp.post('/setpots/<int:year>')
+def set_pots_post(year: int):
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    db = get_db()
+    cursor = db.cursor()
+
+    for country_id, pot_str in request.form.items():
+        try:
+            pot: int | None = int(pot_str)
+            if pot == 0:
+                pot = None
+        except ValueError:
+            return render_template('error.html', error=f"Invalid pot value for country {country_id}"), 400
+
+        cursor.execute('''
+            UPDATE country
+            SET pot = ?
+            WHERE id = ?
+        ''', (pot, country_id))
+
+    db.commit()
+    return redirect(url_for('admin.set_pots', year=year))

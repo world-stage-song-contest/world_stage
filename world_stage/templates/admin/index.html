@@ -2,14 +2,11 @@
 {% block title %}Administrator Utilities{% endblock %}
 {% block content %}
 <div>
-    <p>
-    Since I'm lazy, I'm not gonna try to figure out how to add a tile for draw functionality.
-    <p>
-    To draw the semifinals for the year, go to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;</code>.
-    <p>
-    To draw the finals for the year, go to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;/f</code>.
-    <p>
-    If the second chance round ever returns, you can draw it by going to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;/sc</code>.
+    <p>Since I'm lazy, I'm not gonna try to figure out how to add a tile for draw functionality.
+    <p>To draw the semifinals for the year, go to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;</code>.
+    <p>To draw the finals for the year, go to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;/f</code>.
+    <p>If the second chance round returns, you can draw it by going to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;/sc</code>.
+    <p>To set the pots, go to <code>https://ws.funcall.me/admin/setpots/&lt;year&gt;</code>.
 </div>
 <div class="cards-container">
     <a href="{{ url_for('admin.create_show') }}" class="card">

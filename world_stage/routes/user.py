@@ -164,7 +164,8 @@ def get_country_biases(user_id: int):
     cursor.execute('''
 WITH
 user_shows AS (
-    SELECT DISTINCT show_id
+    SELECT DISTINCT show_id,
+                    country_id
     FROM vote_set
     WHERE voter_id = ?1
 ),
@@ -176,8 +177,9 @@ song_counts AS (
     JOIN song_show ss ON ss.show_id = us.show_id
     JOIN song s ON s.id = ss.song_id
     WHERE s.submitter_id <> ?1
+      AND us.country_id
     GROUP BY ss.show_id,
-                s.country_id
+             s.country_id
 ),
 ranked_points AS (
     SELECT sh.id AS show_id,
@@ -508,6 +510,7 @@ LEFT JOIN user u ON u.id = f.target_id
 LEFT JOIN biases b ON b.target_id = f.target_id
 LEFT JOIN ratios r ON r.target_id = f.target_id
 LEFT JOIN participations p ON p.target_id = f.target_id
+WHERE participations > 0
 ORDER BY bias DESC, participations, total_ratio
     ''', (user_id,))
 
