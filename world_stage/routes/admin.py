@@ -84,6 +84,8 @@ def draw(year: int):
 
     shows = get_year_shows(year, pattern='sf')
     count = len(shows)
+    if count == 0:
+        return render_template('error.html', error=f"No semifinal shows found for {year}"), 404
     per = semifinalists // count
     songs = [per] * count
     deficit = semifinalists - per * count
