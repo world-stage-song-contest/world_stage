@@ -177,7 +177,6 @@ song_counts AS (
     JOIN song_show ss ON ss.show_id = us.show_id
     JOIN song s ON s.id = ss.song_id
     WHERE s.submitter_id <> ?1
-      AND us.country_id
     GROUP BY ss.show_id,
              s.country_id
 ),
