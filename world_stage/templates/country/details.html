@@ -89,7 +89,7 @@
     <h2>Notes</h2>
     <ol>
         {% for note in notes %}
-        <li class="footnote" id="footnote-{{ loop.index }}"><div>{{ note }}</div></li>
+        <li class="footnote" id="footnote-{{ loop.index }}"><div>{{ note|safe }}</div></li>
         {% endfor %}
     </ol>
 </div>
