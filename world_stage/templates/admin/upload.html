@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Upload a file{% endblock %}
+{% block headercontents %}
+{% endblock %}
+{% block content %}
+
+<form method="post" enctype="multipart/form-data">
+    <fieldset>
+        <label for="file">Select a file to upload:</label>
+        <input type="file" name="file" id="file" required>
+    </fieldset>
+    <div class="form-group">
+        <button type="submit">Upload</button>
+    </div>
+</form>
+
+{% endblock %}

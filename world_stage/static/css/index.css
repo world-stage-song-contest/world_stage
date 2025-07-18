@@ -369,6 +369,9 @@ bdi {
 .colour-magenta {
     color: var(--magenta);
 }
+.colour-cyan {
+    color: var(--cyan);
+}
 
 .number.number {
     text-align: right;

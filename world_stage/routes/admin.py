@@ -1,6 +1,7 @@
 from collections import defaultdict
+from pathlib import Path
 import sqlite3
-from flask import Blueprint, redirect, request, url_for
+from flask import Blueprint, current_app, redirect, request, url_for
 import math
 import datetime
 
@@ -545,3 +546,29 @@ def set_pots_post(year: int):
 
     db.commit()
     return redirect(url_for('admin.set_pots', year=year))
+
+@bp.get('/upload')
+def upload():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    return render_template('admin/upload.html')
+
+@bp.post('/upload')
+def upload_post():
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    file = request.files.get('file')
+    if not file:
+        return render_template('error.html', error="No file uploaded"), 400
+
+    print(file)
+
+    file_path = Path(current_app.instance_path, 'uploads', file.filename or datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.dat')
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file.save(file_path)
+
+    return render_template('admin/upload.html', message=f"File '{file.filename}' uploaded successfully.", file_path=str(file_path))
