@@ -329,8 +329,41 @@ def manage(year: int):
 
     return render_template('admin/manage_shows.html', year=year_data, shows=shows)
 
+@bp.post('/manage/<int:year>')
+def manage_post(year: int):
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    body = request.get_json()
+    if not body:
+        return render_template('error.html', error="Empty request body"), 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    action = body.get('action')
+    if not action:
+        return render_template('error.html', error="No action specified"), 400
+
+    match action:
+        case 'change_year_status':
+            closed = body.get('year_status')
+            if closed is None:
+                return render_template('error.html', error="No closed status provided"), 400
+
+            cursor.execute('''
+                UPDATE year
+                SET closed = ?
+                WHERE id = ?
+            ''', (closed, year))
+        case _:
+            return render_template('error.html', error=f"Unknown action '{action}'"), 400
+    db.commit()
+    return {'status': 'success'}, 200
+
 @bp.post('/manage/<int:year>/<show>')
-def manage_post(year: int, show: str):
+def manage_show_post(year: int, show: str):
     resp = verify_user()
     if resp:
         return render_template('error.html', error="Not an admin"), 401
@@ -385,16 +418,6 @@ def manage_post(year: int, show: str):
                 SET date = ?
                 WHERE year_id = ? AND short_name = ?
             ''', (date, year, show))
-        case 'change_year_status':
-            closed = body.get('year_status')
-            if closed is None:
-                return render_template('error.html', error="No closed status provided"), 400
-
-            cursor.execute('''
-                UPDATE year
-                SET closed = ?
-                WHERE id = ?
-            ''', (closed, year))
         case _:
             return render_template('error.html', error=f"Unknown action '{action}'"), 400
 
