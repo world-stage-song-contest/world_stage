@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Recap data{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+    <script>
+        function addShow() {
+            const showInput = document.createElement('input');
+            showInput.name = 'show';
+            showInput.placeholder = '<year>-<short name>';
+            showInput.required = true;
+            showInput.type = 'text';
+            const fieldset = document.querySelector('fieldset');
+            fieldset.appendChild(showInput);
+        }
+
+        function removeShow() {
+            const fieldset = document.querySelector('fieldset');
+            const inputs = fieldset.querySelectorAll('input[name="show"]');
+            if (inputs.length > 1) {
+                fieldset.removeChild(inputs[inputs.length - 1]);
+            } else {
+                alert("At least one show must remain.");
+            }
+        }
+    </script>
+{% endblock %}
+{% block content %}
+
+<form method="POST">
+    <fieldset style="display: flex; flex-direction: column; gap: 0.25em;">
+        <legend>Shows</legend>
+        <input name="show" placeholder="<year>-<short name>" required type="text">
+    </fieldset>
+    <div>
+        <button type="button" onclick="addShow()">Add show</button>
+        <button type="button" onclick="removeShow()">Remove show</button>
+    </div>
+    <div>
+        <button>Submit</button>
+    </div>
+</form>
+
+<textarea cols="150" rows="35" readonly>{{ data }}</textarea>
+{% endblock %}

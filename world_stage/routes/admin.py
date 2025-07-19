@@ -4,6 +4,7 @@ import sqlite3
 from flask import Blueprint, current_app, redirect, request, url_for
 import math
 import datetime
+import csv, io
 
 from ..db import get_db
 from ..utils import LCG, get_show_id, get_show_songs, get_user_role_from_session, get_year_countries, get_year_shows, get_years, render_template
@@ -57,8 +58,8 @@ def create_show_post():
     cur = db.cursor()
 
     cur.execute('''
-        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date)
-        VALUES (:year, 1, :show_name, :short_name, :dtf, :sc, :date)
+        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, allow_access_type)
+        VALUES (:year, 1, :show_name, :short_name, :dtf, :sc, :date, 'none')
     ''', data)
     db.commit()
 
@@ -595,3 +596,68 @@ def upload_post():
     file.save(file_path)
 
     return render_template('admin/upload.html', message=f"File '{file.filename}' uploaded successfully.", file_path=str(file_path))
+
+@bp.get('/recapdata')
+def recap_data():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    return render_template('admin/recap_data.html')
+
+@bp.post('/recapdata')
+def recap_data_post():
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    show_names = request.form.getlist('show')
+
+    db = get_db()
+    cursor = db.cursor()
+
+    shows: list[int] = list()
+    for show in show_names:
+        year, short_name = show.split('-')
+        try:
+            year = int(year)
+        except ValueError:
+            return render_template('admin/recap_data.html', error=f"Invalid year '{year}' in show '{show}'"), 400
+
+        if not short_name:
+            return render_template('admin/recap_data.html', error=f"Invalid show name '{short_name}' in show '{show}'"), 400
+
+        cursor.execute('''
+            SELECT id FROM show WHERE year_id = ? AND short_name = ?
+        ''', (year, short_name))
+        show_id = cursor.fetchone()
+        if not show_id:
+            return render_template('admin/recap_data.html', error=f"Show '{show}' not found"), 404
+        shows.append(show_id[0])
+
+    placeholders = ', '.join(['?'] * len(shows))
+
+    cursor.execute(f'''
+        SELECT show.year_id AS year, short_name AS show, running_order, country_id AS country, cc2 AS country_code, country.name AS country_name, artist, title, video_link, snippet_start, snippet_end, '' AS display_name, GROUP_CONCAT(language.name, ', ') AS language
+        FROM song_show
+        JOIN song ON song_show.song_id = song.id
+        JOIN show ON song_show.show_id = show.id
+        JOIN country ON song.country_id = country.id
+        LEFT JOIN song_language ON song.id = song_language.song_id
+        LEFT JOIN language ON song_language.language_id = language.id
+        WHERE show.id IN ({placeholders})
+        GROUP BY song.id, show.id
+        ORDER BY show_id, running_order
+    ''', shows)
+    csv_data = [dict(row) for row in cursor.fetchall()]
+
+    w = io.StringIO()
+    writer = csv.DictWriter(w, fieldnames=['year', 'show', 'running_order', 'country', 'country_code', 'country_name', 'artist', 'title', 'country_name', 'video_link', 'snippet_start', 'snippet_end', 'display_name', 'language'])
+    writer.writeheader()
+    for row in csv_data:
+        writer.writerow(row)
+    w.seek(0)
+    data = w.getvalue()
+    print(data)
+
+    return render_template('admin/recap_data.html', data=data)
