@@ -638,7 +638,7 @@ def recap_data_post():
     placeholders = ', '.join(['?'] * len(shows))
 
     cursor.execute(f'''
-        SELECT show.year_id AS year, short_name AS show, running_order, country_id AS country, cc2 AS country_code, country.name AS country_name, artist, title, video_link, snippet_start, snippet_end, '' AS display_name, GROUP_CONCAT(language.name, ', ') AS language
+        SELECT show.year_id AS year, short_name AS show, running_order, country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name, artist, title, video_link, snippet_start, snippet_end, '' AS display_name, GROUP_CONCAT(language.name, ', ') AS language
         FROM song_show
         JOIN song ON song_show.song_id = song.id
         JOIN show ON song_show.show_id = show.id
@@ -652,7 +652,7 @@ def recap_data_post():
     csv_data = [dict(row) for row in cursor.fetchall()]
 
     w = io.StringIO()
-    writer = csv.DictWriter(w, fieldnames=['year', 'show', 'running_order', 'country', 'country_code', 'country_name', 'artist', 'title', 'country_name', 'video_link', 'snippet_start', 'snippet_end', 'display_name', 'language'])
+    writer = csv.DictWriter(w, fieldnames=['year', 'show', 'running_order', 'country', 'country_code', 'country_name', 'artist', 'title', 'video_link', 'snippet_start', 'snippet_end', 'display_name', 'language'])
     writer.writeheader()
     for row in csv_data:
         writer.writerow(row)
