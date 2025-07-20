@@ -325,6 +325,7 @@ def manage(year: int):
 
     cursor.execute('''
         SELECT show_name, short_name, date, allow_access_type FROM show WHERE year_id = ?
+        ORDER BY id
     ''', (year,))
     shows = [dict(r) for r in cursor.fetchall()]
 

@@ -166,8 +166,9 @@ WITH
 user_shows AS (
     SELECT DISTINCT show_id,
                     country_id
-    FROM vote_set
-    WHERE voter_id = ?1
+    FROM vote_set vs
+    JOIN show s ON s.id = vs.show_id
+    WHERE voter_id = ?1 AND s.allow_access_type = 'full'
 ),
 song_counts AS (
     SELECT ss.show_id,
@@ -175,8 +176,9 @@ song_counts AS (
            COUNT(*) AS entry_cnt
     FROM user_shows us
     JOIN song_show ss ON ss.show_id = us.show_id
+    JOIN show sh ON sh.id = ss.show_id
     JOIN song s ON s.id = ss.song_id
-    WHERE s.submitter_id <> ?1
+    WHERE s.submitter_id <> ?1 AND sh.allow_access_type = 'full'
     GROUP BY ss.show_id,
              s.country_id
 ),
@@ -323,8 +325,9 @@ def get_submitter_biases(user_id: int):
 WITH
 user_shows AS (
     SELECT DISTINCT show_id
-    FROM vote_set
-    WHERE voter_id = ?1
+    FROM vote_set vs
+    JOIN show s ON s.id = vs.show_id
+    WHERE voter_id = ?1 AND s.allow_access_type = 'full'
 ),
 song_counts AS (
     SELECT ss.show_id,
@@ -332,8 +335,9 @@ song_counts AS (
            COUNT(*) AS entry_cnt
     FROM user_shows us
     JOIN song_show ss ON ss.show_id = us.show_id
+    JOIN show sh ON sh.id = ss.show_id
     JOIN song s ON s.id = ss.song_id
-    WHERE s.submitter_id <> ?1
+    WHERE s.submitter_id <> ?1 AND sh.allow_access_type = 'full'
     GROUP BY ss.show_id,
              s.submitter_id
 ),
