@@ -100,7 +100,7 @@ def details(code: str, year: int):
     rows = max(len(english_lyrics), len(latin_lyrics), len(native_lyrics))
     columns = (1 if english_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)
 
-    return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year, rows=rows,
+    return render_template('country/details.html', song=song, embed=embed, name=name, year=year, rows=rows,
                             columns=columns,
                             native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
                             can_edit=can_edit, notes=notes)

@@ -658,6 +658,5 @@ def recap_data_post():
         writer.writerow(row)
     w.seek(0)
     data = w.getvalue()
-    print(data)
 
     return render_template('admin/recap_data.html', data=data)

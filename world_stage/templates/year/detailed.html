@@ -43,7 +43,7 @@
                 <td class="number header-like">{{ song.vote_data.ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
-                <td>{{ song.title }}</td>
+                <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">{{ song.title }}</a></td>
                 <td class="number">{{ loop.index }}</td>
                 <td class="number" data-value="{{ loop.revindex }}">{{ song.vote_data.sum }}</td>
             {% for voter in results.keys() %}
