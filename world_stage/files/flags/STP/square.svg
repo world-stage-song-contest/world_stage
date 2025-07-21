@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96">
+	<path fill="#163" d="M0 0h96v96H0z"/>
+	<path fill="#fc0" d="M0 32h96v32H0z"/>
+	<path fill="#c12" d="M 32,48 0,0 V 96 z"/>
+	<g fill="#111">
+		<path d="M 40.946577,57.708204 48,36 55.053423,57.708204 36.587322,44.291796 h 22.825356 z" id="x"/>
+		<use href="#x" transform="translate(30 0)"/>
+	</g>
+</svg>
