@@ -8,33 +8,29 @@
 		</g>
 	<circle fill="#fe9" cx="5" cy="5" r="3"/>
 	<g fill="#fc0">
-		<g>
-			<g transform="rotate(45 5 5)">
-				<path d="M5 1l1 4l-2 0z"/>
-				<path d="M9 5l-4 1l0 -2z"/>
-				<path d="M5 9l1 -4l-2 0z"/>
-				<path d="M1 5l4 1l0 -2z"/>
-				</g>
-			<g>
-				<path d="M5 1l1 4l-2 0z"/>
-				<path d="M9 5l-4 1l0 -2z"/>
-				<path d="M5 9l1 -4l-2 0z"/>
-				<path d="M1 5l4 1l0 -2z"/>
-				</g>
+		<g transform="rotate(45 5 5)">
+			<path d="M5 1l1 4l-2 0z"/>
+			<path d="M9 5l-4 1l0 -2z"/>
+			<path d="M5 9l1 -4l-2 0z"/>
+			<path d="M1 5l4 1l0 -2z"/>
 			</g>
 		<g transform="rotate(22.5 5 5)">
-			<g transform="rotate(45 5 5)">
-				<path d="M5 1l1 4l-2 0z"/>
-				<path d="M9 5l-4 1l0 -2z"/>
-				<path d="M5 9l1 -4l-2 0z"/>
-				<path d="M1 5l4 1l0 -2z"/>
-				</g>
-			<g>
-				<path d="M5 1l1 4l-2 0z"/>
-				<path d="M9 5l-4 1l0 -2z"/>
-				<path d="M5 9l1 -4l-2 0z"/>
-				<path d="M1 5l4 1l0 -2z"/>
-				</g>
+			<path d="M5 1l1 4l-2 0z"/>
+			<path d="M9 5l-4 1l0 -2z"/>
+			<path d="M5 9l1 -4l-2 0z"/>
+			<path d="M1 5l4 1l0 -2z"/>
+			</g>
+		<g transform="rotate(67.5 5 5)">
+			<path d="M5 1l1 4l-2 0z"/>
+			<path d="M9 5l-4 1l0 -2z"/>
+			<path d="M5 9l1 -4l-2 0z"/>
+			<path d="M1 5l4 1l0 -2z"/>
+			</g>
+		<g>
+			<path d="M5 1l1 4l-2 0z"/>
+			<path d="M9 5l-4 1l0 -2z"/>
+			<path d="M5 9l1 -4l-2 0z"/>
+			<path d="M1 5l4 1l0 -2z"/>
 			</g>
 		</g>
 	<circle fill="#fa3" cx="5" cy="5" r="2.5"/>
