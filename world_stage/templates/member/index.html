@@ -22,5 +22,12 @@
         <img src="/static/images/bias.png" alt="Bias Icon">
         <p>Check out your biases.</p>
     </a>
+    <form id="logout-form" action="{{ url_for('session.logout') }}" method="POST">
+        <a href="#" onclick="this.parentNode.submit()" class="card">
+            <h3>Log out</h3>
+            <img src="/static/images/exit.png" alt="Calendar Icon">
+            <p>Log out of the website.</p>
+        </a>
+    </form>
 </div>
 {% endblock %}

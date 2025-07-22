@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Logged Out Successfully{% endblock %}
+{% block title %}Logged In Successfully{% endblock %}
 {% block headercontents %}
 <script>
     setTimeout(function() {
-        window.location.href = "/";
+        window.location.href = "{{ url_for('main.home') }}";
     }, 5000);
 </script>
 {% endblock %}
 {% block content %}
 
-{% if state == "logged_in" %}
-<p>You were successfully logged in.</p>
-{% elif state == "already_logged_in" %}
+{% if state == "logged_out" %}
+<p>You were successfully logged out.</p>
+{% elif state == "not_logged_in" %}
 <p>You were already logged in.</p>
 {% endif %}
 <p>You will be redirected to the home page in a few seconds.</p>
-<p>If you are not redirected or are feeling impatient, click <a href="/">HERE</a>.</p>
+<p>If you are not redirected or are feeling impatient, click <a href="{{ url_for('main.home') }}">HERE</a>.</p>
 
 {% endblock%}
