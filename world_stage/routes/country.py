@@ -64,6 +64,11 @@ def generate_iframe(url: str):
 
 @bp.get('/<code>/<int:year>')
 def details(code: str, year: int):
+    session_id = request.cookies.get('session')
+    if not session_id:
+        return render_template('error.html', error="You must be logged in to view song details")
+    user_data = get_user_id_from_session(session_id)
+
     song = get_song(year, code.upper())
     if not song:
         return render_template('error.html', error=f"Songs not found for country {code} in year {year}")
@@ -73,8 +78,6 @@ def details(code: str, year: int):
         embed = generate_iframe(url)
     name = get_country_name(code.upper())
 
-    session_id = request.cookies.get('session')
-    user_data = get_user_id_from_session(session_id)
     user_id = None
     if user_data:
         user_id = user_data[0]

@@ -22,6 +22,25 @@ def get_specials() -> list[dict]:
 
     return specials
 
+def get_other_shows(year: int | None, exclude_show: str | None) -> list[str]:
+    db = get_db()
+    cursor = db.cursor()
+
+    if year:
+        cursor.execute('''
+            SELECT short_name FROM show
+            WHERE year_id = ? AND short_name <> ?
+            ORDER BY id
+        ''', (year, exclude_show))
+    else:
+        cursor.execute('''
+            SELECT short_name FROM show
+            WHERE year_id IS NULL AND short_name <> ?
+            ORDER BY id
+        ''', (exclude_show,))
+
+    return [row[0] for row in cursor.fetchall()]
+
 @bp.get('/')
 def index():
     db = get_db()
@@ -75,7 +94,8 @@ def year(year: str):
         shows = [Show(year=_year, short_name=show[0], name=show[1], date=show[2]) for show in cursor.fetchall()]
         shows.sort()
 
-        return render_template('year/year.html', year=year, songs=songs, closed=closed[0], shows=shows, total=total_entries, placeholders=total_placeholders)
+        return render_template('year/year.html', year=year, songs=songs,
+                               closed=closed[0], shows=shows, total=total_entries, placeholders=total_placeholders)
     else:
         return render_template('year/specials.html', specials=get_specials())
 
@@ -157,7 +177,7 @@ def results(year: str, show: str):
     sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
 
     return render_template('year/summary.html', hidden=reveal, qualifiers=qualifiers, sc_qualifiers=sc_qualifiers,
-                           songs=songs, points=show_data.points, show=show, access=access, offset=off,
+                           songs=songs, points=show_data.points, show=show, access=access, offset=off, other_shows=get_other_shows(_year, show),
                            show_name=show_data.name, short_name=show_data.short_name, show_id=show_data.id, year=year, participants=participants, voters=voter_count)
 
 @bp.get('/<year>/<show>/detailed')
@@ -218,7 +238,7 @@ def detailed_results(year: str, show: str):
     qualifiers = show_data.dtf or 0
     sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
 
-    return render_template('year/detailed.html', qualifiers=qualifiers, sc_qualifiers=sc_qualifiers,
+    return render_template('year/detailed.html', qualifiers=qualifiers, sc_qualifiers=sc_qualifiers, other_shows=get_other_shows(_year, show),
                            songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
 
 @bp.get('/<year>/<show>/scoreboard')

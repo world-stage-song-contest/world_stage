@@ -4,14 +4,15 @@
     <link rel="stylesheet" href="/static/css/bias.css">
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.bias', username=username, type='country') }}">Countries</a>
+    <a class="nav-item" href="{{ url_for('user.bias', username=username, type='user') }}">Users</a>
+{% endblock %}
 {% block content %}
-
-<div>
-    <a href="{{ url_for('user.bias', username=username, type='country') }}" class="button">Country Bias</a>
-    |
-    <a href="{{ url_for('user.bias', username=username, type='user') }}" class="button">User Bias</a>
-</div>
-
 <table class="sortable with-sticky">
     <thead class="sticky">
         <tr>

@@ -7,8 +7,13 @@
 {% endblock %}
 {% block navigation %}
     <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{% if year == 'special'%}Specials{%else%}{{year}}{%endif%}</a>
-    <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
+    <span class="nav-separator"></span>
+    {% for other_show in other_shows %}
+    <a class="nav-item" href="{{ url_for('year.results', year=year, show=other_show)}}"> {{ other_show|upper }}</a>
+    {% endfor %}
+    <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
 {% endblock %}
 {% block content %}
 {% if secret %}
@@ -50,7 +55,11 @@
                 <th class="number">{{ ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
+                {% if song.year is not none %}
                 <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">{{ song.title }}</a></td>
+                {% else %}
+                <td>{{ song.title }}</td>
+                {% endif %}
             {% if access != 'draw' %}
                 <td class="number">{{ place }}</td>
                 <td class="number">{{ song.vote_data.sum }}</td>

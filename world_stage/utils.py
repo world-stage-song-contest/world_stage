@@ -2,9 +2,10 @@ from collections import defaultdict, deque
 import datetime
 from enum import Enum
 from functools import total_ordering
+import json
 from typing import Optional, Union
 
-from flask import request
+from flask import Response, request
 import flask
 from .db import get_db
 from dataclasses import dataclass, field
@@ -1149,13 +1150,19 @@ def get_country_name(country_id: str) -> str:
         return country_name[0]
     return "Unknown"
 
-def render_template(template: str, **kwargs):
+def render_template(template: str, **kwargs) -> Response:
+    resp = Response()
     if request.accept_mimetypes.accept_html:
-        return flask.render_template(template, **kwargs)
+        resp.data = flask.render_template(template, **kwargs)
+        resp.content_type = 'text/html'
     elif request.accept_mimetypes.accept_json:
-        return kwargs
+        resp.data = json.dumps(kwargs)
+        resp.content_type = 'application/json'
     else:
-        return f"Invalid format. Accepted MIME types are: [{request.accept_mimetypes}] for UA '{request.headers.get("User-Agent", '')}'"
+        resp.data = f"Invalid format. Accepted MIME types are: [{request.accept_mimetypes}] for UA '{request.headers.get("User-Agent", '')}'"
+        resp.content_type = 'text/plain'
+
+    return resp
 
 def footnote_plugin(md: MarkdownIt):
     def tokenize_footnote(state: StateInline, silent: bool):

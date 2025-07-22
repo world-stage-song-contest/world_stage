@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import unicodedata
 from flask import Blueprint, redirect, request, url_for
-from typing import Optional
+from typing import Any, Optional
 
 from ..db import get_db
 from ..utils import get_user_id_from_session, format_seconds, get_user_permissions, get_user_role_from_session, get_years, parse_seconds, render_template
@@ -71,18 +71,22 @@ class SongData:
                 res[attr] = getattr(self, attr)
         return res
 
-def delete_song(year: int, country: str, artist: str, title: str, user_id: int | None):
+def delete_song(year: int, country: str, artist: str, title: str, user_id: int | None) -> dict[str, Any]:
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, submitter_id FROM song
+        SELECT song.id, submitter_id, closed FROM song
+        JOIN year ON song.year_id = year.id
         WHERE year_id = ? AND country_id = ?
     ''', (year, country))
     song_id = cursor.fetchone()
     if not song_id:
         return {'error': 'Song not found.'}
-    song_id, submitter_id = song_id
+    song_id, submitter_id, closed = song_id
+
+    if closed != 0:
+        return {'error': "Can't delete a song for a current/past year"}
 
     permissions = get_user_permissions(user_id)
 
@@ -100,9 +104,9 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int |
 
     db.commit()
 
-    return {'success': True, 'message': f"The song \"{artist} — {title}\" hass been deleted from {year}"}
+    return {'success': True, 'message': f"The song \"{artist} — {title}\" has been deleted from {year}"}
 
-def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> dict:
+def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> dict[str, Any]:
     db = get_db()
     cursor = db.cursor()
 
@@ -196,7 +200,7 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
 
     db.commit()
 
-    return {'success': True, 'message': f"The song \"{song_data.artist} — {song_data.title}\" hass been submitted for {song_data.year}"}
+    return {'success': True, 'message': f"The song \"{song_data.artist} — {song_data.title}\" has been submitted for {song_data.year}"}
 
 @bp.get('/')
 def index():
@@ -430,6 +434,7 @@ def submit_song_post():
         user_id = user_id_raw[0]
         set_claim = False
 
+    res = {}
     languages = []
     invalid_languages = []
     other_data = {}
