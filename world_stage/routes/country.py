@@ -36,24 +36,28 @@ mime_types = {
 def generate_iframe(url: str):
     if 'youtu.be' in url:
         video_id = url.split('/')[-1]
-        return f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
+        return f'<iframe src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
 
     elif 'youtube.com/watch' in url:
         match = re.search(r'v=([^&]+)', url)
         if match:
             video_id = match.group(1)
-            return f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
+            return f'<iframe src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
 
     elif 'drive.google.com/file/d/' in url:
         match = re.search(r'/d/([^/]+)', url)
         if match:
             file_id = match.group(1)
-            return f'<iframe src="https://drive.google.com/file/d/{file_id}/preview" width="560" height="315"></iframe>'
+            return f'<iframe src="https://drive.google.com/file/d/{file_id}/preview"></iframe>'
 
     elif (suffix := url.rsplit('.', 1)[-1].lower()) in allow_video_extensions:
         if suffix in mime_types:
-            return f'''<video width="560" height="315" controls>
-            <source src="{url}" type="{mime_types[suffix]}">
+            return f'''<video id="video-player"
+                        class="video-js vjs-fill"
+                        controls
+                        preload="metadata"
+                        data-setup='{{"responsive": true}}'
+                        src="{url}">
             This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.
             </video>'''
         else:
