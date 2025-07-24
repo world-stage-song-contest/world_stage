@@ -460,6 +460,9 @@ def submit_song_post():
             other_data[key] = other_data[key].replace('\r', '')
             other_data[key] = None if other_data[key] == '' else other_data[key]
 
+    other_data["country"] = request.form.get('country', 'XXX')
+    other_data["year"] = int(request.form.get('year', 0))
+
     languages.sort(key=lambda x: x[0])
     languages = list(map(lambda x: x[1], languages))
 
@@ -476,9 +479,6 @@ def submit_song_post():
             other_data['title_language_id'] = 20 # English
         else:
             other_data['title_language_id'] = other_data.get('native_language_id')
-
-    if not other_data.get('country_id', None):
-        res = {'error': 'Sorry, an unknown error occurred. Please try again.'}
 
     missing_fields = []
     missing_fields_internal = []
@@ -510,12 +510,13 @@ def submit_song_post():
     if dur is not None and dur > 20:
         res = {'error': f"The maximum length of the recap snippet is 20 seconds. Yours is {dur} seconds long."}
 
-    if 'error' not in res and action == 'delete':
-        res = delete_song(other_data['year'], other_data['country'], other_data['title'], other_data['artist'], user_id)
-    elif 'error' not in res and action == 'submit' and song_data:
-        res = update_song(song_data, user_id, set_claim)
-    elif 'error' not in res:
-        res = {'error': f"Unknown action: '{action}'."}
+    if 'error' not in res:
+        if action == 'delete':
+            res = delete_song(other_data['year'], other_data['country'], other_data['title'], other_data['artist'], user_id)
+        elif action == 'submit' and song_data:
+            res = update_song(song_data, user_id, set_claim)
+        else:
+            res = {'error': f"Unknown action: '{action}'."}
 
     if 'error' in res:
         return render_template('member/submit.html', years=get_years(), data=other_data,

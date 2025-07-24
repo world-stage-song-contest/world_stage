@@ -188,8 +188,8 @@ ranked_points AS (
            ROW_NUMBER() OVER (PARTITION BY sh.id
                                ORDER BY p.score DESC) AS rn
     FROM user_shows us
-    JOIN SHOW sh ON sh.id = us.show_id
-    JOIN POINT p ON p.point_system_id = sh.point_system_id
+    JOIN show sh ON sh.id = us.show_id
+    JOIN point p ON p.point_system_id = sh.point_system_id
 ),
 max_pts_1_voter AS (
     SELECT sc.show_id,
@@ -205,8 +205,9 @@ given_user AS (
     SELECT s.country_id,
            SUM(p.score) AS given_points
     FROM vote_set vs
+    JOIN user_shows us ON us.show_id = vs.show_id
     JOIN vote v ON v.vote_set_id = vs.id
-    JOIN POINT p ON p.id = v.point_id
+    JOIN point p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
     WHERE vs.voter_id = ?1
       AND s.submitter_id <> ?1
@@ -217,7 +218,7 @@ given_all AS (
            SUM(p.score) AS given_points
     FROM vote_set vs
     JOIN vote v ON v.vote_set_id = vs.id
-    JOIN POINT p ON p.id = v.point_id
+    JOIN point p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
     WHERE vs.show_id IN
             (SELECT show_id
@@ -364,8 +365,9 @@ given_user AS (
     SELECT s.submitter_id AS target_id,
            SUM(p.score) AS given_points
     FROM vote_set vs
+    JOIN user_shows us ON us.show_id = vs.show_id
     JOIN vote v ON v.vote_set_id = vs.id
-    JOIN POINT p ON p.id = v.point_id
+    JOIN point p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
     WHERE vs.voter_id = ?1
       AND s.submitter_id <> ?1
@@ -376,7 +378,7 @@ given_all AS (
            SUM(p.score) AS given_points
     FROM vote_set vs
     JOIN vote v ON v.vote_set_id = vs.id
-    JOIN POINT p ON p.id = v.point_id
+    JOIN point p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
     WHERE vs.show_id IN
             (SELECT show_id
