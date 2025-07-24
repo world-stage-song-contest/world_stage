@@ -510,11 +510,11 @@ def submit_song_post():
     if dur is not None and dur > 20:
         res = {'error': f"The maximum length of the recap snippet is 20 seconds. Yours is {dur} seconds long."}
 
-    if action == 'delete':
+    if 'error' not in res and action == 'delete':
         res = delete_song(other_data['year'], other_data['country'], other_data['title'], other_data['artist'], user_id)
-    elif action == 'submit' and song_data:
+    elif 'error' not in res and action == 'submit' and song_data:
         res = update_song(song_data, user_id, set_claim)
-    else:
+    elif 'error' not in res:
         res = {'error': f"Unknown action: '{action}'."}
 
     if 'error' in res:
