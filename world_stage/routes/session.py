@@ -193,3 +193,26 @@ def sign_up_post():
     db.commit()
 
     return render_template('session/request_account_success.html', state="success")
+
+@bp.get("/logout")
+def logout():
+    return render_template('session/logout.html')
+
+@bp.post("/logout")
+def logout_post():
+    session = request.cookies.get('session', '')
+    if not session:
+        return render_template('session/logout_success.html', state="not_logged_in")
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        DELETE FROM session WHERE session_id = ?
+    ''', (session,))
+
+    db.commit()
+
+    resp = make_response(render_template('session/logout_success.html', state="logged_out"))
+    resp.delete_cookie('session')
+    return resp

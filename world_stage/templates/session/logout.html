@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Log out{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+    <form id="logout-form" method="POST">
+        <a href="#" onclick="this.parentNode.submit()" class="card">
+            <h3>Log out</h3>
+            <img src="/static/images/exit.png" alt="Calendar Icon">
+            <p>Log out of the website.</p>
+        </a>
+    </form>
+{% endblock %}

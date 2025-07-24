@@ -12,6 +12,10 @@ def home():
 def favicon():
     return send_file('files/favicons/favicon.ico')
 
+@bp.get('/robots.txt')
+def robots():
+    return send_file('files/robots.txt')
+
 @bp.get('/favicons/<name>')
 def favicons(name: str):
     valid_names = ['favicon.ico', 'favicon-16x16.png', 'favicon-32x32.png', 'favicon.svg',

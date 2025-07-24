@@ -8,6 +8,8 @@
 }
 
 .user-item {
+    width: 250px;
+    box-sizing: border-box;
     background-color: var(--background3);
     border: 2px solid var(--foreground2);
     gap: 0.5em;
@@ -24,4 +26,5 @@
     gap: 0.5em;
     justify-content: center;
     align-items: center;
+    flex-wrap: wrap;
 }

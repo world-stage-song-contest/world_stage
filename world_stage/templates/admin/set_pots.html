@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Manage shows: {{year}}{% endblock %}
+{% block headercontents %}
+    <script src="/static/js/manage.js"></script>
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+
+<div>
+    <p>Please set the pot of the host country to 0.
+    <p>In general, setting the pot to 0 will remove the country from the semi draw.
+    <p>Don't do this for anyone but the host country.
+</div>
+
+<div class="error" id="error">
+</div>
+
+<form id="set-pots" method="POST">
+    <fieldset class="grid">
+    {% for country in countries %}
+        <label for="{{country.id}}">{{country.name}}</label>
+        <input type="number" name="{{country.id}}" id="{{country.id}}"
+                value="{{ country.pot if country.pot is not none else 0 }}" min="0">
+    {% endfor %}
+    </fieldset>
+    <div>
+        <button type="submit">Set Pots</button>
+    </div>
+</form>
+
+{% endblock %}

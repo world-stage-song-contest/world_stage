@@ -86,3 +86,43 @@ async function changeDate(el, showId) {
     const data = await fetchHelper(url, body);
     setError(data.error);
 }
+
+async function changeYearStatus() {
+    const select = document.getElementById('year_status');
+    if (!select) {
+        const msg = `Select element with ID year_status not found.`;
+        setError(msg);
+        console.error(msg);
+        return;
+    }
+    const url = window.location.href;
+    const body = {
+        'action': 'change_year_status',
+        'year_status': select.value
+    };
+    const data = await fetchHelper(url, body);
+    setError(data.error);
+}
+
+const actionsWhitelist = ['approve', 'unapprove', 'annul_password'];
+async function modifyUser(userId, action, extraData) {
+    if (!actionsWhitelist.includes(action)) {
+        setError('Invalid action specified.');
+        return;
+    }
+
+    const url = window.location.href;
+    const body = {
+        'action': action,
+        'user_id': userId,
+        'extra_data': extraData || {}
+    };
+
+    const data = await fetchHelper(url, body);
+
+    if (data.error) {
+        setError(data.error);
+    } else {
+        location.reload();
+    }
+}

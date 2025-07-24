@@ -3,6 +3,11 @@
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/submissions.css">
 {% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
+{% endblock %}
 {% block content %}
 {% if not closed %}
 <div class="banner compact">

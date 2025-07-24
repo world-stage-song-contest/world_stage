@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Bias: {{ username }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/bias.css">
+    <script src="/static/js/sort-table.js"></script>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.bias', username=username, type='country') }}">Countries</a>
+    <a class="nav-item" href="{{ url_for('user.bias', username=username, type='user') }}">Users</a>
+{% endblock %}
+{% block content %}
+<table class="sortable with-sticky">
+    <thead class="sticky">
+        <tr>
+            <th>#</th>
+            <th>{{ bias_type.capitalize() }}</th>
+            <th>Votings</th>
+            <th>Given<br>Points</th>
+            <th>Given<br>Points %</th>
+            <th>Total<br>Points</th>
+            <th>Total<br>Points %</th>
+            <th>Bias</th>
+            {% if bias_type == 'user' %}
+            <th>Received<br>Points</th>
+            <th>Point<br>Deficit</th>
+            {% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for bias in biases %}
+        <tr data-value="{{ loop.index }}">
+            <th>{{ loop.index }}</th>
+            {% if bias_type == 'country' %}
+            <td>{{ flag(bias.country_id, 24, bias.country_name) }}
+                <a href="{{ url_for('country.country', code=bias.country_id) }}">{{ bias.country_name }}</span></td>
+            {% elif bias_type == 'user' %}
+            <td>{{ bias.submitter_name }}</td>
+            {% else %}
+            <td>ERROR - Unknown bias type</td>
+            {% endif %}
+            <td class="number">{{ bias.participations }}</td>
+            <td class="number">{{ bias.user_given }}</td>
+            <td class="number">{{ "{:.02f}%".format(bias.user_ratio * 100) }}</td>
+            <td class="number">{{ bias.total_given }}</td>
+            <td class="number">{{ "{:.02f}%".format(bias.total_ratio * 100) }}</td>
+            <td class="number bias-value bias-{{bias.bias_class}}">{{ "{:.02f}%".format(bias.bias * 100) }}</td>
+            {% if bias_type == 'user' %}
+            <td class="number">{{ bias.submitter_given }}</td>
+            <td class="number">{{ bias.points_deficit }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

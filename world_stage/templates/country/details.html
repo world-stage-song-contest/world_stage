@@ -5,6 +5,21 @@
     <script src="/static/js/sort-table.js"></script>
     <script src="/static/js/year.js"></script>
     <script src="/static/js/footnote.js"></script>
+    <link href="https://vjs.zencdn.net/8.23.3/video-js.css" rel="stylesheet" />
+    <style>
+        #video-player-container {
+            width: 560px;
+            height: 315px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #video-player-container > iframe {
+            height: 100%;
+            width: 100%;
+        }
+    </style>
 {% endblock %}
 {% block onload%}onLoad(){% endblock %}
 {% block content %}
@@ -53,7 +68,7 @@
     </table>
 </div>
 
-<div class="video">
+<div id="video-player-container" class="video">
     {{ embed|safe }}
 </div>
 
@@ -89,10 +104,12 @@
     <h2>Notes</h2>
     <ol>
         {% for note in notes %}
-        <li class="footnote" id="footnote-{{ loop.index }}"><div>{{ note }}</div></li>
+        <li class="footnote" id="footnote-{{ loop.index }}"><div>{{ note|safe }}</div></li>
         {% endfor %}
     </ol>
 </div>
 {% endif %}
+
+<script src="https://vjs.zencdn.net/8.23.3/video.min.js"></script>
 
 {% endblock %}

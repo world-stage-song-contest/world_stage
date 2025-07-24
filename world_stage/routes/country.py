@@ -36,26 +36,28 @@ mime_types = {
 def generate_iframe(url: str):
     if 'youtu.be' in url:
         video_id = url.split('/')[-1]
-        return f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
+        return f'<iframe src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
 
     elif 'youtube.com/watch' in url:
         match = re.search(r'v=([^&]+)', url)
         if match:
             video_id = match.group(1)
-            return f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
+            return f'<iframe src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
 
     elif 'drive.google.com/file/d/' in url:
-        print(url)
         match = re.search(r'/d/([^/]+)', url)
         if match:
-            print(match)
             file_id = match.group(1)
-            return f'<iframe src="https://drive.google.com/file/d/{file_id}/preview" width="560" height="315"></iframe>'
+            return f'<iframe src="https://drive.google.com/file/d/{file_id}/preview"></iframe>'
 
     elif (suffix := url.rsplit('.', 1)[-1].lower()) in allow_video_extensions:
         if suffix in mime_types:
-            return f'''<video width="560" height="315" controls>
-            <source src="{url}" type="{mime_types[suffix]}">
+            return f'''<video id="video-player"
+                        class="video-js vjs-fill"
+                        controls
+                        preload="metadata"
+                        data-setup='{{"responsive": true}}'
+                        src="{url}">
             This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.
             </video>'''
         else:
@@ -66,6 +68,11 @@ def generate_iframe(url: str):
 
 @bp.get('/<code>/<int:year>')
 def details(code: str, year: int):
+    session_id = request.cookies.get('session')
+    if not session_id:
+        return render_template('error.html', error="You must be logged in to view song details")
+    user_data = get_user_id_from_session(session_id)
+
     song = get_song(year, code.upper())
     if not song:
         return render_template('error.html', error=f"Songs not found for country {code} in year {year}")
@@ -75,8 +82,6 @@ def details(code: str, year: int):
         embed = generate_iframe(url)
     name = get_country_name(code.upper())
 
-    session_id = request.cookies.get('session')
-    user_data = get_user_id_from_session(session_id)
     user_id = None
     if user_data:
         user_id = user_data[0]
@@ -102,7 +107,7 @@ def details(code: str, year: int):
     rows = max(len(english_lyrics), len(latin_lyrics), len(native_lyrics))
     columns = (1 if english_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)
 
-    return render_template('country/details.html', song=song, embed=embed, country_name=name, year=year, rows=rows,
+    return render_template('country/details.html', song=song, embed=embed, name=name, year=year, rows=rows,
                             columns=columns,
                             native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
                             can_edit=can_edit, notes=notes)

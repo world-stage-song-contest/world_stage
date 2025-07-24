@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}User list{% endblock %}
 {% block headercontents %}
-<link rel="stylesheet" href="/static/css/user-list.css">
+    <link rel="stylesheet" href="/static/css/user-list.css">
 {% endblock %}
 {% block content %}
 <div class="user-container">
@@ -15,6 +15,8 @@
                     <div class="user-options">
                         <a href="{{ url_for('user.votes', username=user.username) }}">Vote history</a>
                         <a href="{{ url_for('user.submissions', username=user.username) }}">Submissions</a>
+                        <a href="{{ url_for('user.bias', username=user.username, type='country') }}">Country biases</a>
+                        <a href="{{ url_for('user.bias', username=user.username, type='user') }}">Submitter biases</a>
                     </div>
                 </div>
             {% endfor %}

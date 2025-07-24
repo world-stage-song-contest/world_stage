@@ -4,13 +4,18 @@
 <div class="cards-container">
     <a href="{{ url_for('user.submissions', username=username) }}" class="card">
         <h3>Submissions</h3>
-        <img src="/static/images/submit.png" alt="Submit Icon">
-        <p>Views user's submissions.</p>
+        <img src="/static/images/history.png" alt="Submit Icon">
+        <p>Views the user's submissions.</p>
     </a>
     <a href="{{ url_for('user.votes', username=username) }}" class="card">
         <h3>History</h3>
         <img src="/static/images/history.png" alt="History Icon">
-        <p>View user's vote history.</p>
+        <p>View the user's vote history.</p>
+    </a>
+    <a href="{{ url_for('user.bias', username=username) }}" class="card">
+        <h3>Bias</h3>
+        <img src="/static/images/hands.png" alt="Bias Icon">
+        <p>View the user's bias.</p>
     </a>
 </div>
 {% endblock %}

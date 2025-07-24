@@ -7,6 +7,10 @@
 {% endblock %}
 {% block navigation %}
     <a class="nav-item" href="{{ url_for('year.index') }}">Years</a>
+    <span class="nav-separator"></span>
+    {% for show in shows %}
+    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show.short_name)}}"> {{ show.short_name|upper }}</a>
+    {% endfor %}
 {% endblock %}
 {% block content %}
 {% if not closed %}
@@ -15,15 +19,12 @@
 </div>
 {% endif %}
 
-<div class="shows">
-{% for show in shows %}
-    <a href="{{ url_for('year.results', year=year, show=show.short_name) }}">{{ show.name }}</a> {% if not loop.last %}|{% endif %}
-{% endfor %}
-</div>
-
 <div>
     <input type="checkbox" id="hidesolid" onchange="hideNonPlaceholders(this)">
     <label for="hidesolid">Only show placeholders</label>
+</div>
+<div>
+    <strong><big>Total entries:{{total}} ({{placeholders}} placeholders)</big></strong>
 </div>
 
 <table class="songs-table sortable">

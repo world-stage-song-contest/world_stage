@@ -1,8 +1,10 @@
 from collections import defaultdict
+from pathlib import Path
 import sqlite3
-from flask import Blueprint, redirect, request, url_for
+from flask import Blueprint, current_app, redirect, request, url_for
 import math
 import datetime
+import csv, io
 
 from ..db import get_db
 from ..utils import LCG, get_show_id, get_show_songs, get_user_role_from_session, get_year_countries, get_year_shows, get_years, render_template
@@ -56,8 +58,8 @@ def create_show_post():
     cur = db.cursor()
 
     cur.execute('''
-        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date)
-        VALUES (:year, 1, :show_name, :short_name, :dtf, :sc, :date)
+        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, allow_access_type)
+        VALUES (:year, 1, :show_name, :short_name, :dtf, :sc, :date, 'none')
     ''', data)
     db.commit()
 
@@ -84,6 +86,8 @@ def draw(year: int):
 
     shows = get_year_shows(year, pattern='sf')
     count = len(shows)
+    if count == 0:
+        return render_template('error.html', error=f"No semifinal shows found for {year}"), 404
     per = semifinalists // count
     songs = [per] * count
     deficit = semifinalists - per * count
@@ -313,14 +317,55 @@ def manage(year: int):
     cursor = db.cursor()
 
     cursor.execute('''
+        SELECT id, closed FROM year WHERE id = ?
+    ''', (year,))
+    year_data = cursor.fetchone()
+    if not year_data:
+        return render_template('error.html', error=f"Year {year} not found"), 404
+
+    cursor.execute('''
         SELECT show_name, short_name, date, allow_access_type FROM show WHERE year_id = ?
+        ORDER BY id
     ''', (year,))
     shows = [dict(r) for r in cursor.fetchall()]
 
-    return render_template('admin/manage_shows.html', year=year, shows=shows)
+    return render_template('admin/manage_shows.html', year=year_data, shows=shows)
+
+@bp.post('/manage/<int:year>')
+def manage_post(year: int):
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    body = request.get_json()
+    if not body:
+        return render_template('error.html', error="Empty request body"), 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    action = body.get('action')
+    if not action:
+        return render_template('error.html', error="No action specified"), 400
+
+    match action:
+        case 'change_year_status':
+            closed = body.get('year_status')
+            if closed is None:
+                return render_template('error.html', error="No closed status provided"), 400
+
+            cursor.execute('''
+                UPDATE year
+                SET closed = ?
+                WHERE id = ?
+            ''', (closed, year))
+        case _:
+            return render_template('error.html', error=f"Unknown action '{action}'"), 400
+    db.commit()
+    return {'status': 'success'}, 200
 
 @bp.post('/manage/<int:year>/<show>')
-def manage_post(year: int, show: str):
+def manage_show_post(year: int, show: str):
     resp = verify_user()
     if resp:
         return render_template('error.html', error="Not an admin"), 401
@@ -421,3 +466,198 @@ def fuckup_db_post():
     rows = [dict(row) for row in data]
 
     return {'headers': headers, 'rows': rows}, 200
+
+@bp.get('/users')
+def users():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT id, username, approved, role FROM user
+    ''')
+    users = [dict(row) for row in cursor.fetchall()]
+
+    return render_template('admin/users.html', users=users)
+
+@bp.post('/users')
+def users_post():
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    body = request.get_json()
+    if not body:
+        return render_template('error.html', error="Empty request body"), 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    user_id = body.get('user_id')
+    action = body.get('action')
+
+    if not user_id or not action:
+        return render_template('error.html', error="User ID and action must be provided"), 400
+
+    if action == 'approve':
+        cursor.execute('''
+            UPDATE user
+            SET approved = 1
+            WHERE id = ?
+        ''', (user_id,))
+    elif action == 'unapprove':
+        cursor.execute('''
+            UPDATE user
+            SET approved = 0
+            WHERE id = ?
+        ''', (user_id,))
+    elif action == 'annul_password':
+        cursor.execute('''
+            UPDATE user
+            SET password = NULL, salt = NULL
+            WHERE id = ?
+        ''', (user_id,))
+    else:
+        return render_template('error.html', error=f"Unknown action '{action}'"), 400
+
+    db.commit()
+
+    return {'status': 'success'}, 200
+
+@bp.get('/setpots/<int:year>')
+def set_pots(year: int):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT country.id, name, pot FROM song
+        JOIN country ON song.country_id = country.id
+        WHERE year_id = ?
+        ORDER BY pot, name
+    ''', (year,))
+    countries = [dict(row) for row in cursor.fetchall()]
+
+    return render_template('admin/set_pots.html', countries=countries, year=year)
+
+@bp.post('/setpots/<int:year>')
+def set_pots_post(year: int):
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    db = get_db()
+    cursor = db.cursor()
+
+    for country_id, pot_str in request.form.items():
+        try:
+            pot: int | None = int(pot_str)
+            if pot == 0:
+                pot = None
+        except ValueError:
+            return render_template('error.html', error=f"Invalid pot value for country {country_id}"), 400
+
+        cursor.execute('''
+            UPDATE country
+            SET pot = ?
+            WHERE id = ?
+        ''', (pot, country_id))
+
+    db.commit()
+    return redirect(url_for('admin.set_pots', year=year))
+
+@bp.get('/upload')
+def upload():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    return render_template('admin/upload.html')
+
+@bp.post('/upload')
+def upload_post():
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    file = request.files.get('file')
+    if not file:
+        return render_template('error.html', error="No file uploaded"), 400
+
+    print(file)
+
+    file_path = Path(current_app.instance_path, 'uploads', file.filename or datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.dat')
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file.save(file_path)
+
+    return render_template('admin/upload.html', message=f"File '{file.filename}' uploaded successfully.", file_path=str(file_path))
+
+@bp.get('/recapdata')
+def recap_data():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    return render_template('admin/recap_data.html')
+
+@bp.post('/recapdata')
+def recap_data_post():
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    show_names = request.form.getlist('show')
+
+    db = get_db()
+    cursor = db.cursor()
+
+    shows: list[int] = list()
+    for show in show_names:
+        year, short_name = show.split('-')
+        try:
+            year = int(year)
+        except ValueError:
+            return render_template('admin/recap_data.html', error=f"Invalid year '{year}' in show '{show}'"), 400
+
+        if not short_name:
+            return render_template('admin/recap_data.html', error=f"Invalid show name '{short_name}' in show '{show}'"), 400
+
+        cursor.execute('''
+            SELECT id FROM show WHERE year_id = ? AND short_name = ?
+        ''', (year, short_name))
+        show_id = cursor.fetchone()
+        if not show_id:
+            return render_template('admin/recap_data.html', error=f"Show '{show}' not found"), 404
+        shows.append(show_id[0])
+
+    placeholders = ', '.join(['?'] * len(shows))
+
+    cursor.execute(f'''
+        SELECT show.year_id AS year, short_name AS show, running_order, country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name, artist, title, video_link, snippet_start, snippet_end, '' AS display_name, GROUP_CONCAT(language.name, ', ') AS language
+        FROM song_show
+        JOIN song ON song_show.song_id = song.id
+        JOIN show ON song_show.show_id = show.id
+        JOIN country ON song.country_id = country.id
+        LEFT JOIN song_language ON song.id = song_language.song_id
+        LEFT JOIN language ON song_language.language_id = language.id
+        WHERE show.id IN ({placeholders})
+        GROUP BY song.id, show.id
+        ORDER BY show_id, running_order
+    ''', shows)
+    csv_data = [dict(row) for row in cursor.fetchall()]
+
+    w = io.StringIO()
+    writer = csv.DictWriter(w, fieldnames=['year', 'show', 'running_order', 'country', 'country_code', 'country_name', 'artist', 'title', 'video_link', 'snippet_start', 'snippet_end', 'display_name', 'language'])
+    writer.writeheader()
+    for row in csv_data:
+        writer.writerow(row)
+    w.seek(0)
+    data = w.getvalue()
+
+    return render_template('admin/recap_data.html', data=data)
