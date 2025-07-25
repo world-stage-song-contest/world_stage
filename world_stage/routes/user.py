@@ -390,6 +390,7 @@ given_back AS (
     SELECT vs.voter_id AS target_id,
            SUM(p.score) AS points_back
     FROM vote_set vs
+    JOIN user_shows us ON us.show_id = vs.show_id
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN POINT p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id

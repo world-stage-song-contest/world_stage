@@ -189,7 +189,7 @@ async function putInPlace(envelope) {
 
     const placeholder = document.createElement("div");
     placeholder.classList.add("pseudo-envelope");
-    const envelopes = document.querySelector("#envelopes");
+    const envelopes = envelope.parentNode
     const reveal = document.querySelector("#envelope");
     //const ro = document.querySelector(".ro");
 
@@ -305,13 +305,16 @@ function createCountry(country, countryClass) {
 }
 
 function createEnvelopes() {
-    const envelopes = document.querySelector("#envelopes");
+    const envelopesDtf = document.querySelector("#envelopes-dtf");
+    const envelopesSc = document.querySelector("#envelopes-sc");
     let n = 1;
     for (const [country, isSecondChance] of revealOrder.data()) {
-        if (n == nTop + 1) {
-            envelopes.appendChild(document.createElement("div"));
+        const envelope = createEnvelope(n++ - isSecondChance * nTop, country, isSecondChance);
+        if (isSecondChance) {
+            envelopesSc.appendChild(envelope);
+        } else {
+            envelopesDtf.appendChild(envelope);
         }
-        envelopes.appendChild(createEnvelope(n++ - isSecondChance * nTop, country, isSecondChance));
     }
 }
 
