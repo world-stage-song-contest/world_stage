@@ -56,7 +56,7 @@ async function changeAccessType(el, showId) {
 
     const url = window.location.href + `/${showId}`;
     const body = {
-        'action': 'change_access_type',
+        'action': 'set_access_type',
         'access_type': select.value
     };
 
