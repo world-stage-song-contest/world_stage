@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="96"
+   height="96"
+   viewBox="0 0 96.000001 96"
+   version="1.1"
+   id="svg5"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <g
+     id="layer1">
+    <rect
+       style="fill:#113399;fill-opacity:1;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"
+       id="rect5146"
+       width="96"
+       height="96"
+       x="0"
+       y="0" />
+    <rect
+       style="fill:#dd1133;fill-opacity:1;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"
+       id="rect5202"
+       width="72"
+       height="72"
+       x="12"
+       y="12" />
+    <g
+       id="g7653"
+       class="UnoptimicedTransforms">
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"
+         d="m 48,18 -9,21 -21,9 h 30 z m 0,0 9,21 21,9 H 48 Z M 48,78 39,57 18,48 h 30 z m 0,0 9,-21 21,-9 H 48 Z M 22.019238,33 35.705771,51.294229 33,73.980762 48,48 Z m 0,0 22.686533,2.705771 L 63,22.019238 48,48 Z M 73.980762,63 51.294229,60.294229 33,73.980762 48,48 Z m 0,0 L 60.294229,44.705771 63,22.019238 48,48 Z M 22.019238,63 44.705771,60.294229 63,73.980762 48,48 Z m 0,0 L 35.705771,44.705771 33,22.019238 48,48 Z M 73.980762,33 60.294229,51.294229 63,73.980762 48,48 Z m 0,0 L 51.294229,35.705771 33,22.019238 48,48 Z M 48,78 57,57 78,48 H 48 Z m 0,0 -9,-21 -21,-9 h 30 z m 0,-60 9,21 21,9 H 48 Z m 0,0 -9,21 -21,9 H 48 Z M 73.980762,63 60.294229,44.705771 63,22.019238 48,48 Z m 0,0 L 51.294229,60.294229 33,73.980762 48,48 Z M 22.019238,33 44.705771,35.705771 63,22.019238 48,48 Z m 0,0 L 35.705771,51.294229 33,73.980762 48,48 Z M 73.980762,33 51.294229,35.705771 33,22.019238 48,48 Z m 0,0 L 60.294229,51.294229 63,73.980762 48,48 Z M 22.019238,63 35.705771,44.705771 33,22.019238 48,48 Z m 0,0 L 44.705771,60.294229 63,73.980762 48,48 Z"
+         id="path7650"
+         class="UnoptimicedTransforms" />
+    </g>
+  </g>
+</svg>
