@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
-	<path fill="#139" d="M0 0h144v96H0z"/>
-	<path fill="#d13" d="M12 12h120v72H12z"/>
-	<g fill="#fff" transform="translate(24 0)">
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96">
+	<path fill="#139" d="M0 0h96v96H0z"/>
+	<path fill="#d13" d="M12 12h72v72H12z"/>
+	<g fill="#fff">
 		<path id="a" d="M48 18v30H18l21-9zm0 0v30h30l-21-9zm0 60V48H18l21 9zm0 0V48h30l-21 9z"/>
 		<use href="#a" transform="rotate(30 48 48)"/>
 		<use href="#a" transform="rotate(60 48 48)"/>

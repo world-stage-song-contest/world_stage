@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" >
+	<path fill="#139" d="M0 0h96v96H0z"/>
+	<path fill="#d13" d="M12 12h72v72H12z"/>
+	<g fill="#fff">
+		<g id="4star">
+			<path d="M48 48m0 -30v30h-30l21 -9z"/>
+			<path d="M48 48m0 -30v30h30l-21 -9z"/>
+			<path d="M48 48m0 30v-30h-30l21 9z"/>
+			<path d="M48 48m0 30v-30h30l-21 9z"/>
+			</g>
+		<use href="#4star" transform="rotate(30 48 48)"/>
+		<use href="#4star" transform="rotate(60 48 48)"/>
+		</g>
+</svg>
