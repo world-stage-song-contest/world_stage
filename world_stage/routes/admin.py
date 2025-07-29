@@ -452,7 +452,7 @@ def fuckup_db_post():
     if not query:
         return render_template('error.html', error="No query provided"), 400
 
-    backup_path = f"backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    backup_path = f"backups/backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
     shutil.copy2(db.execute("PRAGMA database_list").fetchone()[2], backup_path)
 
     try:

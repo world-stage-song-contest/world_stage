@@ -92,6 +92,10 @@ def details(code: str, year: int):
     latin_lyrics = []
     native_lyrics = []
     notes = []
+    sources = []
+
+    if song.sources:
+        sources = song.sources.splitlines()
 
     md = get_markdown_parser()
 
@@ -108,6 +112,6 @@ def details(code: str, year: int):
     columns = (1 if english_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)
 
     return render_template('country/details.html', song=song, embed=embed, name=name, year=year, rows=rows,
-                            columns=columns,
+                            columns=columns, sources=sources,
                             native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
                             can_edit=can_edit, notes=notes)

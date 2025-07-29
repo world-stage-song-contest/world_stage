@@ -1,6 +1,7 @@
 import os
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
+import urllib.parse
 
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
@@ -23,6 +24,8 @@ def create_app(config: dict | None = None) -> Flask:
     app.jinja_env.globals.update(zip=zip)
     app.jinja_env.globals.update(round=round)
     app.jinja_env.globals.update(int=int)
+
+    app.jinja_env.filters.update(urldecode=urllib.parse.unquote)
 
     @app.before_request
     def clear_trailing():

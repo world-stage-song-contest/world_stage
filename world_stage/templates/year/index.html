@@ -53,14 +53,15 @@
                     {{ winner.country.name }}
                 </div></a></td>
                 <td class="artist">{{ winner.artist }}</td>
-                <td class="title"><a href="{{ url_for('country.details', code=winner.country.cc.lower(), year=winner.year) }}">
-                    <div class="song-title">
+                <td class="title">
+                    <a class="song-title"
+                       href="{{ url_for('country.details', code=winner.country.cc.lower(), year=winner.year) }}">
                         <span lang="{{winner.title_lang.str("Latn")}}">{{ winner.title }}</span>
                         {% if winner.native_title %}
                         <bdi lang="{{winner.title_lang.str()}}">{{ winner.native_title }}</bdi>
                         {% endif %}
-                    </div>
-                </a></td>
+                    </a>
+                </td>
                 <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
                 <td class="points">{{ winner.vote_data.sum }}</td>
                 <td class="percent">{{ winner.vote_data.pct() }}</td>

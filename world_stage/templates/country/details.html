@@ -30,6 +30,19 @@
 </div>
 {% endif %}
 
+{% if can_edit %}
+<div class="song-sources">
+    <h2>Sources</h2>
+    <ol>
+    {% for source in sources %}
+    {% if source %}
+        <li><div class="source-link">{{source|urldecode|urlize}}</div></li>
+    {% endif %}
+    {% endfor %}
+    </ol>
+</div>
+{% endif %}
+
 <div class="basic-song-info">
     <table>
         <tr>

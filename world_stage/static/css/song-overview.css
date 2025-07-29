@@ -4,6 +4,11 @@
     gap: 0.25em;
     flex-direction: column;
     font-style: italic;
+    width: fit-content;
+}
+
+.song-title > * {
+    width: fit-content;
 }
 
 th, td {
@@ -62,6 +67,7 @@ li:target > div {
     grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
     grid-template-rows: repeat(var(--rows), auto);
     gap: 0.1em 0.8rem;
+    clear: both;
 }
 
 .all-lyrics > div, .all-lyrics > h2 {
@@ -70,4 +76,16 @@ li:target > div {
     word-break: break-word;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+}
+
+.song-sources {
+    float: right;
+    margin-right: 1em;
+}
+
+.source-link {
+    width: 40ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
 }

@@ -376,6 +376,7 @@ class Song:
     video_link: Optional[str]
     recap_start: Optional[str]
     recap_end: Optional[str]
+    sources: Optional[str]
     hidden: bool = False
 
     def __init__(self, *,
@@ -385,6 +386,7 @@ class Song:
                  title_lang: Optional[int], native_lang: Optional[int], lyrics_notes: Optional[str],
                  english_lyrics: Optional[str], latin_lyrics: Optional[str], native_lyrics: Optional[str],
                  video_link: Optional[str], recap_start: Optional[int], recap_end: Optional[int],
+                 sources: Optional[str],
                  languages: list['Language'] = [], show_id: Optional[int] = None, ro: Optional[int] = None):
         self.id = id
         self.title = title
@@ -401,6 +403,7 @@ class Song:
         self.native_lyrics = native_lyrics
         self.lyrics_notes = lyrics_notes
         self.video_link = video_link
+        self.sources = sources
         self.recap_start = format_seconds(recap_start) if recap_start is not None else None
         self.recap_end = format_seconds(recap_end) if recap_end is not None else None
         self.title_lang = get_language(title_lang) if title_lang else Language()
@@ -793,7 +796,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                user.username, song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
-               song.submitter_id, song.notes
+               song.submitter_id, song.notes, song.sources
         FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN show ON song_show.show_id = show.id
@@ -827,6 +830,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
                   ro=song['running_order'],
+                  sources=song['sources'],
                   show_id=show_id if select_votes else None)
                 for song in cursor.fetchall()]
 
@@ -877,7 +881,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
-               song.submitter_id, song.notes
+               song.submitter_id, song.notes, song.sources
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -907,6 +911,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
+                  sources=song['sources'],
                   submitter=song['username']) for song in cursor.fetchall()]
 
     if select_languages:
@@ -928,7 +933,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    user.username, song.year_id,
                    song.video_link, song.snippet_start, song.snippet_end,
-                   song.submitter_id, song.notes
+                   song.submitter_id, song.notes, song.sources
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -944,7 +949,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    user.username, song.year_id,
                    song.video_link, song.snippet_start, song.snippet_end,
-                   song.submitter_id, song.notes
+                   song.submitter_id, song.notes, song.sources
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -974,6 +979,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
+                  sources=song['sources'],
                   submitter=song['username']) for song in cursor.fetchall()]
 
     if select_languages:
@@ -993,7 +999,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 user.username, song.year_id,
                 song.video_link, song.snippet_start, song.snippet_end,
-                song.submitter_id, song.notes
+                song.submitter_id, song.notes, song.sources
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -1023,6 +1029,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
+                  sources=song['sources'],
                   submitter=song['username']) for song in cursor.fetchall()]
 
     if select_languages:
@@ -1042,7 +1049,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 user.username, song.year_id,
                 song.video_link, song.snippet_start, song.snippet_end,
-                song.submitter_id, song.notes
+                song.submitter_id, song.notes, song.sources
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN user on song.submitter_id = user.id
@@ -1075,6 +1082,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
+                  sources=song['sources'],
                   submitter=song['username'])
 
     ret.languages = get_song_languages(ret.id)
