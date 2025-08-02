@@ -470,7 +470,7 @@ class Country {
     }
 
     setActive() {
-        this.element.classList.remove("inactive");
+        this.element.classList.remove("inactive", "own-entry");
         this.currentEl.classList.add("visible");
         this.element.classList.add("main-moving", "active", "received-points");
     }
