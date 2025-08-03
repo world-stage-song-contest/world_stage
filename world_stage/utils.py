@@ -279,9 +279,12 @@ class VoteData:
         other_max = max(other_keys, default=0)
         if this_max != other_max:
             return this_max < other_max
-        for i in range(len(this_keys)):
-            if this_keys[i] != other_keys[i]:
-                return this_keys[i] < other_keys[i]
+        overall_max = max(this_max, other_max)
+        for i in range(overall_max):
+            this_v = self.pts.get(i, 0)
+            other_v = other.pts.get(i, 0)
+            if this_v != other_v:
+                return this_v < other_v
         if self.ro is None or other.ro is None:
             return False
         return self.ro > other.ro
