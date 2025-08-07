@@ -34,9 +34,9 @@ async function onLoad() {
         el.addEventListener('input', function (e) {
             let value = el.value.replace(/\D/g, '');
 
-            if (value.length >= 3) {
-                value = value.slice(0, 4);
-                value = value.slice(0, 2) + ':' + value.slice(2);
+            if (value.length >= 2) {
+                value = value.slice(0, 3);
+                value = value.slice(0, 1) + ':' + value.slice(1);
             }
 
             el.value = value;

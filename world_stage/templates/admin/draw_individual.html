@@ -2,7 +2,8 @@
 {% block title %}Draw {{ show }}{% endblock %}
 {% block headercontents %}
     <script>
-        const year = {{ year }}
+        const year = {{ year }};
+        const multiDraw = false;
     </script>
     <script src="/static/js/draw.js"></script>
     <link rel="stylesheet" href="/static/css/draw.css">
@@ -35,9 +36,10 @@
         <h2>{{ show_name }}</h2>
         <div class="show-countries"
              data-limit="{{ lim }}"
+             data-name="{{ show }}"
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
-        {% for _ in countries %}
-            <div class="show-country item empty"
+        {% for _ in songs %}
+            <div class="show-country item transparent"
                  data-code="XXX"
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
@@ -51,18 +53,20 @@
 </div>
 
 <div id="pots" class="single">
-    <div class="pot pot-big active1">
+    <div class="pot pot-big active1"
+         data-index="0">
         <h2>Participants</h2>
         <div class="pot-container"
              data-limit="{{ lim }}"
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
-        {% for country in countries %}
+        {% for song in songs %}
             <div class="pot-item item"
-                 data-code="{{ country.cc }}"
+                 data-code="{{ song.country.cc }}"
                  data-index="{{ loop.index0 }}"
+                 data-submitter="{{ song.submitter_id }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
-                <div class="flag-container">{{ flag(country.cc, 24, country.name) }}</div>
-                <div class="country-name">{{ country.name }}</div>
+                <div class="flag-container">{{ flag(song.country.cc, 24, song.country.name) }}</div>
+                <div class="country-name">{{ song.country.name }}</div>
             </div>
         {% endfor %}
         </div>

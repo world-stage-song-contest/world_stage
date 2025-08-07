@@ -2,15 +2,16 @@
 {% block title %}Administrator Utilities{% endblock %}
 {% block headercontents %}
     <script>
-        const year = {{ year }}
+        const year = {{ year }};
+        const multiDraw = true;
     </script>
     <script src="/static/js/draw.js"></script>
     <link rel="stylesheet" href="/static/css/draw.css">
 {% endblock %}
 {% block content %}
 <div id="controls">
-    <button onclick="next()" aria-label="Faster"><i class="ph-fill ph-play"></i></button>
-    <button onclick="nextAll()" aria-label="Faster"><i class="ph-fill ph-fast-forward"></i></button>
+    <button onclick="next()" aria-label="Next"><i class="ph-fill ph-play"></i></button>
+    <button onclick="nextAll()" aria-label="Next"><i class="ph-fill ph-fast-forward"></i></button>
     <button onclick="save()" aria-label="Save"><i class="ph-fill ph-floppy-disk"></i></button>
     <button onclick="toggleHeader()" aria-label="Toggle Header"><i class="ph-fill ph-arrows-in"></i></button>
 </div>
@@ -25,15 +26,16 @@
         <h2>{{ show.name }}</h2>
         <div class="show-countries"
              data-limit="{{ lim }}"
+             data-name="{{ show.short_name }}"
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
         {% for _ in range(num) %}
-            <div class="show-country item empty"
+            <div class="show-country item transparent"
                  data-code="XXX"
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
-                <div class="flag-container value transparent">{{ flag("XXX", 25, "Unknown") }}</div>
-                <div class="country-name value transparent"></div>
+                <div class="flag-container value">{{ flag("XXX", 25, "Unknown") }}</div>
+                <div class="country-name value"></div>
             </div>
         {% endfor %}
         </div>
@@ -43,11 +45,14 @@
 
 <div id="pots">
 {% for pot, countries in pots.items() %}
-    <div class="pot {% if loop.index == 1 %}active1{% endif %}">
+    <div data-index="{{ loop.index }}"
+         class="pot {% if loop.index == 1 %}active1{% endif %}">
         <h2>Pot {{loop.index}}</h2>
         <div class="pot-container">
         {% for country in countries %}
-            <div class="pot-item item" data-code="{{ country.cc }}">
+            <div class="pot-item item"
+                 data-code="{{ country.cc }}"
+                 data-submitter="{{ country.submitter }}">
                 <div class="flag-container">{{ flag(country.cc, 25, country.name) }}</div>
                 <div class="country-name">{{ country.name }}</div>
             </div>

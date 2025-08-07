@@ -3,7 +3,7 @@ import datetime
 from enum import Enum
 from functools import total_ordering
 import json
-from typing import Optional, Union
+from typing import Optional
 
 from flask import Response, request
 import flask
@@ -15,7 +15,6 @@ import urllib.parse
 from functools import lru_cache
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline import StateInline
-from markdown_it.token import Token
 import re
 
 Bucket: TypeAlias = Deque[Tuple[str, Dict[int, int]]]
@@ -28,14 +27,17 @@ class LCG:
         self.m = m
         self.seed = seed
 
-    def next(self) -> int:
+    def next(self, limit: int | None) -> int:
         self.state = (self.state * self.a + self.c) % self.m
-        return self.state
+        if limit:
+            return self.state % limit
+        else:
+            return self.state
 
     def shuffle(self, arr: list):
         n = len(arr)
         for i in range(n - 1, 0, -1):
-            j = self.next() % (i + 1)
+            j = self.next(i + 1)
             arr[i], arr[j] = arr[j], arr[i]
 
     def sample[T](self, arr: list[T], k: int) -> list[T]:
@@ -176,7 +178,7 @@ class SuspensefulVoteSequencer:
                 break
 
         for v in early_voters:
-            num = lcg.next() % self.first_half
+            num = lcg.next(self.first_half)
             final_order.insert(num, v)
 
         return final_order
@@ -738,7 +740,7 @@ def format_seconds(seconds: int) -> str:
         return "00:00"
     minutes = seconds // 60
     seconds %= 60
-    return f"{minutes:02}:{seconds:02}"
+    return f"{minutes}:{seconds:02}"
 
 def parse_seconds(td: str | None) -> int | None:
     """Parse a string in the format MM:SS into seconds."""
@@ -1103,18 +1105,19 @@ def get_year_countries(year: int, exclude: list[str] = []) -> list[dict]:
     db = get_db()
     cursor = db.cursor()
     cursor.execute('''
-        SELECT country.id, country.name, country.pot FROM song
+        SELECT country.id, country.name, country.pot, song.submitter_id FROM song
         JOIN country ON song.country_id = country.id
         WHERE song.year_id = ?
         ORDER BY country.name
     ''', (year,))
     countries = []
-    for id, name, pot in cursor.fetchall():
+    for id, name, pot, submitter in cursor.fetchall():
         if id in exclude: continue
         countries.append({
             'cc': id,
             'name': name,
-            'pot': pot
+            'pot': pot,
+            'submitter': submitter,
         })
 
     return countries

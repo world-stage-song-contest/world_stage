@@ -153,9 +153,7 @@ def draw_final(year: int, show: str):
     if not songs:
         return render_template('error.html', error="No show '{show}' found for {year}"), 404
 
-    countries = list(map(lambda s: s.country, songs))
-
-    return render_template('admin/draw_individual.html', countries=countries, show=show, show_name=show_data.name, year=year, num=len(countries), lim=math.ceil((len(countries) / 2) or 1))
+    return render_template('admin/draw_individual.html', songs=songs, show=show, show_name=show_data.name, year=year, num=len(songs), lim=math.ceil((len(songs) / 2) or 1))
 
 @bp.post('/draw/<int:year>/<show>')
 def draw_final_post(year: int, show: str):

@@ -97,6 +97,6 @@
     transition: opacity 1s;
 }
 
-.transparent {
+.transparent > .flag-container, .transparent > .country-name {
     opacity: 0;
 }
