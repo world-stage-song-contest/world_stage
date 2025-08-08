@@ -1,8 +1,12 @@
-class Xoshiro256ss {
+// The following variables are provided in the html file this is included in
+// multiDraw: boolean
+// year: number
+
+class Xoshiro256StarStar {
     constructor(seed) {
         function splitmix64(seed) {
             let z = BigInt.asUintN(64, BigInt(seed));
-            return function() {
+            return function () {
                 z = (z + 0x9e3779b97f4a7c15n) & 0xffffffffffffffffn;
                 let r = z;
                 r = (r ^ (r >> 30n)) * 0xbf58476d1ce4e5b9n & 0xffffffffffffffffn;
@@ -54,7 +58,6 @@ class Xoshiro256ss {
     }
 
     /**
-     *
      * @param {number} limit
      * @returns {number}
      */
@@ -101,7 +104,6 @@ function toggleHeader() {
 }
 
 /**
- *
  * @param {number} t
  * @returns {number}
  */
@@ -110,7 +112,6 @@ function easeOutCubic(t) {
 }
 
 async function save() {
-    if (!allDrawn) return;
     const error = document.querySelector(".error");
     const data = {};
     for (const show of document.querySelectorAll('.show')) {
@@ -145,7 +146,7 @@ class Entry {
     /** @type {number} */
     submitter;
     /** @type {number} */
-    index;
+    pot;
     /** @type {Element} */
     element;
 
@@ -156,114 +157,259 @@ class Entry {
     constructor(element, i) {
         this.code = element.dataset.code;
         this.submitter = parseInt(element.dataset.submitter);
-        this.index = i;
+        this.pot = i;
         this.element = element;
     }
 }
 
 /**
- * @param {Entry[][]} pots
- * @param {{string: {limit: number, entries: Entry[]}}} shows
- * @param {SFC32} lcg
+ * Validates that the allocation problem has a feasible solution
+ * @param {Entry[][]} pots - Array of pots, each containing entries
+ * @param {Object<string, {limit: number, entries: Entry[]}>} shows - Show configurations
+ * @throws {Error} If validation fails
  */
-function drawIntoShows(pots, shows, lcg) {
-  if (!lcg?.next) throw new Error('lcg.next(limit) is required');
-
-  /* ---------- flatten input ---------- */
-  const showNames = Object.keys(shows);
-  if (showNames.length < 2) throw new Error('Need ≥ 2 shows');
-
-  const entries = pots.flat();
-  const N = entries.length;
-  const K = showNames.length;
-
-  /* ---------- quick impossibility checks ---------- */
-  const capacity = showNames.reduce((t, s) => t + shows[s].limit, 0);
-  if (N > capacity) throw new Error(`Impossible: ${N} entries > ${capacity} slots`);
-
-  const perSubmitter = new Map();
-  for (const e of entries)
-    perSubmitter.set(e.submitter, (perSubmitter.get(e.submitter) ?? 0) + 1);
-  for (const [s, c] of perSubmitter)
-    if (c > K) throw new Error(`Submitter ${s} owns ${c} entries but only ${K} shows`);
-
-  /* ---------- adjacency via submitter clash ---------- */
-  const adj = Array.from({ length: N }, () => new Set());
-  const bySubmitter = new Map();
-  entries.forEach((e, i) => {
-    const set = bySubmitter.get(e.submitter) ?? [];
-    for (const j of set) { adj[i].add(j); adj[j].add(i); }
-    set.push(i); bySubmitter.set(e.submitter, set);
-  });
-
-  const colourOf = Array(N).fill(-1);
-  const satDeg   = Array(N).fill(0);
-  const deg      = adj.map(s => s.size);
-  const remaining = showNames.map(n => shows[n].limit);
-
-  function pickVertex() {
-    let best = -1, bestSat = -1, bestDeg = -1;
-    for (let v = 0; v < N; ++v) if (colourOf[v] === -1) {
-      if (satDeg[v] > bestSat ||
-         (satDeg[v] === bestSat && deg[v] > bestDeg)) {
-        best = v; bestSat = satDeg[v]; bestDeg = deg[v];
-      }
+function validateAllocation(pots, shows) {
+    const showNames = Object.keys(shows);
+    if (showNames.length < 2) {
+        throw new Error('Need at least 2 shows for multi-draw allocation');
     }
-    return best;
-  }
 
-  function legalColours(v) {
-    const banned = new Set();
-    for (const u of adj[v]) {
-      const c = colourOf[u];
-      if (c !== -1) banned.add(c);
+    const totalEntries = pots.reduce((sum, pot) => sum + pot.length, 0);
+    const totalCapacity = showNames.reduce((sum, name) => sum + shows[name].limit, 0);
+
+    if (totalEntries > totalCapacity) {
+        throw new Error(`Allocation impossible: ${totalEntries} entries exceed ${totalCapacity} available slots`);
     }
-    const order = [...Array(K).keys()];
-    lcg.shuffle(order);
-    return order.filter(c => !banned.has(c) && remaining[c] > 0);
-  }
 
-  function assign(vIdx) {
-    if (vIdx === -1) return true;
-
-    for (const c of legalColours(vIdx)) {
-      colourOf[vIdx] = c; remaining[c]--;
-      for (const u of adj[vIdx]) satDeg[u] = new Set(
-        [...adj[u]].map(n => colourOf[n]).filter(x => x !== -1)).size;
-
-      if (assign(pickVertex())) return true;
-
-      colourOf[vIdx] = -1; remaining[c]++;
-      for (const u of adj[vIdx]) satDeg[u] = new Set(
-        [...adj[u]].map(n => colourOf[n]).filter(x => x !== -1)).size;
+    // Check submitter constraints
+    const entriesPerSubmitter = new Map();
+    for (const pot of pots) {
+        for (const entry of pot) {
+            entriesPerSubmitter.set(entry.submitter, (entriesPerSubmitter.get(entry.submitter) ?? 0) + 1);
+        }
     }
-    return false;
-  }
 
-  if (!assign(pickVertex()))
-    throw new Error('Deadlock: global graph colouring infeasible');
-
-  for (let i = 0; i < N; ++i) {
-    const showIdx = colourOf[i];
-    const showObj = shows[showNames[showIdx]];
-    showObj.entries.push(entries[i]);
-  }
+    for (const [submitter, count] of entriesPerSubmitter) {
+        if (count > showNames.length) {
+            throw new Error(`Submitter ${submitter} has ${count} entries but only ${showNames.length} shows available`);
+        }
+    }
 }
 
 /**
- *
- * @param {string} showName
- * @param {Entry[]} showEntries
- * @param {SFC32} lcg
+ * Assigns entries from a single pot to available shows using bipartite matching
+ * @param {Entry[]} pot - Entries to assign (will be modified)
+ * @param {Array<{name: string, limit: number, entries: Entry[], submitters: Set<number>}>} liveShows - Shows with capacity
+ * @param {Xoshiro256StarStar} rng - Random number generator
+ * @returns {boolean} True if assignment succeeded
  */
-function setShowDraw(showName, showEntries, lcg) {
+function assignPotToShows(pot, liveShows, rng) {
+    const showCount = liveShows.length;
+    const entryCount = pot.length;
+
+    // Build adjacency lists (show -> compatible entries)
+    const adjacency = Array.from({ length: showCount }, () => []);
+    for (let showIndex = 0; showIndex < showCount; ++showIndex) {
+        const show = liveShows[showIndex];
+        for (let entryIndex = 0; entryIndex < entryCount; ++entryIndex) {
+            if (!show.submitters.has(pot[entryIndex].submitter)) {
+                adjacency[showIndex].push(entryIndex);
+            }
+        }
+    }
+
+    // Find maximum bipartite matching (entry -> show)
+    const matchEntry = Array(entryCount).fill(-1);
+    const seen = Array(entryCount);
+
+    /**
+     * DFS to find augmenting path
+     * @param {number} showIndex
+     * @returns {boolean}
+     */
+    function findAugmentingPath(showIndex) {
+        for (const entryIndex of adjacency[showIndex]) {
+            if (seen[entryIndex]) continue;
+            seen[entryIndex] = true;
+
+            if (matchEntry[entryIndex] === -1 || findAugmentingPath(matchEntry[entryIndex])) {
+                matchEntry[entryIndex] = showIndex;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Try to match each show
+    for (let showIndex = 0; showIndex < showCount; ++showIndex) {
+        seen.fill(false);
+        findAugmentingPath(showIndex);
+    }
+
+    // Apply the matching and collect assigned indices
+    const assignedIndices = [];
+    for (let entryIndex = 0; entryIndex < entryCount; ++entryIndex) {
+        const showIndex = matchEntry[entryIndex];
+        if (showIndex !== -1) {
+            const show = liveShows[showIndex];
+            const entry = pot[entryIndex];
+            show.entries.push(entry);
+            show.submitters.add(entry.submitter);
+            assignedIndices.push(entryIndex);
+        }
+    }
+
+    // Remove assigned entries efficiently
+    const remainingEntries = pot.filter((_, index) => !assignedIndices.includes(index));
+    pot.length = 0;
+    pot.push(...remainingEntries);
+
+    return true;
+}
+
+/**
+ * Assigns leftover entries to remaining show slots
+ * @param {Entry[]} leftovers - Remaining entries to assign
+ * @param {Array<{name: string, limit: number, entries: Entry[], submitters: Set<number>}>} showStates - All shows
+ * @param {Xoshiro256StarStar} rng - Random number generator
+ */
+function assignLeftovers(leftovers, showStates, rng) {
+    // Build list of available slots with show references
+    const availableSlots = [];
+    for (const show of showStates) {
+        const remainingCapacity = show.limit - show.entries.length;
+        for (let i = 0; i < remainingCapacity; i++) {
+            availableSlots.push(show);
+        }
+    }
+
+    const slotCount = availableSlots.length;
+    const leftoverCount = leftovers.length;
+
+    if (leftoverCount > slotCount) {
+        throw new Error(`Cannot assign ${leftoverCount} leftovers to ${slotCount} available slots`);
+    }
+
+    // Bipartite matching for leftovers
+    const slotToEntry = Array(slotCount).fill(-1);
+    const seen = Array(slotCount);
+
+    /**
+     * DFS to find augmenting path for leftover assignment
+     * @param {number} entryIndex
+     * @returns {boolean}
+     */
+    function findAugmentingPath(entryIndex) {
+        const submitter = leftovers[entryIndex].submitter;
+
+        for (let slotIndex = 0; slotIndex < slotCount; ++slotIndex) {
+            if (seen[slotIndex]) continue;
+
+            const show = availableSlots[slotIndex];
+            if (show.submitters.has(submitter)) continue;
+
+            seen[slotIndex] = true;
+
+            if (slotToEntry[slotIndex] === -1 || findAugmentingPath(slotToEntry[slotIndex])) {
+                slotToEntry[slotIndex] = entryIndex;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Match each leftover entry
+    for (let entryIndex = 0; entryIndex < leftoverCount; ++entryIndex) {
+        seen.fill(false);
+        if (!findAugmentingPath(entryIndex)) {
+            throw new Error(`Cannot place entry from submitter ${leftovers[entryIndex].submitter}: no compatible shows available`);
+        }
+    }
+
+    // Apply the matching
+    for (let slotIndex = 0; slotIndex < slotCount; ++slotIndex) {
+        const entryIndex = slotToEntry[slotIndex];
+        if (entryIndex !== -1) {
+            const show = availableSlots[slotIndex];
+            const entry = leftovers[entryIndex];
+            show.entries.push(entry);
+            show.submitters.add(entry.submitter);
+        }
+    }
+}
+
+/**
+ * Main allocation algorithm - distributes entries from pots into shows
+ * @param {Entry[][]} pots - Array of pots containing entries
+ * @param {Object<string, {limit: number, entries: Entry[]}>} shows - Show configurations
+ * @param {Xoshiro256StarStar} rng - Random number generator
+ * @throws {Error} If allocation fails
+ */
+function drawIntoShows(pots, shows, rng) {
+    if (!rng?.next) {
+        throw new Error('Valid RNG with next(limit) method required');
+    }
+
+    validateAllocation(pots, shows);
+
+    // Prepare show states with tracking
+    const showNames = Object.keys(shows);
+    const showStates = showNames.map(name => ({
+        name,
+        limit: shows[name].limit,
+        entries: shows[name].entries,
+        submitters: new Set(shows[name].entries.map(e => e.submitter)),
+    }));
+
+    // Shuffle each pot for randomization
+    pots.forEach(rng.shuffle);
+
+    // Phase 1: Assign complete pots to shows
+    while (true) {
+        const liveShows = showStates.filter(s => s.entries.length < s.limit);
+        if (!liveShows.length) break;
+
+        // Check if we have enough entries in each pot
+        if (!pots.every(pot => pot.length >= liveShows.length)) break;
+
+        // Randomize show order for fairness
+        rng.shuffle(liveShows);
+
+        for (const pot of pots) {
+            if (!assignPotToShows(pot, liveShows, rng)) {
+                throw new Error('Pot assignment failed: conflicting submitter constraints');
+            }
+        }
+    }
+
+    // Phase 2: Handle remaining entries
+    const leftovers = rng.shuffle(pots.flat());
+    if (leftovers.length > 0) {
+        assignLeftovers(leftovers, showStates, rng);
+    }
+
+    // Verify final state
+    for (const show of showStates) {
+        if (show.entries.length !== show.limit) {
+            throw new Error(`Show ${show.name} has ${show.entries.length} entries but needs ${show.limit}`);
+        }
+    }
+}
+
+/**
+ * Updates show UI with assigned entries
+ * @param {string} showName - Name of the show
+ * @param {Entry[]} showEntries - Entries assigned to this show
+ * @param {Xoshiro256StarStar} rng - Random number generator
+ */
+function setShowDraw(showName, showEntries, rng) {
     console.log(showEntries);
     const elements = [...document.querySelectorAll(`.show[data-name='${showName}'] .show-country`)];
     const entries = showEntries.slice();
 
     while (entries.length > 0) {
-        const el = lcg.pop(elements);
-        const en = lcg.pop(entries);
+        const el = rng.pop(elements);
+        const en = rng.pop(entries);
 
         el.dataset.code = en.code;
         el.dataset.pot = en.pot;
@@ -274,13 +420,16 @@ function setShowDraw(showName, showEntries, lcg) {
 }
 
 let shows = null;
+const rng = new Xoshiro256StarStar(year);
 
-const lcg = new Xoshiro256ss(year);
-
+/**
+ * Performs multi-show draw with constraint satisfaction
+ */
 function drawShowsMulti() {
-    /**
-     * @type {{string: {'limit': number, 'entries': Entry[]}}}
-     */
+    if (!multiDraw) {
+        throw new Error("Cannot draw multiple shows in single-draw mode");
+    }
+
     const showData = {};
     [...document.querySelectorAll(".show")].forEach(e => {
         showData[e.dataset.name] = {
@@ -293,21 +442,28 @@ function drawShowsMulti() {
         [...e.querySelectorAll(".pot-item")].map(e => new Entry(e, i))
     );
 
-    drawIntoShows(pots, showData, lcg)
+    drawIntoShows(pots, showData, rng);
+
+    // Sort entries by pot for display
     for (const show of Object.values(showData)) {
-        show.entries.sort((a, b) => a[1] - b[1])
+        show.entries.sort((a, b) => a.pot - b.pot);
     }
 
     for (const [showName, data] of Object.entries(showData)) {
-        setShowDraw(showName, data.entries, lcg);
+        setShowDraw(showName, data.entries, rng);
     }
+
     shows = showData;
 }
 
+/**
+ * Performs single-show draw without constraints
+ */
 function drawShowsSingle() {
-    /**
-     * @type {{string: {'limit': number, 'entries': Entry[]}}}
-     */
+    if (multiDraw) {
+        throw new Error("Cannot draw single show in multi-draw mode");
+    }
+
     const showData = {};
     [...document.querySelectorAll(".show")].forEach(e => {
         showData[e.dataset.name] = {
@@ -316,34 +472,60 @@ function drawShowsSingle() {
         }
     });
 
-    if (Object.keys(showData).length > 1) {
-        throw new Error("Only drawing one show is supported");
+    if (Object.keys(showData).length !== 1) {
+        throw new Error("Single-draw mode requires exactly one show");
     }
 
     const showName = Object.keys(showData)[0];
+    const show = showData[showName];
 
-    const pots = [...document.querySelectorAll(".pot")].flatMap((e, i) =>
+    // Collect all entries from all pots
+    const allEntries = [...document.querySelectorAll(".pot")].flatMap((e, i) =>
         [...e.querySelectorAll(".pot-item")].map(e => new Entry(e, i))
     );
 
-    showData[showName].entries = pots;
+    // Validate capacity
+    if (allEntries.length > show.limit) {
+        throw new Error(`Cannot fit ${allEntries.length} entries into ${show.limit} slots`);
+    }
 
-    setShowDraw(showName, showData[showName].entries, lcg);
+    // Check submitter constraints even in single-show mode
+    const submitterCounts = new Map();
+    for (const entry of allEntries) {
+        submitterCounts.set(entry.submitter, (submitterCounts.get(entry.submitter) ?? 0) + 1);
+    }
 
+    for (const [submitter, count] of submitterCounts) {
+        if (count > 1) {
+            throw new Error(`Submitter ${submitter} has ${count} entries in the same show`);
+        }
+    }
+
+    show.entries = allEntries;
+    setShowDraw(showName, show.entries, rng);
     shows = showData;
 }
 
-
+/**
+ * Main entry point for drawing shows
+ */
 function drawShows() {
-    if (multiDraw) {
-        drawShowsMulti();
-    } else {
-        drawShowsSingle();
+    try {
+        if (multiDraw) {
+            drawShowsMulti();
+        } else {
+            drawShowsSingle();
+        }
+    } catch (error) {
+        console.error('Draw failed:', error);
+        // Reset state on failure
+        shows = null;
+        throw error;
     }
 }
 
 /**
- * @param {Element} element
+ * @param {HTMLElement} element
  */
 function nextSibling(element) {
     const v = element.nextElementSibling;
@@ -357,10 +539,9 @@ const minDelay = 10;
 const maxDelay = 175;
 
 /**
- *
- * @param {Element} element
- * @param {Element[]} elements
- * @param {(Element, Element) => boolean} equal
+ * @param {HTMLElement} element
+ * @param {HTMLElement[]} elements
+ * @param {(HTMLElement, HTMLElement) => boolean} equal
  */
 async function animateElementSelect(element, elements, equal) {
     const nElems = elements.length;
@@ -384,7 +565,7 @@ async function animateElementSelect(element, elements, equal) {
         throw new Error("Element not part of elements");
     }
 
-    let loops = ((lcg.next(5) + 1) % 3);
+    let loops = ((rng.next(5) + 1) % 3);
     if (elements.length < 5) loops += 1;
     if (index < 5) loops += 1;
 
@@ -404,29 +585,34 @@ async function animateElementSelect(element, elements, equal) {
 }
 
 /**
- * @param {Element[]} allCountries
- * @param {Element[]} eligibleCountries
- * @returns {Promise<Element>}
+ * @param {HTMLElement} a
+ * @param {HTMLElement} b
+ * @returns {boolean}
+ */
+function cmpItems(a, b) {
+    return a.dataset.code === b.dataset.code;
+}
+
+/**
+ * @param {HTMLElement[]} allCountries
+ * @param {HTMLElement[]} eligibleCountries
+ * @returns {Promise<HTMLElement>}
  */
 async function selectCountryFromPot(allCountries, eligibleCountries) {
-    const selectedCountry = lcg.select(eligibleCountries);
-
-    await animateElementSelect(selectedCountry, allCountries, (a, b) => a.dataset.code == b.dataset.code);
-
+    const selectedCountry = rng.select(eligibleCountries);
+    await animateElementSelect(selectedCountry, allCountries, cmpItems);
     return selectedCountry;
 }
 
 /**
- * @param {Element} selected
- * @param {Element} currentShow
- * @returns {Promise<Element>}
+ * @param {HTMLElement} selected
+ * @param {HTMLElement} currentShow
+ * @returns {Promise<HTMLElement>}
  */
 async function getShowSlot(selected, currentShow) {
     const allSlots = [...currentShow.querySelectorAll(".show-country.transparent")];
     const suitableSlot = currentShow.querySelector(`.show-country[data-code=${selected.dataset.code}]`);
-
-    await animateElementSelect(suitableSlot, allSlots, (a, b) => a.dataset.code == b.dataset.code);
-
+    await animateElementSelect(suitableSlot, allSlots, cmpItems);
     return suitableSlot;
 }
 
