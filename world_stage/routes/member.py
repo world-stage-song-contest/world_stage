@@ -78,12 +78,14 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int |
     cursor.execute('''
         SELECT song.id, submitter_id, closed FROM song
         JOIN year ON song.year_id = year.id
-        WHERE year_id = ? AND country_id = ?
+        WHERE year_id = %s AND country_id = %s
     ''', (year, country))
     song_id = cursor.fetchone()
     if not song_id:
         return {'error': 'Song not found.'}
-    song_id, submitter_id, closed = song_id
+    submitter_id = song_id['submitter_id']
+    closed = song_id['closed']
+    song_id = song_id['song_id']
 
     if closed != 0:
         return {'error': "Can't delete a song for a current/past year"}
@@ -94,12 +96,12 @@ def delete_song(year: int, country: str, artist: str, title: str, user_id: int |
         return {'error': 'You are not the submitter.'}
 
     cursor.execute('''
-        DELETE FROM song WHERE id = ?
+        DELETE FROM song WHERE id = %s
     ''', (song_id,))
 
     cursor.execute('''
         DELETE FROM song_language
-        WHERE song_id = ?
+        WHERE song_id = %s
         ''', (song_id,))
 
     db.commit()
@@ -112,11 +114,11 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
 
     cursor.execute('''
         SELECT id FROM song
-        WHERE year_id = ? AND country_id = ?
+        WHERE year_id = %s AND country_id = %s
     ''', (song_data.year, song_data.country))
     song_id = cursor.fetchone()
     if song_id:
-        song_id = song_id[0]
+        song_id = song_id['id']
 
     if set_claim:
         new_id = user_id
@@ -126,15 +128,15 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
     if song_id:
         cursor.execute('''
             UPDATE song
-            SET title = ?, native_title = ?, artist = ?,
-                is_placeholder = ?,
-                title_language_id = ?, native_language_id = ?,
-                video_link = ?, snippet_start = ?, snippet_end = ?,
-                translated_lyrics = ?, romanized_lyrics = ?, native_lyrics = ?,
-                submitter_id = ?, notes = ?, sources = ?,
-                admin_approved = ?,
+            SET title = %s, native_title = %s, artist = %s,
+                is_placeholder = %s,
+                title_language_id = %s, native_language_id = %s,
+                video_link = %s, snippet_start = %s, snippet_end = %s,
+                translated_lyrics = %s, romanized_lyrics = %s, native_lyrics = %s,
+                submitter_id = %s, notes = %s, sources = %s,
+                admin_approved = %s,
                 modified_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = %s
         ''', (
             song_data.title,
             song_data.native_title,
@@ -163,7 +165,7 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
             snippet_start, snippet_end, translated_lyrics,
             romanized_lyrics, native_lyrics, submitter_id,
             notes, sources, admin_approved, modified_at
-            ) VALUES (?, COALESCE(?, 'XXX'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ) VALUES (%s, COALESCE(%s, 'XXX'), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             RETURNING id
         ''', (
             song_data.year,
@@ -185,17 +187,17 @@ def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> di
             song_data.sources,
             int(song_data.admin_approved)
         ))
-        song_id = cursor.fetchone()[0]
+        song_id = cursor.fetchone()['id'] # type: ignore
 
     cursor.execute('''
         DELETE FROM song_language
-        WHERE song_id = ?
+        WHERE song_id = %s
         ''', (song_id,))
 
     for i, lang_id in enumerate(song_data.languages):
         cursor.execute('''
-            INSERT OR IGNORE INTO song_language (song_id, language_id, priority)
-            VALUES (?, ?, ?)
+            INSERT INTO song_language (song_id, language_id, priority)
+            VALUES (%s, %s, %s)
         ''', (song_id, lang_id, i))
 
     db.commit()
@@ -211,10 +213,10 @@ def index():
     db = get_db()
     cursor = db.cursor()
     cursor.execute('''
-        SELECT user.username, user.id
+        SELECT account.username, account.id
         FROM session
-        JOIN user ON session.user_id = user.id
-        WHERE session_id = ?
+        JOIN account ON session.user_id = account.id
+        WHERE session_id = %s
     ''', (session_id,))
 
     username = cursor.fetchone()
@@ -222,7 +224,7 @@ def index():
         resp = redirect(url_for('session.login'))
         resp.delete_cookie('session')
         return resp
-    username = username[0]
+    username = username['username']
 
     return render_template('member/index.html', username=username)
 
@@ -233,77 +235,78 @@ def get_languages() -> list[dict]:
         SELECT id, name FROM language
         ORDER BY name
     ''')
-    return [{'id': id, 'name': name} for id, name in cursor.fetchall()]
+    return cursor.fetchall()
 
 def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str, list[dict]]:
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT closed FROM year WHERE id = ?', (year,))
-    closed = cursor.fetchone()[0]
+    cursor.execute('SELECT closed FROM year WHERE id = %s', (year,))
+    closed = cursor.fetchone()['closed'] # type: ignore
 
-    cursor.execute('SELECT COUNT(*) FROM song WHERE year_id = ? AND is_placeholder = 0', (year,))
-    year_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND is_placeholder = 0', (year,))
+    year_count = cursor.fetchone()['c'] # type: ignore
 
     cursor.execute('''
-        SELECT COUNT(*) FROM song
-        WHERE submitter_id = ? AND year_id = ? AND is_placeholder = 0
+        SELECT COUNT(*) AS c FROM song
+        WHERE submitter_id = %s AND year_id = %s AND is_placeholder = 0
     ''', (user_id, year))
-    count = cursor.fetchone()[0]
+    count = cursor.fetchone()['c'] # type: ignore
 
     countries: dict[str, list] = {'own': [], 'placeholder': []}
 
     cursor.execute('''
-        SELECT country.name, country.id FROM song
+        SELECT country.name, country.id AS cc FROM song
         JOIN country ON song.country_id = country.id
-        WHERE song.year_id = ? AND song.submitter_id = ?
+        WHERE song.year_id = %s AND song.submitter_id = %s
         ORDER BY country.name
     ''', (year, user_id))
-    for name, cc in cursor.fetchall():
-        countries['own'].append({'name': name, 'cc': cc})
+    for row in cursor.fetchall():
+        countries['own'].append(row)
 
     if all:
         if closed:
             cursor.execute('''
-                SELECT country.name, country.id FROM song
+                SELECT country.name, country.id AS cc FROM song
                 JOIN country ON song.country_id = country.id
-                WHERE song.year_id = ? AND submitter_id <> ?
+                WHERE song.year_id = %s AND submitter_id <> %s
                 ORDER BY country.name
             ''', (year,user_id))
         else:
             cursor.execute('''
-                SELECT name, id FROM country
-                WHERE available_from <= ?1 AND available_until >= ?1 AND is_participating = 1
+                SELECT name, id AS cc FROM country
+                WHERE available_from <= %(year)s AND available_until >= %(year)s AND is_participating = 1
                            AND id NOT IN (
                            SELECT country_id FROM song
-                           WHERE year_id = ?1 AND submitter_id = ?2)
+                           WHERE year_id = %(year)s AND submitter_id = %(user)s)
                 ORDER BY name
-            ''', (year,user_id))
-        for name, cc in cursor.fetchall():
-            countries['placeholder'].append({'name': name, 'cc': cc})
+            ''', {'year':year,'user':user_id})
+        for row in cursor.fetchall():
+            countries['placeholder'].append(row)
     elif count < 2 and not closed and year_count < 73:
         cursor.execute('''
-            SELECT name, id FROM country
-            WHERE available_from <= ?1 AND available_until >= ?1
+            SELECT name, id AS cc FROM country
+            WHERE available_from <= %(year)s AND available_until >= %(year)s
                     AND is_participating = 1 AND id NOT IN (
                 SELECT country_id FROM song
-                WHERE year_id = ?1 AND (is_placeholder = 0 OR submitter_id = ?2)
+                WHERE year_id = %(year)s AND (is_placeholder = 0 OR submitter_id = %(user)s)
             )
             ORDER BY name
-        ''', (year,user_id))
-        for name, cc in cursor.fetchall():
-            countries['placeholder'].append({'name': name, 'cc': cc})
+        ''', {'year':year,'user':user_id})
+        for row in cursor.fetchall():
+            countries['placeholder'].append(row)
 
+    print(countries)
     return countries
 
 def get_users():
     db = get_db()
     cursor = db.cursor()
     cursor.execute('''
-        SELECT id, username FROM user
+        SELECT id, username FROM account
         ORDER BY username
     ''')
-    return [{'id': id, 'username': username} for id, username in cursor.fetchall()]
+    return cursor.fetchall()
 
 @bp.get('/submit')
 def submit():
@@ -351,18 +354,16 @@ def get_country_data(year: int, country: str):
                    translated_lyrics, romanized_lyrics, native_lyrics,
                    notes, submitter_id, sources, admin_approved
         FROM song
-        WHERE year_id = ? AND country_id = ?
+        WHERE year_id = %s AND country_id = %s
     ''', (year, country))
     song = cursor.fetchone()
     if not song:
         return {'error': 'Song not found'}, 404
 
-    submitter_id: int = 0
-    (id, title, native_title, artist, is_placeholder,
-     title_language_id, native_language_id,
-     video_link, snippet_start, snippet_end,
-     translated_lyrics, romanized_lyrics, native_lyrics,
-     notes, submitter_id, sources, admin_approved) = song
+    submitter_id: int = song.pop('submitter_id') or 0
+    is_placeholder = song.pop('is_placeholder')
+    snippet_start = song.pop('snippet_start')
+    snippet_end = song.pop('snippet_end')
 
     snippet_start = format_seconds(snippet_start) if snippet_start is not None else None
     snippet_end = format_seconds(snippet_end) if snippet_end is not None else None
@@ -370,7 +371,7 @@ def get_country_data(year: int, country: str):
     cursor.execute('''
         SELECT language.id, name FROM song_language
         JOIN language ON song_language.language_id = language.id
-        WHERE song_id = ?
+        WHERE song_id = %s
         ORDER BY priority
     ''', (id,))
     languages = []
@@ -380,23 +381,12 @@ def get_country_data(year: int, country: str):
     song_data = SongData(
         year=year,
         country=country,
-        title=title,
-        native_title=native_title,
-        artist=artist,
         is_placeholder=bool(is_placeholder) and user_id is not None and user_id != submitter_id,
-        title_language_id=title_language_id,
-        native_language_id=native_language_id,
-        video_link=video_link,
         snippet_start=snippet_start,
         snippet_end=snippet_end,
-        english_lyrics=translated_lyrics,
-        romanized_lyrics=romanized_lyrics,
-        native_lyrics=native_lyrics,
         languages=languages,
-        notes=notes,
-        sources=sources,
-        admin_approved=bool(admin_approved),
-        user_id=submitter_id
+        user_id=submitter_id,
+        **song
     )
 
     return song_data.as_dict()

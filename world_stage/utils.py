@@ -543,17 +543,25 @@ def get_show_id(show: str, year: Optional[int] = None) -> Optional[ShowData]:
     if year:
         cursor.execute('''
             SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, allow_access_type FROM show
-            WHERE year_id = ? AND short_name = ?
+            WHERE year_id = %s AND short_name = %s
         ''', (year, short_show_name))
     else:
         cursor.execute('''
             SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, allow_access_type FROM show
-            WHERE short_name = ? AND year_id IS NULL
+            WHERE short_name = %s AND year_id IS NULL
         ''', (short_show_name,))
 
-    show_id = cursor.fetchone()
-    if show_id:
-        show_id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, access_type = show_id
+    show_row = cursor.fetchone()
+    if show_row:
+        show_id = show_row['id']
+        point_system_id = show_row['point_system_id']
+        show_name = show_row['show_name']
+        voting_opens = show_row['voting_opens']
+        voting_closes = show_row['voting_closes']
+        dtf = show_row['dtf']
+        sc = show_row['sc']
+        special = show_row['special']
+        access_type = show_row['allow_access_type']
     else:
         return None
 
@@ -583,26 +591,13 @@ def get_points_for_system(point_system_id: int) -> list[int]:
     points = []
     cursor.execute('''
         SELECT score FROM point
-        WHERE point_system_id = ?
+        WHERE point_system_id = %s
         ORDER BY place
     ''', (point_system_id,))
     for p in cursor.fetchall():
-        points.append(p[0])
+        points.append(p['score'])
 
     return points
-
-def get_current_year() -> int:
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute('''
-        SELECT id FROM year
-        WHERE closed > 0
-        ORDER BY id DESC
-        LIMIT 1
-    ''')
-    year = cursor.fetchone()[0]
-    return year
 
 def get_countries(only_participating: bool = False) -> list[Country]:
     if only_participating:
@@ -615,15 +610,15 @@ def get_countries(only_participating: bool = False) -> list[Country]:
     cursor.execute(query)
     countries = [
         Country(
-            cc=id,
-            name=name,
-            is_participating=bool(is_participating),
-            bg=bgr_colour,
-            fg1=fg1_colour,
-            fg2=fg2_colour,
-            text=txt_colour
+            cc=row['id'],
+            name=row['name'],
+            is_participating=bool(row['is_participating']),
+            bg=row['bgr_colour'],
+            fg1=row['fg1_colour'],
+            fg2=row['fg2_colour'],
+            text=row['txt_colour']
         )
-        for id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour in cursor.fetchall()
+        for row in cursor.fetchall()
     ]
     return countries
 
@@ -634,13 +629,13 @@ def get_user_id_from_session(session_id: str | None) -> tuple[int, str] | None:
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT user.id, user.username FROM session
-        JOIN user ON session.user_id = user.id
-        WHERE session.session_id = ? AND session.expires_at > datetime('now')
+        SELECT account.id, account.username FROM session
+        JOIN account ON session.user_id = account.id
+        WHERE session.session_id = %s AND session.expires_at > CURRENT_TIMESTAMP
     ''', (session_id,))
     row = cursor.fetchone()
     if row:
-        return (row[0], row[1])
+        return (row['id'], row['username'])
     return None
 
 def get_user_role_from_session(session_id: str | None) -> UserPermissions:
@@ -651,12 +646,12 @@ def get_user_role_from_session(session_id: str | None) -> UserPermissions:
 
     cursor.execute('''
         SELECT role FROM session
-        JOIN user ON session.user_id = user.id
-        WHERE session.session_id = ? AND session.expires_at > datetime('now')
+        JOIN account ON session.user_id = account.id
+        WHERE session.session_id = %s AND session.expires_at > CURRENT_TIMESTAMP
     ''', (session_id,))
     row = cursor.fetchone()
     if row:
-        role = row[0]
+        role = row['role']
         return UserPermissions.from_str(role)
     return UserPermissions.NONE
 
@@ -667,11 +662,11 @@ def get_user_permissions(user_id: int | None) -> UserPermissions:
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT role FROM user WHERE id = ?
+        SELECT role FROM account WHERE id = %s
     ''', (user_id,))
     row = cursor.fetchone()
     if row:
-        role = row[0]
+        role = row['role']
         return UserPermissions.from_str(role)
     return UserPermissions.NONE
 
@@ -697,36 +692,36 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT COUNT(*) FROM vote
+        SELECT COUNT(*) AS c FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
-        WHERE song_id = ? AND show_id = ?
+        WHERE song_id = %s AND show_id = %s
     ''', (song_id, show_id))
 
-    count = cursor.fetchone()[0]
+    count = cursor.fetchone()['c'] # type: ignore
 
     cursor.execute('''
-        SELECT MAX(score) FROM show
+        SELECT MAX(score) AS m FROM show
         JOIN point ON show.point_system_id = point.point_system_id
-        WHERE show.id = ?
+        WHERE show.id = %s
     ''', (show_id,))
-    max_pts = cursor.fetchone()[0]
+    max_pts = cursor.fetchone()['m'] # type: ignore
 
     cursor.execute('''
-        SELECT COUNT(DISTINCT voter_id) FROM vote_set
-        WHERE show_id = ?
+        SELECT COUNT(DISTINCT voter_id) AS c FROM vote_set
+        WHERE show_id = %s
     ''', (show_id,))
-    show_voters = cursor.fetchone()[0]
+    show_voters = cursor.fetchone()['c'] # type: ignore
 
     cursor.execute('''
         SELECT score FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
-        JOIN user ON vote_set.voter_id = user.id
+        JOIN account ON vote_set.voter_id = account.id
         JOIN point ON vote.point_id = point.id
-        WHERE song_id = ? AND show_id = ?
+        WHERE song_id = %s AND show_id = %s
     ''', (song_id,show_id))
     res = VoteData(ro=ro, total_votes=count, max_pts=max_pts, show_voters=show_voters)
     for points in cursor.fetchall():
-        pt = points[0]
+        pt = points['score']
         res.sum += pt
         res.count += 1
         res.pts[pt] += 1
@@ -758,13 +753,13 @@ def get_language(lang_id: int) -> Optional[Language]:
 
     cursor.execute('''
         SELECT name, tag, extlang, region, subvariant, suppress_script FROM language
-        WHERE id = ?
+        WHERE id = %s
     ''', (lang_id,))
     lang = cursor.fetchone()
     if not lang:
         return None
 
-    return Language(lang[0], lang[1], lang[2], lang[3], lang[4], lang[5])
+    return Language(**lang)
 
 def get_song_languages(song_id: int) -> list[Language]:
     db = get_db()
@@ -773,10 +768,10 @@ def get_song_languages(song_id: int) -> list[Language]:
     cursor.execute('''
         SELECT language.name, language.tag, language.extlang, language.region, language.subvariant, language.suppress_script FROM song_language
         JOIN language ON song_language.language_id = language.id
-        WHERE song_id = ?
+        WHERE song_id = %s
         ORDER BY priority
     ''', (song_id,))
-    languages = [Language(lang[0], lang[1], lang[2], lang[3], lang[4], lang[5]) for lang in cursor.fetchall()]
+    languages = [Language(**lang) for lang in cursor.fetchall()]
 
     return languages
 
@@ -799,15 +794,15 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
                song.year_id, song_show.running_order, song.is_placeholder,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-               user.username, song.title_language_id, song.native_language_id,
+               account.username, song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
                song.submitter_id, song.notes, song.sources
         FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN show ON song_show.show_id = show.id
         JOIN country ON song.country_id = country.id
-        LEFT OUTER JOIN user on song.submitter_id = user.id
-        WHERE show.id = ?
+        LEFT OUTER JOIN account ON song.submitter_id = account.id
+        WHERE show.id = %s
         ORDER BY {additional_sort} song_show.running_order, song_show.id
         ''', (show_id,))
     songs = [Song(id=song['id'],
@@ -862,10 +857,10 @@ def get_year_winner(year: int) -> Optional[Song]:
 
     cursor.execute('''
         SELECT closed FROM year
-        WHERE id = ?
+        WHERE id = %s
         ''', (year,))
 
-    closed = cursor.fetchone()[0]
+    closed = cursor.fetchone()['closed'] # type: ignore
     if not closed:
         return None
 
@@ -882,15 +877,15 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, country.name, country.is_participating,
                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
-               song.is_placeholder, user.username, song.year_id,
+               song.is_placeholder, account.username, song.year_id,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
                song.submitter_id, song.notes, song.sources
         FROM song
         JOIN country ON song.country_id = country.id
-        LEFT OUTER JOIN user on song.submitter_id = user.id
-        WHERE song.year_id = ?
+        LEFT OUTER JOIN account ON song.submitter_id = account.id
+        WHERE song.year_id = %s
         ORDER BY country.name
         ''', (year,))
     songs = [Song(id=song['id'],
@@ -936,13 +931,13 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                   user.username, song.year_id,
+                   account.username, song.year_id,
                    song.video_link, song.snippet_start, song.snippet_end,
                    song.submitter_id, song.notes, song.sources
             FROM song
             JOIN country ON song.country_id = country.id
-            LEFT OUTER JOIN user on song.submitter_id = user.id
-            WHERE song.submitter_id = ? AND song.year_id = ? AND song.year_id IS NOT NULL
+            LEFT OUTER JOIN account ON song.submitter_id = account.id
+            WHERE song.submitter_id = %s AND song.year_id = %s AND song.year_id IS NOT NULL
             ORDER BY song.year_id, country.name
         ''', (user_id, year))
     else:
@@ -952,13 +947,13 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                    country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                   user.username, song.year_id,
+                   account.username, song.year_id,
                    song.video_link, song.snippet_start, song.snippet_end,
                    song.submitter_id, song.notes, song.sources
             FROM song
             JOIN country ON song.country_id = country.id
-            LEFT OUTER JOIN user on song.submitter_id = user.id
-            WHERE song.submitter_id = ? AND song.year_id IS NOT NULL
+            LEFT OUTER JOIN account ON song.submitter_id = account.id
+            WHERE song.submitter_id = %s AND song.year_id IS NOT NULL
             ORDER BY song.year_id, country.name
         ''', (user_id,))
     songs = [Song(id=song['id'],
@@ -1002,15 +997,15 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                 country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                user.username, song.year_id,
+                account.username, song.year_id,
                 song.video_link, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources
         FROM song
         JOIN country ON song.country_id = country.id
-        LEFT OUTER JOIN user on song.submitter_id = user.id
-        WHERE (song.country_id = ?1 OR country.cc2 = ?1) AND song.year_id IS NOT NULL
+        LEFT OUTER JOIN account ON song.submitter_id = account.id
+        WHERE (song.country_id = %(cc)s OR country.cc2 = %(cc)s) AND song.year_id IS NOT NULL
         ORDER BY song.year_id, country.name
-    ''', (code,))
+    ''', {'cc':code})
     songs = [Song(id=song['id'],
                   title=song['title'],
                   native_title=song['native_title'],
@@ -1052,15 +1047,15 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                 country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                user.username, song.year_id,
+                account.username, song.year_id,
                 song.video_link, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources
         FROM song
         JOIN country ON song.country_id = country.id
-        LEFT OUTER JOIN user on song.submitter_id = user.id
-        WHERE (song.country_id = ?1 OR country.cc2 = ?1) AND song.year_id = ?2
+        LEFT OUTER JOIN account ON song.submitter_id = account.id
+        WHERE (song.country_id = %(cc)s OR country.cc2 = %(cc)s) AND song.year_id = %(year)s
         ORDER BY song.year_id, country.name
-    ''', (code,year))
+    ''', {'cc': code, 'year': year})
     song = cursor.fetchone()
     if not song:
         return None
@@ -1099,7 +1094,7 @@ def get_years() -> list[int]:
     cursor.execute('''
         SELECT id FROM year
     ''')
-    return list(map(lambda x: x[0], cursor.fetchall()))
+    return list(map(lambda x: x['id'], cursor.fetchall()))
 
 def get_year_countries(year: int, exclude: list[str] = []) -> list[dict]:
     db = get_db()
@@ -1107,7 +1102,7 @@ def get_year_countries(year: int, exclude: list[str] = []) -> list[dict]:
     cursor.execute('''
         SELECT country.id, country.name, country.pot, song.submitter_id FROM song
         JOIN country ON song.country_id = country.id
-        WHERE song.year_id = ?
+        WHERE song.year_id = %s
         ORDER BY country.name
     ''', (year,))
     countries = []
@@ -1128,7 +1123,7 @@ def get_year_shows(year: int, pattern: str = '') -> list[dict]:
 
     cursor.execute('''
         SELECT show_name, short_name FROM show
-        WHERE year_id = ? AND short_name LIKE ?
+        WHERE year_id = %s AND short_name LIKE %s
     ''', (year, pattern + '%'))
 
     shows = []
@@ -1145,10 +1140,10 @@ def get_vote_count_for_show(show_id: int) -> int:
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT COUNT(*) FROM vote_set
-        WHERE show_id = ?
+        SELECT COUNT(*) AS c FROM vote_set
+        WHERE show_id = %s
     ''', (show_id,))
-    count = cursor.fetchone()[0]
+    count = cursor.fetchone()['c'] # type: ignore
     return count
 
 def get_country_name(country_id: str) -> str:
@@ -1157,11 +1152,11 @@ def get_country_name(country_id: str) -> str:
 
     cursor.execute('''
         SELECT name FROM country
-        WHERE id = ?1 OR cc2 = ?1
-    ''', (country_id,))
+        WHERE id = %(cc)s OR cc2 = %(cc)s
+    ''', {'cc':country_id})
     country_name = cursor.fetchone()
     if country_name:
-        return country_name[0]
+        return country_name['name']
     return "Unknown"
 
 def render_template(template: str, **kwargs) -> Response:

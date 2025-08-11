@@ -15,7 +15,7 @@ def get_specials() -> list[dict]:
     cursor = db.cursor()
 
     cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id IS NULL')
-    specials = [{'short_name': short_name, 'name': show_name, 'date': date} for short_name, show_name, date in cursor.fetchall()]
+    specials = [row for row in cursor.fetchall()]
 
     for special in specials:
         special['winner'] = get_special_winner(special['short_name'])
@@ -29,17 +29,17 @@ def get_other_shows(year: int | None, exclude_show: str | None) -> list[str]:
     if year:
         cursor.execute('''
             SELECT short_name FROM show
-            WHERE year_id = ? AND short_name <> ?
+            WHERE year_id = %s AND short_name <> %s
             ORDER BY id
         ''', (year, exclude_show))
     else:
         cursor.execute('''
             SELECT short_name FROM show
-            WHERE year_id IS NULL AND short_name <> ?
+            WHERE year_id IS NULL AND short_name <> %s
             ORDER BY id
         ''', (exclude_show,))
 
-    return [row[0] for row in cursor.fetchall()]
+    return [row['short_name'] for row in cursor.fetchall()]
 
 @bp.get('/')
 def index():
@@ -51,11 +51,10 @@ def index():
     ongoing = []
 
     cursor.execute('SELECT id, closed FROM year ORDER BY id DESC')
-    for id, closed in cursor.fetchall():
-        data = {'id': id, 'closed': closed}
-        if closed == 1:
+    for data in cursor.fetchall():
+        if data['closed'] == 1:
             years.append(data)
-        elif closed == 2:
+        elif data['closed'] == 2:
             ongoing.append(data)
         else:
             upcoming.append(data)
@@ -80,22 +79,22 @@ def year(year: str):
         _year = None
 
     if _year:
-        cursor.execute('SELECT closed FROM year WHERE id = ?', (year,))
+        cursor.execute('SELECT closed FROM year WHERE id = %s', (year,))
         closed = cursor.fetchone()
         if not closed:
             return render_template('error.html', error='Year not closed yet'), 404
 
         songs = get_year_songs(_year, select_languages=True)
 
-        cursor.execute('SELECT COUNT(*) FROM song WHERE year_id = ? AND is_placeholder = 0', (_year,))
-        total_entries = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND is_placeholder', (_year,))
+        total_entries = cursor.fetchone()['c'] # type: ignore
         total_placeholders = len(songs)-total_entries
-        cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = ?', (year,))
-        shows = [Show(year=_year, short_name=show[0], name=show[1], date=show[2]) for show in cursor.fetchall()]
+        cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = %s', (year,))
+        shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
         shows.sort()
 
         return render_template('year/year.html', year=year, songs=songs,
-                               closed=closed[0], shows=shows, total=total_entries, placeholders=total_placeholders)
+                               closed=closed['closed'], shows=shows, total=total_entries, placeholders=total_placeholders)
     else:
         return render_template('year/specials.html', specials=get_specials())
 
@@ -141,8 +140,8 @@ def results(year: str, show: str):
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT count(voter_id) FROM vote_set WHERE show_id = ?', (show_data.id,))
-    voter_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(voter_id) AS c FROM vote_set WHERE show_id = %s', (show_data.id,))
+    voter_count = cursor.fetchone()['c'] # type: ignore
     songs.sort(reverse=True)
 
     off = 0
@@ -211,27 +210,27 @@ def detailed_results(year: str, show: str):
 
     results: dict = {}
     cursor.execute('''
-        SELECT username, country_id, country.name FROM vote_set
-        JOIN user ON vote_set.voter_id = user.id
+        SELECT username, COALESCE(country_id, 'XXX') as code, country.name AS country FROM vote_set
+        JOIN account ON vote_set.voter_id = account.id
         LEFT OUTER JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = ?
+        WHERE vote_set.show_id = %s
         ORDER BY created_at
     ''', (show_data.id,))
-    for username, country_id, country_name in cursor.fetchall():
-        results[username] = {'code': country_id or "XXX", 'country': country_name}
+    for row in cursor.fetchall():
+        results[row['username']] = row
 
     for song in songs:
         cursor.execute('''
             SELECT point.score, username FROM vote
             JOIN vote_set ON vote.vote_set_id = vote_set.id
-            JOIN user ON vote_set.voter_id = user.id
+            JOIN account ON vote_set.voter_id = account.id
             JOIN point ON vote.point_id = point.id
-            WHERE song_id = ? AND show_id = ?
+            WHERE song_id = %s AND show_id = %s
             ORDER BY created_at
         ''', (song.id, show_data.id))
 
-        for pts, username in cursor.fetchall():
-            results[username][song.id] = pts
+        for row in cursor.fetchall():
+            results[row['username']][song.id] = row['score']
 
     songs.sort(reverse=True)
 
@@ -294,18 +293,18 @@ def scores(year: str, show: str):
         return {"error": "No songs found for this show."}, 404
 
     cursor.execute('''
-        SELECT song_id, point.score, username FROM vote
+        SELECT song_id, point.score AS pts, username FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
-        JOIN user ON vote_set.voter_id = user.id
+        JOIN account ON vote_set.voter_id = account.id
         JOIN song ON vote.song_id = song.id
         JOIN point ON vote.point_id = point.id
-        WHERE vote_set.show_id = ?
+        WHERE vote_set.show_id = %s
         ORDER BY vote_set.created_at
     ''', (show_data.id,))
     results_raw = cursor.fetchall()
     results: dict[str, dict[int, int]] = defaultdict(dict)
-    for song_id, pts, username in results_raw:
-        results[username][pts] = song_id
+    for row in results_raw:
+        results[row['username']][row['pts']] = row['song_id']
 
     sequencer = SuspensefulVoteSequencer(results, songs, show_data.points, seed=show_data.id)
     vote_order = sequencer.get_order()
@@ -314,23 +313,23 @@ def scores(year: str, show: str):
     for voter_username in vote_order:
         cursor.execute('''
             SELECT song.id FROM song
-            JOIN user ON song.submitter_id = user.id
+            JOIN account ON song.submitter_id = account.id
             JOIN song_show ON song.id = song_show.song_id
-            WHERE user.username = ? AND song_show.show_id = ?
+            WHERE account.username = %s AND song_show.show_id = %s
         ''', (voter_username,show_data.id))
         for song_id in cursor.fetchall():
-            user_songs[voter_username].append(song_id[0])
+            user_songs[voter_username].append(song_id['id'])
 
     cursor.execute('''
-        SELECT username, nickname, country_id, country.name FROM vote_set
-        JOIN user ON vote_set.voter_id = user.id
+        SELECT username, nickname, country_id AS code, country.name AS country FROM vote_set
+        JOIN account ON vote_set.voter_id = account.id
         JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = ?
+        WHERE vote_set.show_id = %s
     ''', (show_data.id,))
     vote_set = cursor.fetchall()
     voter_assoc = {}
-    for username, nickname, country_code, country_name in vote_set:
-        voter_assoc[username] = {'nickname': nickname, 'country': country_name, 'code': country_code}
+    for row in vote_set:
+        voter_assoc[row['username']] = row
 
     return {'songs': songs, 'results': results, 'points': show_data.points, 'vote_order': vote_order, 'associations': voter_assoc, 'user_songs': user_songs}
 
@@ -416,9 +415,14 @@ def qualifiers_post(year: str, show: str):
         else:
             add = 1
         cursor.execute('''
-            INSERT OR REPLACE INTO song_show (song_id, show_id, running_order, qualifier_order)
-            VALUES (?, ?, ?, ?)
-        ''', (int(song_id), final_data.id, n, i + add))
+            INSERT INTO song_show (song_id, show_id, running_order, qualifier_order)
+            VALUES (%(soid)s, %(shid)s, %(ro)s, %(qo)s)
+            ON CONFLICT (show_id, song_id) DO UPDATE
+            SET song_id = %(soid)s,
+                show_id = %(shid)s,
+                running_order = %(ro)s,
+                qualifier_order = %(qo)s
+        ''', {'soid': int(song_id), 'shid': final_data.id, 'ro': n, 'qo': i + add})
 
     if sc_data:
         second_chance_order = typing.cast(list[int], body.get('sc'))
@@ -428,9 +432,14 @@ def qualifiers_post(year: str, show: str):
         for i, song_id in enumerate(second_chance_order):
             n = sf_number + (i + 1) / 100
             cursor.execute('''
-                INSERT OR REPLACE INTO song_show (song_id, show_id, running_order, qualifier_order)
-                VALUES (?, ?, ?, ?)
-            ''', (int(song_id), sc_data.id, n, i + 1))
+                INSERT INTO song_show (song_id, show_id, running_order, qualifier_order)
+                VALUES (%(soid)s, %(shid)s, %(ro)s, %(qo)s)
+                ON CONFLICT (show_id, song_id) DO UPDATE
+                SET song_id = %(soid)s,
+                    show_id = %(shid)s,
+                    running_order = %(ro)s,
+                    qualifier_order = %(qo)s
+        ''', {'soid': int(song_id), 'shid': sc_data.id, 'ro': n, 'qo': i + 1})
     db.commit()
 
     return {'success': True, 'message': "Qualifiers saved successfully."}
@@ -463,19 +472,19 @@ def qualifiers_scores(year: str, show: str):
     db = get_db()
     cursor = db.cursor()
     cursor.execute('''
-        SELECT song.id, song_show.running_order, country.name, country.id FROM song
+        SELECT song.id, song_show.running_order, country.name AS country, country.id AS cc FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN country ON song.country_id = country.id
-        WHERE song_show.show_id = ?
+        WHERE song_show.show_id = %s
         ORDER BY song_show.running_order
     ''', (show_data.id,))
     countries = []
-    for id, running_order, country, cc in cursor.fetchall():
+    for row in cursor.fetchall():
         val = {
-            'id': id,
-            'country': country,
-            'cc': cc,
-            'points': get_votes_for_song(id, show_data.id, running_order)
+            'id': row['id'],
+            'country': row['country'],
+            'cc': row['cc'],
+            'points': get_votes_for_song(row['id'], show_data.id, row['running_order'])
         }
         countries.append(val)
 

@@ -14,21 +14,21 @@ def index():
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, username, role FROM user
+        SELECT id, username, role FROM account
         ORDER BY username
     ''')
     users = defaultdict(list)
     users['Admin'] = []
-    for id, username, role in cursor.fetchall():
-        if role == 'admin' or role == 'owner':
+    for row in cursor.fetchall():
+        if row['role'] == 'admin' or row['role'] == 'owner':
             users['Admin'].append({
-                'id': id,
-                'username': username
+                'id': row['id'],
+                'username': row['username']
             })
-        first_letter = username[0].upper()
+        first_letter = row['username'][0].upper()
         val = {
-            'id': id,
-            'username': username
+            'id': row['id'],
+            'username': row['username']
         }
         users[first_letter].append(val)
 
@@ -48,16 +48,16 @@ def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type
     song_modified = False
 
     cursor.execute('''
-        SELECT id FROM show WHERE year_id = ? AND short_name = ?
+        SELECT id FROM show WHERE year_id = %s AND short_name = %s
     ''', (year, show_short_name))
     show = cursor.fetchone()
     if show:
         show_exists = True
         cursor.execute('''
-            SELECT COUNT(*) FROM song_show
-            WHERE show_id = ? AND song_id = ?
-        ''', (show[0], song['id']))
-        if cursor.fetchone()[0] > 0:
+            SELECT COUNT(*) AS c FROM song_show
+            WHERE show_id = %s AND song_id = %s
+        ''', (show['id'], song['id']))
+        if cursor.fetchone()['c'] > 0: # type: ignore
             song_modified = True
             song['class'] = f'qualifier {show_short_name}-qualifier'
             if access_type == 'partial':
@@ -78,62 +78,57 @@ def votes(username: str):
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id FROM user WHERE username = ?
+        SELECT id FROM account WHERE username = %s
     ''', (username,))
     user_id = cursor.fetchone()
     if not user_id:
         return render_template('error.html', error="User not found"), 404
-    user_id = user_id[0]
+    user_id = user_id['id']
 
     cursor.execute('''
-        SELECT vote_set.id, user.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id, show.allow_access_type FROM vote_set
-        JOIN user ON vote_set.voter_id = user.id
+        SELECT vote_set.id, account.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id, show.allow_access_type FROM vote_set
+        JOIN account ON vote_set.voter_id = account.id
         JOIN show ON vote_set.show_id = show.id
-        WHERE vote_set.voter_id = ? AND (show.allow_access_type = 'full' OR show.allow_access_type = 'partial')
+        WHERE vote_set.voter_id = %s AND (show.allow_access_type = 'full' OR show.allow_access_type = 'partial')
         ORDER BY show.date DESC
     ''', (user_id,))
     votes = []
-    for id, username, nickname, country_id, show_name, short_name, date, year, access_type in cursor.fetchall():
+    for row in cursor.fetchall():
         val = {
-            'id': id,
-            'username': username,
-            'nickname': nickname or username,
-            'code': country_id,
-            'show_name': show_name,
-            'short_name': short_name,
-            'access_type': access_type,
-            'date': date.strftime("%d %b %Y"),
-            'year': year
+            'id': row['id'],
+            'username': row['username'],
+            'nickname': row['nickname'] or username,
+            'code': row['country_id'],
+            'show_name': row['show_name'],
+            'short_name': row['short_name'],
+            'access_type': row['allow_access_type'],
+            'date': row['date'].strftime("%d %b %Y"),
+            'year': row['year_id']
         }
+        print(val)
         votes.append(val)
 
     for vote in votes:
         cursor.execute('''
-            SELECT point.score, song.title, song.artist, song.country_id, country.name, song.id FROM vote
+            SELECT point.score AS pts, song.title, song.artist, song.country_id AS code, country.name, song.id FROM vote
             JOIN song ON vote.song_id = song.id
             JOIN point ON vote.point_id = point.id
             JOIN country ON song.country_id = country.id
-            WHERE vote.vote_set_id = ?
+            WHERE vote.vote_set_id = %s
             ORDER BY point.score DESC
         ''', (vote['id'],))
         songs = []
-        for pts, title, artist, country_id, country, id in cursor.fetchall():
-            val = {
-                'id': id,
-                'pts': pts,
-                'title': title,
-                'artist': artist,
-                'code': country_id,
-                'country': country,
-                'class': ''
-            }
-
+        for val in cursor.fetchall():
             if vote['short_name'] != 'f':
                 redact_song_if_show(val, vote['year'], 'f', vote['access_type'])
                 if vote['short_name'] != 'sc':
                     redact_song_if_show(val, vote['year'], 'sc', vote['access_type'])
             songs.append(val)
+
+        print(songs)
         vote['points'] = songs
+
+    print(votes)
 
     return render_template('user/votes.html', votes=votes, username=username)
 
@@ -146,12 +141,12 @@ def submissions(username: str):
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id FROM user WHERE username = ?
+        SELECT id FROM account WHERE username = %s
     ''', (username,))
-    user_id = cursor.fetchone()
-    if not user_id:
+    user_id_g = cursor.fetchone()
+    if not user_id_g:
         return render_template('error.html', error="User not found"), 404
-    user_id = user_id[0]
+    user_id = user_id_g['id']
 
     songs = get_user_songs(user_id, select_languages=True)
 
@@ -168,7 +163,9 @@ user_shows AS (
                     country_id
     FROM vote_set vs
     JOIN show s ON s.id = vs.show_id
-    WHERE voter_id = ?1 AND s.allow_access_type = 'full'
+    WHERE voter_id = %(id)s
+      AND s.allow_access_type = 'full'
+      AND s.year_id IS NOT NULL
 ),
 song_counts AS (
     SELECT ss.show_id,
@@ -178,7 +175,9 @@ song_counts AS (
     JOIN song_show ss ON ss.show_id = us.show_id
     JOIN show sh ON sh.id = ss.show_id
     JOIN song s ON s.id = ss.song_id
-    WHERE s.submitter_id <> ?1 AND sh.allow_access_type = 'full'
+    WHERE s.submitter_id <> %(id)s
+      AND sh.allow_access_type = 'full'
+      AND sh.year_id IS NOT NULL
     GROUP BY ss.show_id,
              s.country_id
 ),
@@ -209,8 +208,8 @@ given_user AS (
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN point p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
-    WHERE vs.voter_id = ?1
-      AND s.submitter_id <> ?1
+    WHERE vs.voter_id = %(id)s
+      AND s.submitter_id <> %(id)s
     GROUP BY s.country_id
 ),
 given_all AS (
@@ -223,7 +222,7 @@ given_all AS (
     WHERE vs.show_id IN
             (SELECT show_id
             FROM user_shows)
-      AND s.submitter_id <> ?1
+      AND s.submitter_id <> %(id)s
     GROUP BY s.country_id
 ),
 max_total_user AS (
@@ -290,7 +289,7 @@ ratios AS (
 )
 SELECT r.country_id,
        c.name AS country_name,
-       COALESCE(sc.songs_available, 0) AS participations,
+       COALESCE(sc.songs_available, 0) AS parts,
        r.user_given,
        r.user_max,
        r.user_ratio,
@@ -312,8 +311,8 @@ LEFT JOIN
     (SELECT country_id,
             SUM(entry_cnt) AS songs_available
     FROM song_counts GROUP  BY country_id) sc ON sc.country_id = r.country_id
-ORDER  BY bias DESC, participations, r.total_ratio
-    ''', (user_id,))
+ORDER BY bias DESC, parts, r.total_ratio
+    ''', {'id': user_id})
 
     for r in cursor.fetchall():
         yield dict(r)
@@ -328,7 +327,7 @@ user_shows AS (
     SELECT DISTINCT show_id
     FROM vote_set vs
     JOIN show s ON s.id = vs.show_id
-    WHERE voter_id = ?1 AND s.allow_access_type = 'full'
+    WHERE voter_id = %(id)s AND s.allow_access_type = 'full'
 ),
 song_counts AS (
     SELECT ss.show_id,
@@ -338,7 +337,7 @@ song_counts AS (
     JOIN song_show ss ON ss.show_id = us.show_id
     JOIN show sh ON sh.id = ss.show_id
     JOIN song s ON s.id = ss.song_id
-    WHERE s.submitter_id <> ?1 AND sh.allow_access_type = 'full'
+    WHERE s.submitter_id <> %(id)s AND sh.allow_access_type = 'full'
     GROUP BY ss.show_id,
              s.submitter_id
 ),
@@ -369,8 +368,8 @@ given_user AS (
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN point p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
-    WHERE vs.voter_id = ?1
-      AND s.submitter_id <> ?1
+    WHERE vs.voter_id = %(id)s
+      AND s.submitter_id <> %(id)s
     GROUP BY s.submitter_id
 ),
 given_all AS (
@@ -383,7 +382,7 @@ given_all AS (
     WHERE vs.show_id IN
             (SELECT show_id
              FROM user_shows)
-      AND s.submitter_id <> ?1
+      AND s.submitter_id <> %(id)s
     GROUP BY s.submitter_id
 ),
 given_back AS (
@@ -394,8 +393,8 @@ given_back AS (
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN POINT p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
-    WHERE s.submitter_id = ?1
-      AND vs.voter_id <> ?1
+    WHERE s.submitter_id = %(id)s
+      AND vs.voter_id <> %(id)s
      GROUP BY vs.voter_id
 ),
 max_total_user AS (
@@ -460,7 +459,7 @@ participations AS (
     WHERE ss.show_id IN
             (SELECT show_id
              FROM user_shows)
-      AND s.submitter_id <> ?1
+      AND s.submitter_id <> %(id)s
     GROUP BY s.submitter_id
 ),
 ratios AS (
@@ -470,21 +469,21 @@ ratios AS (
            f.pts_all_to_target AS points_all_to_submitter,
            f.user_max,
            f.all_max,
-           COALESCE(f.pts_user_to_target*1.0 / f.user_max, 0) AS user_ratio,
-           COALESCE(f.pts_all_to_target*1.0 / f.all_max, 0) AS total_ratio,
-           COALESCE(f.pts_user_to_target*1.0 / f.pts_target_to_user, 0) - 1 AS reciprocal_bias
+           COALESCE(f.pts_user_to_target*1.0 / NULLIF(f.user_max, 0), 0) AS user_ratio,
+           COALESCE(f.pts_all_to_target*1.0 / NULLIF(f.all_max, 0), 0) AS total_ratio,
+           COALESCE(f.pts_user_to_target*1.0 / NULLIF(f.pts_target_to_user, 0), 0) - 1 AS reciprocal_bias
     FROM final f
-    LEFT JOIN user u ON u.id = f.target_id
+    LEFT JOIN account u ON u.id = f.target_id
     LEFT JOIN participations p ON p.target_id = f.target_id
 ),
 biases AS (
     SELECT r.target_id,
-           COALESCE((r.user_ratio / r.total_ratio), 0) - 1 AS total_bias
+           COALESCE((r.user_ratio / NULLIF(r.total_ratio, 0)), 0) - 1 AS total_bias
     FROM ratios r
 )
 SELECT f.target_id AS submitter_id,
        u.username AS submitter_name,
-       COALESCE(p.songs_available, 0) AS participations,
+       COALESCE(p.songs_available, 0) AS parts,
        f.pts_user_to_target AS user_given,
        f.pts_target_to_user AS submitter_given,
        f.pts_all_to_target AS total_given,
@@ -512,13 +511,13 @@ SELECT f.target_id AS submitter_id,
            ELSE 'very-positive'
        END AS reciprocal_bias_class
 FROM FINAL f
-LEFT JOIN user u ON u.id = f.target_id
+LEFT JOIN account u ON u.id = f.target_id
 LEFT JOIN biases b ON b.target_id = f.target_id
 LEFT JOIN ratios r ON r.target_id = f.target_id
 LEFT JOIN participations p ON p.target_id = f.target_id
-WHERE participations > 0
-ORDER BY bias DESC, participations, total_ratio
-    ''', (user_id,))
+WHERE COALESCE(p.songs_available, 0) > 0
+ORDER BY bias DESC, parts, total_ratio
+    ''', {'id': user_id})
 
     for r in cursor.fetchall():
         yield dict(r)
@@ -534,12 +533,12 @@ def bias(username: str):
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id FROM user WHERE username = ?
+        SELECT id FROM account WHERE username = %s
     ''', (username,))
-    user_id = cursor.fetchone()
-    if not user_id:
+    user_id_g = cursor.fetchone()
+    if not user_id_g:
         return {'error': 'User not found'}, 404
-    user_id = user_id[0]
+    user_id = user_id_g['id']
 
     if bias_type == 'user':
         biases = get_submitter_biases(user_id)

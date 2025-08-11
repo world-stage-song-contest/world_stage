@@ -1,5 +1,7 @@
 import os
 from flask import Flask
+from psycopg_pool import ConnectionPool
+from psycopg.rows import dict_row
 from werkzeug.middleware.proxy_fix import ProxyFix
 import urllib.parse
 
@@ -16,6 +18,15 @@ def create_app(config: dict | None = None) -> Flask:
     app.config.from_envvar('WORLD_STAGE_CONFIG', silent=True)
 
     app.config.from_pyfile('config.py', silent=True)
+
+    app.config["DB_POOL"] = ConnectionPool(
+        conninfo=app.config.get("DATABASE_URI", os.environ.get('DATABASE_URI', '')),
+        min_size=1,
+        max_size=10,
+        timeout=10.0,
+        kwargs={"row_factory": dict_row},
+    )
+
     app.url_map.strict_slashes = False
     app.wsgi_app = ProxyFix( # type: ignore[method-assign]
         app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1

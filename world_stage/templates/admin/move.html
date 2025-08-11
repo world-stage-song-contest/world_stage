@@ -25,7 +25,7 @@
         <select name="from_year" id="from_year" required>
             <option value=""></option>
             {% for year in years %}
-                <option value="{{ year }}" {% if year == from_year %}selected{%endif%}>{{ year }}</option>
+                <option value="{{ year.id }}" {% if year.id == from_year %}selected{%endif%}>{{ year.id }}</option>
             {% endfor %}
         </select>
     </fieldset>
@@ -42,7 +42,7 @@
         <select name="to_year" id="to_year">
             <option value=""></option>
             {% for year in years %}
-                <option value="{{ year }}" {% if year == to_year %}selected{%endif%}>{{ year }}</option>
+                <option value="{{ year.id }}" {% if year.id == to_year %}selected{%endif%}>{{ year.id }}</option>
             {% endfor %}
         </select>
         </fieldset>

@@ -1,11 +1,12 @@
 [project]
 name = "world-stage"
-version = "2.4.0"
+version = "3.0.0"
 description = "Voting website for World Stage."
 requires-python = ">= 3.12"
 dependencies = [
     "flask",
-    "markdown-it-py"
+    "markdown-it-py",
+    "psycopg[binary,pool]"
 ]
 
 [build-system]

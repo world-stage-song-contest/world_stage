@@ -69,26 +69,25 @@ def login_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id, password, salt, approved FROM user WHERE username = ?', (username,))
+    cursor.execute('SELECT id, password, salt, approved FROM account WHERE username = %s', (username,))
     user = cursor.fetchone()
     if not user:
         return render_template('session/login.html', message="User not found.")
-    user_id, stored_password, stored_salt, is_approved = user
 
-    if not stored_password:
+    if not user['password']:
         return render_template('session/login.html', message="You need to set a password first.")
 
-    if not is_approved:
+    if not user['approved']:
         return render_template('session/login.html', message="Your account is not approved yet.")
 
-    if not verify_password(stored_password, stored_salt, password):
+    if not verify_password(user['password'], user['salt'], password):
         return render_template('session/login.html', message="Invalid password.")
 
     session_id = str(uuid.uuid4())
     cursor.execute('''
         INSERT INTO session (session_id, user_id, created_at, expires_at)
-        VALUES (?, ?, datetime('now'), datetime('now', '+365 days'))
-    ''', (session_id, user_id))
+        VALUES (%s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + '1 year')
+    ''', (session_id, user['id']))
 
     db.commit()
 
@@ -129,18 +128,18 @@ def set_password_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id, approved FROM user WHERE username = ?', (username,))
+    cursor.execute('SELECT id, approved FROM user WHERE username = %s', (username,))
     user = cursor.fetchone()
     if not user:
         return render_template('session/set_password.html', message="User not found.")
     user_id, approved = user
     if not approved:
-        return render_template('session/set_password.html', message="Your account is not approved yet.")
+        return render_template('session/set_password.html', message="Your account is not approved yet. Please ping a moderator.")
     hashed, salt = hash_password(password)
     cursor.execute('''
-        UPDATE user
-        SET password = ?, salt = ?
-        WHERE id = ?
+        UPDATE account
+        SET password = %s, salt = %s
+        WHERE id = %s
     ''', (hashed, salt, user_id))
 
     db.commit()
@@ -179,15 +178,15 @@ def sign_up_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id FROM user WHERE username = ?', (username,))
+    cursor.execute('SELECT id FROM account WHERE username = %s', (username,))
     user = cursor.fetchone()
     if user:
         return render_template('session/request_account.html', message="Your account already exists as you have either voted or submitted entries before. Instead of signing up, please <a href='/setpassword'>set your password</a>.")
 
     hashed, salt = hash_password(password)
     cursor.execute('''
-        INSERT INTO user (username, password, salt, approved)
-        VALUES (?, ?, ?, 0)
+        INSERT INTO account (username, password, salt, approved)
+        VALUES (%s, %s, %s, 0)
     ''', (username, hashed, salt))
 
     db.commit()
@@ -208,7 +207,7 @@ def logout_post():
     cursor = db.cursor()
 
     cursor.execute('''
-        DELETE FROM session WHERE session_id = ?
+        DELETE FROM session WHERE session_id = %s
     ''', (session,))
 
     db.commit()

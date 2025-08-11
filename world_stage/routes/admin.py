@@ -1,6 +1,7 @@
 from collections import defaultdict
 from pathlib import Path
-import sqlite3
+import subprocess
+import psycopg
 from flask import Blueprint, current_app, redirect, request, url_for
 import math
 import datetime
@@ -57,11 +58,14 @@ def create_show_post():
     db = get_db()
     cur = db.cursor()
 
-    cur.execute('''
-        INSERT OR IGNORE INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, allow_access_type)
-        VALUES (:year, 1, :show_name, :short_name, :dtf, :sc, :date, 'none')
-    ''', data)
-    db.commit()
+    try:
+        cur.execute('''
+            INSERT INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, allow_access_type)
+            VALUES (%(year)s, 1, %(show_name)s, %(short_name)s, %(dtf)s, %(sc)s, %(date)s, 'none')
+        ''', data)
+        db.commit()
+    except psycopg.Error as e:
+        return render_template('admin/create_show.html', error=str(e))
 
     return redirect(url_for('admin.create_show'))
 
@@ -121,18 +125,18 @@ def draw_post(year: int):
             for i, cc in enumerate(ro):
                 cursor.execute('''
                     SELECT id FROM song
-                    WHERE year_id = ? AND country_id = ?
+                    WHERE year_id = %s AND country_id = %s
                 ''', (year, cc))
                 song_id = cursor.fetchone()
                 if not song_id:
                     return {'error': f'No song for country {cc} in year {year}'}
-                song_id = song_id[0]
+                song_id = song_id['id']
 
                 cursor.execute('''
                     INSERT INTO song_show (song_id, show_id, running_order)
-                    VALUES (?, ?, ?)
+                    VALUES (%s, %s, %s)
                 ''', (song_id, show_data.id, i+1))
-    except sqlite3.IntegrityError:
+    except psycopg.IntegrityError:
         return {'error': "Duplicate data"}, 400
 
     db.commit()
@@ -179,17 +183,17 @@ def draw_final_post(year: int, show: str):
     for i, cc in enumerate(ro):
         cursor.execute('''
             SELECT id FROM song
-            WHERE year_id = ? AND country_id = ?
+            WHERE year_id = %s AND country_id = %s
         ''', (year, cc))
         song_id = cursor.fetchone()
         if not song_id:
             return {'error': f'No song for country {cc} in year {year}'}
-        song_id = song_id[0]
+        song_id = song_id['id']
 
         cursor.execute('''
             UPDATE song_show
-            SET running_order = ?
-            WHERE song_id = ? AND show_id = ?
+            SET running_order = %s
+            WHERE song_id = %s AND show_id = %s
         ''', (i+1, song_id, show_data.id))
 
     db.commit()
@@ -227,12 +231,12 @@ def move():
     cursor.execute('''
         SELECT id FROM year ORDER BY id
     ''')
-    years = [row[0] for row in cursor.fetchall()]
+    years = cursor.fetchall()
 
     cursor.execute('''
-        SELECT id, name FROM country ORDER BY name
+        SELECT id, name FROM country WHERE is_participating ORDER BY name
     ''')
-    countries = [dict(row) for row in cursor.fetchall()]
+    countries = cursor.fetchall()
 
     return render_template('admin/move.html', years=years, countries=countries)
 
@@ -248,12 +252,12 @@ def move_post():
     cursor.execute('''
         SELECT id FROM year ORDER BY id
     ''')
-    years = [row[0] for row in cursor.fetchall()]
+    years = cursor.fetchall()
 
     cursor.execute('''
-        SELECT id, name FROM country ORDER BY name
+        SELECT id, name FROM country WHERE is_participating ORDER BY name
     ''')
-    countries = [dict(row) for row in cursor.fetchall()]
+    countries = cursor.fetchall()
 
     from_year_txt = request.form.get('from_year')
     to_year_txt = request.form.get('to_year')
@@ -292,11 +296,11 @@ def move_post():
     try:
         cursor.execute('''
             UPDATE song
-            SET year_id = COALESCE(?, year_id),
-                country_id = COALESCE(?, country_id)
-            WHERE year_id = ? AND country_id = ?
+            SET year_id = COALESCE(%s, year_id),
+                country_id = COALESCE(%s, country_id)
+            WHERE year_id = %s AND country_id = %s
         ''', (to_year, to_cc, from_year, from_cc))
-    except sqlite3.IntegrityError as e:
+    except psycopg.Error as e:
         return render_template('admin/move.html', error=f"Database error: {str(e)}",
                                from_year=from_year_txt, to_year=to_year_txt,
                                from_cc=from_cc, to_cc=to_cc,
@@ -315,14 +319,14 @@ def manage(year: int):
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, closed FROM year WHERE id = ?
+        SELECT id, closed FROM year WHERE id = %s
     ''', (year,))
     year_data = cursor.fetchone()
     if not year_data:
         return render_template('error.html', error=f"Year {year} not found"), 404
 
     cursor.execute('''
-        SELECT show_name, short_name, date, allow_access_type FROM show WHERE year_id = ?
+        SELECT show_name, short_name, date, allow_access_type FROM show WHERE year_id = %s
         ORDER BY id
     ''', (year,))
     shows = [dict(r) for r in cursor.fetchall()]
@@ -354,8 +358,8 @@ def manage_post(year: int):
 
             cursor.execute('''
                 UPDATE year
-                SET closed = ?
-                WHERE id = ?
+                SET closed = %s
+                WHERE id = %s
             ''', (closed, year))
         case _:
             return render_template('error.html', error=f"Unknown action '{action}'"), 400
@@ -383,14 +387,14 @@ def manage_show_post(year: int, show: str):
         case 'open_voting':
             cursor.execute('''
                 UPDATE show
-                SET voting_opens = datetime('now')
-                WHERE year_id = ? AND short_name = ?
+                SET voting_opens = CURRENT_TIMESTAMP
+                WHERE year_id = %s AND short_name = %s
             ''', (year, show))
         case 'close_voting':
             cursor.execute('''
                 UPDATE show
-                SET voting_closes = datetime('now')
-                WHERE year_id = ? AND short_name = ?
+                SET voting_closes = CURRENT_TIMESTAMP
+                WHERE year_id = %s AND short_name = %s
             ''', (year, show))
         case 'set_access_type':
             access_type = body.get('access_type')
@@ -399,8 +403,8 @@ def manage_show_post(year: int, show: str):
 
             cursor.execute('''
                 UPDATE show
-                SET allow_access_type = ?
-                WHERE year_id = ? AND short_name = ?
+                SET allow_access_type = %s
+                WHERE year_id = %s AND short_name = %s
             ''', (access_type, year, show))
         case 'change_date':
             date_str = body.get('date')
@@ -415,8 +419,8 @@ def manage_show_post(year: int, show: str):
 
             cursor.execute('''
                 UPDATE show
-                SET date = ?
-                WHERE year_id = ? AND short_name = ?
+                SET date = %s
+                WHERE year_id = %s AND short_name = %s
             ''', (date, year, show))
         case _:
             return render_template('error.html', error=f"Unknown action '{action}'"), 400
@@ -450,8 +454,7 @@ def fuckup_db_post():
     if not query:
         return render_template('error.html', error="No query provided"), 400
 
-    backup_path = f"backups/backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-    shutil.copy2(db.execute("PRAGMA database_list").fetchone()[2], backup_path)
+    subprocess.run(os.environ["BACKUP_SCRIPT"])
 
     try:
         cursor.execute(query)
@@ -459,9 +462,8 @@ def fuckup_db_post():
     except Exception as e:
         return render_template('error.html', error=f"Query failed: {str(e)}"), 400
 
-    data = cursor.fetchall()
+    rows = cursor.fetchall()
     headers = [description[0] for description in cursor.description] if cursor.description else []
-    rows = [dict(row) for row in data]
 
     return {'headers': headers, 'rows': rows}, 200
 
@@ -504,19 +506,19 @@ def users_post():
         cursor.execute('''
             UPDATE user
             SET approved = 1
-            WHERE id = ?
+            WHERE id = %s
         ''', (user_id,))
     elif action == 'unapprove':
         cursor.execute('''
             UPDATE user
             SET approved = 0
-            WHERE id = ?
+            WHERE id = %s
         ''', (user_id,))
     elif action == 'annul_password':
         cursor.execute('''
             UPDATE user
             SET password = NULL, salt = NULL
-            WHERE id = ?
+            WHERE id = %s
         ''', (user_id,))
     else:
         return render_template('error.html', error=f"Unknown action '{action}'"), 400
@@ -537,7 +539,7 @@ def set_pots(year: int):
     cursor.execute('''
         SELECT country.id, name, pot FROM song
         JOIN country ON song.country_id = country.id
-        WHERE year_id = ?
+        WHERE year_id = %s
         ORDER BY pot, name
     ''', (year,))
     countries = [dict(row) for row in cursor.fetchall()]
@@ -563,8 +565,8 @@ def set_pots_post(year: int):
 
         cursor.execute('''
             UPDATE country
-            SET pot = ?
-            WHERE id = ?
+            SET pot = %s
+            WHERE id = %s
         ''', (pot, country_id))
 
     db.commit()
@@ -627,27 +629,35 @@ def recap_data_post():
             return render_template('admin/recap_data.html', error=f"Invalid show name '{short_name}' in show '{show}'"), 400
 
         cursor.execute('''
-            SELECT id FROM show WHERE year_id = ? AND short_name = ?
+            SELECT id FROM show WHERE year_id = %s AND short_name = %s
         ''', (year, short_name))
         show_id = cursor.fetchone()
         if not show_id:
             return render_template('admin/recap_data.html', error=f"Show '{show}' not found"), 404
-        shows.append(show_id[0])
+        shows.append(show_id['id'])
 
-    placeholders = ', '.join(['?'] * len(shows))
-
-    cursor.execute(f'''
-        SELECT show.year_id AS year, short_name AS show, running_order, country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name, artist, title, video_link, snippet_start, snippet_end, '' AS display_name, GROUP_CONCAT(language.name, ', ') AS language
-        FROM song_show
-        JOIN song ON song_show.song_id = song.id
-        JOIN show ON song_show.show_id = show.id
-        JOIN country ON song.country_id = country.id
-        LEFT JOIN song_language ON song.id = song_language.song_id
-        LEFT JOIN language ON song_language.language_id = language.id
-        WHERE show.id IN ({placeholders})
-        GROUP BY song.id, show.id
-        ORDER BY show_id, running_order
-    ''', shows)
+    cursor.execute('''
+WITH song_data AS (
+    SELECT DISTINCT ON (song.id, show.id)
+           show.id as show_id, show.year_id AS year, short_name AS show, running_order,
+           country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
+           artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
+           (SELECT STRING_AGG(l.name, ', ')
+            FROM song_language sl
+            JOIN language l ON sl.language_id = l.id
+            WHERE sl.song_id = song.id) AS language
+    FROM song_show
+    JOIN song ON song_show.song_id = song.id
+    JOIN show ON song_show.show_id = show.id
+    JOIN country ON song.country_id = country.id
+    WHERE show.id = ANY(%s)
+    ORDER BY song.id, show.id
+)
+SELECT year, show, running_order, country, country_code, country_name,
+       artist, title, video_link, snippet_start, snippet_end, display_name, language
+FROM song_data
+ORDER BY show_id, running_order
+    ''', (shows,))
     csv_data = [dict(row) for row in cursor.fetchall()]
 
     w = io.StringIO()

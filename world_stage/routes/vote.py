@@ -13,50 +13,50 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT id FROM vote_set WHERE voter_id = ? AND show_id = ?', (voter_id,show_id))
-    vote_set_id = cursor.fetchone()[0]
+    cursor.execute('SELECT id FROM vote_set WHERE voter_id = %s AND show_id = %s', (voter_id,show_id))
+    vote_set_id = cursor.fetchone()['id'] # type: ignore
 
-    cursor.execute('UPDATE vote_set SET nickname = ?, country_id = ? WHERE id = ?', (nickname, country_id or 'XXX', vote_set_id))
+    cursor.execute('UPDATE vote_set SET nickname = %s, country_id = %s WHERE id = %s', (nickname, country_id or 'XXX', vote_set_id))
 
-    cursor.execute('UPDATE vote SET song_id = NULL WHERE vote_set_id = ?', (vote_set_id,))
+    cursor.execute('UPDATE vote SET song_id = NULL WHERE vote_set_id = %s', (vote_set_id,))
 
     for point, song_id in votes.items():
         cursor.execute('''
             SELECT id FROM point
-            WHERE point_system_id = ? AND score = ?
+            WHERE point_system_id = %s AND score = %s
             ''', (point_system_id, point))
-        point_id = cursor.fetchone()[0]
+        point_id = cursor.fetchone()['id'] # type: ignore
         cursor.execute('''
             UPDATE vote
-            SET song_id = ?
-            WHERE vote_set_id = ? AND point_id = ?
+            SET song_id = %s
+            WHERE vote_set_id = %s AND point_id = %s
         ''', (song_id, vote_set_id, point_id))
 
 def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('INSERT OR IGNORE INTO user (username) VALUES (?)', (username,))
-    cursor.execute('SELECT id FROM user WHERE username = ?', (username,))
-    voter_id = cursor.fetchone()[0]
+    cursor.execute('INSERT INTO account (username) VALUES (%s) ON CONFLICT DO NOTHING', (username,))
+    cursor.execute('SELECT id FROM account WHERE username = %s', (username,))
+    voter_id = cursor.fetchone()['id'] # type: ignore
 
-    cursor.execute('SELECT id FROM vote_set WHERE voter_id = ? AND show_id = ?', (voter_id, show_id))
+    cursor.execute('SELECT id FROM vote_set WHERE voter_id = %s AND show_id = %s', (voter_id, show_id))
     existing_vote_set = cursor.fetchone()
 
     if not existing_vote_set:
         cursor.execute('''
             INSERT INTO vote_set (voter_id, show_id, country_id, nickname, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             RETURNING id
             ''', (voter_id, show_id, country_id or 'XXX', nickname))
-        vote_set_id = cursor.fetchone()[0]
+        vote_set_id = cursor.fetchone()['id'] # type: ignore
         for point, song_id in votes.items():
             cursor.execute('''
                 SELECT id FROM point
-                WHERE point_system_id = ? AND score = ?
+                WHERE point_system_id = %s AND score = %s
                 ''', (point_system_id, point))
-            point_id = cursor.fetchone()[0]
-            cursor.execute('INSERT INTO vote (vote_set_id, song_id, point_id) VALUES (?, ?, ?)', (vote_set_id, song_id, point_id))
+            point_id = cursor.fetchone()['id'] # type: ignore
+            cursor.execute('INSERT INTO vote (vote_set_id, song_id, point_id) VALUES (%s, %s, %s)', (vote_set_id, song_id, point_id))
         action = "added"
     else:
         update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id)
@@ -74,21 +74,21 @@ def index():
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, show_name, short_name, year_id, voting_opens, voting_closes
+        SELECT id, show_name AS name, short_name, year_id AS year, voting_opens, voting_closes
         FROM show
-        WHERE voting_opens <= datetime('now') AND (voting_closes IS NULL OR voting_closes >= datetime('now'))
+        WHERE voting_opens <= CURRENT_TIMESTAMP AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
     ''')
 
-    for id, name, short_name, year, voting_opens, voting_closes in cursor.fetchall():
+    for row in cursor.fetchall():
         left = None
-        if voting_closes:
-            left = voting_closes - dt_now()
+        if row['voting_closes']:
+            left = row['voting_closes'] - dt_now()
         open_votings.append({
-            'id': id,
-            'name': f"{year} {name}" if year else name,
-            'short_name': f"{year}-{short_name}" if year else short_name,
-            'voting_opens': voting_opens,
-            'voting_closes': voting_closes,
+            'id': row['id'],
+            'name': f"{row['year']} {row['name']}" if row['year'] else row['name'],
+            'short_name': f"{row['year']}-{row['short_name']}" if row['year'] else row['short_name'],
+            'voting_opens': row['voting_opens'],
+            'voting_closes': row['voting_closes'],
             'left': format_timedelta(left),
         })
     return render_template('vote/index.html', shows=open_votings)
@@ -123,20 +123,22 @@ def vote(show: str):
     vote_set_id = None
     countries = []
     if username:
-        cursor.execute('SELECT id FROM user WHERE username = ? COLLATE NOCASE', (username,))
+        cursor.execute('SELECT id FROM account WHERE username = %s COLLATE NOCASE', (username,))
         user_id = cursor.fetchone()
         if user_id:
-            user_songs = get_user_songs(user_id[0], show_data.year)
+            user_songs = get_user_songs(user_id['id'], show_data.year)
             countries = list(map(lambda s: s.country, user_songs))
             cursor.execute('''
                 SELECT vote_set.id, vote_set.nickname, vote_set.country_id
                 FROM vote_set
-                JOIN user ON vote_set.voter_id = user.id
-                WHERE user.username = ? AND vote_set.show_id = ?
+                JOIN "user u" ON vote_set.voter_id = u.id
+                WHERE u.username = %s AND vote_set.show_id = %s
             ''', (username, show_data.id))
-            vote_set_id = cursor.fetchone()
-            if vote_set_id:
-                vote_set_id, nickname, country_id = vote_set_id
+            vs_row = cursor.fetchone()
+            if vs_row:
+                vote_set_id = vs_row['vote_set_id']
+                nickname = vs_row['nickname']
+                country_id = vs_row['country_id']
 
     if not countries:
         countries = get_countries()
@@ -145,7 +147,7 @@ def vote(show: str):
         cursor.execute('''
             SELECT song_id, score FROM vote
             JOIN point ON vote.point_id = point.id
-            WHERE vote_set_id = ?
+            WHERE vote_set_id = %s
         ''', (vote_set_id,))
         for song_id, pts in cursor.fetchall():
             selected[pts] = song_id
@@ -197,10 +199,10 @@ def vote_post(show: str):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT id FROM user WHERE username = ? COLLATE NOCASE', (username,))
+    cursor.execute('SELECT id FROM account WHERE LOWER(username) = LOWER(%s)', (username,))
     voter = cursor.fetchone()
     if voter:
-        voter_id = voter[0]
+        voter_id = voter['id']
     else:
         voter_id = 0
 
@@ -217,11 +219,11 @@ def vote_post(show: str):
         country_id = None
 
     cursor.execute('''
-        SELECT id FROM song WHERE submitter_id = ?
+        SELECT id FROM song WHERE submitter_id = %s
     ''', (voter_id,))
     submitted_song = cursor.fetchone()
     if submitted_song:
-        submitted_song = submitted_song[0]
+        submitted_song = submitted_song['id']
     else:
         submitted_song = None
 
