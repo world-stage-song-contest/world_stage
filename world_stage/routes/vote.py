@@ -131,8 +131,8 @@ def vote(show: str):
             cursor.execute('''
                 SELECT vote_set.id, vote_set.nickname, vote_set.country_id
                 FROM vote_set
-                JOIN "user u" ON vote_set.voter_id = u.id
-                WHERE u.username = %s AND vote_set.show_id = %s
+                JOIN account ON vote_set.voter_id = account.id
+                WHERE account.username = %s AND vote_set.show_id = %s
             ''', (username, show_data.id))
             vs_row = cursor.fetchone()
             if vs_row:

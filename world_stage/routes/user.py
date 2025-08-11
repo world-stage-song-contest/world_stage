@@ -105,7 +105,6 @@ def votes(username: str):
             'date': row['date'].strftime("%d %b %Y"),
             'year': row['year_id']
         }
-        print(val)
         votes.append(val)
 
     for vote in votes:
@@ -125,10 +124,7 @@ def votes(username: str):
                     redact_song_if_show(val, vote['year'], 'sc', vote['access_type'])
             songs.append(val)
 
-        print(songs)
         vote['points'] = songs
-
-    print(votes)
 
     return render_template('user/votes.html', votes=votes, username=username)
 

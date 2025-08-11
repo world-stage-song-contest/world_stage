@@ -296,7 +296,6 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
         for row in cursor.fetchall():
             countries['placeholder'].append(row)
 
-    print(countries)
     return countries
 
 def get_users():

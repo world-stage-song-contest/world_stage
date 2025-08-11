@@ -590,8 +590,6 @@ def upload_post():
     if not file:
         return render_template('error.html', error="No file uploaded"), 400
 
-    print(file)
-
     file_path = Path(current_app.instance_path, 'uploads', file.filename or datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.dat')
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file.save(file_path)
