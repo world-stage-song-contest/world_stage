@@ -211,11 +211,11 @@ def changes():
     cursor.execute('''
         SELECT country_id AS cc, country.name, year_id AS year, artist, title, username AS submitter, modified_at FROM song
         JOIN country ON song.country_id = country.id
-        JOIN user ON song.submitter_id = user.id
-        WHERE modified_at >= datetime(date('now'), '-3 days')
+        JOIN account ON song.submitter_id = account.id
+        WHERE modified_at >= CURRENT_TIMESTAMP - interval '1 day'
         ORDER BY modified_at DESC
     ''')
-    changes = [dict(row) for row in cursor.fetchall()]
+    changes = cursor.fetchall()
 
     return render_template('admin/changes.html', changes=changes)
 
@@ -329,7 +329,7 @@ def manage(year: int):
         SELECT show_name, short_name, date, allow_access_type FROM show WHERE year_id = %s
         ORDER BY id
     ''', (year,))
-    shows = [dict(r) for r in cursor.fetchall()]
+    shows = cursor.fetchall()
 
     return render_template('admin/manage_shows.html', year=year_data, shows=shows)
 
@@ -456,10 +456,12 @@ def fuckup_db_post():
 
     subprocess.run(os.environ["BACKUP_SCRIPT"])
 
+    cursor.execute("SET ROLE dml_only_role")
     try:
         cursor.execute(query)
         db.commit()
     except Exception as e:
+        cursor.execute("RESET ROLE")
         return render_template('error.html', error=f"Query failed: {str(e)}"), 400
 
     rows = cursor.fetchall()
@@ -477,9 +479,9 @@ def users():
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, username, approved, role FROM user
+        SELECT id, username, approved, role FROM account
     ''')
-    users = [dict(row) for row in cursor.fetchall()]
+    users = cursor.fetchall()
 
     return render_template('admin/users.html', users=users)
 
@@ -504,19 +506,19 @@ def users_post():
 
     if action == 'approve':
         cursor.execute('''
-            UPDATE user
+            UPDATE account
             SET approved = 1
             WHERE id = %s
         ''', (user_id,))
     elif action == 'unapprove':
         cursor.execute('''
-            UPDATE user
+            UPDATE account
             SET approved = 0
             WHERE id = %s
         ''', (user_id,))
     elif action == 'annul_password':
         cursor.execute('''
-            UPDATE user
+            UPDATE account
             SET password = NULL, salt = NULL
             WHERE id = %s
         ''', (user_id,))
@@ -542,7 +544,7 @@ def set_pots(year: int):
         WHERE year_id = %s
         ORDER BY pot, name
     ''', (year,))
-    countries = [dict(row) for row in cursor.fetchall()]
+    countries = cursor.fetchall()
 
     return render_template('admin/set_pots.html', countries=countries, year=year)
 
@@ -656,7 +658,7 @@ SELECT year, show, running_order, country, country_code, country_name,
 FROM song_data
 ORDER BY show_id, running_order
     ''', (shows,))
-    csv_data = [dict(row) for row in cursor.fetchall()]
+    csv_data = cursor.fetchall()
 
     w = io.StringIO()
     writer = csv.DictWriter(w, fieldnames=['year', 'show', 'running_order', 'country', 'country_code', 'country_name', 'artist', 'title', 'video_link', 'snippet_start', 'snippet_end', 'display_name', 'language'])

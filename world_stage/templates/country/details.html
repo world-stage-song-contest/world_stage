@@ -87,9 +87,9 @@
 
 <div class="all-lyrics" style="--rows: {{ rows }}; --columns: {{ columns }};">
     {% set column = 1%}
-    {% if english_lyrics %}
+    {% if translated_lyrics %}
         <h2 style="--row: 1; --column: {{ column }};">English lyrics</h2>
-        {% for line in english_lyrics %}
+        {% for line in translated_lyrics %}
         <div class="line eng-line" lang="en" style="--row: {{ loop.index + 1 }}; --column: {{ column }};">{{ line|safe }}</div>
         {% endfor %}
         {% set column = column + 1%}

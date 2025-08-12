@@ -123,22 +123,22 @@ def vote(show: str):
     vote_set_id = None
     countries = []
     if username:
-        cursor.execute('SELECT id FROM account WHERE username = %s COLLATE NOCASE', (username,))
+        cursor.execute('SELECT id FROM account WHERE username = %s', (username,))
         user_id = cursor.fetchone()
         if user_id:
             user_songs = get_user_songs(user_id['id'], show_data.year)
             countries = list(map(lambda s: s.country, user_songs))
             cursor.execute('''
-                SELECT vote_set.id, vote_set.nickname, vote_set.country_id
+                SELECT vote_set.id AS vsid, vote_set.nickname, vote_set.country_id AS cid
                 FROM vote_set
                 JOIN account ON vote_set.voter_id = account.id
                 WHERE account.username = %s AND vote_set.show_id = %s
             ''', (username, show_data.id))
             vs_row = cursor.fetchone()
             if vs_row:
-                vote_set_id = vs_row['vote_set_id']
+                vote_set_id = vs_row['vsid']
                 nickname = vs_row['nickname']
-                country_id = vs_row['country_id']
+                country_id = vs_row['cid']
 
     if not countries:
         countries = get_countries()
@@ -149,8 +149,8 @@ def vote(show: str):
             JOIN point ON vote.point_id = point.id
             WHERE vote_set_id = %s
         ''', (vote_set_id,))
-        for song_id, pts in cursor.fetchall():
-            selected[pts] = song_id
+        for row in cursor.fetchall():
+            selected[row['score']] = row['song_id']
 
     songs = get_show_songs(show_data.year, show_data.short_name)
 
@@ -199,7 +199,7 @@ def vote_post(show: str):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT id FROM account WHERE LOWER(username) = LOWER(%s)', (username,))
+    cursor.execute('SELECT id FROM account WHERE username = %s', (username,))
     voter = cursor.fetchone()
     if voter:
         voter_id = voter['id']

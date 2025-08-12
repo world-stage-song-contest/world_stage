@@ -374,7 +374,7 @@ class Song:
     native_title: Optional[str]
     title_lang: Optional[Language]
     native_lang: Optional[Language]
-    english_lyrics: Optional[str]
+    translated_lyrics: Optional[str]
     latin_lyrics: Optional[str]
     native_lyrics: Optional[str]
     lyrics_notes: Optional[str]
@@ -389,7 +389,7 @@ class Song:
                  country: Country, year: Optional[int],
                  placeholder: bool, submitter: Optional[str], submitter_id: Optional[int],
                  title_lang: Optional[int], native_lang: Optional[int], lyrics_notes: Optional[str],
-                 english_lyrics: Optional[str], latin_lyrics: Optional[str], native_lyrics: Optional[str],
+                 translated_lyrics: Optional[str], latin_lyrics: Optional[str], native_lyrics: Optional[str],
                  video_link: Optional[str], recap_start: Optional[int], recap_end: Optional[int],
                  sources: Optional[str],
                  languages: list['Language'] = [], show_id: Optional[int] = None, ro: Optional[int] = None):
@@ -403,7 +403,7 @@ class Song:
         self.placeholder = placeholder
         self.submitter = submitter
         self.submitter_id = submitter_id
-        self.english_lyrics = english_lyrics
+        self.translated_lyrics = translated_lyrics
         self.latin_lyrics = latin_lyrics
         self.native_lyrics = native_lyrics
         self.lyrics_notes = lyrics_notes
@@ -825,7 +825,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
                   submitter_id=song['submitter_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
-                  english_lyrics=song['translated_lyrics'],
+                  translated_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
@@ -907,7 +907,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                   submitter_id=song['submitter_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
-                  english_lyrics=song['translated_lyrics'],
+                  translated_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
@@ -975,7 +975,7 @@ def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages
                   submitter_id=song['submitter_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
-                  english_lyrics=song['translated_lyrics'],
+                  translated_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
@@ -1025,7 +1025,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                   title_lang=song['title_language_id'],
                   submitter_id=song['submitter_id'],
                   native_lang=song['native_language_id'],
-                  english_lyrics=song['translated_lyrics'],
+                  translated_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
@@ -1078,7 +1078,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                   submitter_id=song['submitter_id'],
                   title_lang=song['title_language_id'],
                   native_lang=song['native_language_id'],
-                  english_lyrics=song['translated_lyrics'],
+                  translated_lyrics=song['translated_lyrics'],
                   latin_lyrics=song['romanized_lyrics'],
                   native_lyrics=song['native_lyrics'],
                   lyrics_notes=song['notes'],
@@ -1100,20 +1100,12 @@ def get_year_countries(year: int, exclude: list[str] = []) -> list[dict]:
     db = get_db()
     cursor = db.cursor()
     cursor.execute('''
-        SELECT country.id, country.name, country.pot, song.submitter_id FROM song
+        SELECT country.id AS cc, country.name, country.pot, song.submitter_id AS submitter FROM song
         JOIN country ON song.country_id = country.id
         WHERE song.year_id = %s
         ORDER BY country.name
     ''', (year,))
-    countries = []
-    for id, name, pot, submitter in cursor.fetchall():
-        if id in exclude: continue
-        countries.append({
-            'cc': id,
-            'name': name,
-            'pot': pot,
-            'submitter': submitter,
-        })
+    countries = cursor.fetchall()
 
     return countries
 
@@ -1126,12 +1118,7 @@ def get_year_shows(year: int, pattern: str = '') -> list[dict]:
         WHERE year_id = %s AND short_name LIKE %s
     ''', (year, pattern + '%'))
 
-    shows = []
-    for name, short in cursor.fetchall():
-        shows.append({
-            'name': name,
-            'short_name': short
-        })
+    shows = cursor.fetchall()
 
     return shows
 

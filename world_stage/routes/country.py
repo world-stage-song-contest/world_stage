@@ -88,7 +88,7 @@ def details(code: str, year: int):
     permissions = get_user_permissions(user_id)
 
     can_edit = permissions.can_edit or user_id == song.submitter_id
-    english_lyrics = []
+    translated_lyrics = []
     latin_lyrics = []
     native_lyrics = []
     notes = []
@@ -99,8 +99,8 @@ def details(code: str, year: int):
 
     md = get_markdown_parser()
 
-    if song.english_lyrics:
-        english_lyrics = md.renderInline(song.english_lyrics).split('\n')
+    if song.translated_lyrics:
+        translated_lyrics = md.renderInline(song.translated_lyrics).split('\n')
     if song.latin_lyrics:
         latin_lyrics = md.renderInline(song.latin_lyrics).split('\n')
     if song.native_lyrics:
@@ -108,10 +108,10 @@ def details(code: str, year: int):
     if song.lyrics_notes:
         notes = md.renderInline(song.lyrics_notes).split('\n')
 
-    rows = max(len(english_lyrics), len(latin_lyrics), len(native_lyrics))
-    columns = (1 if english_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)
+    rows = max(len(translated_lyrics), len(latin_lyrics), len(native_lyrics))
+    columns = (1 if translated_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)
 
     return render_template('country/details.html', song=song, embed=embed, name=name, year=year, rows=rows,
                             columns=columns, sources=sources,
-                            native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, english_lyrics=english_lyrics,
+                            native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, translated_lyrics=translated_lyrics,
                             can_edit=can_edit, notes=notes)

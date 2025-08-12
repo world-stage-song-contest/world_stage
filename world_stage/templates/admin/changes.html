@@ -23,7 +23,7 @@
             <td>{{ change.artist }}</td>
             <td>{{ change.title }}</td>
             <td>{{ change.submitter }}</td>
-            <td>{{ change.modified_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ change.modified_at.strftime('%Y-%m-%d %H:%M:%S %Z') }}</td>
         </tr>
     {% endfor %}
 {% endblock %}
