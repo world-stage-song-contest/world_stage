@@ -18,6 +18,7 @@ def close_db(e=None) -> None:
     db = g.pop('db', None)
     if db is not None:
         pool: ConnectionPool = current_app.config["DB_POOL"]
+        db.rollback()
         pool.putconn(db)
 
 def init_db():

@@ -1,22 +1,38 @@
 {% extends "base.html" %}
 {% block title %}Fuck Up The Database{% endblock %}
-{% block headercontents %}
-    <script src="/static/js/database.js"></script>
-{% endblock %}
 {% block content %}
 
-<div class="error" id="error">
-</div>
+<div class="error" id="error">{{error}}</div>
 
-<div>
-    <textarea id="query" cols="80" rows="25">
-    </textarea>
-</div>
+<form method="POST">
+    <div>
+        <textarea id="query" name="query" cols="80" rows="25">{{query}}</textarea>
+    </div>
 
-<div>
-<button onclick="submitQuery()">Submit Query</button>
-</div>
+    <div>
+        <button type="submit" name="kind" value="html">Submit query</button>
+        <button type="submit" name="kind" value="csv">Download as CSV</button>
+    </div>
+</form>
 
 <table id="result">
+{% if headers %}
+    <thead>
+        <tr>
+        {% for header in headers %}
+            <th>{{ header }}</th>
+        {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+        {% for header in headers %}
+            <td>{{ row[header] }}</td>
+        {% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+{% endif %}
 </table>
 {% endblock %}

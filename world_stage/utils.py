@@ -321,22 +321,12 @@ class VoteData:
 class Language:
     name: str
     tag: str
-    extlang: Optional[str]
-    region: Optional[str]
-    subvariant: Optional[str]
-    suppress_script: Optional[bool]
+    extlang: str | None
+    region: str | None
+    subvariant: str | None
+    suppress_script: str | None
 
-    def __init__(self, name: str = '', tag: str = '',
-                 extlang: Optional[str] = None, region: Optional[str] = None,
-                 subvariant: Optional[str] = None, suppress_script: Optional[bool] = None):
-        self.name = name
-        self.tag = tag
-        self.extlang = extlang
-        self.region = region
-        self.subvariant = subvariant
-        self.suppress_script = suppress_script
-
-    def str(self, script: Optional[str] = None) -> str:
+    def str(self, script: str | None = None) -> str:
         components = [self.tag]
         if self.extlang:
             components.append(self.extlang)
@@ -365,34 +355,34 @@ class Song:
     title: str
     artist: str
     country: Country
-    year: Optional[int]
+    year: int | None
     placeholder: bool
     languages: list[Language]
-    vote_data: Optional[VoteData]
-    submitter: Optional[str]
-    submitter_id: Optional[int]
-    native_title: Optional[str]
-    title_lang: Optional[Language]
-    native_lang: Optional[Language]
-    translated_lyrics: Optional[str]
-    latin_lyrics: Optional[str]
-    native_lyrics: Optional[str]
-    lyrics_notes: Optional[str]
-    video_link: Optional[str]
-    recap_start: Optional[str]
-    recap_end: Optional[str]
-    sources: Optional[str]
+    vote_data: VoteData | None
+    submitter: str | None
+    submitter_id: int | None
+    native_title: str | None
+    title_lang: Language | None
+    native_lang: Language | None
+    translated_lyrics: str | None
+    latin_lyrics: str | None
+    native_lyrics: str | None
+    lyrics_notes: str | None
+    video_link: str | None
+    recap_start: str | None
+    recap_end: str | None
+    sources: str | None
     hidden: bool = False
 
     def __init__(self, *,
-                 id: int, title: str, native_title: Optional[str], artist: str,
-                 country: Country, year: Optional[int],
-                 placeholder: bool, submitter: Optional[str], submitter_id: Optional[int],
-                 title_lang: Optional[int], native_lang: Optional[int], lyrics_notes: Optional[str],
-                 translated_lyrics: Optional[str], latin_lyrics: Optional[str], native_lyrics: Optional[str],
-                 video_link: Optional[str], recap_start: Optional[int], recap_end: Optional[int],
-                 sources: Optional[str],
-                 languages: list['Language'] = [], show_id: Optional[int] = None, ro: Optional[int] = None):
+                 id: int, title: str, native_title: str | None, artist: str,
+                 country: Country, year: int | None,
+                 placeholder: bool, submitter: str | None, submitter_id: int | None,
+                 title_lang: int | None, native_lang: int | None, lyrics_notes: str | None,
+                 translated_lyrics: str | None, latin_lyrics: str | None, native_lyrics: str | None,
+                 video_link: str | None, recap_start: int | None, recap_end: int | None,
+                 sources: str | None,
+                 languages: list['Language'] = [], show_id: int | None = None, ro: int | None = None):
         self.id = id
         self.title = title
         self.artist = artist
@@ -411,8 +401,8 @@ class Song:
         self.sources = sources
         self.recap_start = format_seconds(recap_start) if recap_start is not None else None
         self.recap_end = format_seconds(recap_end) if recap_end is not None else None
-        self.title_lang = get_language(title_lang) if title_lang else Language()
-        self.native_lang = get_language(native_lang) if native_lang else Language()
+        self.title_lang = get_language(title_lang) if title_lang else None
+        self.native_lang = get_language(native_lang) if native_lang else None
         if show_id is not None and ro is not None:
             self.vote_data = get_votes_for_song(self.id, show_id, ro)
         elif ro is not None:
@@ -449,7 +439,7 @@ class Song:
             'vote_data': self.vote_data.as_dict() if self.vote_data else None
         }
 
-    def get_pt(self, points: int) -> Optional[int]:
+    def get_pt(self, points: int) -> int | None:
         if self.vote_data is None:
             return None
         return self.vote_data.get_pt(points)
@@ -457,12 +447,12 @@ class Song:
 @total_ordering
 @dataclass
 class Show:
-    year: Optional[int]
+    year: int | None
     short_name: str
     name: str
     date: datetime.date
 
-    def __init__(self, *, year: Optional[int], short_name: str, name: str, date: datetime.date):
+    def __init__(self, *, year: int | None, short_name: str, name: str, date: datetime.date):
         self.year = year
         self.short_name = short_name
         self.name = name
@@ -525,7 +515,7 @@ def parse_timedelta(td: str) -> datetime.timedelta:
 def dt_now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
-def get_show_id(show: str, year: Optional[int] = None) -> Optional[ShowData]:
+def get_show_id(show: str, year: int | None = None) -> ShowData | None:
     if year:
         short_show_name = show
     else:
@@ -747,7 +737,7 @@ def parse_seconds(td: str | None) -> int | None:
     else:
         raise ValueError("Invalid time format. Use 'MM:SS'.")
 
-def get_language(lang_id: int) -> Optional[Language]:
+def get_language(lang_id: int) -> Language | None:
     db = get_db()
     cursor = db.cursor()
 
@@ -775,7 +765,7 @@ def get_song_languages(song_id: int) -> list[Language]:
 
     return languages
 
-def get_show_songs(year: Optional[int], short_name: str, *, select_languages=False, select_votes=False, sort_reveal = False) -> Optional[list[Song]]:
+def get_show_songs(year: int | None, short_name: str, *, select_languages=False, select_votes=False, sort_reveal = False) -> list[Song] | None:
     db = get_db()
     cursor = db.cursor()
     data = get_show_id(short_name, year)
@@ -840,7 +830,7 @@ def get_show_songs(year: Optional[int], short_name: str, *, select_languages=Fal
 
     return songs
 
-def get_show_winner(year: Optional[int], show: str) -> Optional[Song]:
+def get_show_winner(year: int | None, show: str) -> Song | None:
     songs = get_show_songs(year, show, select_votes=True)
     if not songs:
         return None
@@ -851,7 +841,7 @@ def get_show_winner(year: Optional[int], show: str) -> Optional[Song]:
 
     return winner
 
-def get_year_winner(year: int) -> Optional[Song]:
+def get_year_winner(year: int) -> Song | None:
     db = get_db()
     cursor = db.cursor()
 
@@ -866,7 +856,7 @@ def get_year_winner(year: int) -> Optional[Song]:
 
     return get_show_winner(year, 'f')
 
-def get_special_winner(show: str) -> Optional[Song]:
+def get_special_winner(show: str) -> Song | None:
     return get_show_winner(None, show)
 
 def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
@@ -920,7 +910,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
 
     return songs
 
-def get_user_songs(user_id: int, year: Optional[int] = None, *, select_languages = False) -> list[Song]:
+def get_user_songs(user_id: int, year: int | None = None, *, select_languages = False) -> list[Song]:
     db = get_db()
     cursor = db.cursor()
 

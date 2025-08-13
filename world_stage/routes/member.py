@@ -188,7 +188,7 @@ class SongRepository:
     def find_song(self, year: int, country: str) -> dict | None:
         """Find existing song by year and country"""
         self.cursor.execute('''
-            SELECT id, title, native_title, artist, is_placeholder,
+            SELECT title, native_title, artist, is_placeholder,
                    title_language_id, native_language_id, video_link,
                    snippet_start, snippet_end, translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
@@ -353,12 +353,12 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
 
     closed = year_result['closed']
 
-    cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND is_placeholder = 0', (year,))
+    cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder', (year,))
     year_count = cursor.fetchone()['c'] # type: ignore
 
     cursor.execute('''
         SELECT COUNT(*) AS c FROM song
-        WHERE submitter_id = %s AND year_id = %s AND is_placeholder = 0
+        WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder
     ''', (user_id, year))
     user_count = cursor.fetchone()['c'] # type: ignore
 

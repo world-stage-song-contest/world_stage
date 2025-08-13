@@ -2,7 +2,7 @@ from collections import defaultdict
 from pathlib import Path
 import subprocess
 import psycopg
-from flask import Blueprint, current_app, redirect, request, url_for
+from flask import Blueprint, Response, current_app, redirect, request, url_for
 import math
 import datetime
 import csv, io
@@ -429,14 +429,6 @@ def manage_show_post(year: int, show: str):
 
     return {'status': 'success'}, 200
 
-@bp.get('/fuckupdb')
-def fuckup_db():
-    resp = verify_user()
-    if resp:
-        return resp
-
-    return render_template('admin/fuckupdb.html')
-
 @bp.post('/fuckupdb')
 def fuckup_db_post():
     resp = verify_user()
@@ -446,28 +438,43 @@ def fuckup_db_post():
     db = get_db()
     cursor = db.cursor()
 
-    body = request.get_json()
-    if not body:
-        return render_template('error.html', error="Empty request body"), 400
-
-    query = body.get('query')
+    query = request.form.get('query')
     if not query:
-        return render_template('error.html', error="No query provided"), 400
+        return render_template('admin/fuckupdb.html', error="No query provided"), 400
 
     subprocess.run(os.environ["BACKUP_SCRIPT"])
 
-    cursor.execute("SET ROLE dml_only_role")
     try:
-        cursor.execute(query)
+        cursor.execute("SET ROLE dml_only_role")
+        cursor.execute(query) # type: ignore
         db.commit()
-    except Exception as e:
+        rows = cursor.fetchall()
+        headers = [description[0] for description in cursor.description] if cursor.description else []
+    except psycopg.Error as e:
+        return render_template('admin/fuckupdb.html', error=f"Query failed: {str(e)}", query=query), 400
+    finally:
         cursor.execute("RESET ROLE")
-        return render_template('error.html', error=f"Query failed: {str(e)}"), 400
 
-    rows = cursor.fetchall()
-    headers = [description[0] for description in cursor.description] if cursor.description else []
 
-    return {'headers': headers, 'rows': rows}, 200
+    kind = request.form.get('kind')
+    if kind == 'csv':
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=headers)
+        writer.writeheader()
+        writer.writerows(rows)
+
+        filename = datetime.datetime.now(tz=datetime.UTC).strftime("query_%Y%m%dT%H%M%SZ.csv")
+
+        response = Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+        return response
+    elif kind == 'html':
+        return render_template('admin/fuckupdb.html', rows=rows, headers=headers, query=query)
+    else:
+        return render_template('admin/fuckupdb.html', error=f"Unknown filetype: {kind}"), 400
 
 @bp.get('/users')
 def users():
