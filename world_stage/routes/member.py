@@ -1,210 +1,432 @@
 from dataclasses import dataclass
 import unicodedata
 from flask import Blueprint, redirect, request, url_for
-from typing import Any, Optional
+from typing import Any, Optional, NamedTuple
 
 from ..db import get_db
-from ..utils import get_user_id_from_session, format_seconds, get_user_permissions, get_user_role_from_session, get_years, parse_seconds, render_template
+from ..utils import (
+    get_user_id_from_session, format_seconds, get_user_permissions,
+    get_user_role_from_session, get_years, parse_seconds, render_template
+)
 
 bp = Blueprint('member', __name__, url_prefix='/member')
+
+# Constants
+ENGLISH_LANG_ID = 20
+MAX_SNIPPET_DURATION = 20
+MAX_USER_SUBMISSIONS = 2
+MAX_YEAR_SUBMISSIONS = 73
+
+class ValidationError(Exception):
+    """Raised when form validation fails"""
+    pass
+
+class Result(NamedTuple):
+    success: bool
+    message: str
+    error: str | None = None
 
 @dataclass
 class SongData:
     year: int
     country: str
     title: str
-    native_title: Optional[str]
+    native_title: str | None
     artist: str
     is_placeholder: bool
-    title_language_id: Optional[int]
-    native_language_id: Optional[int]
-    video_link: Optional[str]
-    snippet_start: Optional[str]
-    snippet_end: Optional[str]
-    translated_lyrics: Optional[str]
-    romanized_lyrics: Optional[str]
-    native_lyrics: Optional[str]
-    notes: Optional[str]
+    title_language_id: int | None
+    native_language_id: int | None
+    video_link: str | None
+    snippet_start: str | None
+    snippet_end: str | None
+    english_lyrics: str | None
+    romanized_lyrics: str | None
+    native_lyrics: str | None
+    notes: str | None
     languages: list[dict]
-    is_translation: bool
-    does_match: bool
     sources: str
     admin_approved: bool
-    user_id: Optional[int] = None
+    user_id: int | None = None
 
-    def __init__(self, *, year: int, country: str, title: str,
-                 native_title: Optional[str], artist: str,
-                 is_placeholder: bool, title_language_id: Optional[int],
-                 native_language_id: Optional[int], video_link: Optional[str],
-                 snippet_start: Optional[str], snippet_end: Optional[str],
-                 translated_lyrics: Optional[str], romanized_lyrics: Optional[str],
-                 native_lyrics: Optional[str], languages: list[dict], notes: Optional[str],
-                 sources: str, admin_approved: bool = False,
-                 user_id: Optional[int] = None):
-        self.year = year
-        self.country = country
-        self.title = title
-        self.native_title = native_title
-        self.artist = artist
-        self.is_placeholder = is_placeholder
-        self.title_language_id = title_language_id
-        self.native_language_id = native_language_id
-        self.video_link = video_link
-        self.snippet_start = snippet_start
-        self.snippet_end = snippet_end
-        self.translated_lyrics = translated_lyrics
-        self.romanized_lyrics = romanized_lyrics
-        self.native_lyrics = native_lyrics
-        self.languages = languages
-        print(languages)
-        if languages and isinstance(languages[0], dict):
-            first_language_id = languages[0]['id']
-            self.is_translation = first_language_id != title_language_id
-            self.does_match = first_language_id == native_language_id
-        self.notes = notes
-        self.user_id = user_id
-        self.sources = sources
-        self.admin_approved = admin_approved
+    def __post_init__(self):
+        """Calculate derived fields after initialization"""
+        if self.languages and isinstance(self.languages[0], dict):
+            first_language_id = self.languages[0]['id']
+            self.is_translation = first_language_id != self.title_language_id
+            self.does_match = first_language_id == self.native_language_id
 
-    def as_dict(self) -> dict:
-        res = {}
-        for attr in self.__dict__:
-                res[attr] = getattr(self, attr)
-        return res
+    def as_dict(self) -> dict[str, Any]:
+        return {attr: getattr(self, attr) for attr in self.__dict__}
 
-def delete_song(year: int, country: str, artist: str, title: str, user_id: int | None) -> dict[str, Any]:
+@dataclass
+class FormData:
+    year: int
+    country: str
+    title: str | None
+    native_title: str | None
+    artist: str | None
+    is_placeholder: bool
+    title_language_id: int | None
+    native_language_id: int | None
+    video_link: str | None
+    snippet_start: str | None
+    snippet_end: str | None
+    english_lyrics: str | None
+    romanized_lyrics: str | None
+    native_lyrics: str | None
+    notes: str | None
+    sources: str | None
+    admin_approved: bool
+    languages: list[int]
+    is_translation: bool
+    does_match: bool
+
+    @classmethod
+    def from_request(cls, form: dict[str, str]) -> tuple['FormData', list[str]]:
+        """Parse form data and return (data, validation_errors)"""
+        errors = []
+
+        # Parse languages
+        languages = []
+        invalid_languages = []
+        for key, value in form.items():
+            if key.startswith('language'):
+                try:
+                    n = int(key.removeprefix('language'))
+                    languages.append((n, int(value)))
+                except ValueError:
+                    invalid_languages.append(key)
+
+        languages.sort(key=lambda x: x[0])
+        language_ids = [x[1] for x in languages]
+
+        if not language_ids:
+            errors.append('At least one language must be selected')
+
+        # Parse boolean fields
+        boolean_data = {
+            'is_placeholder': form.get('is_placeholder', 'off') == 'on',
+            'admin_approved': form.get('admin_approved', 'off') == 'on',
+            'is_translation': form.get('is_translation', 'off') == 'on',
+            'does_match': form.get('does_match', 'off') == 'on',
+        }
+
+        # Parse and normalize text fields
+        text_data = {}
+        for key in ['title', 'native_title', 'artist', 'video_link',
+                   'snippet_start', 'snippet_end', 'english_lyrics',
+                   'romanized_lyrics', 'native_lyrics', 'notes', 'sources']:
+            value = form.get(key, '').strip()
+            value = unicodedata.normalize('NFC', value)
+            value = value.replace('\r', '')
+            text_data[key] = None if value == '' else value
+
+        # Parse numeric fields
+        try:
+            year = int(form.get('year', 0))
+            country = form.get('country', 'XXX')
+        except ValueError:
+            errors.append('Invalid year format')
+            year = 0
+            country = 'XXX'
+
+        # Determine language IDs based on logic
+        native_language_id = None
+        title_language_id = None
+
+        if language_ids:
+            if boolean_data['does_match'] or not text_data.get('native_title'):
+                native_language_id = language_ids[0]
+
+            if boolean_data['is_translation']:
+                title_language_id = ENGLISH_LANG_ID
+            else:
+                title_language_id = native_language_id
+
+        return cls(
+            year=year,
+            country=country,
+            languages=language_ids,
+            title_language_id=title_language_id,
+            native_language_id=native_language_id,
+            **text_data, # type: ignore
+            **boolean_data # type: ignore
+        ), errors
+
+class SongValidator:
+    REQUIRED_FIELDS = {
+        'artist': "Artist",
+        'title': "Latin title",
+        'sources': "Sources",
+    }
+
+    def validate_submission(self, data: FormData, user_permissions) -> list[str]:
+        """Validate form data for submission"""
+        errors = []
+
+        # Required field validation
+        for field, display_name in self.REQUIRED_FIELDS.items():
+            if not getattr(data, field):
+                errors.append(f"Missing required field: {display_name}")
+
+        # Snippet duration validation
+        if data.snippet_start and data.snippet_end:
+            start_seconds = parse_seconds(data.snippet_start)
+            end_seconds = parse_seconds(data.snippet_end)
+            if start_seconds is not None and end_seconds is not None:
+                duration = end_seconds - start_seconds
+                if duration > MAX_SNIPPET_DURATION:
+                    errors.append(f"Snippet duration ({duration}s) exceeds maximum ({MAX_SNIPPET_DURATION}s)")
+
+        return errors
+
+class SongRepository:
+    def __init__(self):
+        self.db = get_db()
+        self.cursor = self.db.cursor()
+
+    def find_song(self, year: int, country: str) -> dict | None:
+        """Find existing song by year and country"""
+        self.cursor.execute('''
+            SELECT id, title, native_title, artist, is_placeholder,
+                   title_language_id, native_language_id, video_link,
+                   snippet_start, snippet_end, translated_lyrics,
+                   romanized_lyrics, native_lyrics, notes, submitter_id,
+                   sources, admin_approved
+            FROM song
+            WHERE year_id = %s AND country_id = %s
+        ''', (year, country))
+        return self.cursor.fetchone()
+
+    def get_song_languages(self, song_id: int) -> list[dict]:
+        """Get languages for a song"""
+        self.cursor.execute('''
+            SELECT language.id, name FROM song_language
+            JOIN language ON song_language.language_id = language.id
+            WHERE song_id = %s
+            ORDER BY priority
+        ''', (song_id,))
+        return [{'id': row['id'], 'name': row['name']} for row in self.cursor.fetchall()]
+
+    def can_delete_song(self, year: int, country: str) -> tuple[bool, str | None, int | None]:
+        """Check if song can be deleted, return (can_delete, error_msg, submitter_id)"""
+        self.cursor.execute('''
+            SELECT song.id, submitter_id, closed FROM song
+            JOIN year ON song.year_id = year.id
+            WHERE year_id = %s AND country_id = %s
+        ''', (year, country))
+
+        result = self.cursor.fetchone()
+        if not result:
+            return False, 'Song not found', None
+
+        if result['closed'] != 0:
+            return False, "Can't delete a song for a current/past year", None
+
+        return True, None, result['submitter_id']
+
+    def delete_song(self, year: int, country: str) -> bool:
+        """Delete song and associated data"""
+        # Get song ID first
+        self.cursor.execute('''
+            SELECT id FROM song
+            WHERE year_id = %s AND country_id = %s
+        ''', (year, country))
+
+        result = self.cursor.fetchone()
+        if not result:
+            return False
+
+        song_id = result['id']
+
+        # Delete in correct order (foreign key constraints)
+        self.cursor.execute('DELETE FROM song_language WHERE song_id = %s', (song_id,))
+        self.cursor.execute('DELETE FROM song WHERE id = %s', (song_id,))
+
+        self.db.commit()
+        return True
+
+    def upsert_song(self, data: FormData, user_id: int | None) -> int:
+        """Insert or update song, return song_id"""
+        existing_song = self.find_song(data.year, data.country)
+
+        if existing_song:
+            song_id = existing_song['id']
+            self.cursor.execute('''
+                UPDATE song
+                SET title = %s, native_title = %s, artist = %s, is_placeholder = %s,
+                    title_language_id = %s, native_language_id = %s, video_link = %s,
+                    snippet_start = %s, snippet_end = %s, translated_lyrics = %s,
+                    romanized_lyrics = %s, native_lyrics = %s, submitter_id = %s,
+                    notes = %s, sources = %s, admin_approved = %s,
+                    modified_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (
+                data.title, data.native_title, data.artist, data.is_placeholder,
+                data.title_language_id, data.native_language_id, data.video_link,
+                parse_seconds(data.snippet_start), parse_seconds(data.snippet_end),
+                data.english_lyrics, data.romanized_lyrics, data.native_lyrics,
+                user_id, data.notes, data.sources, data.admin_approved, song_id
+            ))
+        else:
+            self.cursor.execute('''
+                INSERT INTO song (
+                    year_id, country_id, title, native_title, artist, is_placeholder,
+                    title_language_id, native_language_id, video_link,
+                    snippet_start, snippet_end, translated_lyrics,
+                    romanized_lyrics, native_lyrics, submitter_id,
+                    notes, sources, admin_approved, modified_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                RETURNING id
+            ''', (
+                data.year, data.country, data.title, data.native_title, data.artist,
+                data.is_placeholder, data.title_language_id, data.native_language_id,
+                data.video_link, parse_seconds(data.snippet_start), parse_seconds(data.snippet_end),
+                data.english_lyrics, data.romanized_lyrics, data.native_lyrics,
+                user_id, data.notes, data.sources, data.admin_approved
+            ))
+            song_id = self.cursor.fetchone()['id'] # type: ignore
+
+        # Update languages
+        self.cursor.execute('DELETE FROM song_language WHERE song_id = %s', (song_id,))
+        for i, lang_id in enumerate(data.languages):
+            self.cursor.execute('''
+                INSERT INTO song_language (song_id, language_id, priority)
+                VALUES (%s, %s, %s)
+            ''', (song_id, lang_id, i))
+
+        self.db.commit()
+        return song_id
+
+class SongService:
+    def __init__(self):
+        self.repo = SongRepository()
+        self.validator = SongValidator()
+
+    def delete_song(self, year: int, country: str, artist: str, title: str, user_id: int | None) -> Result:
+        """Delete song with permission checking"""
+        can_delete, error_msg, submitter_id = self.repo.can_delete_song(year, country)
+
+        if not can_delete:
+            return Result(False, "", error_msg)
+
+        permissions = get_user_permissions(user_id)
+        if not permissions.can_edit and submitter_id != user_id:
+            return Result(False, "", "You are not the submitter")
+
+        success = self.repo.delete_song(year, country)
+        if success:
+            return Result(True, f'The song "{artist} — {title}" has been deleted from {year}')
+        else:
+            return Result(False, "", "Failed to delete song")
+
+    def submit_song(self, data: FormData, user_id: int | None) -> Result:
+        """Submit song with validation"""
+        permissions = get_user_permissions(user_id)
+        validation_errors = self.validator.validate_submission(data, permissions)
+
+        if validation_errors:
+            return Result(False, "", "; ".join(validation_errors))
+
+        try:
+            song_id = self.repo.upsert_song(data, user_id)
+            return Result(True, f'The song "{data.artist} — {data.title}" has been submitted for {data.year}')
+        except Exception as e:
+            return Result(False, "", f"Database error: {str(e)}")
+
+def get_languages() -> list[dict]:
+    """Get all available languages"""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT id, name FROM language ORDER BY name')
+    return cursor.fetchall()
+
+def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str, list[dict]]:
+    """Get countries available for submission"""
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
-        SELECT song.id AS song_id, submitter_id, closed FROM song
-        JOIN year ON song.year_id = year.id
-        WHERE year_id = %s AND country_id = %s
-    ''', (year, country))
-    song_id = cursor.fetchone()
-    if not song_id:
-        return {'error': 'Song not found.'}
-    submitter_id = song_id['submitter_id']
-    closed = song_id['closed']
-    song_id = song_id['song_id']
+    cursor.execute('SELECT closed FROM year WHERE id = %s', (year,))
+    year_result = cursor.fetchone()
+    if not year_result:
+        return {'own': [], 'placeholder': []}
 
-    if closed != 0:
-        return {'error': "Can't delete a song for a current/past year"}
+    closed = year_result['closed']
 
-    permissions = get_user_permissions(user_id)
-
-    if not permissions.can_edit and submitter_id != user_id:
-        return {'error': 'You are not the submitter.'}
+    cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND is_placeholder = 0', (year,))
+    year_count = cursor.fetchone()['c'] # type: ignore
 
     cursor.execute('''
-        DELETE FROM song_language
-        WHERE song_id = %s
-        ''', (song_id,))
+        SELECT COUNT(*) AS c FROM song
+        WHERE submitter_id = %s AND year_id = %s AND is_placeholder = 0
+    ''', (user_id, year))
+    user_count = cursor.fetchone()['c'] # type: ignore
 
+    countries: dict[str, list[dict[str, Any]]] = {'own': [], 'placeholder': []}
+
+    # Get user's own submissions
     cursor.execute('''
-        DELETE FROM song WHERE id = %s
-    ''', (song_id,))
+        SELECT country.name, country.id AS cc FROM song
+        JOIN country ON song.country_id = country.id
+        WHERE song.year_id = %s AND song.submitter_id = %s
+        ORDER BY country.name
+    ''', (year, user_id))
+    countries['own'] = cursor.fetchall()
 
-    db.commit()
+    # Get available placeholder countries
+    if all:
+        if closed:
+            cursor.execute('''
+                SELECT country.name, country.id AS cc FROM song
+                JOIN country ON song.country_id = country.id
+                WHERE song.year_id = %s AND submitter_id <> %s
+                ORDER BY country.name
+            ''', (year, user_id))
+        else:
+            cursor.execute('''
+                SELECT name, id AS cc FROM country
+                WHERE available_from <= %(year)s AND available_until >= %(year)s
+                      AND is_participating = 1
+                      AND id NOT IN (
+                          SELECT country_id FROM song
+                          WHERE year_id = %(year)s AND submitter_id = %(user)s
+                      )
+                ORDER BY name
+            ''', {'year': year, 'user': user_id})
+        countries['placeholder'] = cursor.fetchall()
+    elif user_count < MAX_USER_SUBMISSIONS and not closed and year_count < MAX_YEAR_SUBMISSIONS:
+        cursor.execute('''
+            SELECT name, id AS cc FROM country
+            WHERE available_from <= %(year)s AND available_until >= %(year)s
+                  AND is_participating = 1
+                  AND id NOT IN (
+                      SELECT country_id FROM song
+                      WHERE year_id = %(year)s AND (is_placeholder OR submitter_id = %(user)s)
+                  )
+            ORDER BY name
+        ''', {'year': year, 'user': user_id})
+        countries['placeholder'] = cursor.fetchall()
 
-    return {'success': True, 'message': f"The song \"{artist} — {title}\" has been deleted from {year}"}
+    return countries
 
-def update_song(song_data: SongData, user_id: int | None, set_claim: bool) -> dict[str, Any]:
+def get_users() -> list[dict]:
+    """Get all users for admin dropdown"""
     db = get_db()
     cursor = db.cursor()
+    cursor.execute('SELECT id, username FROM account ORDER BY username')
+    return cursor.fetchall()
 
-    cursor.execute('''
-        SELECT id FROM song
-        WHERE year_id = %s AND country_id = %s
-    ''', (song_data.year, song_data.country))
-    song_id = cursor.fetchone()
-    if song_id:
-        song_id = song_id['id']
+def parse_user_assignment(form_data: dict, permissions, default_user_id: int) -> tuple[int | None, bool]:
+    """Parse user assignment from form, return (user_id, set_claim)"""
+    force_submitter = form_data.get('force_submitter')
+    if force_submitter and permissions.can_edit:
+        if force_submitter == 'none':
+            return None, True
+        else:
+            return int(force_submitter.strip()), True
+    return default_user_id, False
 
-    if set_claim:
-        new_id = user_id
-    else:
-        new_id = song_data.user_id or user_id
-
-    if song_id:
-        cursor.execute('''
-            UPDATE song
-            SET title = %s, native_title = %s, artist = %s,
-                is_placeholder = %s,
-                title_language_id = %s, native_language_id = %s,
-                video_link = %s, snippet_start = %s, snippet_end = %s,
-                translated_lyrics = %s, romanized_lyrics = %s, native_lyrics = %s,
-                submitter_id = %s, notes = %s, sources = %s,
-                admin_approved = %s,
-                modified_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-        ''', (
-            song_data.title,
-            song_data.native_title,
-            song_data.artist,
-            song_data.is_placeholder,
-            song_data.title_language_id,
-            song_data.native_language_id,
-            song_data.video_link,
-            song_data.snippet_start,
-            song_data.snippet_end,
-            song_data.translated_lyrics,
-            song_data.romanized_lyrics,
-            song_data.native_lyrics,
-            new_id,
-            song_data.notes,
-            song_data.sources,
-            song_data.admin_approved,
-            song_id
-        ))
-    else:
-        cursor.execute('''
-            INSERT INTO song (
-            year_id, country_id,
-            title, native_title, artist, is_placeholder,
-            title_language_id, native_language_id, video_link,
-            snippet_start, snippet_end, translated_lyrics,
-            romanized_lyrics, native_lyrics, submitter_id,
-            notes, sources, admin_approved, modified_at
-            ) VALUES (%s, COALESCE(%s, 'XXX'), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            RETURNING id
-        ''', (
-            song_data.year,
-            song_data.country,
-            song_data.title,
-            song_data.native_title,
-            song_data.artist,
-            song_data.is_placeholder,
-            song_data.title_language_id,
-            song_data.native_language_id,
-            song_data.video_link,
-            song_data.snippet_start,
-            song_data.snippet_end,
-            song_data.translated_lyrics,
-            song_data.romanized_lyrics,
-            song_data.native_lyrics,
-            song_data.user_id or user_id,
-            song_data.notes,
-            song_data.sources,
-            song_data.admin_approved
-        ))
-        song_id = cursor.fetchone()['id'] # type: ignore
-
-    cursor.execute('''
-        DELETE FROM song_language
-        WHERE song_id = %s
-        ''', (song_id,))
-
-    for i, lang_id in enumerate(song_data.languages):
-        cursor.execute('''
-            INSERT INTO song_language (song_id, language_id, priority)
-            VALUES (%s, %s, %s)
-        ''', (song_id, lang_id, i))
-
-    db.commit()
-
-    return {'success': True, 'message': f"The song \"{song_data.artist} — {song_data.title}\" has been submitted for {song_data.year}"}
-
+# Route handlers
 @bp.get('/')
 def index():
     session_id = request.cookies.get('session')
@@ -214,99 +436,19 @@ def index():
     db = get_db()
     cursor = db.cursor()
     cursor.execute('''
-        SELECT account.username, account.id
+        SELECT account.username
         FROM session
         JOIN account ON session.user_id = account.id
         WHERE session_id = %s
     ''', (session_id,))
 
-    username = cursor.fetchone()
-    if not username:
+    result = cursor.fetchone()
+    if not result:
         resp = redirect(url_for('session.login'))
         resp.delete_cookie('session')
         return resp
-    username = username['username']
 
-    return render_template('member/index.html', username=username)
-
-def get_languages() -> list[dict]:
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute('''
-        SELECT id, name FROM language
-        ORDER BY name
-    ''')
-    return cursor.fetchall()
-
-def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str, list[dict]]:
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute('SELECT closed FROM year WHERE id = %s', (year,))
-    closed = cursor.fetchone()['closed'] # type: ignore
-
-    cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND is_placeholder', (year,))
-    year_count = cursor.fetchone()['c'] # type: ignore
-
-    cursor.execute('''
-        SELECT COUNT(*) AS c FROM song
-        WHERE submitter_id = %s AND year_id = %s AND is_placeholder
-    ''', (user_id, year))
-    count = cursor.fetchone()['c'] # type: ignore
-
-    countries: dict[str, list] = {'own': [], 'placeholder': []}
-
-    cursor.execute('''
-        SELECT country.name, country.id AS cc FROM song
-        JOIN country ON song.country_id = country.id
-        WHERE song.year_id = %s AND song.submitter_id = %s
-        ORDER BY country.name
-    ''', (year, user_id))
-    for row in cursor.fetchall():
-        countries['own'].append(row)
-
-    if all:
-        if closed:
-            cursor.execute('''
-                SELECT country.name, country.id AS cc FROM song
-                JOIN country ON song.country_id = country.id
-                WHERE song.year_id = %s AND submitter_id <> %s
-                ORDER BY country.name
-            ''', (year,user_id))
-        else:
-            cursor.execute('''
-                SELECT name, id AS cc FROM country
-                WHERE available_from <= %(year)s AND available_until >= %(year)s AND is_participating = 1
-                           AND id NOT IN (
-                           SELECT country_id FROM song
-                           WHERE year_id = %(year)s AND submitter_id = %(user)s)
-                ORDER BY name
-            ''', {'year':year,'user':user_id})
-        for row in cursor.fetchall():
-            countries['placeholder'].append(row)
-    elif count < 2 and not closed and year_count < 73:
-        cursor.execute('''
-            SELECT name, id AS cc FROM country
-            WHERE available_from <= %(year)s AND available_until >= %(year)s
-                    AND is_participating = 1 AND id NOT IN (
-                SELECT country_id FROM song
-                WHERE year_id = %(year)s AND (is_placeholder OR submitter_id = %(user)s)
-            )
-            ORDER BY name
-        ''', {'year':year,'user':user_id})
-        for row in cursor.fetchall():
-            countries['placeholder'].append(row)
-
-    return countries
-
-def get_users():
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute('''
-        SELECT id, username FROM account
-        ORDER BY username
-    ''')
-    return cursor.fetchall()
+    return render_template('member/index.html', username=result['username'])
 
 @bp.get('/submit')
 def submit():
@@ -318,64 +460,38 @@ def submit():
     country = request.args.get('country')
     permissions = get_user_role_from_session(session_id)
 
-    users = get_users()
+    return render_template('member/submit.html',
+                         year=year, country=country, elevated=permissions.can_edit,
+                         years=get_years(), languages=get_languages(),
+                         countries={}, data={}, onLoad=True, users=get_users())
 
-    return render_template('member/submit.html', year=year, country=country, elevated=permissions.can_edit,
-                           years=get_years(), languages=get_languages(), countries={}, data={}, onLoad=True,
-                           users=users)
-
-@bp.get('/submit/<year>')
-def get_countries_for_year(year):
-    d = get_user_id_from_session(request.cookies.get('session'))
-    user_id = None
-    if d:
-        user_id = d[0]
-
+@bp.get('/submit/<int:year>')
+def get_countries_for_year(year: int):
+    session_data = get_user_id_from_session(request.cookies.get('session'))
+    user_id = session_data[0] if session_data else None
     permissions = get_user_permissions(user_id)
     countries = get_countries(year, user_id, all=permissions.can_edit)
-
     return {'countries': countries}
 
-@bp.get('/submit/<year>/<country>')
+@bp.get('/submit/<int:year>/<country>')
 def get_country_data(year: int, country: str):
-    session_id = request.cookies.get('session')
-    d = get_user_id_from_session(session_id)
-    user_id = None
-    if d:
-        user_id = d[0]
+    session_data = get_user_id_from_session(request.cookies.get('session'))
+    user_id = session_data[0] if session_data else None
 
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute('''
-        SELECT id, title, native_title, artist, is_placeholder,
-                   title_language_id, native_language_id,
-                   video_link, snippet_start, snippet_end,
-                   translated_lyrics, romanized_lyrics, native_lyrics,
-                   notes, submitter_id, sources, admin_approved
-        FROM song
-        WHERE year_id = %s AND country_id = %s
-    ''', (year, country))
-    song = cursor.fetchone()
+    repo = SongRepository()
+    song = repo.find_song(year, country)
     if not song:
         return {'error': 'Song not found'}, 404
 
-    submitter_id: int = song.pop('submitter_id') or 0
-    song_id = song.pop('id')
+    submitter_id = song.pop('submitter_id') or 0
     is_placeholder = song.pop('is_placeholder')
-    snippet_start = song.pop('snippet_start')
-    snippet_end = song.pop('snippet_end')
 
-    snippet_start = format_seconds(snippet_start) if snippet_start is not None else None
-    snippet_end = format_seconds(snippet_end) if snippet_end is not None else None
+    # Format time fields
+    snippet_start = format_seconds(song.pop('snippet_start')) if song.get('snippet_start') else None
+    snippet_end = format_seconds(song.pop('snippet_end')) if song.get('snippet_end') else None
 
-    cursor.execute('''
-        SELECT language.id, name FROM song_language
-        JOIN language ON song_language.language_id = language.id
-        WHERE song_id = %s
-        ORDER BY priority
-    ''', (song_id,))
-    languages = cursor.fetchall()
+    # Get languages
+    languages = repo.get_song_languages(song['id'])
 
     song_data = SongData(
         year=year,
@@ -390,129 +506,65 @@ def get_country_data(year: int, country: str):
 
     return song_data.as_dict()
 
-required_fields = {
-    'artist': "Artist",
-    'title': "Latin title",
-    "sources": "Sources",
-}
-
-boolean_fields = [
-    "admin_approved",
-    "is_placeholder",
-]
-
 @bp.post('/submit')
 def submit_song_post():
     session_id = request.cookies.get('session')
     if not session_id:
         return redirect(url_for('session.login'))
-    user_id_raw = get_user_id_from_session(session_id)
-    if not user_id_raw:
+
+    user_data = get_user_id_from_session(session_id)
+    if not user_data:
         return redirect(url_for('session.login'))
 
-    permissions = get_user_permissions(user_id_raw[0])
+    default_user_id = user_data[0]
+    permissions = get_user_permissions(default_user_id)
 
-    force_submitter = request.form.get('force_submitter', None)
-    if force_submitter and permissions.can_edit:
-        if force_submitter == 'none':
-            user_id = None
-        else:
-            user_id = int(force_submitter.strip())
-        set_claim = True
-    else:
-        user_id = user_id_raw[0]
-        set_claim = False
+    # Parse form data
+    form_data, parse_errors = FormData.from_request(request.form)
+    if parse_errors:
+        return render_error_template(form_data, parse_errors[0], [])
 
-    res = {}
-    languages = []
-    invalid_languages = []
-    other_data = {}
-    for key in boolean_fields:
-        other_data[key] = request.form.get(key, 'off') == "on"
+    # Handle user assignment
+    user_id, set_claim = parse_user_assignment(request.form.to_dict(), permissions, default_user_id)
+
     action = request.form['action']
-    for key, value in request.form.items():
-        if key == 'action' or key == 'force_submitter':
-            continue
+    service = SongService()
 
-        if key in boolean_fields:
-            continue
-
-        if key.startswith('language'):
-            n = int(key.removeprefix('language'))
-            try:
-                languages.append((n, int(value)))
-            except ValueError:
-                invalid_languages.append(key)
-        else:
-            other_data[key] = value.strip()
-            other_data[key] = unicodedata.normalize('NFC', other_data[key])
-            other_data[key] = other_data[key].replace('\r', '')
-            other_data[key] = None if other_data[key] == '' else other_data[key]
-
-    other_data["country"] = request.form.get('country', 'XXX')
-    other_data["year"] = int(request.form.get('year', 0))
-
-    languages.sort(key=lambda x: x[0])
-    languages = list(map(lambda x: x[1], languages))
-
-    is_translation = other_data.pop('is_translation', False) == "on"
-    does_match = other_data.pop('does_match', False) == "on"
-
-    if not languages:
-        res = {'error': 'At least one language must be selected.'}
-    else:
-        if languages and (does_match or not other_data.get('native_title', None)):
-            other_data['native_language_id'] = languages[0]
-
-        if is_translation:
-            other_data['title_language_id'] = 20 # English
-        else:
-            other_data['title_language_id'] = other_data.get('native_language_id')
-
-    missing_fields = []
-    missing_fields_internal = []
-    if action == 'submit':
-        for field in required_fields.keys():
-            if field not in other_data or other_data[field] is None:
-                missing_fields.append(required_fields[field])
-                missing_fields_internal.append(field)
-
-    if missing_fields:
-        return render_template('member/submit.html', years=get_years(), data=other_data,
-                               languages=get_languages(), countries=get_countries(other_data['year'], user_id),
-                               year=other_data['year'], country=other_data['country'],
-                               selected_languages=languages, invalid_languages=invalid_languages,
-                               error='Missing required fields: ' + ', '.join(missing_fields),
-                               missing_fields=missing_fields_internal, onLoad=False)
-
-    other_data['snippet_start'] = parse_seconds(other_data['snippet_start'])
-    other_data['snippet_end'] = parse_seconds(other_data['snippet_end'])
-
-    song_data = None
-    if action == 'submit':
-        song_data = SongData(languages=languages, **other_data)
-
-    dur = None
-    if other_data['snippet_end'] is not None and other_data['snippet_start'] is not None:
-        dur = other_data['snippet_end'] - other_data['snippet_start']
-
-    if dur is not None and dur > 20:
-        res = {'error': f"The maximum length of the recap snippet is 20 seconds. Yours is {dur} seconds long."}
-
-    if 'error' not in res:
+    try:
         if action == 'delete':
-            res = delete_song(other_data['year'], other_data['country'], other_data['title'], other_data['artist'], user_id)
-        elif action == 'submit' and song_data:
-            res = update_song(song_data, user_id, set_claim)
+            result = service.delete_song(form_data.year, form_data.country,
+                                       form_data.artist or "", form_data.title or "", user_id)
+        elif action == 'submit':
+            validation_errors = service.validator.validate_submission(form_data, permissions)
+            if validation_errors:
+                return render_error_template(form_data, validation_errors[0], [])
+
+            result = service.submit_song(form_data, user_id)
         else:
-            res = {'error': f"Unknown action: '{action}'."}
+            result = Result(False, "", f"Unknown action: '{action}'")
 
-    if 'error' in res:
-        return render_template('member/submit.html', years=get_years(), data=other_data,
-                               languages=get_languages(), countries=get_countries(other_data['year'], user_id),
-                               year=other_data['year'], country=other_data['country'],
-                               selected_languages=languages, invalid_languages=invalid_languages,
-                               error=res['error'], missing_fields=missing_fields_internal, onLoad=False,
-                               users=get_users())
+        if not result.success:
+            return render_error_template(form_data, result.error or "Unknown error", [])
 
-    return render_template('member/submit_success.html', message=res['message'])
+        return render_template('member/submit_success.html', message=result.message)
+
+    except Exception as e:
+        return render_error_template(form_data, f"System error: {str(e)}", [])
+
+def render_error_template(form_data: FormData, error: str, missing_fields: list[str]):
+    """Render error template with consistent data"""
+    user_data = get_user_id_from_session(request.cookies.get('session'))
+    user_id = user_data[0] if user_data else None
+
+    return render_template('member/submit.html',
+                         years=get_years(),
+                         data=form_data.__dict__,
+                         languages=get_languages(),
+                         countries=get_countries(form_data.year, user_id),
+                         year=form_data.year,
+                         country=form_data.country,
+                         selected_languages=form_data.languages,
+                         error=error,
+                         missing_fields=missing_fields,
+                         onLoad=False,
+                         users=get_users())

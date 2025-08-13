@@ -86,7 +86,7 @@ def year(year: str):
 
         songs = get_year_songs(_year, select_languages=True)
 
-        cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND is_placeholder', (_year,))
+        cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder', (_year,))
         total_entries = cursor.fetchone()['c'] # type: ignore
         total_placeholders = len(songs)-total_entries
         cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = %s', (year,))
