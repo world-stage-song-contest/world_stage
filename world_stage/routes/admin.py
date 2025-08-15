@@ -429,6 +429,14 @@ def manage_show_post(year: int, show: str):
 
     return {'status': 'success'}, 200
 
+@bp.get('/fuckupdb')
+def fuckup_db():
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    return render_template('admin/fuckupdb.html')
+
 @bp.post('/fuckupdb')
 def fuckup_db_post():
     resp = verify_user()

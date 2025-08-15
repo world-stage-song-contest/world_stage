@@ -319,12 +319,12 @@ class VoteData:
 
 @dataclass
 class Language:
-    name: str
-    tag: str
-    extlang: str | None
-    region: str | None
-    subvariant: str | None
-    suppress_script: str | None
+    name: str = ''
+    tag: str = ''
+    extlang: str | None = None
+    region: str | None = None
+    subvariant: str | None = None
+    suppress_script: str | None = None
 
     def str(self, script: str | None = None) -> str:
         components = [self.tag]
@@ -401,8 +401,8 @@ class Song:
         self.sources = sources
         self.recap_start = format_seconds(recap_start) if recap_start is not None else None
         self.recap_end = format_seconds(recap_end) if recap_end is not None else None
-        self.title_lang = get_language(title_lang) if title_lang else None
-        self.native_lang = get_language(native_lang) if native_lang else None
+        self.title_lang = get_language(title_lang) if title_lang else Language()
+        self.native_lang = get_language(native_lang) if native_lang else Language()
         if show_id is not None and ro is not None:
             self.vote_data = get_votes_for_song(self.id, show_id, ro)
         elif ro is not None:
@@ -718,24 +718,24 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
     return res
 
 def format_seconds(seconds: int) -> str:
-    """Format seconds into a string in the format MM:SS."""
+    """Format seconds into a string in the format M:SS."""
     if seconds is None:
-        return "00:00"
+        return "0:00"
     if seconds < 0:
-        return "00:00"
+        return "0:00"
     minutes = seconds // 60
     seconds %= 60
     return f"{minutes}:{seconds:02}"
 
 def parse_seconds(td: str | None) -> int | None:
-    """Parse a string in the format MM:SS into seconds."""
+    """Parse a string in the format M:SS into seconds."""
     if td is None:
         return None
     parts = list(map(int, td.split(':')))
     if len(parts) == 2:
         return parts[0] * 60 + parts[1]
     else:
-        raise ValueError("Invalid time format. Use 'MM:SS'.")
+        raise ValueError("Invalid time format. Use 'M:SS'.")
 
 def get_language(lang_id: int) -> Language | None:
     db = get_db()

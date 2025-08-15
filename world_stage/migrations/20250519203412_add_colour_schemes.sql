@@ -1,8 +1,0 @@
-BEGIN TRANSACTION;
-
-ALTER TABLE country ADD COLUMN bgr_colour TEXT;
-ALTER TABLE country ADD COLUMN fg1_colour TEXT;
-ALTER TABLE country ADD COLUMN fg2_colour TEXT;
-ALTER TABLE country ADD COLUMN txt_colour TEXT;
-
-COMMIT;

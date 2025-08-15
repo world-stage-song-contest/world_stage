@@ -39,7 +39,7 @@ class SongData:
     video_link: str | None
     snippet_start: str | None
     snippet_end: str | None
-    english_lyrics: str | None
+    translated_lyrics: str | None
     romanized_lyrics: str | None
     native_lyrics: str | None
     notes: str | None
@@ -71,7 +71,7 @@ class FormData:
     video_link: str | None
     snippet_start: str | None
     snippet_end: str | None
-    english_lyrics: str | None
+    translated_lyrics: str | None
     romanized_lyrics: str | None
     native_lyrics: str | None
     notes: str | None
@@ -114,7 +114,7 @@ class FormData:
         # Parse and normalize text fields
         text_data = {}
         for key in ['title', 'native_title', 'artist', 'video_link',
-                   'snippet_start', 'snippet_end', 'english_lyrics',
+                   'snippet_start', 'snippet_end', 'translated_lyrics',
                    'romanized_lyrics', 'native_lyrics', 'notes', 'sources']:
             value = form.get(key, '').strip()
             value = unicodedata.normalize('NFC', value)
@@ -185,10 +185,10 @@ class SongRepository:
         self.db = get_db()
         self.cursor = self.db.cursor()
 
-    def find_song(self, year: int, country: str) -> dict | None:
+    def find_song(self, year: int, country: str) -> tuple[int, dict] | None:
         """Find existing song by year and country"""
         self.cursor.execute('''
-            SELECT title, native_title, artist, is_placeholder,
+            SELECT id, title, native_title, artist, is_placeholder,
                    title_language_id, native_language_id, video_link,
                    snippet_start, snippet_end, translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
@@ -196,7 +196,11 @@ class SongRepository:
             FROM song
             WHERE year_id = %s AND country_id = %s
         ''', (year, country))
-        return self.cursor.fetchone()
+        song_data = self.cursor.fetchone()
+        if song_data:
+            return song_data.pop('id'), song_data
+        else:
+            return None
 
     def get_song_languages(self, song_id: int) -> list[dict]:
         """Get languages for a song"""
@@ -251,7 +255,7 @@ class SongRepository:
         existing_song = self.find_song(data.year, data.country)
 
         if existing_song:
-            song_id = existing_song['id']
+            song_id, _ = existing_song
             self.cursor.execute('''
                 UPDATE song
                 SET title = %s, native_title = %s, artist = %s, is_placeholder = %s,
@@ -265,7 +269,7 @@ class SongRepository:
                 data.title, data.native_title, data.artist, data.is_placeholder,
                 data.title_language_id, data.native_language_id, data.video_link,
                 parse_seconds(data.snippet_start), parse_seconds(data.snippet_end),
-                data.english_lyrics, data.romanized_lyrics, data.native_lyrics,
+                data.translated_lyrics, data.romanized_lyrics, data.native_lyrics,
                 user_id, data.notes, data.sources, data.admin_approved, song_id
             ))
         else:
@@ -282,7 +286,7 @@ class SongRepository:
                 data.year, data.country, data.title, data.native_title, data.artist,
                 data.is_placeholder, data.title_language_id, data.native_language_id,
                 data.video_link, parse_seconds(data.snippet_start), parse_seconds(data.snippet_end),
-                data.english_lyrics, data.romanized_lyrics, data.native_lyrics,
+                data.translated_lyrics, data.romanized_lyrics, data.native_lyrics,
                 user_id, data.notes, data.sources, data.admin_approved
             ))
             song_id = self.cursor.fetchone()['id'] # type: ignore
@@ -479,19 +483,21 @@ def get_country_data(year: int, country: str):
     user_id = session_data[0] if session_data else None
 
     repo = SongRepository()
-    song = repo.find_song(year, country)
-    if not song:
+    song_info = repo.find_song(year, country)
+    if not song_info:
         return {'error': 'Song not found'}, 404
+
+    song_id, song = song_info
 
     submitter_id = song.pop('submitter_id') or 0
     is_placeholder = song.pop('is_placeholder')
 
     # Format time fields
-    snippet_start = format_seconds(song.pop('snippet_start')) if song.get('snippet_start') else None
-    snippet_end = format_seconds(song.pop('snippet_end')) if song.get('snippet_end') else None
+    snippet_start = format_seconds(song.pop('snippet_start'))
+    snippet_end = format_seconds(song.pop('snippet_end'))
 
     # Get languages
-    languages = repo.get_song_languages(song['id'])
+    languages = repo.get_song_languages(song_id)
 
     song_data = SongData(
         year=year,

@@ -77,15 +77,3 @@ li:target > div {
     white-space: pre-wrap;
     overflow-wrap: break-word;
 }
-
-.song-sources {
-    float: right;
-    margin-right: 1em;
-}
-
-.source-link {
-    width: 40ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-}

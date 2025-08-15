@@ -495,12 +495,6 @@ function drawShowsSingle() {
         submitterCounts.set(entry.submitter, (submitterCounts.get(entry.submitter) ?? 0) + 1);
     }
 
-    for (const [submitter, count] of submitterCounts) {
-        if (count > 1) {
-            throw new Error(`Submitter ${submitter} has ${count} entries in the same show`);
-        }
-    }
-
     show.entries = allEntries;
     setShowDraw(showName, show.entries, rng);
     shows = showData;

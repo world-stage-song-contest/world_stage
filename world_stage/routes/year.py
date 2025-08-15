@@ -409,7 +409,7 @@ def qualifiers_post(year: str, show: str):
         return {'error': "Reveal order not provided"}, 400
 
     for i, song_id in enumerate(final_order):
-        n = sf_number + (i + 1) / 100
+        n = sf_number * 100 + (i + 1)
         if sf_number == 9:
             add = 20
         else:
@@ -430,7 +430,7 @@ def qualifiers_post(year: str, show: str):
             return {'error': "Second chance order must be a list"}, 400
 
         for i, song_id in enumerate(second_chance_order):
-            n = sf_number + (i + 1) / 100
+            n = sf_number * 100 + (i + 1)
             cursor.execute('''
                 INSERT INTO song_show (song_id, show_id, running_order, qualifier_order)
                 VALUES (%(soid)s, %(shid)s, %(ro)s, %(qo)s)
