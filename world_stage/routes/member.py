@@ -377,15 +377,14 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     ''', (year, user_id))
     countries['own'] = cursor.fetchall()
 
-    # Get available placeholder countries
     if all:
         if closed:
             cursor.execute('''
                 SELECT country.name, country.id AS cc FROM song
                 JOIN country ON song.country_id = country.id
-                WHERE song.year_id = %s AND submitter_id <> %s
+                WHERE song.year_id = %(year)s AND submitter_id <> %(user)s
                 ORDER BY country.name
-            ''', (year, user_id))
+            ''', {'year': year, 'user': user_id})
         else:
             cursor.execute('''
                 SELECT name, id AS cc FROM country
@@ -405,7 +404,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
                   AND is_participating = 1
                   AND id NOT IN (
                       SELECT country_id FROM song
-                      WHERE year_id = %(year)s AND (is_placeholder OR submitter_id = %(user)s)
+                      WHERE year_id = %(year)s AND (submitter_id = %(user)s)
                   )
             ORDER BY name
         ''', {'year': year, 'user': user_id})

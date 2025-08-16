@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Optional
+from typing import Any, Optional
 from flask import make_response, request, Blueprint
 import datetime
 import unicodedata
@@ -101,7 +101,7 @@ def vote(show: str):
     country = ''
     country_id = ''
 
-    selected = {}
+    selected: dict[int, dict[str, Any]] = defaultdict(dict)
 
     show_data = get_show_id(show)
 
@@ -145,12 +145,17 @@ def vote(show: str):
 
     if vote_set_id:
         cursor.execute('''
-            SELECT song_id, score FROM vote
+            SELECT song_id, score, country.id AS cc FROM vote
             JOIN point ON vote.point_id = point.id
+            JOIN song ON vote.song_id = song.id
+            JOIN country ON song.country_id = country.id
             WHERE vote_set_id = %s
         ''', (vote_set_id,))
         for row in cursor.fetchall():
-            selected[row['score']] = row['song_id']
+            selected[row['score']]['sid'] = row['song_id']
+            selected[row['score']]['cc'] = row['cc']
+
+    print(selected)
 
     songs = get_show_songs(show_data.year, show_data.short_name)
 

@@ -18,6 +18,13 @@ fieldset.grid {
     align-items: center;
 }
 
+fieldset.grid-3 {
+    display: grid;
+    grid-template-columns: max-content max-content 1fr;
+    gap: 1rem;
+    align-items: center;
+}
+
 fieldset.nongrid {
     display: flex;
     flex-direction: column;

@@ -3,6 +3,7 @@
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/vote.css">
     <link rel="stylesheet" href="/static/css/forms.css">
+    <script src="/static/js/vote.js"></script>
 {% endblock %}
 {% block content %}
 
@@ -28,29 +29,50 @@
 </div>
 
 <form method="POST">
-    <fieldset class="grid">
+    <fieldset class="grid-3">
         <legend>User data</legend>
             <label class="req" title="Your submitter name. Doesn't change." for="username">Voter Name</label>
+            <div></div>
             <input type="text" name="username" value="{{ username or "" }}" maxlength="64" required>
             <label title="The name you want to be displayed on the scoreboard." for="nickname">Display Name</label>
+            <div></div>
             <input type="text" name="nickname" value="{{ nickname or "" }}" maxlength="64">
             <label class="req" title="The country to display on the scoreboard." for="country">Country</label>
-            <select name="country" id="country">
-                <option value="XXX">Select a country</option>
+            <div class="flag-container">
+                <img class="flag" id="display-flag"
+                     src="/flag/{{selected_country or 'XXX'}}.svg?s=30"
+                     height="30" width="45">
+            </div>
+            <select name="country" id="country"
+                    onchange="updateFlag(this)"
+                    data-flag="display-flag">
+                <option data-country="XXX" value="XXX">Select a country</option>
             {% for country in countries %}
-                <option value="{{ country.cc }}" {% if country.cc == selected_country %}selected{% endif %}>{{ country.name }}</option>
+                <option value="{{ country.cc }}" data-country="{{country.cc}}"
+                        {% if country.cc == selected_country %}selected{% endif %}>
+                    {{ country.name }}
+                </option>
             {% endfor %}
             </select>
         </fieldset>
-        <fieldset class="grid">
+        <fieldset class="grid-3">
             <legend>Songs</legend>
         {% for point in points %}
             {% set pl = loop %}
             <label for="pts-{{point}}" class="req">{{point}} points</label>
-            <select name="pts-{{point}}" id="pts-{{point}}" class="{% if point in invalid %}invalid{% else %}valid{% endif %}">
-                <option value=""></option>
+            <div class="flag-container">
+                <img class="flag" id="flag-{{point}}"
+                     src="/flag/{{selected[point]['cc'] or 'XXX'}}.svg?s=30"
+                     height="30" width="45">
+            </div>
+            <select name="pts-{{point}}" id="pts-{{point}}" data-flag="flag-{{point}}"
+                    class="{% if point in invalid %}invalid{% else %}valid{% endif %}"
+                    onchange="updateFlag(this)">
+                <option data-country="XXX" value=""></option>
             {% for song in songs %}
-                <option value="{{song.id}}" {% if (selected[point] == song.id) %}selected{% endif %}>
+                <option value="{{song.id}}"
+                        data-country="{{song.country.cc}}"
+                        {% if (selected[point]['sid'] == song.id) %}selected{% endif %}>
                     {{song.country.name}} ({{song.title}})
                 </option>
             {% endfor %}
