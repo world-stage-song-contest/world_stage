@@ -1306,7 +1306,12 @@ def make_entity_plugin(entities=None):
             "nbsp": "\u00A0",
             "shy": "\u00AD",
             "tab": "\t",
-            "amp": "&"
+            "amp": "&",
+            "ensp": " ",
+            "emsp": " ",
+            "ndash": "–",
+            "mdash": "—",
+            "ellip": "…"
         }
 
     def entity_plugin(md: MarkdownIt):

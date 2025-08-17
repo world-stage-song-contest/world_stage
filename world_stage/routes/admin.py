@@ -622,7 +622,7 @@ def recap_data():
     return render_template('admin/recap_data.html')
 
 @bp.post('/recapdata')
-def recap_data_post():
+def recap_data_post() -> Response | tuple[Response, int]:
     resp = verify_user()
     if resp:
         return render_template('error.html', error="Not an admin"), 401
@@ -634,11 +634,11 @@ def recap_data_post():
 
     shows: list[int] = list()
     for show in show_names:
-        year, short_name = show.split('-')
+        _year, short_name = show.split('-')
         try:
-            year = int(year)
+            year = int(_year)
         except ValueError:
-            return render_template('admin/recap_data.html', error=f"Invalid year '{year}' in show '{show}'"), 400
+            return render_template('admin/recap_data.html', error=f"Invalid year '{_year}' in show '{show}'"), 400
 
         if not short_name:
             return render_template('admin/recap_data.html', error=f"Invalid show name '{short_name}' in show '{show}'"), 400
