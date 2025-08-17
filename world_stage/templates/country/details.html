@@ -40,9 +40,9 @@
         <tr>
             <th>Title</th>
             <td><div class="song-title">
-                <span lang="{{song.title_lang.str('Latn')}}">{{ song.title or '' }}</span>
+                <span lang="{{song.title_lang.str('Latn', song.country.cc2)}}">{{ song.title or '' }}</span>
                 {% if song.native_title %}
-                <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
+                <bdi lang="{{song.title_lang.str(None, song.country.cc2)}}">{{ song.native_title }}</bdi>
                 {% endif %}
             </div></td>
         </tr>
@@ -87,7 +87,7 @@
     {% if latin_lyrics %}
         <h2 class="lyrics-item" style="--row: 1; --column: {{ column }};">Native lyrics (Latin alphabet)</h2>
         {% for line in latin_lyrics %}
-        <div class="lyrics-item line lat-line" lang="{{ song.native_lang.str("Latn") }}" style="--row: {{ loop.index + 1 }}; --column: {{ column }};">{{ line|safe }}</div>
+        <div class="lyrics-item line lat-line" lang="{{ song.native_lang.str("Latn", song.country.cc2) }}" style="--row: {{ loop.index + 1 }}; --column: {{ column }};">{{ line|safe }}</div>
         {% endfor %}
         {% set column = column + 1%}
     {% endif %}
@@ -95,7 +95,7 @@
     {% if native_lyrics %}
         <h2 class="lyrics-item" style="--row: 1; --column: {{ column }};">Native lyrics (non-Latin alphabet)</h2>
         {% for line in native_lyrics %}
-        <div class="lyrics-item line nat-line" lang="{{ song.native_lang.str() }}" dir="auto" style="--row: {{ loop.index + 1 }}; --column: {{ column }};">{{ line|safe }}</div>
+        <div class="lyrics-item line nat-line" lang="{{ song.native_lang.str(None, song.country.cc2) }}" dir="auto" style="--row: {{ loop.index + 1 }}; --column: {{ column }};">{{ line|safe }}</div>
         {% endfor %}
         {% set column = column + 1%}
     {% endif %}

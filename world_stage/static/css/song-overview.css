@@ -63,7 +63,9 @@ li:target > div {
 }
 
 .lyrics-wrapper {
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.5em;
 }
 
 .all-lyrics {
@@ -81,4 +83,6 @@ li:target > div {
     word-break: keep-all;
     white-space: pre;
     width: max-content;
+    height: 1em;
+    tab-size: 1em;
 }

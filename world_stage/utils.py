@@ -238,24 +238,12 @@ class UserPermissions(Enum):
     def can_edit(self):
         return self == UserPermissions.EDITOR or self == UserPermissions.ADMIN or self == UserPermissions.OWNER
 
-@dataclass
+@dataclass(kw_only=True)
 class Country:
     cc: str
     name: str
     is_participating: bool
-    bg: str
-    fg1: str
-    fg2: str
-    text: str
-
-    def __init__(self, *, cc: str, name: str, is_participating: bool, bg: str, fg1: str, fg2: str, text: str):
-        self.cc = cc
-        self.name = name
-        self.is_participating = is_participating
-        self.bg = bg
-        self.fg1 = fg1
-        self.fg2 = fg2
-        self.text = text
+    cc2: str
 
 @total_ordering
 @dataclass
@@ -320,7 +308,7 @@ class VoteData:
             'pts': dict(self.pts)
         }
 
-@dataclass
+@dataclass(frozen=True)
 class Language:
     name: str = ''
     tag: str = ''
@@ -329,14 +317,15 @@ class Language:
     subvariant: str | None = None
     suppress_script: str | None = None
 
-    def str(self, script: str | None = None) -> str:
+    @lru_cache
+    def str(self, script: str | None = None, cc: str | None = None) -> str:
         components = [self.tag]
         if self.extlang:
             components.append(self.extlang)
         if script and script != self.suppress_script:
             components.append(script)
-        if self.region:
-            components.append(self.region)
+        if cc:
+            components.append(cc.upper())
         if self.subvariant:
             components.append(self.subvariant)
         return '-'.join(components)
@@ -594,9 +583,9 @@ def get_points_for_system(point_system_id: int) -> list[int]:
 
 def get_countries(only_participating: bool = False) -> list[Country]:
     if only_participating:
-        query = "SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE is_participating = 1 AND id <> 'XXX' ORDER BY name"
+        query = "SELECT id, name, is_participating, cc2 FROM country WHERE is_participating = 1 AND id <> 'XXX' ORDER BY name"
     else:
-        query = "SELECT id, name, is_participating, bgr_colour, fg1_colour, fg2_colour, txt_colour FROM country WHERE id <> 'XXX' ORDER BY name"
+        query = "SELECT id, name, is_participating, cc2 FROM country WHERE id <> 'XXX' ORDER BY name"
     db = get_db()
     cursor = db.cursor()
 
@@ -606,10 +595,7 @@ def get_countries(only_participating: bool = False) -> list[Country]:
             cc=row['id'],
             name=row['name'],
             is_participating=bool(row['is_participating']),
-            bg=row['bgr_colour'],
-            fg1=row['fg1_colour'],
-            fg2=row['fg2_colour'],
-            text=row['txt_colour']
+            cc2=row['cc2']
         )
         for row in cursor.fetchall()
     ]
@@ -784,8 +770,7 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
 
     cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
-               song.country_id, country.name, country.is_participating,
-               country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+               song.country_id, country.name, country.is_participating, country.cc2,
                song.year_id, song_show.running_order, song.is_placeholder,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                account.username, song.title_language_id, song.native_language_id,
@@ -809,10 +794,7 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
                   country=Country(cc=song['country_id'],
                                     name=song['name'],
                                     is_participating=bool(song['is_participating']),
-                                    bg=song['bgr_colour'],
-                                    fg1=song['fg1_colour'],
-                                    fg2=song['fg2_colour'],
-                                    text=song['txt_colour']),
+                                    cc2=song['cc2']),
                   year=song['year_id'],
                   placeholder=bool(song['is_placeholder']),
                   submitter=song['username'],
@@ -869,8 +851,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
 
     cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
-               song.country_id, country.name, country.is_participating,
-               country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+               song.country_id, country.name, country.is_participating, country.cc2,
                song.is_placeholder, account.username, song.year_id,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
@@ -892,10 +873,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                   country=Country(cc=song['country_id'],
                                     name=song['name'],
                                     is_participating=bool(song['is_participating']),
-                                    bg=song['bgr_colour'],
-                                    fg1=song['fg1_colour'],
-                                    fg2=song['fg2_colour'],
-                                    text=song['txt_colour']),
+                                    cc2=song['cc2']),
                   placeholder=bool(song['is_placeholder']),
                   year=song['year_id'],
                   submitter_id=song['submitter_id'],
@@ -937,8 +915,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
     else:
         cursor.execute('''
             SELECT song.id, song.title, song.artist, song.native_title,
-                   song.country_id, country.name, country.is_participating,
-                   country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+                   song.country_id, country.name, country.is_participating, country.cc2,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id,
@@ -960,10 +937,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
                   country=Country(cc=song['country_id'],
                                     name=song['name'],
                                     is_participating=bool(song['is_participating']),
-                                    bg=song['bgr_colour'],
-                                    fg1=song['fg1_colour'],
-                                    fg2=song['fg2_colour'],
-                                    text=song['txt_colour']),
+                                    cc2=song['cc2']),
                   placeholder=bool(song['is_placeholder']),
                   year=song['year_id'],
                   submitter_id=song['submitter_id'],
@@ -987,8 +961,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.is_participating,
-                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+                song.country_id, country.name, country.is_participating, country.cc2,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id,
@@ -1010,10 +983,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                   country=Country(cc=song['country_id'],
                                     name=song['name'],
                                     is_participating=bool(song['is_participating']),
-                                    bg=song['bgr_colour'],
-                                    fg1=song['fg1_colour'],
-                                    fg2=song['fg2_colour'],
-                                    text=song['txt_colour']),
+                                    cc2=song['cc2']),
                   placeholder=bool(song['is_placeholder']),
                   year=song['year_id'],
                   title_lang=song['title_language_id'],
@@ -1037,8 +1007,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.is_participating,
-                country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+                song.country_id, country.name, country.is_participating, country.cc2,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id,
@@ -1063,10 +1032,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                   country=Country(cc=song['country_id'],
                                     name=song['name'],
                                     is_participating=bool(song['is_participating']),
-                                    bg=song['bgr_colour'],
-                                    fg1=song['fg1_colour'],
-                                    fg2=song['fg2_colour'],
-                                    text=song['txt_colour']),
+                                    cc2=song['cc2']),
                   placeholder=bool(song['is_placeholder']),
                   year=song['year_id'],
                   submitter_id=song['submitter_id'],

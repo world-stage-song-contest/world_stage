@@ -48,9 +48,9 @@
             <td>{{ song.artist or '' }}</td>
             <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
                 <div class="song-title">
-                    <span lang="{{song.title_lang.str('Latn')}}">{{ song.title or '' }}</span>
+                    <span lang="{{song.title_lang.str('Latn', song.country.cc2)}}">{{ song.title or '' }}</span>
                     {% if song.native_title %}
-                    <bdi lang="{{song.title_lang.str()}}">{{ song.native_title }}</bdi>
+                    <bdi lang="{{song.title_lang.str(), song.country.cc2}}">{{ song.native_title }}</bdi>
                     {% endif %}
                 </div>
             </a></td>

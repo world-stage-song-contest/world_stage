@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Vote - {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/predict.css">
+    <script src="/static/js/predict.js"></script>
+{% endblock %}
+{% block content %}
+
+{% for error in errors %}
+    <p class="error">{{ error }}</p>
+{% endfor %}
+
+<div class="big">{{ prediction_count }} people have already predicted</div>
+
+<form method="POST">
+        <fieldset class="predictions">
+            <legend>Predictions</legend>
+        {% for song in songs %}
+            <div class="predictions-item" draggable="true">
+                <input type="hidden" value="{{loop.index}}" name="{{song.country.cc}}">
+                <div class="flag-container">
+                    {{ flag(song.country.cc, 45, song.country.name) }}
+                    <div class="song-title">{{ song.title }}</div>
+                </div>
+            </div>
+        {% endfor %}
+        </fieldset>
+    </div>
+    <div>
+        <button type="submit">Submit</button>
+    </div>
+</form>
+
+{% endblock %}
