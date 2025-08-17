@@ -282,7 +282,7 @@ class VoteData:
         if this_max != other_max:
             return this_max < other_max
         overall_max = max(this_max, other_max)
-        for i in range(overall_max):
+        for i in range(overall_max,0,-1):
             this_v = self.pts.get(i, 0)
             other_v = other.pts.get(i, 0)
             if this_v != other_v:
@@ -290,6 +290,9 @@ class VoteData:
         if self.ro is None or other.ro is None:
             return False
         return self.ro > other.ro
+
+    def __str__(self):
+        return f"VoteData(ro={self.ro}, count={self.count}, pts={self.pts})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VoteData):
@@ -708,7 +711,8 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         JOIN account ON vote_set.voter_id = account.id
         JOIN point ON vote.point_id = point.id
         WHERE song_id = %s AND show_id = %s
-    ''', (song_id,show_id))
+        ORDER BY score
+    ''', (song_id, show_id))
     res = VoteData(ro=ro, total_votes=count, max_pts=max_pts, show_voters=show_voters)
     for points in cursor.fetchall():
         pt = points['score']
@@ -1296,6 +1300,49 @@ def make_bbcode_plugin(allowed_colours):
 
     return bbcode_plugin
 
+def make_entity_plugin(entities=None):
+    if entities is None:
+        entities = {
+            "nbsp": "\u00A0",
+            "shy": "\u00AD",
+            "tab": "\t",
+            "amp": "&"
+        }
+
+    def entity_plugin(md: MarkdownIt):
+        def tokenizer(state: StateInline, silent: bool):
+            src = state.src
+            pos = state.pos
+
+            if not src.startswith("&", pos):
+                return False
+
+            semi = src.find(";", pos + 1)
+            if semi == -1:
+                return False
+
+            name = src[pos + 1:semi]
+            if name not in entities:
+                return False
+
+            if silent:
+                return True
+
+            token = state.push("entity", "", 0)
+            token.content = entities[name]
+
+            state.pos = semi + 1
+            return True
+
+        md.inline.ruler.before("text", "entities", tokenizer)
+
+        def render_entity(self, tokens, idx, opts, env):
+            return tokens[idx].content
+
+        md.add_render_rule("entity", render_entity)
+
+    return entity_plugin
+
 @lru_cache(maxsize=1)
 def get_markdown_parser():
     colours = {'red', 'green', 'blue', 'yellow', 'magenta', 'cyan'}
@@ -1304,5 +1351,6 @@ def get_markdown_parser():
         .enable(['emphasis'])
         .use(footnote_plugin)
         .use(make_bbcode_plugin(colours))
+        .use(make_entity_plugin())
         )
     return md

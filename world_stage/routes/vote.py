@@ -155,8 +155,6 @@ def vote(show: str):
             selected[row['score']]['sid'] = row['song_id']
             selected[row['score']]['cc'] = row['cc']
 
-    print(selected)
-
     songs = get_show_songs(show_data.year, show_data.short_name)
 
     return render_template('vote/vote.html',

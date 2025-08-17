@@ -89,7 +89,7 @@ def year(year: str):
         cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder', (_year,))
         total_entries = cursor.fetchone()['c'] # type: ignore
         total_placeholders = len(songs)-total_entries
-        cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = %s', (year,))
+        cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = %s ORDER BY id', (year,))
         shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
         shows.sort()
 
@@ -509,3 +509,32 @@ def qualifiers_scores(year: str, show: str):
 
     return {'countries': countries,'reveal_order': {'dtf': dtf_countries, 'sc': sc_countries},
             'dtf': show_data.dtf, 'sc': show_data.sc or 0, 'special': show_data.special or 0}
+
+@bp.get('/<year>/<show>/voters')
+def show_voters(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access this show"), 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT username, nickname, COALESCE(cc, 'XXX') FROM vote_set
+        JOIN user ON voter_id = user.id
+        LEFT OUTER JOIN country ON country_id = country.id
+        WHERE show_id = %s
+    ''', (show_data.id,))
+
+    return render_template('year/voters.html')
