@@ -404,7 +404,9 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
                   AND is_participating
                   AND id NOT IN (
                       SELECT country_id FROM song
-                      WHERE year_id = %(year)s AND (submitter_id = %(user)s)
+                      WHERE year_id = %(year)s
+                        AND submitter_id = %(user)s
+                        AND NOT is_placeholder
                   )
             ORDER BY name
         ''', {'year': year, 'user': user_id})
