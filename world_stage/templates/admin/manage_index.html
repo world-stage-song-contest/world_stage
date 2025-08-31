@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Years{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/year.css">
+    <link rel="stylesheet" href="/static/css/song-table.css">
+    <script src="/static/js/sort-table.js"></script>
+{% endblock %}
+{% block content %}
+
+<div class="year-container">
+    {% for year in years %}
+        <div class="upcoming-year">
+            <a href="{{ url_for('admin.manage', year=year.id) }}">
+                <div class="year-number">{{ year.id }}</div>
+            </a>
+        </div>
+    {% endfor %}
+</div>
+
+{% endblock %}

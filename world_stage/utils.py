@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 import datetime
 from enum import Enum
@@ -52,7 +53,7 @@ class LCG:
             a, b = indices[i], indices[i + 1]
             arr[a], arr[b] = arr[b], arr[a]
 
-class SuspensefulVoteSequencer:
+class AbstractVoteSequencer(ABC):
     def __init__(
         self,
         vote_dict: Dict[str, Dict[int, int]],
@@ -132,6 +133,11 @@ class SuspensefulVoteSequencer:
         winner_points = sum(pts for pts, item in vote.items() if item == self.known_winner)
         return (winner_points * self.winner_weight) + gap
 
+    @abstractmethod
+    def get_order(self) -> List[str]:
+        pass
+
+class SuspensefulVoteSequencer(AbstractVoteSequencer):
     def get_order(self) -> List[str]:
         low, medium, high, early_voters = self._classify_votes()
         current_scores: Dict[int, int] = {song_id: 0 for song_id in self.song_ids}
@@ -176,6 +182,26 @@ class SuspensefulVoteSequencer:
                 bucket = deque((u, v) for u, v in bucket if u != best_user)
                 buckets[(bucket_idx - 1) % len(buckets)] = bucket
                 break
+
+        for v in early_voters:
+            num = lcg.next(self.first_half)
+            final_order.insert(num, v)
+
+        return final_order
+
+class RandomVoteSequencer(AbstractVoteSequencer):
+    def get_order(self) -> List[str]:
+        _, _, _, early_voters = self._classify_votes()
+        final_order_set = set(self.vote_dict.keys())
+
+        for v in early_voters:
+            final_order_set.remove(v)
+
+        final_order = list(final_order_set)
+
+        lcg = LCG(self.seed)
+
+        lcg.shuffle(final_order)
 
         for v in early_voters:
             num = lcg.next(self.first_half)
@@ -524,12 +550,12 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
 
     if year:
         cursor.execute('''
-            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, allow_access_type FROM show
+            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, access_type FROM show
             WHERE year_id = %s AND short_name = %s
         ''', (year, short_show_name))
     else:
         cursor.execute('''
-            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, allow_access_type FROM show
+            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, access_type FROM show
             WHERE short_name = %s AND year_id IS NULL
         ''', (short_show_name,))
 
@@ -543,7 +569,7 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         dtf = show_row['dtf']
         sc = show_row['sc']
         special = show_row['special']
-        access_type = show_row['allow_access_type']
+        access_type = show_row['access_type']
     else:
         return None
 
@@ -583,7 +609,7 @@ def get_points_for_system(point_system_id: int) -> list[int]:
 
 def get_countries(only_participating: bool = False) -> list[Country]:
     if only_participating:
-        query = "SELECT id, name, is_participating, cc2 FROM country WHERE is_participating = 1 AND id <> 'XXX' ORDER BY name"
+        query = "SELECT id, name, is_participating, cc2 FROM country WHERE is_participating AND id <> 'XXX' ORDER BY name"
     else:
         query = "SELECT id, name, is_participating, cc2 FROM country WHERE id <> 'XXX' ORDER BY name"
     db = get_db()
@@ -695,7 +721,6 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         SELECT score FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
-        JOIN point ON vote.point_id = point.id
         WHERE song_id = %s AND show_id = %s
         ORDER BY score
     ''', (song_id, show_id))
@@ -707,12 +732,10 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         res.pts[pt] += 1
     return res
 
-def format_seconds(seconds: int) -> str:
+def format_seconds(seconds: int | None) -> str:
     """Format seconds into a string in the format M:SS."""
-    if seconds is None:
-        return "0:00"
-    if seconds < 0:
-        return "0:00"
+    if seconds is None or seconds <= 0:
+        return ""
     minutes = seconds // 60
     seconds %= 60
     return f"{minutes}:{seconds:02}"
@@ -899,8 +922,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
     if year:
         cursor.execute('''
             SELECT song.id, song.title, song.artist, song.native_title,
-                   song.country_id, country.name, country.is_participating,
-                   country.bgr_colour, country.fg1_colour, country.fg2_colour, country.txt_colour,
+                   song.country_id, country.name, country.is_participating, country.cc2,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id,
@@ -1056,14 +1078,25 @@ def get_years() -> list[int]:
     ''')
     return list(map(lambda x: x['id'], cursor.fetchall()))
 
-def get_year_countries(year: int, exclude: list[str] = []) -> list[dict]:
+def get_year_countries(year: int, *, exclude: list[str] = [], sort_by_priority: bool = False, host: bool = True) -> list[dict]:
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('''
+
+    if sort_by_priority:
+        order_by = "priority"
+    else:
+        order_by = "country.name"
+
+    add = ""
+    if not host:
+        add = "AND country.id <> year.host"
+
+    cursor.execute(f'''
         SELECT country.id AS cc, country.name, country.pot, song.submitter_id AS submitter FROM song
         JOIN country ON song.country_id = country.id
+        JOIN year ON song.year_id = year.id {add}
         WHERE song.year_id = %s
-        ORDER BY country.name
+        ORDER BY {order_by}
     ''', (year,))
     countries = cursor.fetchall()
 

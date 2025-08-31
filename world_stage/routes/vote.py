@@ -1,6 +1,6 @@
 from collections import defaultdict
 from typing import Any, Optional
-from flask import make_response, request, Blueprint
+from flask import make_response, redirect, request, Blueprint, url_for
 import datetime
 import unicodedata
 
@@ -20,17 +20,12 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id
 
     cursor.execute('UPDATE vote SET song_id = NULL WHERE vote_set_id = %s', (vote_set_id,))
 
-    for point, song_id in votes.items():
-        cursor.execute('''
-            SELECT id FROM point
-            WHERE point_system_id = %s AND score = %s
-            ''', (point_system_id, point))
-        point_id = cursor.fetchone()['id'] # type: ignore
+    for score, song_id in votes.items():
         cursor.execute('''
             UPDATE vote
             SET song_id = %s
-            WHERE vote_set_id = %s AND point_id = %s
-        ''', (song_id, vote_set_id, point_id))
+            WHERE vote_set_id = %s AND score = %s
+        ''', (song_id, vote_set_id, score))
 
 def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
     db = get_db()
@@ -50,13 +45,8 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
             RETURNING id
             ''', (voter_id, show_id, country_id or 'XXX', nickname))
         vote_set_id = cursor.fetchone()['id'] # type: ignore
-        for point, song_id in votes.items():
-            cursor.execute('''
-                SELECT id FROM point
-                WHERE point_system_id = %s AND score = %s
-                ''', (point_system_id, point))
-            point_id = cursor.fetchone()['id'] # type: ignore
-            cursor.execute('INSERT INTO vote (vote_set_id, song_id, point_id) VALUES (%s, %s, %s)', (vote_set_id, song_id, point_id))
+        for score, song_id in votes.items():
+            cursor.execute('INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)', (vote_set_id, song_id, score))
         action = "added"
     else:
         update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id)
@@ -146,7 +136,6 @@ def vote(show: str):
     if vote_set_id:
         cursor.execute('''
             SELECT song_id, score, country.id AS cc FROM vote
-            JOIN point ON vote.point_id = point.id
             JOIN song ON vote.song_id = song.id
             JOIN country ON song.country_id = country.id
             WHERE vote_set_id = %s
@@ -258,7 +247,7 @@ def vote_post(show: str):
 
     if not errors:
         action = add_votes(username, nickname or None, country_id, show_data.id, show_data.point_system_id, votes)
-        resp = make_response(render_template('vote/success.html', action=action))
+        resp = make_response(render_template('vote/success.html', action=action, what='vote', what_act='voting'))
         resp.set_cookie('username', username, max_age=datetime.timedelta(days=30))
         return resp
 
@@ -268,3 +257,103 @@ def vote_post(show: str):
                            username=username, username_invalid=username_invalid, nickname=nickname,
                            year=show_data.year, show_name=show_data.name, show=show,
                            selected_country=country_id, countries=get_countries())
+
+#@bp.get('/<show>/predict')
+def predict(show: str):
+    show_data = get_show_id(show)
+
+    session_id = request.cookies.get('session')
+    if not session_id:
+        return redirect(url_for('session.login'))
+
+    session_data = get_user_id_from_session(session_id)
+    if not session_data:
+        return redirect(url_for('session.login'))
+
+    user_id = session_data[0]
+
+    if not show_data or not show_data.id:
+        return render_template('error.html', error="Show not found"), 404
+
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SEELCT id FROM prediction_set
+        WHERE user_id = %s AND show_id = %s
+    ''', (user_id, show_data.id))
+
+    ret_data = cursor.fetchone()
+
+    if ret_data:
+        cursor.execute('''
+
+        ''')
+
+        songs = cursor.fetchall()
+    else:
+        songs = [] # get_show_songs(show_data.year, show_data.short_name)
+
+    return render_template('error.html', error="Unfinished")
+
+#@bp.post('/<show>/predict')
+def predict_post(show: str):
+    show_data = get_show_id(show)
+
+    if not show_data or not show_data.id:
+        return render_template('error.html', error="Show not found"), 404
+
+    session_id = request.cookies.get('session')
+    if not session_id:
+        return redirect(url_for('session.login'))
+
+    session_data = get_user_id_from_session(session_id)
+    if not session_data:
+        return redirect(url_for('session.login'))
+
+    user_id = session_data[0]
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        INSERT INTO prediction_set (user_id, show_id)
+        VALUES (%s, %s)
+        ON CONFLICT (user_id, show_id) DO UPDATE SET
+            user_id = EXCLUDED.user_id
+        RETURNING id
+    ''', (user_id, show_data.id))
+
+    print(cursor.rowcount)
+
+    prediction_set_id = cursor.fetchone()['id'] # type: ignore
+
+    print(prediction_set_id)
+
+    data = []
+    for song, position in request.form.items():
+        data.append({
+            'sid': song,
+            'pos': position,
+            'psid': prediction_set_id
+        })
+
+    print(data)
+
+    cursor.execute('DELETE FROM prediction WHERE set_id = %s', (prediction_set_id,))
+    n = cursor.rowcount
+
+    cursor.executemany('''
+        INSERT INTO prediction (set_id, song_id, position)
+        VALUES (%(psid)s, %(sid)s, %(pos)s)
+    ''', data)
+
+    db.commit()
+
+    if n:
+        action = 'updated'
+    else:
+        action = 'submitted'
+
+    return render_template('vote/success.html', action=action, what='prediction', what_act='predicting')

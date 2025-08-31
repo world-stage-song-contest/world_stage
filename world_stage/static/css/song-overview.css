@@ -1,16 +1,3 @@
-.song-title {
-    padding: 0.25em 0;
-    display: flex;
-    gap: 0.25em;
-    flex-direction: column;
-    font-style: italic;
-    width: fit-content;
-}
-
-.song-title > * {
-    width: fit-content;
-}
-
 th, td {
     padding: 0.25em;
 }
@@ -83,6 +70,6 @@ li:target > div {
     word-break: keep-all;
     white-space: pre;
     width: max-content;
-    height: 1em;
+    min-height: 1em;
     tab-size: 1em;
 }

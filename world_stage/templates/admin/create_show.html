@@ -7,13 +7,6 @@
 <form method="POST">
     <fieldset class="grid">
         <legend>Year</legend>
-        <label for="year">Year</label>
-        <select name="year" id="year">
-            <option value=""></option>
-            {% for year in years %}
-                <option value="{{ year }}">{{ year }}</option>
-            {% endfor %}
-        </select>
         <label for="show_name">Full Show Name</label>
         <input name="show_name" id="show_name" required>
         <label for="show_name">Short Show Name</label>

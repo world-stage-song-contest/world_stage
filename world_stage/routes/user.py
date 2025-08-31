@@ -86,10 +86,10 @@ def votes(username: str):
     user_id = user_id['id']
 
     cursor.execute('''
-        SELECT vote_set.id, account.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id, show.allow_access_type FROM vote_set
+        SELECT vote_set.id, account.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id, show.access_type FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         JOIN show ON vote_set.show_id = show.id
-        WHERE vote_set.voter_id = %s AND (show.allow_access_type = 'full' OR show.allow_access_type = 'partial')
+        WHERE vote_set.voter_id = %s AND (show.access_type = 'full' OR show.access_type = 'partial')
         ORDER BY show.date DESC
     ''', (user_id,))
     votes = []
@@ -101,7 +101,7 @@ def votes(username: str):
             'code': row['country_id'],
             'show_name': row['show_name'],
             'short_name': row['short_name'],
-            'access_type': row['allow_access_type'],
+            'access_type': row['access_type'],
             'date': row['date'].strftime("%d %b %Y"),
             'year': row['year_id']
         }
@@ -109,12 +109,11 @@ def votes(username: str):
 
     for vote in votes:
         cursor.execute('''
-            SELECT point.score AS pts, song.title, song.artist, song.country_id AS code, country.name, song.id FROM vote
+            SELECT score AS pts, song.title, song.artist, song.country_id AS code, country.name, song.id FROM vote
             JOIN song ON vote.song_id = song.id
-            JOIN point ON vote.point_id = point.id
             JOIN country ON song.country_id = country.id
             WHERE vote.vote_set_id = %s
-            ORDER BY point.score DESC
+            ORDER BY score DESC
         ''', (vote['id'],))
         songs = []
         for val in cursor.fetchall():
@@ -159,15 +158,15 @@ WITH user_shows AS (
     FROM vote_set vs
     JOIN show s ON s.id = vs.show_id
     WHERE voter_id = %(id)s
-      AND s.allow_access_type = 'full'
+      AND s.access_type = 'full'
       AND s.year_id IS NOT NULL
 ),
 -- Combine voting aggregations and song counts in one scan
 voting_stats AS (
     SELECT
         s.country_id,
-        SUM(CASE WHEN vs.voter_id = %(id)s THEN p.score ELSE 0 END) AS user_given,
-        SUM(p.score) AS total_given,
+        SUM(CASE WHEN vs.voter_id = %(id)s THEN score ELSE 0 END) AS user_given,
+        SUM(score) AS total_given,
         COUNT(DISTINCT CASE WHEN vs.voter_id = %(id)s THEN v.id END) AS user_votes,
         COUNT(DISTINCT CASE WHEN s.submitter_id <> %(id)s THEN ss.show_id || '-' || s.country_id END) AS show_country_pairs
     FROM user_shows us
@@ -175,7 +174,6 @@ voting_stats AS (
     JOIN song s ON s.id = ss.song_id
     LEFT JOIN vote_set vs ON vs.show_id = ss.show_id
     LEFT JOIN vote v ON v.vote_set_id = vs.id AND v.song_id = s.id
-    LEFT JOIN point p ON p.id = v.point_id
     WHERE s.submitter_id <> %(id)s
     GROUP BY s.country_id
 ),
@@ -191,7 +189,7 @@ entry_counts AS (
     JOIN show sh ON sh.id = ss.show_id
     JOIN song s ON s.id = ss.song_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.allow_access_type = 'full'
+      AND sh.access_type = 'full'
       AND sh.year_id IS NOT NULL
     GROUP BY ss.show_id, s.country_id, sh.point_system_id
 ),
@@ -324,18 +322,17 @@ WITH user_shows AS (
     FROM vote_set vs
     JOIN show s ON s.id = vs.show_id
     WHERE voter_id = %(id)s
-      AND s.allow_access_type = 'full'
+      AND s.access_type = 'full'
 ),
 -- Points given TO targets (other submitters)
 voting_to_targets AS (
     SELECT
         s.submitter_id AS target_id,
-        SUM(CASE WHEN vs.voter_id = %(id)s THEN p.score ELSE 0 END) AS pts_user_to_target,
-        SUM(p.score) AS pts_all_to_target,
+        SUM(CASE WHEN vs.voter_id = %(id)s THEN score ELSE 0 END) AS pts_user_to_target,
+        SUM(score) AS pts_all_to_target,
         COUNT(DISTINCT s.id) AS songs_available
     FROM vote_set vs
     JOIN vote v ON v.vote_set_id = vs.id
-    JOIN point p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
     WHERE vs.show_id IN (SELECT show_id FROM user_shows)
       AND s.submitter_id <> %(id)s
@@ -344,10 +341,9 @@ voting_to_targets AS (
 voting_from_targets AS (
     SELECT
         vs.voter_id AS target_id,
-        SUM(p.score) AS pts_target_to_user
+        SUM(score) AS pts_target_to_user
     FROM vote_set vs
     JOIN vote v ON v.vote_set_id = vs.id
-    JOIN point p ON p.id = v.point_id
     JOIN song s ON s.id = v.song_id
     WHERE s.submitter_id = %(id)s
       AND vs.voter_id <> %(id)s

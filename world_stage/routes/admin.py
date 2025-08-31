@@ -30,21 +30,23 @@ def index():
         return resp
     return render_template('admin/index.html')
 
-@bp.get('/createshow')
-def create_show():
+@bp.get('/manage/<int:year>/createshow')
+def create_show(year: int):
     resp = verify_user()
     if resp:
         return resp
-    return render_template('admin/create_show.html', years=get_years())
+    return render_template('admin/create_show.html', years=get_years(), year=year)
 
-@bp.post('/createshow')
-def create_show_post():
+@bp.post('/manage/<int:year>/createshow')
+def create_show_post(year: int):
     resp = verify_user()
     if resp:
         return resp
 
-    data = {}
-    for key, value in request.form.items():
+    data: dict[str, int | str | None] = {'year': year}
+    value: int | str | None
+    for key, value_ in request.form.items():
+        value = value_
         try:
             value = int(value)
         except ValueError:
@@ -60,14 +62,14 @@ def create_show_post():
 
     try:
         cur.execute('''
-            INSERT INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, allow_access_type)
+            INSERT INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, access_type)
             VALUES (%(year)s, 1, %(show_name)s, %(short_name)s, %(dtf)s, %(sc)s, %(date)s, 'none')
         ''', data)
         db.commit()
     except psycopg.Error as e:
         return render_template('admin/create_show.html', error=str(e))
 
-    return redirect(url_for('admin.create_show'))
+    return redirect(url_for('admin.create_show', year=year))
 
 @bp.get('/draw/<int:year>')
 def draw(year: int):
@@ -309,6 +311,20 @@ def move_post():
     return render_template('admin/move.html', message="Songs moved successfully.",
                            years=years, countries=countries)
 
+@bp.get('/manage')
+def manage_index():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('SELECT id, closed FROM year ORDER BY id')
+    years = cursor.fetchall()
+
+    return render_template('admin/manage_index.html', years=years)
+
 @bp.get('/manage/<int:year>')
 def manage(year: int):
     resp = verify_user()
@@ -326,7 +342,7 @@ def manage(year: int):
         return render_template('error.html', error=f"Year {year} not found"), 404
 
     cursor.execute('''
-        SELECT show_name, short_name, date, allow_access_type FROM show WHERE year_id = %s
+        SELECT show_name, short_name, date, access_type FROM show WHERE year_id = %s
         ORDER BY id
     ''', (year,))
     shows = cursor.fetchall()
@@ -403,7 +419,7 @@ def manage_show_post(year: int, show: str):
 
             cursor.execute('''
                 UPDATE show
-                SET allow_access_type = %s
+                SET access_type = %s
                 WHERE year_id = %s AND short_name = %s
             ''', (access_type, year, show))
         case 'change_date':
@@ -456,13 +472,16 @@ def fuckup_db_post():
         cursor.execute("SET ROLE dml_only_role")
         cursor.execute(query) # type: ignore
         db.commit()
-        rows = cursor.fetchall()
-        headers = [description[0] for description in cursor.description] if cursor.description else []
+
+        rows = []
+        headers = []
+        if cursor.rowcount > 0:
+            rows = cursor.fetchall()
+            headers = [description[0] for description in cursor.description] if cursor.description else []
     except psycopg.Error as e:
         return render_template('admin/fuckupdb.html', error=f"Query failed: {str(e)}", query=query), 400
     finally:
         cursor.execute("RESET ROLE")
-
 
     kind = request.form.get('kind')
     if kind == 'csv':
@@ -544,7 +563,7 @@ def users_post():
 
     return {'status': 'success'}, 200
 
-@bp.get('/setpots/<int:year>')
+@bp.get('/manage/<int:year>/setpots')
 def set_pots(year: int):
     resp = verify_user()
     if resp:
@@ -556,14 +575,15 @@ def set_pots(year: int):
     cursor.execute('''
         SELECT country.id, name, pot FROM song
         JOIN country ON song.country_id = country.id
-        WHERE year_id = %s
+        JOIN year ON song.year_id = year.id
+        WHERE year_id = %s AND year.host <> country.id
         ORDER BY pot, name
     ''', (year,))
     countries = cursor.fetchall()
 
     return render_template('admin/set_pots.html', countries=countries, year=year)
 
-@bp.post('/setpots/<int:year>')
+@bp.post('/manage/<int:year>/setpots')
 def set_pots_post(year: int):
     resp = verify_user()
     if resp:
@@ -578,11 +598,11 @@ def set_pots_post(year: int):
             if pot == 0:
                 pot = None
         except ValueError:
-            return render_template('error.html', error=f"Invalid pot value for country {country_id}"), 400
+            return render_template('error.html', error=f"Invalid priority value for country {country_id}"), 400
 
         cursor.execute('''
             UPDATE country
-            SET pot = %s
+            SET priority = %s
             WHERE id = %s
         ''', (pot, country_id))
 

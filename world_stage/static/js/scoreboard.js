@@ -529,7 +529,7 @@ class Country {
             const keys1 = Object.keys(dict1);
             const keys2 = Object.keys(dict2);
             const allKeys = [...new Set([...keys1, ...keys2])];
-            allKeys.sort((a, b) => a - b);
+            allKeys.sort((a, b) => b - a);
             for (const key of allKeys) {
                 const val1 = dict1[key];
                 const val2 = dict2[key];

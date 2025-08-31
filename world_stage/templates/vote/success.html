@@ -9,11 +9,11 @@
 {% endblock %}
 {% block content %}
 
-<p>Thank you for voting!</p>
+<p>Thank you for {{ what_act }}!</p>
 {% if action == "updated" %}
-<p>Your vote has been successfully <u>edited</u>.</p>
+<p>Your {{ what }} has been successfully <u>edited</u>.</p>
 {% else %}
-<p>Your vote has been successfully <u>recorded</u>.</p>
+<p>Your {{ what }} has been successfully <u>recorded</u>.</p>
 {% endif %}
 <p>You will be redirected to the home page in a few seconds.</p>
 

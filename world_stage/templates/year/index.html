@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Years{% endblock %}
 {% block headercontents %}
-<link rel="stylesheet" href="/static/css/year.css">
+    <link rel="stylesheet" href="/static/css/year.css">
+    <link rel="stylesheet" href="/static/css/song-table.css">
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block content %}
@@ -52,15 +53,18 @@
                     {{ flag(winner.country.cc, 42, winner.country.name) }}
                     {{ winner.country.name }}
                 </div></a></td>
-                <td class="artist">{{ winner.artist }}</td>
+                <td class="artist"><div class="song-artist">{{ winner.artist }}</div></td>
                 <td class="title">
-                    <a class="song-title"
-                       href="{{ url_for('country.details', code=winner.country.cc.lower(), year=winner.year) }}">
-                        <span lang="{{winner.title_lang.str("Latn", winner.country.cc2)}}">{{ winner.title }}</span>
-                        {% if winner.native_title %}
-                        <bdi lang="{{winner.title_lang.str(None, winner.country.cc2)}}">{{ winner.native_title }}</bdi>
-                        {% endif %}
-                    </a>
+                    <div class="song-title">
+                        <a href="{{ url_for('country.details', code=winner.country.cc.lower(), year=winner.year) }}">
+                            <span lang="{{winner.title_lang.str("Latn", winner.country.cc2)}}">{{ winner.title }}</span>
+                        </a>
+                    {% if winner.native_title %}
+                        <a href="{{ url_for('country.details', code=winner.country.cc.lower(), year=winner.year) }}">
+                            <bdi lang="{{winner.title_lang.str(None, winner.country.cc2)}}">{{ winner.native_title }}</bdi>
+                        </a>
+                    {% endif %}
+                    </div>
                 </td>
                 <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
                 <td class="points">{{ winner.vote_data.sum }}</td>

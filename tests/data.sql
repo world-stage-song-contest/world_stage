@@ -47,13 +47,13 @@ INSERT INTO year (id) VALUES (2023);
 INSERT INTO year (id) VALUES (2024);
 INSERT INTO year (id) VALUES (2025);
 
-INSERT INTO show (year_id, point_system_id, show_name, short_name, voting_opens, voting_closes, date, dtf, sc, special, allow_access_type)
+INSERT INTO show (year_id, point_system_id, show_name, short_name, voting_opens, voting_closes, date, dtf, sc, special, access_type)
     VALUES (2023, 1, 'Semi-Final 1', 'sf1', '2023-05-01 00:00:00', '2023-05-08 23:59:59', '2023-05-08', 10, 0, 0, 'full');
 
-INSERT INTO show (year_id, point_system_id, show_name, short_name, voting_opens, voting_closes, date, dtf, sc, special, allow_access_type)
+INSERT INTO show (year_id, point_system_id, show_name, short_name, voting_opens, voting_closes, date, dtf, sc, special, access_type)
     VALUES (2023, 1, 'Semi-Final 2', 'sf2', '2023-05-02 00:00:00', '2023-05-09 23:59:59', '2023-05-09', 10, 0, 0, 'full');
 
-INSERT INTO show (year_id, point_system_id, show_name, short_name, voting_opens, voting_closes, date, dtf, sc, special, allow_access_type)
+INSERT INTO show (year_id, point_system_id, show_name, short_name, voting_opens, voting_closes, date, dtf, sc, special, access_type)
     VALUES (2023, 1, 'Final', 'f', '2023-05-10 00:00:00', '2023-05-17 23:59:59', '2023-08-17', 10, 0, 0, 'full');
 
 INSERT INTO song (year_id, )

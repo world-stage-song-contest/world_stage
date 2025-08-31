@@ -2,6 +2,7 @@
 {% block title %}Submissions: {{ username }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/submissions.css">
+    <link rel="stylesheet" href="/static/css/song-table.css">
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block navigation %}
@@ -34,13 +35,19 @@
                     {{ flag(song.country.cc, 40, song.country.name) }}
                     <span>{{ song.country.name }}</span>
             </div></a></td>
-            <td>{{ song.artist }}</td>
-            <td><a class="song-title" href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
-                <span lang="{{song.title_lang.str('Latn', song.country.cc2)}}">{{ song.title or '' }}</span>
+            <td><div class="song-artist">{{ song.artist }}</div></td>
+            <td>
+                <div class="song-title">
+                    <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
+                        <span lang="{{song.title_lang.str('Latn', song.country.cc2)}}">{{ song.title or '' }}</span>
+                    </a>
                 {% if song.native_title %}
-                <bdi lang="{{song.title_lang.str(None, song.country.cc2)}}">{{ song.native_title }}</bdi>
+                    <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
+                        <bdi lang="{{song.title_lang.str(None, song.country.cc2)}}">{{ song.native_title }}</bdi>
+                    </a>
                 {% endif %}
-            </a></td>
+                </div>
+            </td>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
         </tr>
     {% endfor %}

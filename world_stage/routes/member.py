@@ -389,7 +389,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
             cursor.execute('''
                 SELECT name, id AS cc FROM country
                 WHERE available_from <= %(year)s AND available_until >= %(year)s
-                      AND is_participating = 1
+                      AND is_participating
                       AND id NOT IN (
                           SELECT country_id FROM song
                           WHERE year_id = %(year)s AND submitter_id = %(user)s
@@ -401,7 +401,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
         cursor.execute('''
             SELECT name, id AS cc FROM country
             WHERE available_from <= %(year)s AND available_until >= %(year)s
-                  AND is_participating = 1
+                  AND is_participating
                   AND id NOT IN (
                       SELECT country_id FROM song
                       WHERE year_id = %(year)s AND (submitter_id = %(user)s)

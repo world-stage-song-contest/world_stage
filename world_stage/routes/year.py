@@ -2,7 +2,7 @@ from collections import defaultdict
 from flask import request, Blueprint
 import typing
 
-from ..utils import (LCG, Show, SuspensefulVoteSequencer,
+from ..utils import (LCG, AbstractVoteSequencer, RandomVoteSequencer, Show, SuspensefulVoteSequencer,
                      get_show_id, dt_now, get_user_role_from_session,
                      get_votes_for_song, get_year_songs, get_year_winner,
                      get_special_winner, render_template, get_show_songs)
@@ -221,10 +221,9 @@ def detailed_results(year: str, show: str):
 
     for song in songs:
         cursor.execute('''
-            SELECT point.score, username FROM vote
+            SELECT score, username FROM vote
             JOIN vote_set ON vote.vote_set_id = vote_set.id
             JOIN account ON vote_set.voter_id = account.id
-            JOIN point ON vote.point_id = point.id
             WHERE song_id = %s AND show_id = %s
             ORDER BY created_at
         ''', (song.id, show_data.id))
@@ -293,11 +292,10 @@ def scores(year: str, show: str):
         return {"error": "No songs found for this show."}, 404
 
     cursor.execute('''
-        SELECT song_id, point.score AS pts, username FROM vote
+        SELECT song_id, score AS pts, username FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
         JOIN song ON vote.song_id = song.id
-        JOIN point ON vote.point_id = point.id
         WHERE vote_set.show_id = %s
         ORDER BY vote_set.created_at
     ''', (show_data.id,))
@@ -306,7 +304,11 @@ def scores(year: str, show: str):
     for row in results_raw:
         results[row['username']][row['pts']] = row['song_id']
 
-    sequencer = SuspensefulVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+    sequencer: AbstractVoteSequencer
+    if show_data.id < 60:
+        sequencer = SuspensefulVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+    else:
+        sequencer = RandomVoteSequencer(results, songs, show_data.points, seed=show_data.id)
     vote_order = sequencer.get_order()
 
     user_songs = defaultdict(list)

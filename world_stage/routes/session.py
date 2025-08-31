@@ -128,19 +128,18 @@ def set_password_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id, approved FROM user WHERE username = %s', (username,))
+    cursor.execute('SELECT id, approved FROM account WHERE username = %s', (username,))
     user = cursor.fetchone()
     if not user:
         return render_template('session/set_password.html', message="User not found.")
-    user_id, approved = user
-    if not approved:
+    if not user['approved']:
         return render_template('session/set_password.html', message="Your account is not approved yet. Please ping a moderator.")
     hashed, salt = hash_password(password)
     cursor.execute('''
         UPDATE account
         SET password = %s, salt = %s
         WHERE id = %s
-    ''', (hashed, salt, user_id))
+    ''', (hashed, salt, user['id']))
 
     db.commit()
 

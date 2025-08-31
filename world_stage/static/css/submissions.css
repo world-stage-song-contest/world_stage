@@ -4,19 +4,6 @@
     gap: 0.5em;
 }
 
-.song-title {
-    padding: 0.25em 0;
-    display: flex;
-    gap: 0.25em;
-    flex-direction: column;
-    font-style: italic;
-    width: fit-content;
-}
-
-.song-title > * {
-    width: fit-content;
-}
-
 .placeholder {
     background-color: var(--background2);
 }

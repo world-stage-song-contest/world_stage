@@ -30,22 +30,23 @@ def init_db():
 def migrate_db() -> list[str]:
     applied_migrations = []
 
-    with get_db() as db:
-        with db.cursor() as cur:
-            migrations_path = Path(current_app.root_path) / 'migrations'
+    with current_app.config["DB_POOL"] as pool:
+        with pool.getconn() as db:
+            with db.cursor() as cur:
+                migrations_path = Path(current_app.root_path) / 'migrations'
 
-            for f in sorted(migrations_path.iterdir()):
-                if f.is_file() and f.suffix == '.sql':
-                    name = f.stem
-                    cur.execute('SELECT * FROM migration WHERE name = %s', (name,))
-                    if cur.fetchone():
-                        continue
-                    with f.open() as file:
-                        sql = file.read()
-                        db.execute(typing.cast(typing.LiteralString, sql))
-                    cur.execute('INSERT INTO migration (name) VALUES (%s)', (name,))
-                    db.commit()
-                    applied_migrations.append(name)
+                for f in sorted(migrations_path.iterdir()):
+                    if f.is_file() and f.suffix == '.sql':
+                        name = f.stem
+                        cur.execute('SELECT * FROM migration WHERE name = %s', (name,))
+                        if cur.fetchone():
+                            continue
+                        with f.open() as file:
+                            sql = file.read()
+                            db.execute(typing.cast(typing.LiteralString, sql))
+                        cur.execute('INSERT INTO migration (name) VALUES (%s)', (name,))
+                        db.commit()
+                        applied_migrations.append(name)
 
     return applied_migrations
 

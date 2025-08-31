@@ -8,6 +8,13 @@
 <div class="error" id="error">
 </div>
 
+<div>
+    <h2>Other links</h2>
+    <ul>
+        <li><a href="{{ url_for('admin.create_show', year=year.id) }}">Create Show</a></li>
+        <li><a href="{{ url_for('admin.set_pots', year=year.id) }}">Set Pots</a></li>
+</div>
+
 <table>
     <thead>
         <tr>
@@ -29,7 +36,7 @@
                 <select id="access_type_{{ show.short_name }}">
                     {% for access_type in access_types %}
                     <option value="{{ access_type }}"
-                            {% if show.allow_access_type == access_type %}selected{% endif %}>
+                            {% if show.access_type == access_type %}selected{% endif %}>
                         {{ access_type }}
                     </option>
                     {% endfor %}

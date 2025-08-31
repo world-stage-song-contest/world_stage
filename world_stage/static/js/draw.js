@@ -642,42 +642,18 @@ async function next() {
         console.log(e);
     }
 
-    const [nextPot, looped] = nextSibling(currentPotElement);
-    currentPotElement.classList.remove("active1");
-    nextPot.classList.add("active1");
+    const [nextShow, looped] = nextSibling(currentShowElement);
+    currentShowElement.classList.remove("active1");
+    nextShow.classList.add("active1");
 
     if (looped) {
-        const [nextShow,] = nextSibling(currentShowElement);
-        currentShowElement.classList.remove("active1");
-        nextShow.classList.add("active1");
+        const [nextPot,] = nextSibling(currentPotElement);
+        currentPotElement.classList.remove("active1");
+        nextPot.classList.add("active1");
     }
 
-    clicked = false;
-}
-
-async function nextAll() {
-    if (clicked) return;
-    clicked = true;
-    if (shows == null) drawShows();
-
-    const currentShowElement = document.querySelector('.show.active1');
-    const currentShow = currentShowElement.querySelector('.show-countries');
-
-    const allCountries = [...document.querySelectorAll('.pot-item')];
-    const eligibleCountries = [...document.querySelectorAll(`.pot-item[data-show='${currentShow.dataset.name}']`)];
-    const selected = await selectCountryFromPot(allCountries, eligibleCountries);
-    const showSlot = await getShowSlot(selected, currentShow);
-    showSlot.classList.remove("transparent");
-
-    await new Promise(r => setTimeout(r, 1000));
-
-    selected.remove();
-    showSlot.classList.remove("active2");
-
-    if (currentShow.querySelectorAll('.empty').length == 0) {
-        const [nextShow,] = nextSibling(currentShowElement);
-        currentShowElement.classList.remove("active1");
-        nextShow.classList.add("active1");
+    if (currentPotElement.querySelectorAll('.item').length == 0) {
+        currentPotElement.remove();
     }
 
     clicked = false;
