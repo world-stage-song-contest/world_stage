@@ -1,5 +1,5 @@
 /**
- * @param {HTMLInputElement} cb 
+ * @param {HTMLInputElement} cb
  */
 function hideNonPlaceholders(cb) {
     if (cb.checked) {
@@ -10,9 +10,19 @@ function hideNonPlaceholders(cb) {
 }
 
 /**
- * 
- * @param {HTMLTableRowElement} row 
+ * @param {HTMLTableRowElement} row
  */
 function revealRow(row) {
     row.classList.remove("unrevealed");
+}
+
+/**
+ * @param {Event} event
+ * @param {HTMLTableCellElement} cell
+ */
+function revealPoints(event, cell) {
+    if (!cell.classList.contains("extra-visible")) {
+        event.stopPropagation();
+        cell.classList.add("extra-visible");
+    }
 }

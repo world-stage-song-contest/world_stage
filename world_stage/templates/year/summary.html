@@ -61,8 +61,10 @@
                 <td>{{ song.title }}</td>
                 {% endif %}
             {% if access != 'draw' %}
-                <td class="number">{{ place }}</td>
-                <td class="number">{{ song.vote_data.sum }}</td>
+                <td class="number extra-visible">{{ place }}</td>
+                <td class="number"
+                {%if song.hidden %}onclick="revealPoints(event, this)"{% endif %}
+                >{{ song.vote_data.sum }}</td>
                 <td class="number percent">{{ song.vote_data.pct() }}</td>
                 <td class="number">{{ song.vote_data.count }}</td>
             {% for point in points %}

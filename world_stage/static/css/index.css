@@ -5,6 +5,7 @@
     --background2: rgb(239, 214, 164);
     --foreground2: rgb(11, 25, 43);
     --background3: rgb(229, 229, 229);
+    --background4: rgb(228, 228, 228);
     --link: rgb(19, 86, 187);
     --visited-link: rgb(162, 19, 187);
 
@@ -32,6 +33,7 @@
         --background1: rgb(17, 17, 17);
         --foreground1: rgb(238, 238, 238);
         --background3: rgb(29, 29, 29);
+        --background4: rgb(34, 34, 34);
         --link: rgb(39, 121, 224);
         --visited-link: rgb(2000, 39, 224);
 
@@ -56,6 +58,7 @@
     --background2: rgb(239, 214, 164);
     --foreground2: rgb(11, 25, 43);
     --background3: rgb(229, 229, 229);
+    --background4: rgb(228, 228, 228);
     --link: rgb(19, 86, 187);
     --visited-link: rgb(162, 19, 187);
 
@@ -79,6 +82,7 @@
     --background1: rgb(17, 17, 17);
     --foreground1: rgb(238, 238, 238);
     --background3: rgb(29, 29, 29);
+    --background4: rgb(34, 34, 34);
     --link: rgb(39, 121, 224);
     --visited-link: rgb(2000, 39, 224);
 
@@ -139,6 +143,12 @@ a:visited {
 
 table {
     border-collapse: collapse;
+    background-color: var(--background4);
+}
+
+th {
+    background-color: var(--background3);
+    font-weight: bold;
 }
 
 table.with-sticky {
@@ -151,6 +161,10 @@ td.sticky, th.sticky {
     left: 0;
     background-color: inherit;
     z-index: 1;
+}
+
+th.sticky {
+    background-color: var(--background3);
 }
 
 thead.sticky {

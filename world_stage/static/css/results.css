@@ -97,3 +97,7 @@ td, th {
 .unrevealed > td, .unrevealed > th {
     opacity: 0;
 }
+
+td.extra-visible {
+    opacity: 1;
+}
