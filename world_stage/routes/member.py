@@ -399,16 +399,19 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
         countries['placeholder'] = cursor.fetchall()
     elif user_count < MAX_USER_SUBMISSIONS and not closed and year_count < MAX_YEAR_SUBMISSIONS:
         cursor.execute('''
-            SELECT name, id AS cc FROM country
-            WHERE available_from <= %(year)s AND available_until >= %(year)s
-                  AND is_participating
-                  AND id NOT IN (
-                      SELECT country_id FROM song
-                      WHERE year_id = %(year)s
-                        AND submitter_id = %(user)s
-                        AND NOT is_placeholder
-                  )
-            ORDER BY name
+            SELECT c.name, c.id AS cc
+            FROM country AS c
+            WHERE c.available_from <= %(year)s AND c.available_until >= %(year)s
+              AND c.is_participating
+              AND NOT EXISTS (
+                SELECT 1
+                FROM song AS s
+                WHERE s.year_id = %(year)s
+                AND s.country_id = c.id
+                AND s.is_placeholder = FALSE
+                AND s.submitter_id <> %(user)s
+            )
+            ORDER BY c.name
         ''', {'year': year, 'user': user_id})
         countries['placeholder'] = cursor.fetchall()
 

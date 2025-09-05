@@ -4,7 +4,7 @@
     gap: 0.25em;
     flex-direction: column;
     font-style: italic;
-    max-width: 300px;
+    width: fit-content;
 }
 
 .song-title > a {

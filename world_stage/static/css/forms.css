@@ -68,6 +68,10 @@ fieldset.rightlabels > label {
     align-items: center;
 }
 
+.span-fieldset.horizontal {
+    flex-direction: row;
+}
+
 optgroup:empty {
     display: none;
 }
