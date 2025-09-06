@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 144 96">
-	<path fill="#fff" d="M0 0h144v96H0z"/>
-	<path fill="#c12" d="M0 0h144v32H0z"/>
-	<path fill="#13a" d="M0 64h144v32H0z"/>
-	<g transform="translate(24 0)">
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+	<path fill="#fff" d="M0 0h96v96H0z"/>
+	<path fill="#c12" d="M0 0h96v32H0z"/>
+	<path fill="#13a" d="M0 64h96v32H0z"/>
+	<g>
 		<circle fill="#c12" cx="48" cy="48" r="14"/>
 		<circle fill="#fff" cx="48" cy="48" r="13"/>
 		<circle fill="#13a" cx="48" cy="48" r="12"/>
