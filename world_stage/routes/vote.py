@@ -9,14 +9,31 @@ from ..db import get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
 
-def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id):
+def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id) -> tuple[bool, str]:
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT id FROM vote_set WHERE voter_id = %s AND show_id = %s', (voter_id,show_id))
-    vote_set_id = cursor.fetchone()['id'] # type: ignore
+    session_id = request.cookies.get('session')
+    user_data = get_user_id_from_session(session_id)
+    user_id = None
+    if user_data:
+        user_id = user_data[0]
 
-    cursor.execute('UPDATE vote_set SET nickname = %s, country_id = %s WHERE id = %s', (nickname, country_id or 'XXX', vote_set_id))
+    cursor.execute('SELECT id, ip_address FROM vote_set WHERE voter_id = %s AND show_id = %s', (voter_id, show_id))
+    vote_set_data = cursor.fetchone()
+    if not vote_set_data:
+        return False, "Votes not found"
+
+    vote_set_id = vote_set_data['id']
+    ip_addr = vote_set_data['ip_address']
+
+    if voter_id != user_id and ip_addr != request.remote_addr:
+        return False, "IP addresses don't match. Log in or use the same device to vote."
+
+    cursor.execute('''
+        UPDATE vote_set SET nickname = %s, country_id = %s, ip_address = %s
+        WHERE id = %s
+    ''', (nickname, country_id or 'XXX', request.remote_addr, vote_set_id))
 
     cursor.execute('UPDATE vote SET song_id = NULL WHERE vote_set_id = %s', (vote_set_id,))
 
@@ -27,7 +44,9 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id
             WHERE vote_set_id = %s AND score = %s
         ''', (song_id, vote_set_id, score))
 
-def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
+    return True, "updated"
+
+def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -> tuple[bool, str]:
     db = get_db()
     cursor = db.cursor()
 
@@ -38,23 +57,23 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes):
     cursor.execute('SELECT id FROM vote_set WHERE voter_id = %s AND show_id = %s', (voter_id, show_id))
     existing_vote_set = cursor.fetchone()
 
+    res = True
     if not existing_vote_set:
         cursor.execute('''
-            INSERT INTO vote_set (voter_id, show_id, country_id, nickname, created_at)
-            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO vote_set (voter_id, show_id, country_id, nickname, ip_address, created_at)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             RETURNING id
-            ''', (voter_id, show_id, country_id or 'XXX', nickname))
+            ''', (voter_id, show_id, country_id or 'XXX', nickname, request.remote_addr))
         vote_set_id = cursor.fetchone()['id'] # type: ignore
         for score, song_id in votes.items():
             cursor.execute('INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)', (vote_set_id, song_id, score))
         action = "added"
     else:
-        update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id)
-        action = "updated"
+        res, action = update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id)
 
     db.commit()
 
-    return action
+    return res, action
 
 @bp.get('/')
 def index():
@@ -178,6 +197,9 @@ def vote_post(show: str):
     username = request.form['username']
     username = unicodedata.normalize('NFKC', username)
     username = username.strip()
+
+    session_id = request.cookies.get('session')
+
     nickname = request.form['nickname']
     nickname = nickname.strip()
     country_id: Optional[str] = request.form['country']
@@ -197,6 +219,16 @@ def vote_post(show: str):
         voter_id = voter['id']
     else:
         voter_id = 0
+
+    cursor.execute('''
+        SELECT 1
+        FROM vote_set
+        WHERE show_id = %s
+          AND ip_address = %s
+    ''', (show_data.id, request.remote_addr))
+
+    if cursor.fetchone():
+        return render_template('error.html', error="A vote has already been entered from this IP address.")
 
     country_codes = []
     country_names = []
@@ -246,10 +278,13 @@ def vote_post(show: str):
         errors.append(f"Duplicate votes: {'; '.join(map(lambda v: f"{', '.join(map(str, v))} points", invalid_votes.values()))}")
 
     if not errors:
-        action = add_votes(username, nickname or None, country_id, show_data.id, show_data.point_system_id, votes)
-        resp = make_response(render_template('vote/success.html', action=action, what='vote', what_act='voting'))
-        resp.set_cookie('username', username, max_age=datetime.timedelta(days=30))
-        return resp
+        res, action = add_votes(username, nickname or None, country_id, show_data.id, show_data.point_system_id, votes)
+        if res:
+            resp = make_response(render_template('vote/success.html', action=action, what='vote', what_act='voting'))
+            resp.set_cookie('username', username, max_age=datetime.timedelta(days=30))
+            return resp
+        else:
+            return render_template('error.html', error=action)
 
     return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, errors=errors,
