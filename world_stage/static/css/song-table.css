@@ -4,8 +4,6 @@
     gap: 0.25em;
     flex-direction: column;
     font-style: italic;
-    width: fit-content;
-    max-width: 300px;
 }
 
 .song-title > a {
@@ -14,6 +12,8 @@
     -webkit-line-clamp: 3;
     line-clamp: 3;
     overflow: hidden;
+    width: fit-content;
+    max-width: 300px;
 }
 
 .song-artist {

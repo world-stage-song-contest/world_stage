@@ -51,9 +51,10 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
     cursor = db.cursor()
 
     cursor.execute('SELECT id FROM account WHERE username = %s', (username,))
-    voter_id = cursor.fetchone()
-    if not voter_id:
-        return False, f"User with name '{username}' not found. Ensure that you entered your display name into the Display Name field."
+    voter_id_data = cursor.fetchone()
+    if not voter_id_data:
+        return False, f"User with name '{username}' not found. Ensure that you entered your username into the Voter Name field and your display name into the Display Name field."
+    voter_id = voter_id_data['id']
 
     cursor.execute('SELECT id FROM vote_set WHERE voter_id = %s AND show_id = %s', (voter_id, show_id))
     existing_vote_set = cursor.fetchone()
@@ -228,8 +229,8 @@ def vote_post(show: str):
           AND ip_address = %s
     ''', (show_data.id, request.remote_addr))
 
-    if cursor.fetchone():
-        return render_template('error.html', error="A vote has already been entered from this IP address.")
+    #if cursor.fetchone():
+    #    return render_template('error.html', error="A vote has already been entered from this IP address.")
 
     country_codes = []
     country_names = []

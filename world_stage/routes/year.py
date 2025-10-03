@@ -3,6 +3,7 @@ from flask import request, Blueprint
 import typing
 
 from ..utils import (LCG, AbstractVoteSequencer, RandomVoteSequencer, Show, SuspensefulVoteSequencer,
+                     ChronologicalVoteSequencer,
                      get_show_id, dt_now, get_user_role_from_session,
                      get_votes_for_song, get_year_songs, get_year_winner,
                      get_special_winner, render_template, get_show_songs)
@@ -307,8 +308,10 @@ def scores(year: str, show: str):
     sequencer: AbstractVoteSequencer
     if show_data.id < 60:
         sequencer = SuspensefulVoteSequencer(results, songs, show_data.points, seed=show_data.id)
-    else:
+    elif show_data.id < 65:
         sequencer = RandomVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+    else:
+        sequencer = ChronologicalVoteSequencer(results, songs, show_data.points, seed=show_data.id)
     vote_order = sequencer.get_order()
 
     user_songs = defaultdict(list)
@@ -533,8 +536,8 @@ def show_voters(year: str, show: str):
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT username, nickname, COALESCE(cc, 'XXX') FROM vote_set
-        JOIN user ON voter_id = user.id
+        SELECT username, nickname, COALESCE(country.id, 'XXX') FROM vote_set
+        JOIN account ON voter_id = account.id
         LEFT OUTER JOIN country ON country_id = country.id
         WHERE show_id = %s
     ''', (show_data.id,))

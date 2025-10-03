@@ -275,9 +275,9 @@
 }
 
 .flag-overlay.dot-mask {
-  background-image: 
+  background-image:
     radial-gradient(
-      circle, 
+      circle,
       transparent 0, transparent 0.5px,
       black 0.5px, black 1px
     );
@@ -391,7 +391,7 @@
 }
 
 .own-entry .current-points {
-    filter: brightness(0.1);
+    filter: brightness(2);
 }
 
 .winner .total-points {
