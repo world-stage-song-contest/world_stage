@@ -5,6 +5,7 @@
     flex-direction: column;
     font-style: italic;
     width: fit-content;
+    max-width: 300px;
 }
 
 .song-title > a {

@@ -73,3 +73,9 @@ li:target > div {
     min-height: 1em;
     tab-size: 1em;
 }
+
+.song-title {
+    font-style: italic;
+    display: flex;
+    flex-direction: column;
+}

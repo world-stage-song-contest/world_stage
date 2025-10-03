@@ -50,9 +50,10 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('INSERT INTO account (username) VALUES (%s) ON CONFLICT DO NOTHING', (username,))
     cursor.execute('SELECT id FROM account WHERE username = %s', (username,))
-    voter_id = cursor.fetchone()['id'] # type: ignore
+    voter_id = cursor.fetchone()
+    if not voter_id:
+        return False, f"User with name '{username}' not found. Ensure that you entered your display name into the Display Name field."
 
     cursor.execute('SELECT id FROM vote_set WHERE voter_id = %s AND show_id = %s', (voter_id, show_id))
     existing_vote_set = cursor.fetchone()

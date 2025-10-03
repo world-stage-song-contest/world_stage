@@ -209,6 +209,10 @@ class RandomVoteSequencer(AbstractVoteSequencer):
 
         return final_order
 
+class ChronologicalVoteSequencer(AbstractVoteSequencer):
+    def get_order(self) -> List[str]:
+        return list(self.vote_dict.keys())
+
 @dataclass
 class ShowData:
     id: int
