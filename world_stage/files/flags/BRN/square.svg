@@ -1,0 +1,9 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 4 4">
+<style><![CDATA[.A{fill:#fff}.B{fill:#fc2}.C{fill:#c12}.D{fill:#111}]]></style>
+	<path class="A" d="M0 0h4v4H0z"/>
+	<path class="D" d="M0 1v3h4v-1z"/>
+	<g class="B">
+		<path d="M0 0h4v2z"/>
+		<path d="M0 2v2h4z"/>
+		</g>
+	</svg>
