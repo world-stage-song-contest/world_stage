@@ -13,6 +13,6 @@
 	<g clip-path="url(#f)" fill="none">
 		<path stroke="#FFF" stroke-width="4" d="m18 6H9L0 0v12l9-6"/>
 		<path fill="#111" stroke="#fb1" stroke-width="4" clip-path="url(#t)" d="m0 0 9 6L0 12"/>
-		<path stroke="#175" stroke-width="2.4" d="m0 0 9 6h9M0 12l9-6"/>
+		<path stroke="#175" stroke-width="2" d="m0 0 9 6h9M0 12l9-6"/>
 		</g>
 	</svg>

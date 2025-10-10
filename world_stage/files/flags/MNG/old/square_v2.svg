@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 90 90">
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 81 81">
 <style><![CDATA[.A{fill:#c23}.B{fill:#059}.C{fill:#fd2}]]></style>
-	<path class="A" d="M0 0h90v90H0z"/>
-	<path class="B" d="M30 0h30v90H30z"/>
-	<g transform="translate(-5 15)">
+	<path class="A" d="M0 0h81v81H0z"/>
+	<path class="B" d="M27 0h27v81H27z"/>
+	<g transform="translate(-6.5 10.5)">
 		<g class="C">
 			<path id="tr" d="M20 51l-5 -3h10z"/>
 			<use transform="translate(0 -21)" href="#tr"/>

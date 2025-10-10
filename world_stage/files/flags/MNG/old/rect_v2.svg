@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 90 60">
+<style><![CDATA[.A{fill:#c23}.B{fill:#059}.C{fill:#fd2}.D{fill:#012}]]></style>
+	<path class="A" d="M0 0h90v60H0z"/>
+	<path class="B" d="M30 0h30v60H30z"/>
+	<g class="C">
+		<path id="tr" d="M20 51l-5 -3h10z"/>
+		<use transform="translate(0 -21)" href="#tr"/>
+		<path id="sq" d="M15 45h10v2h-10z"/>
+		<use transform="translate(0 -14)" href="#sq"/>
+		<circle cx="20" cy="39" r="5"/>
+		<circle class="A" cx="20" cy="36.5" r="2.75"/>
+		<circle class="C" cx="20" cy="36.5" r="2.25"/>
+		<circle class="A" cx="20" cy="41.5" r="2.75"/>
+		<circle class="C" cx="20" cy="41.5" r="2.25"/>
+		</g>
+	</svg>

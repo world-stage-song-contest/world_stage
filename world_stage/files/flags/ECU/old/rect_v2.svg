@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="600" height="400" style="cursor: default;"><script xmlns=""/>
+  <path fill="#fd0" d="M0 0H600V400H0z"/>
+  <path fill="#034ea2" d="M0 200H600V300H0z"/>
+  <path fill="#ed1c24" d="M0 300H600V400H0z"/>
+  <g transform="translate(224.0419 196.72454) scale(.93370165)" fill="#fff">
+    <g id="e" fill="#fff">
+      <g transform="translate(74.434827 9.0359054) scale(5.5278641)" id="c" fill="#fff">
+        <g id="b" fill="#fff">
+          <path transform="rotate(18 3.15687581 -.49999998)" id="a" fill="#fff" d="M0 1 .5 1 0 0z"/>
+          <use transform="scale(-1 1)" width="744.09448" height="1052.3622" xlink:href="#a"/>
+        </g>
+        <use transform="rotate(72)" width="744.09448" height="1052.3622" xlink:href="#b"/>
+        <use transform="rotate(-72)" width="744.09448" height="1052.3622" xlink:href="#b"/>
+        <use transform="rotate(144)" width="744.09448" height="1052.3622" xlink:href="#b"/>
+        <use transform="rotate(-144)" width="744.09448" height="1052.3622" xlink:href="#b"/>
+      </g>
+      <use transform="translate(-12.161542 2.9535172)" width="396" height="216" xlink:href="#c"/>
+      <use transform="translate(-23.628138 9.2080244)" width="396" height="216" xlink:href="#c"/>
+      <use transform="translate(-33.009899 18.416049)" id="d" x="0" y="0" width="396" height="216" xlink:href="#c" fill="#fff"/>
+      <use transform="translate(-6.0523405 10.788955)" width="396" height="216" xlink:href="#d"/>
+      <use transform="translate(-42.103238 42.366383)" width="396" height="216" xlink:href="#c"/>
+      <use transform="translate(-42.366383 54.997355)" width="396" height="216" xlink:href="#c"/>
+      <use transform="translate(-39.20864 67.365181)" width="396" height="216" xlink:href="#c"/>
+      <use transform="translate(-32.893154 78.943571)" width="396" height="216" xlink:href="#c"/>
+      <use transform="translate(-23.419926 88.153654)" width="396" height="216" xlink:href="#c"/>
+      <use transform="translate(-12.367826 94.205995)" width="396" height="216" xlink:href="#c"/>
+      <use transform="translate(0 97.100593)" width="396" height="216" xlink:href="#c"/>
+    </g>
+    <use transform="matrix(-1 0 0 1 162.70314 0)" width="396" height="216" xlink:href="#e"/>
+  </g>
+</svg>
