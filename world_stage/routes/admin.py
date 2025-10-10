@@ -602,7 +602,7 @@ def set_pots_post(year: int):
 
         cursor.execute('''
             UPDATE country
-            SET priority = %s
+            SET pot = %s
             WHERE id = %s
         ''', (pot, country_id))
 

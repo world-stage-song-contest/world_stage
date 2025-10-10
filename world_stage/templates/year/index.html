@@ -61,7 +61,7 @@
                         </a>
                     {% if winner.native_title %}
                         <a href="{{ url_for('country.details', code=winner.country.cc.lower(), year=winner.year) }}">
-                            <bdi lang="{{winner.title_lang.str(None, winner.country.cc2)}}">{{ winner.native_title }}</bdi>
+                            <bdi lang="{{winner.native_lang.str(None, winner.country.cc2)}}">{{ winner.native_title }}</bdi>
                         </a>
                     {% endif %}
                     </div>

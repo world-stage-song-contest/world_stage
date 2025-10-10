@@ -1112,7 +1112,7 @@ def get_year_shows(year: int, pattern: str = '') -> list[dict]:
 
     cursor.execute('''
         SELECT show_name, short_name FROM show
-        WHERE year_id = %s AND short_name LIKE %s
+        WHERE year_id = %s AND short_name LIKE %s COLLATE "C"
     ''', (year, pattern + '%'))
 
     shows = cursor.fetchall()

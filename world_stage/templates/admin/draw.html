@@ -33,7 +33,7 @@
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
-                <div class="flag-container value">{{ flag("XXX", 25, "Unknown") }}</div>
+                <div class="flag-container value">{{ flag("XXX", 24, "Unknown") }}</div>
                 <div class="country-name value"></div>
             </div>
         {% endfor %}
@@ -52,7 +52,7 @@
             <div class="pot-item item"
                  data-code="{{ country.cc }}"
                  data-submitter="{{ country.submitter }}">
-                <div class="flag-container">{{ flag(country.cc, 25, country.name) }}</div>
+                <div class="flag-container">{{ flag(country.cc, 24, country.name) }}</div>
                 <div class="country-name">{{ country.name }}</div>
             </div>
         {% endfor %}
