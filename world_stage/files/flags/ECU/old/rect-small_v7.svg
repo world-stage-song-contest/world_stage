@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
+	<path fill="#149" d="M0 0h144v96H0z"/>
+	<path fill="#fd0" d="M0 0h144v48H0z"/>
+	<path fill="#d23" d="M0 72h144v24H0z"/>
+	<g fill="#fff" transform="rotate(7.5 72 60)">
+		<g id="g">
+			<g id="e">
+				<g id="a"><circle cx="72" cy="50" r="1"/></g>
+				<g id="b" transform="rotate(15 72 60)"><use href="#a"/></g>
+				<g id="c" transform="rotate(15 72 60)"><use href="#b"/></g>
+				<g id="d" transform="rotate(15 72 60)"><use href="#c"/></g>
+				</g>
+			<g id="f" transform="rotate(60 72 60)"><use href="#e"/></g>
+			</g>
+		<g id="h" transform="rotate(120 72 60)"><use href="#g"/></g>
+		<g id="i" transform="rotate(240 72 60)"><use href="#g"/></g>
+		</g>
+	</svg>
