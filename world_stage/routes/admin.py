@@ -403,7 +403,8 @@ def manage_show_post(year: int, show: str):
         case 'open_voting':
             cursor.execute('''
                 UPDATE show
-                SET voting_opens = CURRENT_TIMESTAMP
+                SET voting_opens = COALESCE(voting_opens, CURRENT_TIMESTAMP)
+                  , voting_closes = NULL
                 WHERE year_id = %s AND short_name = %s
             ''', (year, show))
         case 'close_voting':

@@ -87,7 +87,9 @@ def index():
     cursor.execute('''
         SELECT id, show_name AS name, short_name, year_id AS year, voting_opens, voting_closes
         FROM show
-        WHERE voting_opens <= CURRENT_TIMESTAMP AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
+        WHERE voting_opens <= CURRENT_TIMESTAMP
+          AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
+        ORDER BY id
     ''')
 
     for row in cursor.fetchall():

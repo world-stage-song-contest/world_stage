@@ -370,6 +370,18 @@ class Language:
             'suppress_script': self.suppress_script,
         }
 
+class RawSongData(dict):
+    def __init__(self, data=None, **kwargs):
+        if data is None:
+            data = {}
+        super().__init__(data, **kwargs)
+
+class CachedSongData(dict):
+    def __init__(self, data=None, **kwargs):
+        if data is None:
+            data = {}
+        super().__init__(data, **kwargs)
+
 @total_ordering
 @dataclass
 class Song:
@@ -396,7 +408,43 @@ class Song:
     sources: str | None
     hidden: bool = False
 
-    def __init__(self, *,
+    def __init__(self, song: RawSongData | CachedSongData):
+        if isinstance(song, RawSongData):
+            self._RawSongData_init(song)
+        elif isinstance(song, CachedSongData):
+            pass
+        else:
+            raise TypeError(f'Bad type: {type(song)}')
+
+    def _RawSongData_init(self, song: RawSongData):
+        self._raw_init(
+            id=song['id'],
+            title=song['title'],
+            native_title=song['native_title'],
+            artist=song['artist'],
+            video_link=song['video_link'],
+            recap_start=song['snippet_start'],
+            recap_end=song['snippet_end'],
+            country=Country(cc=song['country_id'],
+                            name=song['name'],
+                            is_participating=bool(song['is_participating']),
+                            cc2=song['cc2']),
+            placeholder=bool(song['is_placeholder']),
+            year=song['year_id'],
+            title_lang=song['title_language_id'],
+            submitter_id=song['submitter_id'],
+            native_lang=song['native_language_id'],
+            translated_lyrics=song['translated_lyrics'],
+            latin_lyrics=song['romanized_lyrics'],
+            native_lyrics=song['native_lyrics'],
+            lyrics_notes=song['notes'],
+            sources=song['sources'],
+            submitter=song['username'],
+            show_id=song.get('show_id'),
+            ro=song.get('running_order')
+        )
+
+    def _raw_init(self, *,
                  id: int, title: str, native_title: str | None, artist: str,
                  country: Country, year: int | None,
                  placeholder: bool, submitter: str | None, submitter_id: int | None,
@@ -811,30 +859,8 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
         WHERE show.id = %s
         ORDER BY {additional_sort} song_show.running_order, song_show.id
         ''', (show_id,))
-    songs = [Song(id=song['id'],
-                  title=song['title'],
-                  native_title=song['native_title'],
-                  artist=song['artist'],
-                  video_link=song['video_link'],
-                  recap_start=song['snippet_start'],
-                  recap_end=song['snippet_end'],
-                  country=Country(cc=song['country_id'],
-                                    name=song['name'],
-                                    is_participating=bool(song['is_participating']),
-                                    cc2=song['cc2']),
-                  year=song['year_id'],
-                  placeholder=bool(song['is_placeholder']),
-                  submitter=song['username'],
-                  submitter_id=song['submitter_id'],
-                  title_lang=song['title_language_id'],
-                  native_lang=song['native_language_id'],
-                  translated_lyrics=song['translated_lyrics'],
-                  latin_lyrics=song['romanized_lyrics'],
-                  native_lyrics=song['native_lyrics'],
-                  lyrics_notes=song['notes'],
-                  ro=song['running_order'],
-                  sources=song['sources'],
-                  show_id=show_id if select_votes else None)
+    songs = [Song(RawSongData(song,
+                              show_id=show_id if select_votes else None))
                 for song in cursor.fetchall()]
 
     if select_languages:
@@ -890,28 +916,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
         WHERE song.year_id = %s
         ORDER BY country.name
         ''', (year,))
-    songs = [Song(id=song['id'],
-                  title=song['title'],
-                  native_title=song['native_title'],
-                  artist=song['artist'],
-                  video_link=song['video_link'],
-                  recap_start=song['snippet_start'],
-                  recap_end=song['snippet_end'],
-                  country=Country(cc=song['country_id'],
-                                    name=song['name'],
-                                    is_participating=bool(song['is_participating']),
-                                    cc2=song['cc2']),
-                  placeholder=bool(song['is_placeholder']),
-                  year=song['year_id'],
-                  submitter_id=song['submitter_id'],
-                  title_lang=song['title_language_id'],
-                  native_lang=song['native_language_id'],
-                  translated_lyrics=song['translated_lyrics'],
-                  latin_lyrics=song['romanized_lyrics'],
-                  native_lyrics=song['native_lyrics'],
-                  lyrics_notes=song['notes'],
-                  sources=song['sources'],
-                  submitter=song['username']) for song in cursor.fetchall()]
+    songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
 
     if select_languages:
         for song in songs:
@@ -953,28 +958,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
             WHERE song.submitter_id = %s AND song.year_id IS NOT NULL
             ORDER BY song.year_id, country.name
         ''', (user_id,))
-    songs = [Song(id=song['id'],
-                  title=song['title'],
-                  native_title=song['native_title'],
-                  artist=song['artist'],
-                  video_link=song['video_link'],
-                  recap_start=song['snippet_start'],
-                  recap_end=song['snippet_end'],
-                  country=Country(cc=song['country_id'],
-                                    name=song['name'],
-                                    is_participating=bool(song['is_participating']),
-                                    cc2=song['cc2']),
-                  placeholder=bool(song['is_placeholder']),
-                  year=song['year_id'],
-                  submitter_id=song['submitter_id'],
-                  title_lang=song['title_language_id'],
-                  native_lang=song['native_language_id'],
-                  translated_lyrics=song['translated_lyrics'],
-                  latin_lyrics=song['romanized_lyrics'],
-                  native_lyrics=song['native_lyrics'],
-                  lyrics_notes=song['notes'],
-                  sources=song['sources'],
-                  submitter=song['username']) for song in cursor.fetchall()]
+    songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
 
     if select_languages:
         for song in songs:
@@ -999,28 +983,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
         WHERE (song.country_id = %(cc)s OR country.cc2 = %(cc)s) AND song.year_id IS NOT NULL
         ORDER BY song.year_id, country.name
     ''', {'cc':code})
-    songs = [Song(id=song['id'],
-                  title=song['title'],
-                  native_title=song['native_title'],
-                  artist=song['artist'],
-                  video_link=song['video_link'],
-                  recap_start=song['snippet_start'],
-                  recap_end=song['snippet_end'],
-                  country=Country(cc=song['country_id'],
-                                    name=song['name'],
-                                    is_participating=bool(song['is_participating']),
-                                    cc2=song['cc2']),
-                  placeholder=bool(song['is_placeholder']),
-                  year=song['year_id'],
-                  title_lang=song['title_language_id'],
-                  submitter_id=song['submitter_id'],
-                  native_lang=song['native_language_id'],
-                  translated_lyrics=song['translated_lyrics'],
-                  latin_lyrics=song['romanized_lyrics'],
-                  native_lyrics=song['native_lyrics'],
-                  lyrics_notes=song['notes'],
-                  sources=song['sources'],
-                  submitter=song['username']) for song in cursor.fetchall()]
+    songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
 
     if select_languages:
         for song in songs:
@@ -1048,28 +1011,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
     song = cursor.fetchone()
     if not song:
         return None
-    ret = Song(id=song['id'],
-                  title=song['title'],
-                  native_title=song['native_title'],
-                  artist=song['artist'],
-                  video_link=song['video_link'],
-                  recap_start=song['snippet_start'],
-                  recap_end=song['snippet_end'],
-                  country=Country(cc=song['country_id'],
-                                    name=song['name'],
-                                    is_participating=bool(song['is_participating']),
-                                    cc2=song['cc2']),
-                  placeholder=bool(song['is_placeholder']),
-                  year=song['year_id'],
-                  submitter_id=song['submitter_id'],
-                  title_lang=song['title_language_id'],
-                  native_lang=song['native_language_id'],
-                  translated_lyrics=song['translated_lyrics'],
-                  latin_lyrics=song['romanized_lyrics'],
-                  native_lyrics=song['native_lyrics'],
-                  lyrics_notes=song['notes'],
-                  sources=song['sources'],
-                  submitter=song['username'])
+    ret = Song(RawSongData(song))
 
     ret.languages = get_song_languages(ret.id)
     return ret
