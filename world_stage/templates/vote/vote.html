@@ -21,7 +21,7 @@
             <dt><strong>Display Name</strong></dt>
             <dd>The name you want to be displayed on the scoreboard. If left blank, will default to the username.</dd>
             <dt><strong>Country</strong> (Required)</dt>
-            <dd>The flag you're voting under. If you submitted an entry, you may only choose a flag of the country you've submitted admins.
+            <dd>The flag you're voting under. If you submitted an entry, you may only choose a flag of one of the countries you've submitted for.
                 Otherwise, you can choose any country. If you haven't submitted an entry, you're allowed to vote for anything.</dd>
             </dd>
         </dl>
@@ -82,7 +82,7 @@
     </div>
      <fieldset class="grid">
             <legend>Recap</legend>
-            {% set url = "https://funcall.me/data/recaps/" ~ year ~ short_name ~ ".mov" %}
+            {% set url = "https://media.world-stage.org/recaps/" ~ year ~ short_name ~ ".mov" %}
             <video width="560" height="315" controls><source src="{{ url }}" type="video/mp4">Your browser does not support the video tag.</video>
     </fieldset>
     <div>

@@ -22,7 +22,12 @@
 </div>
 {% else %}
 <div>
-    <strong><big>Total voters:{{voters}}</big></strong>
+    <strong><big>Total voters: {{voters}}</big></strong>
+</div>
+<div style="margin: 0.5em 0;">
+    <strong>Download playlist:</strong>
+    <a href="{{ url_for('year.show_playlist', year=year, show=show) }}">With postcards</a>/<a
+    href="{{ url_for('year.show_playlist', year=year, show=show, postcards='false') }}">Without postcards</a>
 </div>
 <div id="scroll-container">
 <table class="sortable">
@@ -78,7 +83,7 @@
 </div>
 <fieldset class="grid">
     <legend>Recap</legend>
-    {% set url = "https://funcall.me/data/recaps/" ~ year ~ short_name ~ ".mov" %}
+    {% set url = "https://media.world-stage.org/recaps/" ~ year ~ short_name ~ ".mov" %}
     <video width="560" height="315" controls><source src="{{ url }}" type="video/mp4">Your browser does not support the video tag.</video>
 </fieldset>
 {% endif %}

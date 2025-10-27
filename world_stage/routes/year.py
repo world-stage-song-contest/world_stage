@@ -1,9 +1,10 @@
 from collections import defaultdict
-from flask import request, Blueprint
+import io
+from flask import Response, request, Blueprint
 import typing
 
 from ..utils import (LCG, AbstractVoteSequencer, RandomVoteSequencer, Show, SuspensefulVoteSequencer,
-                     ChronologicalVoteSequencer,
+                     ChronologicalVoteSequencer, ShowData,
                      get_show_id, dt_now, get_user_role_from_session,
                      get_votes_for_song, get_year_songs, get_year_winner,
                      get_special_winner, render_template, get_show_songs)
@@ -543,3 +544,84 @@ def show_voters(year: str, show: str):
     ''', (show_data.id,))
 
     return render_template('year/voters.html')
+
+def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[str]]:
+    def write(buf: io.StringIO, val: str):
+        buf.write(val)
+        buf.write("\n")
+
+    def write_header(buf: io.StringIO):
+        write(buf, "#EXTINF:0")
+        write(buf, "#EXTVLCOPT:network-caching=3000")
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT cc2, video_link FROM song
+        JOIN song_show ON song_show.song_id = song.id
+        JOIN country ON song.country_id = country.id
+        WHERE song_show.show_id = %s
+        ORDER BY running_order
+    ''', (show_data.id,))
+
+    output = io.StringIO(newline='\r\n')
+    output.write("#EXTM3U\n")
+
+    bad_countries = []
+
+    for song in cursor.fetchall():
+        cc = song['cc2']
+        url = song['video_link']
+        if postcards:
+            write_header(output)
+            write(output, f"https://media.world-stage.org/postcards/{cc.lower()}.mov")
+
+        write_header(output)
+        if 'media.world-stage.org' not in url:
+            bad_countries.append(cc)
+
+        write(output, url)
+
+    write_header(output)
+    write(output, f"https://media.world-stage.org/recaps/{show_data.year}{show_data.short_name}.mov")
+
+    if bad_countries:
+        return "", bad_countries
+
+    return output.getvalue(), []
+
+@bp.get('/<year>/<show>/playlist')
+def show_playlist(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    postcards = request.args.get('postcards', 'false') == 'true'
+
+    value, bad_countries = generate_playlist(show_data, postcards)
+
+    if bad_countries:
+        bad_countries.sort()
+        return render_template('error.html', error=("Not all links for this show have been corrected. "
+                                                    "Please ping one of the admins. "
+                                                    f"Invalid links: {', '.join(bad_countries)}."))
+
+    if postcards:
+        extra = ""
+    else:
+        extra = "x"
+
+    filename = f"{year}{show}{extra}.m3u"
+
+    response = Response(
+        value,
+        mimetype='application/x-mpegurl',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+    return response
