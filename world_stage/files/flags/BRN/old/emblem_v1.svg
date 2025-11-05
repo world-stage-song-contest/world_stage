@@ -1,0 +1,18 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<style><![CDATA[.A{fill:#fff}.B{fill:#fc2}.C{fill:#c12}.D{fill:#111}]]></style>
+	<path class="A" d="M0 0h32v32H0z"/>
+	<path class="D" d="M0 8v24h32v-8z"/>
+	<g class="B">
+		<path d="M0 0h32v16z"/>
+		<path d="M0 16v16h32z"/>
+		</g>
+	<g class="C">
+		<path clip-path="url(#crescentOuter)" d="M0 0h32v32H0z"/>
+		</g>
+	<clipPath id="crescentInner">
+		<circle cx="16" cy="13" r="7"/>
+		</clipPath>
+	<clipPath id="crescentOuter">
+		<circle clip-path="url(#crescentInner)" cx="16" cy="16" r="9"/>
+		</clipPath>
+	</svg>

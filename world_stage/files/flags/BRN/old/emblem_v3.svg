@@ -1,0 +1,30 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<style><![CDATA[.A{fill:#fff}.B{fill:#fc2}.C{fill:#c12}.D{fill:#111}]]></style>
+	<path class="A" d="M0 0h32v32H0z"/>
+	<path class="D" d="M0 8v24h32v-8z"/>
+	<g class="B">
+		<path d="M0 0h32v16z"/>
+		<path d="M0 16v16h32z"/>
+		</g>
+	<g class="C">
+		<path mask="url(#crescent)" d="M0 0h32v32H0z"/>
+		</g>
+	<mask id="crescent">
+		<path fill="black" d="M0 0h32v32H0z"/>
+		<g>
+			<circle fill="white" cx="16" cy="16" r="18"/>
+			<path fill="black" d="M0 26h32v6H0z"/>
+			<circle fill="white" cx="16" cy="16" r="16"/>
+			<path fill="black" d="M-8 0v32L16 16l-16 16h32L16 16L40 32v-32z"/>
+			<circle fill="black" cx="16" cy="16" r="14"/>
+			<circle fill="white" cx="16" cy="16" r="13"/>
+			<path fill="black" d="M-8 0v32L16 16l24 16v-32z"/>
+			<circle fill="black" cx="16" cy="16" r="10"/>
+			<circle fill="white" cx="16" cy="16" r="9"/>
+			<circle fill="black" cx="16" cy="13" r="7"/>
+			</g>
+		<g>
+			<circle fill="white" cx="16" cy="13" r="1"/>
+			</g>
+		</mask>
+	</svg>

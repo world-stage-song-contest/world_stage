@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="144" height="96" viewBox="20 0 960 640">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1000" height="640">
 <path d="M 0,0 H 1000 V 640 H 0 Z" fill="#139"/>
 <path d="M 0,160 H 1000 V 480 H 0 Z" fill="#c02"/>
 <g transform="matrix(1.6,0,0,1.6,187.4272,-697.54433)" fill="#fff" stroke="#c02" stroke-width=".96">

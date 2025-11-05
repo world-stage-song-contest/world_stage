@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="144" height="96" viewBox="0 0 540 360">
-	<path fill="#fc0" d="M0 0h540v360H0z"/>
-	<path fill="#173" d="M0 0h540v120H0z"/>
-	<path fill="#d12" d="M0 240h540v120H0z"/>
-	<g transform="translate(270 180)">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="96" height="96" viewBox="0 0 360 360">
+	<path fill="#fc0" d="M0 0h360v360H0z"/>
+	<path fill="#173" d="M0 0h360v120H0z"/>
+	<path fill="#d12" d="M0 240h360v120H0z"/>
+	<g transform="translate(180 180)">
 		<circle fill="#14a" r="120"/>
 		<g id="a">
 			<path fill="#fc0" d="m 0,-96 -4.205849,12.944272 17.347494,53.390097 H -9.987258 l -2.599358,8 h 74.162668 l 11.011056,-8 H 21.553343 Z"/>

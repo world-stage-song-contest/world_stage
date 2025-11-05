@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 144 96">
+<style><![CDATA[.red{fill:#c02}.blue{fill:#139}.white{fill:#fff}]]></style>
+	<path class="blue" d="M0 0h144v96H0z"/>
+	<path class="red"  d="M0 24h144v48H0z"/>
+	<g id="flip" transform="translate(72 66)">
+		<g id="outerTower" class="white" transform="translate(15 -15)">
+			<path d="M0 0h9v9H0z"/>
+			</g>
+		<g id="base" class="white">
+			<path d="M0 -6h28v1H0z"/>
+			<path d="M0 -4h30v1H0z"/>
+			<path d="M0 -2h32v1H0z"/>
+			<path d="M0  0h34v2H0z"/>
+			</g>
+		<g id="stair">
+			<g class="red" transform="translate(17 -7)">
+				<path d="M0  0h6v10H0z"/>
+				</g>
+			<g class="white" transform="translate(18 .5)">
+				<path d="M0 -6h4v1H0z"/>
+				<path d="M0 -4h4v1H0z"/>
+				<path d="M0 -2h4v1H0z"/>
+				<path d="M0  0h4v1H0z"/>
+				</g>
+			</g>
+		</g>
+	<use href="#flip" transform="scale(-1,1)" transform-origin="center"/>
+	</svg>
