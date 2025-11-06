@@ -5,6 +5,7 @@ from typing import Any, Optional, NamedTuple
 
 from ..db import get_db
 from ..utils import (
+    UserPermissions,
     get_user_id_from_session, format_seconds, get_user_permissions,
     get_user_role_from_session, get_years, parse_seconds, render_template
 )
@@ -160,9 +161,12 @@ class SongValidator:
         'sources': "Sources",
     }
 
-    def validate_submission(self, data: FormData, user_permissions) -> list[str]:
+    def validate_submission(self, data: FormData, user_permissions: UserPermissions) -> list[str]:
         """Validate form data for submission"""
         errors = []
+
+        if user_permissions.can_view_restricted:
+            return []
 
         # Required field validation
         for field, display_name in self.REQUIRED_FIELDS.items():
@@ -560,6 +564,19 @@ def submit_song_post():
 
     except Exception as e:
         return render_error_template(form_data, f"System error: {str(e)}", [])
+
+#@bp.patch('/submit')
+def patch_submission():
+    session_id = request.cookies.get('session')
+    if not session_id:
+        return redirect(url_for('session.login'))
+
+    user_data = get_user_id_from_session(session_id)
+    if not user_data:
+        return redirect(url_for('session.login'))
+
+    default_user_id = user_data[0]
+    permissions = get_user_permissions(default_user_id)
 
 def render_error_template(form_data: FormData, error: str, missing_fields: list[str]):
     """Render error template with consistent data"""

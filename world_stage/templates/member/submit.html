@@ -158,14 +158,14 @@
         <div class="banner long-text">
             <div>
                 Please provide sources for the release date of the song.
-                If the sources aren't provided before the show,
+                If the sources aren't provided before the submission deadline,
                 the song will not be approved by the admins.
             </div>
         </div>
         <div>
             <label for="sources" class="req">Sources</label>
         </div>
-        <textarea id="sources" name="sources" rows="5" cols="50" required
+        <textarea id="sources" name="sources" rows="5" cols="50" {%if not elevated%}required{%endif%}
             placeholder="Sources for the release date and originality of the song">{{ data.sources }}</textarea>
     </fieldset>
 
@@ -245,14 +245,14 @@
                 separated with a double blank line (i.e. you hit the Enter/Return key twice).
             </div>
         </div>
-        <details>
+        <details open>
             <summary>English lyrics</summary>
             <div class="limit-length">
                 If the song is fully in English, enter the lyrics only here. Otherwise, enter a full translation here.
             </div>
             <textarea id="translated_lyrics" name="translated_lyrics" rows="15" cols="50" placeholder="English lyrics">{{ data.translated_lyrics }}</textarea>
         </details>
-        <details>
+        <details open>
             <summary>Native lyrics (Latin alphabet)</summary>
             <div class="limit-length">
                 Leave blank if the song is natively in English.
@@ -261,7 +261,7 @@
             </div>
             <textarea id="romanized_lyrics" name="romanized_lyrics" rows="15" cols="50" placeholder="Native lyrics (Latin alphabet)">{{ data.romanized_lyrics }}</textarea>
         </details>
-        <details>
+        <details open>
             <summary>Native lyrics (non-Latin alphabet)</summary>
             <div class="limit-length">
                 If the song lyrics are already written in a Latin script, leave blank.

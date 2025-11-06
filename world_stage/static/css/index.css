@@ -148,6 +148,7 @@ table {
 
 th {
     background-color: var(--background3);
+    color: var(--foreground2);
     font-weight: bold;
 }
 

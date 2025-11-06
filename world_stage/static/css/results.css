@@ -14,7 +14,7 @@
 
 .user-vote-container {
     overflow: hidden;
-    width: 30px;
+    max-width: 30px;
     font-family: monospace;
     display: flex;
     flex-direction: column;
@@ -31,8 +31,7 @@
 }
 
 .vote-flag {
-    box-sizing: border-box;
-    width: 30px;
+    width: 24px;
     border: 1px solid grey;
 }
 
@@ -47,7 +46,7 @@
 .country {
     display: flex;
     gap: 0.25em;
-	  align-items: center;
+	align-items: center;
 }
 
 th.plain {
