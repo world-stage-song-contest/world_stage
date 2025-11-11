@@ -1,6 +1,7 @@
-<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 360 360">
-	<path fill="#d23" d="M0 0h540v360H0z"/>
-	<g transform="translate(180,180)" fill="#fd0">
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 720 480">
+	<path fill="#094" d="M0 0h720v480H0z"/>
+	<path fill="#e23" d="M0 0h720v240H0z"/>
+	<g transform="translate(360,240)" fill="#fc1">
 		<g id="c">
 			<path id="t" d="M 0,-100 V 0 H 50" transform="rotate(18 0,-100)"/>
 			<use href="#t" transform="scale(-1,1)"/>
