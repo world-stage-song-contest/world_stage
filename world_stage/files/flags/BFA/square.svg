@@ -1,1 +1,14 @@
-<svg height="800" viewBox="0 0 800 800" width="800" xmlns="http://www.w3.org/2000/svg"><path d="m0 799.99869h800v-799.99867h-800z" fill="#009e49" stroke-width="1.08866"/><path d="m0 399.99935h800v-400.00066333h-800z" fill="#ef2b2d" stroke-width="1.08866"/><g fill="#fcd116" transform="translate(-200)"><path d="m0 0-30.902-95.105 47.553-15.452" transform="matrix(1.3333333 0 0 -1.3333333 600 266.66667)"/><path d="m0 0 30.901-95.105-47.552-15.452" transform="matrix(1.3333333 0 0 -1.3333333 600 266.66667)"/><path d="m0 0h-100v-50" transform="matrix(1.3333333 0 0 -1.3333333 726.80733 358.79747)"/><path d="m0 0-80.901-58.779-29.39 40.451" transform="matrix(1.3333333 0 0 -1.3333333 726.80733 358.79747)"/><path d="m0 0-30.901 95.105-47.553-15.451" transform="matrix(1.3333333 0 0 -1.3333333 678.37107 507.86853)"/><path d="m0 0-80.901 58.778 29.388 40.451" transform="matrix(1.3333333 0 0 -1.3333333 678.37107 507.86853)"/><path d="m0 0 80.901 58.778-29.389 40.451" transform="matrix(1.3333333 0 0 -1.3333333 521.62893 507.86853)"/><path d="m0 0 30.901 95.105 47.553-15.451" transform="matrix(1.3333333 0 0 -1.3333333 521.62893 507.86853)"/><g transform="matrix(1.3333333 0 0 -1.3333333 473.19267 358.79747)"><path d="m0 0 80.901-58.779 29.39 40.451"/><path d="m0 0h100v-50"/></g></g></svg>
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 360 360">
+	<path fill="#085" d="M0 0h360v360H0z"/>
+	<path fill="#e13" d="M0 0h360v180H0z"/>
+	<g transform="translate(180,180)" fill="#fd0">
+		<g id="c">
+			<path id="t" d="M 0,-100 V 0 H 50" transform="rotate(18 0,-100)"/>
+			<use href="#t" transform="scale(-1,1)"/>
+			</g>
+		<use href="#c" transform="rotate(72)"/>
+		<use href="#c" transform="rotate(144)"/>
+		<use href="#c" transform="rotate(216)"/>
+		<use href="#c" transform="rotate(288)"/>
+	</g>
+</svg>
