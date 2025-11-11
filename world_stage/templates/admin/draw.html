@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Administrator Utilities{% endblock %}
+{% block title %}Draw {year}{% endblock %}
 {% block headercontents %}
     <script>
         const year = {{ year }};
@@ -22,7 +22,7 @@
     <div class="show {% if loop.index == 1 %}active1{% endif %}"
          data-name="{{ show.short_name }}"
          data-songs="{{ num }}">
-        <h2>{{ show.name }}</h2>
+        <h2>{{ show.show_name }}</h2>
         <div class="show-countries"
              data-limit="{{ lim }}"
              data-name="{{ show.short_name }}"

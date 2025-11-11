@@ -24,16 +24,16 @@ def country(code: str):
     name = get_country_name(code.upper())
     return render_template('country/country.html', songs=songs, country=code, country_name=name)
 
-allow_video_extensions = ('mp4', 'm4v', 'webm', 'ogg', 'mov')
 mime_types = {
     'mp4': 'video/mp4',
-    'm4v': 'video/x-m4v',
+    'm4v': 'video/mp4',
+    'm4a': 'audio/mp4',
     'webm': 'video/webm',
     'ogg': 'video/ogg',
     'mov': 'video/quicktime'
 }
 
-def generate_iframe(url: str):
+def generate_iframe(url: str, img_url: str | None):
     if 'youtu.be' in url:
         video_id = url.split('/')[-1]
         return f'<iframe src="https://www.youtube.com/embed/{video_id}" frameborder="0" allowfullscreen></iframe>'
@@ -50,38 +50,37 @@ def generate_iframe(url: str):
             file_id = match.group(1)
             return f'<iframe src="https://drive.google.com/file/d/{file_id}/preview"></iframe>'
 
-    elif (suffix := url.rsplit('.', 1)[-1].lower()) in allow_video_extensions:
-        if suffix in mime_types:
-            return f'''<video id="video-player"
-                        class="video-js vjs-fill"
-                        controls
-                        preload="metadata"
-                        data-setup='{{"responsive": true}}'
-                        src="{url}">
-            This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.
-            </video>'''
-        else:
-            return f'''This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.'''
+    elif (suffix := url.rsplit('.', 1)[-1].lower()) in mime_types.keys():
+        mime_type = mime_types[suffix]
+        poster = ''
+        if mime_type.startswith('audio'):
+            poster = f'poster="{img_url}"'
+        return f'''<video id="video-player"
+                    class="video-js vjs-fill"
+                    controls
+                    {poster}
+                    preload="metadata"
+                    data-setup='{{"responsive": true}}'
+                    src="{url}">
+        This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.
+        </video>'''
 
     else:
         return f'''This media format isn't supported for direct playback by your browser. <a href="{url}" target="_blank">Watch the video here</a>.'''
 
 @bp.get('/<code>/<int:year>')
 def details(code: str, year: int):
-    session_id = request.cookies.get('session')
-    if not session_id:
-        return render_template('error.html', error="You must be logged in to view song details")
-    user_data = get_user_id_from_session(session_id)
-
     song = get_song(year, code.upper())
     if not song:
         return render_template('error.html', error=f"Songs not found for country {code} in year {year}")
     url = song.video_link
     embed = ''
     if url and url != 'N/A':
-        embed = generate_iframe(url)
+        embed = generate_iframe(url, song.poster_link)
     name = get_country_name(code.upper())
 
+    session_id = request.cookies.get('session')
+    user_data = get_user_id_from_session(session_id)
     user_id = None
     if user_data:
         user_id = user_data[0]

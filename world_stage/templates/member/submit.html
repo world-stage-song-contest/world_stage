@@ -194,6 +194,11 @@
         <div class="span-fieldset">
             <div><small>This can be a youtube link, a google drive link or a direct link to an mp4 or webm file.</small></div>
         </div>
+    {% if elevated %}
+        <label for="video">Cover art URL</label>
+        <input class="stretchable" id="poster_link" name="poster_link"
+               placeholder="https://media.world-stage.org/wsYYYYcc.jpg" maxlength="128" value="{{ data.poster_link }}">
+    {% endif %}
         <label for="snippet_start">Recap snippet start</label>
         <div>
         <input class="time-input" id="snippet_start" name="snippet_start" placeholder="0:00"

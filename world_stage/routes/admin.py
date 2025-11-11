@@ -476,13 +476,15 @@ def fuckup_db_post():
 
         rows = []
         headers = []
-        if cursor.rowcount > 0:
+        if cursor.description is not None:
             rows = cursor.fetchall()
             headers = [description[0] for description in cursor.description] if cursor.description else []
-    except psycopg.Error as e:
-        return render_template('admin/fuckupdb.html', error=f"Query failed: {str(e)}", query=query), 400
-    finally:
+
         cursor.execute("RESET ROLE")
+    except psycopg.Error as e:
+
+        db.rollback()
+        return render_template('admin/fuckupdb.html', error=f"Query failed: {str(e)}", query=query), 400
 
     kind = request.form.get('kind')
     if kind == 'csv':
@@ -678,7 +680,7 @@ WITH song_data AS (
            show.id as show_id, show.year_id AS year, short_name AS show, running_order,
            country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
            artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
-           (SELECT STRING_AGG(l.name, ', ')
+           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
             WHERE sl.song_id = song.id) AS language

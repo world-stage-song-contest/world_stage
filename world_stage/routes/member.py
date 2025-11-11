@@ -38,6 +38,7 @@ class SongData:
     title_language_id: int | None
     native_language_id: int | None
     video_link: str | None
+    poster_link: str | None
     snippet_start: str | None
     snippet_end: str | None
     translated_lyrics: str | None
@@ -70,6 +71,7 @@ class FormData:
     title_language_id: int | None
     native_language_id: int | None
     video_link: str | None
+    poster_link: str | None
     snippet_start: str | None
     snippet_end: str | None
     translated_lyrics: str | None
@@ -114,7 +116,7 @@ class FormData:
 
         # Parse and normalize text fields
         text_data = {}
-        for key in ['title', 'native_title', 'artist', 'video_link',
+        for key in ['title', 'native_title', 'artist', 'video_link', 'poster_link',
                    'snippet_start', 'snippet_end', 'translated_lyrics',
                    'romanized_lyrics', 'native_lyrics', 'notes', 'sources']:
             value = form.get(key, '').strip()
@@ -193,7 +195,7 @@ class SongRepository:
         """Find existing song by year and country"""
         self.cursor.execute('''
             SELECT id, title, native_title, artist, is_placeholder,
-                   title_language_id, native_language_id, video_link,
+                   title_language_id, native_language_id, video_link, poster_link
                    snippet_start, snippet_end, translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
                    sources, admin_approved
@@ -263,7 +265,7 @@ class SongRepository:
             self.cursor.execute('''
                 UPDATE song
                 SET title = %s, native_title = %s, artist = %s, is_placeholder = %s,
-                    title_language_id = %s, native_language_id = %s, video_link = %s,
+                    title_language_id = %s, native_language_id = %s, video_link = %s, poster_link = %s,
                     snippet_start = %s, snippet_end = %s, translated_lyrics = %s,
                     romanized_lyrics = %s, native_lyrics = %s, submitter_id = %s,
                     notes = %s, sources = %s, admin_approved = %s,
@@ -271,7 +273,7 @@ class SongRepository:
                 WHERE id = %s
             ''', (
                 data.title, data.native_title, data.artist, data.is_placeholder,
-                data.title_language_id, data.native_language_id, data.video_link,
+                data.title_language_id, data.native_language_id, data.video_link, data.poster_link,
                 parse_seconds(data.snippet_start), parse_seconds(data.snippet_end),
                 data.translated_lyrics, data.romanized_lyrics, data.native_lyrics,
                 user_id, data.notes, data.sources, data.admin_approved, song_id
@@ -280,16 +282,16 @@ class SongRepository:
             self.cursor.execute('''
                 INSERT INTO song (
                     year_id, country_id, title, native_title, artist, is_placeholder,
-                    title_language_id, native_language_id, video_link,
+                    title_language_id, native_language_id, video_link, poster_link
                     snippet_start, snippet_end, translated_lyrics,
                     romanized_lyrics, native_lyrics, submitter_id,
                     notes, sources, admin_approved, modified_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 RETURNING id
             ''', (
                 data.year, data.country, data.title, data.native_title, data.artist,
                 data.is_placeholder, data.title_language_id, data.native_language_id,
-                data.video_link, parse_seconds(data.snippet_start), parse_seconds(data.snippet_end),
+                data.video_link, data.poster_link, parse_seconds(data.snippet_start), parse_seconds(data.snippet_end),
                 data.translated_lyrics, data.romanized_lyrics, data.native_lyrics,
                 user_id, data.notes, data.sources, data.admin_approved
             ))

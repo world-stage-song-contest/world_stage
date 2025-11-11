@@ -403,6 +403,7 @@ class Song:
     native_lyrics: str | None
     lyrics_notes: str | None
     video_link: str | None
+    poster_link: str | None
     recap_start: str | None
     recap_end: str | None
     sources: str | None
@@ -423,6 +424,7 @@ class Song:
             native_title=song['native_title'],
             artist=song['artist'],
             video_link=song['video_link'],
+            poster_link=song['poster_link'],
             recap_start=song['snippet_start'],
             recap_end=song['snippet_end'],
             country=Country(cc=song['country_id'],
@@ -446,7 +448,7 @@ class Song:
 
     def _raw_init(self, *,
                  id: int, title: str, native_title: str | None, artist: str,
-                 country: Country, year: int | None,
+                 country: Country, year: int | None, poster_link: str | None,
                  placeholder: bool, submitter: str | None, submitter_id: int | None,
                  title_lang: int | None, native_lang: int | None, lyrics_notes: str | None,
                  translated_lyrics: str | None, latin_lyrics: str | None, native_lyrics: str | None,
@@ -468,6 +470,7 @@ class Song:
         self.native_lyrics = native_lyrics
         self.lyrics_notes = lyrics_notes
         self.video_link = video_link
+        self.poster_link = poster_link
         self.sources = sources
         self.recap_start = format_seconds(recap_start) if recap_start is not None else None
         self.recap_end = format_seconds(recap_end) if recap_end is not None else None
@@ -850,7 +853,7 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                account.username, song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
-               song.submitter_id, song.notes, song.sources
+               song.submitter_id, song.notes, song.sources, song.poster_link
         FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN show ON song_show.show_id = show.id
@@ -905,7 +908,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
     cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, country.name, country.is_participating, country.cc2,
-               song.is_placeholder, account.username, song.year_id,
+               song.is_placeholder, account.username, song.year_id, song.poster_link,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
@@ -934,7 +937,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
                    song.country_id, country.name, country.is_participating, country.cc2,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                   account.username, song.year_id,
+                   account.username, song.year_id, song.poster_link,
                    song.video_link, song.snippet_start, song.snippet_end,
                    song.submitter_id, song.notes, song.sources
             FROM song
@@ -949,7 +952,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
                    song.country_id, country.name, country.is_participating, country.cc2,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                   account.username, song.year_id,
+                   account.username, song.year_id, song.poster_link,
                    song.video_link, song.snippet_start, song.snippet_end,
                    song.submitter_id, song.notes, song.sources
             FROM song
@@ -974,7 +977,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                 song.country_id, country.name, country.is_participating, country.cc2,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                account.username, song.year_id,
+                account.username, song.year_id, song.poster_link,
                 song.video_link, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources
         FROM song
@@ -999,7 +1002,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                 song.country_id, country.name, country.is_participating, country.cc2,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                account.username, song.year_id,
+                account.username, song.year_id, song.poster_link,
                 song.video_link, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources
         FROM song
