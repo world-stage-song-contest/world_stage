@@ -1,5 +1,5 @@
 CREATE TABLE country_year_results (
-    country_id NOT NULL REFERENCES country (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    country_id text NOT NULL REFERENCES country (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     country_name text NOT NULL,
     year_id integer REFERENCES year (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     song_id bigint NOT NULL REFERENCES song (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
@@ -11,7 +11,7 @@ CREATE TABLE country_year_results (
 CREATE OR REPLACE FUNCTION compute_country_year_results()
 RETURNS trigger AS $$
 BEGIN
-  IF NEW.status = 'closed' AND OLD.status IS DISTINCT FROM 'closed' THEN
+  IF NEW.closed = 1 AND OLD.closed IS DISTINCT FROM 1 THEN
     DELETE FROM country_year_results WHERE year_id = NEW.id;
 
     WITH finals AS (
@@ -152,7 +152,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_compute_country_year_results
-AFTER UPDATE OF status ON year
+AFTER UPDATE OF closed ON year
 FOR EACH ROW
-WHEN (NEW.status = 'closed' AND OLD.status IS DISTINCT FROM 'closed')
+WHEN (NEW.closed = 1 AND OLD.closed IS DISTINCT FROM 1)
 EXECUTE FUNCTION compute_country_year_results();

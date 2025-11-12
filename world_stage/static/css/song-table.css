@@ -12,8 +12,10 @@
     -webkit-line-clamp: 3;
     line-clamp: 3;
     overflow: hidden;
-    width: fit-content;
+
+    display: inline-block;
     max-width: 300px;
+    padding: 0.05em 0.1em;
 }
 
 .song-artist {

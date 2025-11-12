@@ -621,7 +621,7 @@ def show_playlist(year: str, show: str):
 
     response = Response(
         value,
-        mimetype='application/x-mpegurl',
+        mimetype='audio/x-mpegurl',
         headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
     return response

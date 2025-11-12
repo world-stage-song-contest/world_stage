@@ -38,7 +38,6 @@ class SongData:
     title_language_id: int | None
     native_language_id: int | None
     video_link: str | None
-    poster_link: str | None
     snippet_start: str | None
     snippet_end: str | None
     translated_lyrics: str | None
@@ -49,6 +48,7 @@ class SongData:
     sources: str
     admin_approved: bool
     user_id: int | None = None
+    poster_link: str | None = None
 
     def __post_init__(self):
         """Calculate derived fields after initialization"""
@@ -195,7 +195,7 @@ class SongRepository:
         """Find existing song by year and country"""
         self.cursor.execute('''
             SELECT id, title, native_title, artist, is_placeholder,
-                   title_language_id, native_language_id, video_link, poster_link
+                   title_language_id, native_language_id, video_link, poster_link,
                    snippet_start, snippet_end, translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
                    sources, admin_approved
@@ -265,7 +265,8 @@ class SongRepository:
             self.cursor.execute('''
                 UPDATE song
                 SET title = %s, native_title = %s, artist = %s, is_placeholder = %s,
-                    title_language_id = %s, native_language_id = %s, video_link = %s, poster_link = %s,
+                    title_language_id = %s, native_language_id = %s, video_link = %s,
+                    poster_link = coalesce(%s, poster_link),
                     snippet_start = %s, snippet_end = %s, translated_lyrics = %s,
                     romanized_lyrics = %s, native_lyrics = %s, submitter_id = %s,
                     notes = %s, sources = %s, admin_approved = %s,
@@ -282,7 +283,7 @@ class SongRepository:
             self.cursor.execute('''
                 INSERT INTO song (
                     year_id, country_id, title, native_title, artist, is_placeholder,
-                    title_language_id, native_language_id, video_link, poster_link
+                    title_language_id, native_language_id, video_link, poster_link,
                     snippet_start, snippet_end, translated_lyrics,
                     romanized_lyrics, native_lyrics, submitter_id,
                     notes, sources, admin_approved, modified_at
@@ -503,8 +504,8 @@ def get_country_data(year: int, country: str):
     is_placeholder = song.pop('is_placeholder')
 
     # Format time fields
-    snippet_start = format_seconds(song.pop('snippet_start'))
-    snippet_end = format_seconds(song.pop('snippet_end'))
+    snippet_start = format_seconds(song.pop('snippet_start') or None)
+    snippet_end = format_seconds(song.pop('snippet_end') or None)
 
     # Get languages
     languages = repo.get_song_languages(song_id)
