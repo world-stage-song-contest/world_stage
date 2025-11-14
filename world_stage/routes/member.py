@@ -331,9 +331,8 @@ class SongService:
         else:
             return Result(False, "", "Failed to delete song")
 
-    def submit_song(self, data: FormData, user_id: int | None) -> Result:
+    def submit_song(self, data: FormData, user_id: int | None, permissions: UserPermissions) -> Result:
         """Submit song with validation"""
-        permissions = get_user_permissions(user_id)
         validation_errors = self.validator.validate_submission(data, permissions)
 
         if validation_errors:
@@ -556,7 +555,7 @@ def submit_song_post():
             if validation_errors:
                 return render_error_template(form_data, validation_errors[0], [])
 
-            result = service.submit_song(form_data, user_id)
+            result = service.submit_song(form_data, user_id, permissions)
         else:
             result = Result(False, "", f"Unknown action: '{action}'")
 

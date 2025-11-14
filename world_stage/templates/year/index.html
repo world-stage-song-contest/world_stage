@@ -31,7 +31,7 @@
 
 <h2>Done years</h2>
 <div class="sticky-header-table-container">
-    <table class="results-table sticky-header-table sortable">
+    <table class="results-table sticky-header-table sortable song-table">
         <thead>
             <tr>
                 <th>Year</th>
@@ -78,7 +78,7 @@
 
 <h2>Specials</h2>
 <div class="sticky-header-table-container">
-    <table class="results-table sticky-header-table sortable">
+    <table class="results-table sticky-header-table sortable song-table">
         <thead>
             <tr>
                 <th>Special</th>
@@ -95,7 +95,7 @@
         {% for special in specials %}
         {% set winner = special.winner %}
             <tr data-value="{{ loop.index }}">
-                <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.results', year='special', show=special.short_name) }}"><b>{{ special.name }}</b></a></td>
+                <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.results', year='special', show=special.short_name) }}"><b>{{ special.show_name }}</b></a></td>
                 <td><div class="country">
                     {{ flag(winner.country.cc, 42, winner.country.name) }}
                     <span href="/country/{{ winner.country.cc }}">{{ winner.country.name }}</span>

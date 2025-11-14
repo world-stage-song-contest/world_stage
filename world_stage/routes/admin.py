@@ -603,6 +603,8 @@ def set_pots_post(year: int):
         except ValueError:
             return render_template('error.html', error=f"Invalid priority value for country {country_id}"), 400
 
+        cursor.execute('UPDATE country SET pot = NULL')
+
         cursor.execute('''
             UPDATE country
             SET pot = %s

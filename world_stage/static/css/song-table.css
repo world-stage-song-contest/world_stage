@@ -13,7 +13,7 @@
     line-clamp: 3;
     overflow: hidden;
 
-    display: inline-block;
+    width: fit-content;
     max-width: 300px;
     padding: 0.05em 0.1em;
 }
