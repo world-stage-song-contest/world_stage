@@ -2,6 +2,7 @@
 <img
     src="{{ url_for('main.flag', country=cc, t=type, w=width) }}"
     width="{{ width }}"
+    height="{{ width*2/3 }}"
     class="{{ class }}">
 {%- endmacro %}
 {% macro title(title, native_title, lang, native_lang) -%}

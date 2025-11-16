@@ -1,4 +1,6 @@
 from collections import defaultdict
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 import subprocess
 import psycopg
@@ -648,35 +650,76 @@ def recap_data():
 
 @bp.post('/recapdata')
 def recap_data_post() -> Response | tuple[Response, int]:
+    db = get_db()
+    cursor = db.cursor()
+
+    def process_shows(data: list) -> list[int]:
+        shows: list[int] = []
+        for show in data:
+            _year, short_name = show.split('-')
+            try:
+                year = int(_year)
+            except ValueError:
+                raise RuntimeError(f"Invalid year '{_year}' in show '{show}'")
+
+            if not short_name:
+                raise RuntimeError(f"Invalid show name '{short_name}' in show '{show}'")
+
+            cursor.execute('''
+                SELECT id FROM show WHERE year_id = %s AND short_name = %s
+            ''', (year, short_name))
+            show_id = cursor.fetchone()
+            if not show_id:
+                raise RuntimeError(f"Show '{show}' not found")
+            shows.append(show_id['id'])
+
+        return shows
+
+    def process_countries(data: list) -> list[str]:
+        for country in data:
+            if len(country) != 2:
+                raise RuntimeError(f"Code '{country}' is invalid. It needs to have exactly two characters.")
+
+        return data
+
+    def process_years(data: list) -> list[int]:
+        years: list[int] = []
+        for year in data:
+            if len(year) != 4:
+                raise RuntimeError(f"Year '{year}' is invalid. It needs to have exactly four digits.")
+
+            try:
+                yr = int(year)
+                years.append(yr)
+            except ValueError:
+                raise RuntimeError(f"Year '{year}' is invalid. It needs to have exactly four digits.")
+
+        return years
+
+    def process_submitters(data: list) -> list[int]:
+        users: list[int] = []
+        for user in data:
+            cursor.execute('''
+                SELECT id FROM account WHERE username = %s
+            ''', (user,))
+            user_id = cursor.fetchone()
+            if not user_id:
+                raise RuntimeError(f"User '{user}' is unknown")
+            users.append(user_id['id'])
+        return users
+
     resp = verify_user()
     if resp:
         return render_template('error.html', error="Not an admin"), 401
 
-    show_names = request.form.getlist('show')
+    form_data = request.form.getlist('show')
+    type = request.form.get('type', '')
 
-    db = get_db()
-    cursor = db.cursor()
+    try:
+        if type == 'show':
+            shows = process_shows(form_data)
 
-    shows: list[int] = list()
-    for show in show_names:
-        _year, short_name = show.split('-')
-        try:
-            year = int(_year)
-        except ValueError:
-            return render_template('admin/recap_data.html', error=f"Invalid year '{_year}' in show '{show}'"), 400
-
-        if not short_name:
-            return render_template('admin/recap_data.html', error=f"Invalid show name '{short_name}' in show '{show}'"), 400
-
-        cursor.execute('''
-            SELECT id FROM show WHERE year_id = %s AND short_name = %s
-        ''', (year, short_name))
-        show_id = cursor.fetchone()
-        if not show_id:
-            return render_template('admin/recap_data.html', error=f"Show '{show}' not found"), 404
-        shows.append(show_id['id'])
-
-    cursor.execute('''
+            cursor.execute('''
 WITH song_data AS (
     SELECT DISTINCT ON (song.id, show.id)
            show.id as show_id, show.year_id AS year, short_name AS show, running_order,
@@ -698,6 +741,82 @@ SELECT year, show, running_order, country, country_code, country_name,
 FROM song_data
 ORDER BY show_id, running_order
     ''', (shows,))
+
+        elif type == 'year':
+            years = process_years(form_data)
+
+            cursor.execute('''
+WITH song_data AS (
+    SELECT song.year_id as show_id, song.year_id AS year, LOWER(cc2) AS show, UPPER(cc2) AS running_order,
+           country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
+           artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
+           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
+            FROM song_language sl
+            JOIN language l ON sl.language_id = l.id
+            WHERE sl.song_id = song.id) AS language
+    FROM song
+    JOIN country ON song.country_id = country.id
+    WHERE song.year_id = ANY(%s)
+    ORDER BY LOWER(cc2)
+)
+SELECT year, show, running_order, country, country_code, country_name,
+       artist, title, video_link, snippet_start, snippet_end, display_name, language
+FROM song_data
+ORDER BY country_name
+    ''', (years,))
+
+        elif type == 'country':
+            countries = process_countries(form_data)
+
+            cursor.execute('''
+WITH song_data AS (
+    SELECT LOWER(cc2) as show_id, song.year_id AS year, LOWER(cc2) AS show, MOD(song.year_id, 100) AS running_order,
+           country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
+           artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
+           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
+            FROM song_language sl
+            JOIN language l ON sl.language_id = l.id
+            WHERE sl.song_id = song.id) AS language
+    FROM song
+    JOIN country ON song.country_id = country.id
+    JOIN year ON song.year_id = year.id
+    WHERE country.cc2 = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
+    ORDER BY song.year_id
+)
+SELECT year, show, running_order, country, country_code, country_name,
+       artist, title, video_link, snippet_start, snippet_end, display_name, language
+FROM song_data
+ORDER BY year
+    ''', (countries,))
+
+        elif type == 'submitter':
+            submitters = process_submitters(form_data)
+
+            cursor.execute('''
+WITH song_data AS (
+    SELECT account.username as show_id, song.year_id AS year, LOWER(cc2) AS show,
+           UPPER(cc2) || MOD(song.year_id, 100) AS running_order,
+           country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
+           artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
+           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
+            FROM song_language sl
+            JOIN language l ON sl.language_id = l.id
+            WHERE sl.song_id = song.id) AS language
+    FROM song
+    JOIN country ON song.country_id = country.id
+    JOIN year ON song.year_id = year.id
+    JOIN account ON song.submitter_id = account.id
+    WHERE song.submitter_id = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
+    ORDER BY song.year_id, country_name
+)
+SELECT year, show, running_order, country, country_code, country_name,
+       artist, title, video_link, snippet_start, snippet_end, display_name, language
+FROM song_data
+ORDER BY year, country_name
+    ''', (submitters,))
+    except RuntimeError as e:
+        return render_template('error.html', error=e.args[0])
+
     csv_data = cursor.fetchall()
 
     w = io.StringIO()
@@ -706,6 +825,6 @@ ORDER BY show_id, running_order
     for row in csv_data:
         writer.writerow(row)
     w.seek(0)
-    data = w.getvalue()
+    form = w.getvalue()
 
-    return render_template('admin/recap_data.html', data=data)
+    return render_template('admin/recap_data.html', data=form)

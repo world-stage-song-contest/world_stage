@@ -27,6 +27,14 @@
 {% block content %}
 
 <form method="POST">
+    <div>
+        <select name="type">
+            <option value="show">Shows</option>
+            <option value="year">Years</option>
+            <option value="country">Countries</option>
+            <option value="submitter">Submitters</option>
+        </select>
+    </div>
     <fieldset style="display: flex; flex-direction: column; gap: 0.25em;">
         <legend>Shows</legend>
         <input name="show" placeholder="<year>-<short name>" required type="text">
