@@ -656,7 +656,11 @@ def recap_data_post() -> Response | tuple[Response, int]:
     def process_shows(data: list) -> list[int]:
         shows: list[int] = []
         for show in data:
-            _year, short_name = show.split('-')
+            try:
+                _year, short_name = show.split('-')
+            except ValueError:
+                raise RuntimeError(f"Invalid number of dashes in the value '{show}'")
+
             try:
                 year = int(_year)
             except ValueError:
@@ -722,9 +726,9 @@ def recap_data_post() -> Response | tuple[Response, int]:
             cursor.execute('''
 WITH song_data AS (
     SELECT DISTINCT ON (song.id, show.id)
-           show.id as show_id, show.year_id AS year, short_name AS show, running_order,
-           country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
-           artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
+           show.id as show_id, show.year_id || short_name AS show, running_order,
+           LOWER(cc2) AS country, country.name AS country_name,
+           artist, title, video_link, snippet_start, snippet_end,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
@@ -736,8 +740,8 @@ WITH song_data AS (
     WHERE show.id = ANY(%s)
     ORDER BY song.id, show.id
 )
-SELECT year, show, running_order, country, country_code, country_name,
-       artist, title, video_link, snippet_start, snippet_end, display_name, language
+SELECT show, running_order, country, country_name,
+       artist, title, video_link, snippet_start, snippet_end, language
 FROM song_data
 ORDER BY show_id, running_order
     ''', (shows,))
@@ -747,9 +751,9 @@ ORDER BY show_id, running_order
 
             cursor.execute('''
 WITH song_data AS (
-    SELECT song.year_id as show_id, song.year_id AS year, LOWER(cc2) AS show, UPPER(cc2) AS running_order,
-           country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
-           artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
+    SELECT song.year_id as show_id, LOWER(cc2) AS show, UPPER(cc2) AS running_order,
+           LOWER(cc2) AS country, country.name AS country_name,
+           artist, title, video_link, snippet_start, snippet_end,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
@@ -759,8 +763,8 @@ WITH song_data AS (
     WHERE song.year_id = ANY(%s)
     ORDER BY LOWER(cc2)
 )
-SELECT year, show, running_order, country, country_code, country_name,
-       artist, title, video_link, snippet_start, snippet_end, display_name, language
+SELECT show, running_order, country, country_name,
+       artist, title, video_link, snippet_start, snippet_end, language
 FROM song_data
 ORDER BY country_name
     ''', (years,))
@@ -770,9 +774,10 @@ ORDER BY country_name
 
             cursor.execute('''
 WITH song_data AS (
-    SELECT LOWER(cc2) as show_id, song.year_id AS year, LOWER(cc2) AS show, MOD(song.year_id, 100) AS running_order,
-           country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
-           artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
+    SELECT LOWER(cc2) as show_id, LOWER(cc2) AS show,
+           MOD(song.year_id, 100) AS running_order,
+           LOWER(cc2) AS country, country.name AS country_name,
+           artist, title, video_link, snippet_start, snippet_end,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
@@ -783,8 +788,8 @@ WITH song_data AS (
     WHERE country.cc2 = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
     ORDER BY song.year_id
 )
-SELECT year, show, running_order, country, country_code, country_name,
-       artist, title, video_link, snippet_start, snippet_end, display_name, language
+SELECT show, running_order, country, country_name,
+       artist, title, video_link, snippet_start, snippet_end, language
 FROM song_data
 ORDER BY year
     ''', (countries,))
@@ -794,10 +799,10 @@ ORDER BY year
 
             cursor.execute('''
 WITH song_data AS (
-    SELECT account.username as show_id, song.year_id AS year, LOWER(cc2) AS show,
-           UPPER(cc2) || MOD(song.year_id, 100) AS running_order,
-           country_id AS country, LOWER(cc2) AS country_code, country.name AS country_name,
-           artist, title, video_link, snippet_start, snippet_end, '' AS display_name,
+    SELECT account.username as show_id, song.year_id AS year, account.username AS show,
+           MOD(song.year_id, 100) AS running_order,
+           LOWER(cc2) AS country, country.name AS country_name,
+           artist, title, video_link, snippet_start, snippet_end,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
@@ -809,8 +814,8 @@ WITH song_data AS (
     WHERE song.submitter_id = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
     ORDER BY song.year_id, country_name
 )
-SELECT year, show, running_order, country, country_code, country_name,
-       artist, title, video_link, snippet_start, snippet_end, display_name, language
+SELECT year, show, running_order, country, country_name,
+       artist, title, video_link, snippet_start, snippet_end, language
 FROM song_data
 ORDER BY year, country_name
     ''', (submitters,))
@@ -820,7 +825,7 @@ ORDER BY year, country_name
     csv_data = cursor.fetchall()
 
     w = io.StringIO()
-    writer = csv.DictWriter(w, fieldnames=['year', 'show', 'running_order', 'country', 'country_code', 'country_name', 'artist', 'title', 'video_link', 'snippet_start', 'snippet_end', 'display_name', 'language'])
+    writer = csv.DictWriter(w, fieldnames=['show', 'running_order', 'country', 'country_name', 'artist', 'title', 'video_link', 'snippet_start', 'snippet_end', 'language'])
     writer.writeheader()
     for row in csv_data:
         writer.writerow(row)

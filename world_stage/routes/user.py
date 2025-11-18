@@ -152,81 +152,14 @@ def get_country_biases(user_id: int):
     cursor = db.cursor()
 
     cursor.execute('''
--- Optimized country voting analysis with reduced CTEs
 WITH user_shows AS (
-    SELECT DISTINCT show_id, country_id
+    SELECT DISTINCT s.id AS show_id
     FROM vote_set vs
     JOIN show s ON s.id = vs.show_id
-    WHERE voter_id = %(id)s
+    WHERE vs.voter_id = %(id)s
       AND s.access_type = 'full'
       AND s.year_id IS NOT NULL
 ),
--- Combine voting aggregations and song counts in one scan
-voting_stats AS (
-    SELECT
-        s.country_id,
-        SUM(CASE WHEN vs.voter_id = %(id)s THEN score ELSE 0 END) AS user_given,
-        SUM(score) AS total_given,
-        COUNT(DISTINCT CASE WHEN vs.voter_id = %(id)s THEN v.id END) AS user_votes,
-        COUNT(DISTINCT CASE WHEN s.submitter_id <> %(id)s THEN ss.show_id || '-' || s.country_id END) AS show_country_pairs
-    FROM user_shows us
-    JOIN song_show ss ON ss.show_id = us.show_id
-    JOIN song s ON s.id = ss.song_id
-    LEFT JOIN vote_set vs ON vs.show_id = ss.show_id
-    LEFT JOIN vote v ON v.vote_set_id = vs.id AND v.song_id = s.id
-    WHERE s.submitter_id <> %(id)s
-    GROUP BY s.country_id
-),
--- Calculate entry counts per show-country for max points calculation
-entry_counts AS (
-    SELECT
-        ss.show_id,
-        s.country_id,
-        COUNT(*) AS entry_cnt,
-        sh.point_system_id
-    FROM user_shows us
-    JOIN song_show ss ON ss.show_id = us.show_id
-    JOIN show sh ON sh.id = ss.show_id
-    JOIN song s ON s.id = ss.song_id
-    WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
-      AND sh.year_id IS NOT NULL
-    GROUP BY ss.show_id, s.country_id, sh.point_system_id
-),
--- Calculate max points more efficiently
-max_points_calc AS (
-    SELECT
-        ec.country_id,
-        SUM(
-            (SELECT SUM(score)
-             FROM (
-                SELECT score
-                FROM point
-                WHERE point_system_id = ec.point_system_id
-                ORDER BY score DESC
-                LIMIT ec.entry_cnt
-             ) top_scores)
-        ) AS max_pts_user,
-        SUM(
-            (SELECT SUM(score)
-             FROM (
-                SELECT score
-                FROM point
-                WHERE point_system_id = ec.point_system_id
-                ORDER BY score DESC
-                LIMIT ec.entry_cnt
-             ) top_scores) * vc.voter_count
-        ) AS max_pts_all
-    FROM entry_counts ec
-    JOIN (
-        SELECT show_id, COUNT(*) AS voter_count
-        FROM vote_set
-        WHERE show_id IN (SELECT show_id FROM user_shows)
-        GROUP BY show_id
-    ) vc ON vc.show_id = ec.show_id
-    GROUP BY ec.country_id
-),
--- Calculate songs available per country
 songs_available AS (
     SELECT
         s.country_id,
@@ -234,79 +167,193 @@ songs_available AS (
     FROM user_shows us
     JOIN song_show ss ON ss.show_id = us.show_id
     JOIN song s ON s.id = ss.song_id
+    JOIN show sh ON sh.id = ss.show_id
     WHERE s.submitter_id <> %(id)s
+      AND sh.access_type = 'full'
+      AND sh.year_id IS NOT NULL
     GROUP BY s.country_id
+),
+all_votes AS (
+    SELECT
+        s.country_id,
+        SUM(v.score) AS total_given
+    FROM user_shows us
+    JOIN vote_set vs ON vs.show_id = us.show_id
+    JOIN vote v ON v.vote_set_id = vs.id
+    JOIN song s ON s.id = v.song_id
+    JOIN show sh ON sh.id = vs.show_id
+    WHERE s.submitter_id <> %(id)s
+      AND sh.access_type = 'full'
+      AND sh.year_id IS NOT NULL
+    GROUP BY s.country_id
+),
+all_totals AS (
+    SELECT COALESCE(SUM(total_given), 0) AS total_given_all
+    FROM all_votes
+),
+show_user_points AS (
+    SELECT
+        vs.show_id,
+        SUM(v.score) AS user_points_in_show
+    FROM vote_set vs
+    JOIN vote v ON v.vote_set_id = vs.id
+    WHERE vs.voter_id = %(id)s
+      AND vs.show_id IN (SELECT show_id FROM user_shows)
+    GROUP BY vs.show_id
+),
+country_shows AS (
+    SELECT DISTINCT
+        ss.show_id,
+        s.country_id
+    FROM user_shows us
+    JOIN song_show ss ON ss.show_id = us.show_id
+    JOIN song s ON s.id = ss.song_id
+    JOIN show sh ON sh.id = ss.show_id
+    WHERE s.submitter_id <> %(id)s
+      AND sh.access_type = 'full'
+      AND sh.year_id IS NOT NULL
+),
+user_exposure AS (
+    SELECT
+        cs.country_id,
+        COALESCE(SUM(sup.user_points_in_show), 0) AS exposure_points
+    FROM country_shows cs
+    LEFT JOIN show_user_points sup ON sup.show_id = cs.show_id
+    GROUP BY cs.country_id
+),
+user_votes AS (
+    SELECT
+        s.country_id,
+        SUM(v.score) AS user_given,
+        COUNT(DISTINCT v.id) AS user_votes
+    FROM user_shows us
+    JOIN vote_set vs ON vs.show_id = us.show_id
+    JOIN vote v ON v.vote_set_id = vs.id
+    JOIN song s ON s.id = v.song_id
+    JOIN show sh ON sh.id = vs.show_id
+    WHERE s.submitter_id <> %(id)s
+      AND sh.access_type = 'full'
+      AND sh.year_id IS NOT NULL
+      AND vs.voter_id = %(id)s
+    GROUP BY s.country_id
+),
+user_total AS (
+    SELECT
+        COALESCE(SUM(user_given), 0) AS user_total_given,
+        COALESCE(SUM(user_votes), 0) AS user_vote_events
+    FROM user_votes
+),
+combined AS (
+    SELECT
+        COALESCE(av.country_id, uv.country_id, sa.country_id, ue.country_id) AS country_id,
+        COALESCE(sa.songs_available, 0) AS songs_available,
+        COALESCE(uv.user_given, 0) AS user_given,
+        COALESCE(uv.user_votes, 0) AS user_votes,
+        COALESCE(av.total_given, 0) AS total_given,
+        COALESCE(ue.exposure_points, 0) AS exposure_points
+    FROM all_votes av
+    FULL OUTER JOIN user_votes uv
+        ON uv.country_id = av.country_id
+    FULL OUTER JOIN songs_available sa
+        ON sa.country_id = COALESCE(av.country_id, uv.country_id)
+    FULL OUTER JOIN user_exposure ue
+        ON ue.country_id = COALESCE(av.country_id, uv.country_id, sa.country_id)
+),
+bias_values AS (
+    SELECT
+        ctry.country_id,
+        ctry.songs_available,
+        ctry.user_given,
+        ctry.user_votes,
+        ctry.total_given,
+        ctry.exposure_points,
+        ut.user_total_given::numeric AS user_total_given,
+        at.total_given_all::numeric AS total_given_all,
+        CASE
+            WHEN ut.user_total_given > 0
+            THEN ctry.user_given::numeric / ut.user_total_given
+            ELSE 0
+        END AS q_c,
+        CASE
+            WHEN at.total_given_all > 0
+            THEN ctry.total_given::numeric / at.total_given_all
+            ELSE 0
+        END AS p_c
+    FROM combined ctry
+    CROSS JOIN user_total ut
+    CROSS JOIN all_totals at
+),
+scored AS (
+    SELECT
+        bv.country_id,
+        bv.songs_available,
+        bv.user_given,
+        bv.user_votes,
+        bv.total_given,
+        bv.exposure_points,
+        bv.user_total_given,
+        bv.total_given_all,
+        bv.q_c,
+        bv.p_c,
+        bv.exposure_points::numeric AS N_c,
+        100.0::numeric AS s0,
+        CASE
+            WHEN bv.p_c > 0 AND bv.exposure_points > 0
+            THEN (bv.exposure_points / (bv.exposure_points + 100.0)) * bv.q_c
+               + (100.0 / (bv.exposure_points + 100.0)) * bv.p_c
+            WHEN bv.p_c > 0
+            THEN bv.p_c
+            ELSE 0
+        END AS q_hat
+    FROM bias_values bv
+),
+final_bias AS (
+    SELECT
+        s.*,
+        CASE
+            WHEN s.p_c > 0
+            THEN (s.q_hat - s.p_c) / (s.p_c + 0.0005)
+            ELSE 0
+        END AS bias
+    FROM scored s
+),
+classified AS (
+    SELECT
+        fb.*,
+        CASE
+            WHEN fb.songs_available < 5 OR fb.N_c < 50
+                THEN 'inconclusive'
+            WHEN fb.bias < -0.5
+                THEN 'very-negative'
+            WHEN fb.bias < -0.1
+                THEN 'negative'
+            WHEN fb.bias < 0.1
+                THEN 'neutral'
+            WHEN fb.bias < 0.5
+                THEN 'positive'
+            ELSE 'very-positive'
+        END AS bias_class
+    FROM final_bias fb
 )
 SELECT
-    COALESCE(vs.country_id, mp.country_id, sa.country_id) AS country_id,
+    ctry.country_id,
     c.name AS country_name,
-    COALESCE(sa.songs_available, 0) AS parts,
-    COALESCE(vs.user_given, 0) AS user_given,
-    COALESCE(mp.max_pts_user, 0) AS user_max,
-    CASE
-        WHEN mp.max_pts_user > 0
-        THEN COALESCE(vs.user_given, 0)::numeric / mp.max_pts_user
-        ELSE 0
-    END AS user_ratio,
-    COALESCE(vs.total_given, 0) AS total_given,
-    COALESCE(mp.max_pts_all, 0) AS total_max,
-    CASE
-        WHEN mp.max_pts_all > 0
-        THEN COALESCE(vs.total_given, 0)::numeric / mp.max_pts_all
-        ELSE 0
-    END AS total_ratio,
-    CASE
-        WHEN mp.max_pts_all > 0 AND vs.total_given > 0 AND mp.max_pts_user > 0
-        THEN ((COALESCE(vs.user_given, 0)::numeric / mp.max_pts_user) /
-              (COALESCE(vs.total_given, 0)::numeric / mp.max_pts_all)) - 1
-        ELSE 0
-    END AS bias,
-    CASE
-        WHEN COALESCE(sa.songs_available, 0) < 5 THEN 'inconclusive'
-        WHEN CASE
-                WHEN mp.max_pts_all > 0 AND vs.total_given > 0 AND mp.max_pts_user > 0
-                THEN ((COALESCE(vs.user_given, 0)::numeric / mp.max_pts_user) /
-                      (COALESCE(vs.total_given, 0)::numeric / mp.max_pts_all)) - 1
-                ELSE 0
-             END < -0.5 THEN 'very-negative'
-        WHEN CASE
-                WHEN mp.max_pts_all > 0 AND vs.total_given > 0 AND mp.max_pts_user > 0
-                THEN ((COALESCE(vs.user_given, 0)::numeric / mp.max_pts_user) /
-                      (COALESCE(vs.total_given, 0)::numeric / mp.max_pts_all)) - 1
-                ELSE 0
-             END < -0.1 THEN 'negative'
-        WHEN CASE
-                WHEN mp.max_pts_all > 0 AND vs.total_given > 0 AND mp.max_pts_user > 0
-                THEN ((COALESCE(vs.user_given, 0)::numeric / mp.max_pts_user) /
-                      (COALESCE(vs.total_given, 0)::numeric / mp.max_pts_all)) - 1
-                ELSE 0
-             END < 0.1 THEN 'neutral'
-        WHEN CASE
-                WHEN mp.max_pts_all > 0 AND vs.total_given > 0 AND mp.max_pts_user > 0
-                THEN ((COALESCE(vs.user_given, 0)::numeric / mp.max_pts_user) /
-                      (COALESCE(vs.total_given, 0)::numeric / mp.max_pts_all)) - 1
-                ELSE 0
-             END < 0.5 THEN 'positive'
-        ELSE 'very-positive'
-    END AS bias_class
-FROM voting_stats vs
-FULL OUTER JOIN max_points_calc mp ON mp.country_id = vs.country_id
-FULL OUTER JOIN songs_available sa ON sa.country_id = COALESCE(vs.country_id, mp.country_id)
-LEFT JOIN country c ON c.id = COALESCE(vs.country_id, mp.country_id, sa.country_id)
-WHERE COALESCE(sa.songs_available, 0) > 0
+    ctry.songs_available AS parts,
+    ctry.user_given,
+    ctry.user_total_given AS user_max,
+    ctry.q_c AS user_ratio,
+    ctry.total_given,
+    ctry.total_given_all AS total_max,
+    ctry.p_c AS total_ratio,
+    ctry.bias,
+    ctry.bias_class
+FROM classified ctry
+LEFT JOIN country c ON c.id = ctry.country_id
+WHERE ctry.songs_available > 0
 ORDER BY
-    CASE
-        WHEN mp.max_pts_all > 0 AND vs.total_given > 0 AND mp.max_pts_user > 0
-        THEN ((COALESCE(vs.user_given, 0)::numeric / mp.max_pts_user) /
-              (COALESCE(vs.total_given, 0)::numeric / mp.max_pts_all)) - 1
-        ELSE 0
-    END DESC,
-    COALESCE(sa.songs_available, 0),
-    CASE
-        WHEN mp.max_pts_all > 0
-        THEN COALESCE(vs.total_given, 0)::numeric / mp.max_pts_all
-        ELSE 0
-    END
+    ctry.bias DESC,
+    ctry.songs_available,
+    ctry.p_c
     ''', {'id': user_id})
 
     for r in cursor.fetchall():
@@ -318,149 +365,241 @@ def get_submitter_biases(user_id: int):
 
     cursor.execute('''
 WITH user_shows AS (
-    SELECT DISTINCT show_id
+    SELECT DISTINCT s.id AS show_id
     FROM vote_set vs
     JOIN show s ON s.id = vs.show_id
-    WHERE voter_id = %(id)s
+    WHERE vs.voter_id = %(id)s
       AND s.access_type = 'full'
 ),
--- Points given TO targets (other submitters)
-voting_to_targets AS (
+songs_available AS (
     SELECT
-        s.submitter_id AS target_id,
-        SUM(CASE WHEN vs.voter_id = %(id)s THEN score ELSE 0 END) AS pts_user_to_target,
-        SUM(score) AS pts_all_to_target,
+        s.submitter_id AS submitter_id,
         COUNT(DISTINCT s.id) AS songs_available
-    FROM vote_set vs
-    JOIN vote v ON v.vote_set_id = vs.id
-    JOIN song s ON s.id = v.song_id
-    WHERE vs.show_id IN (SELECT show_id FROM user_shows)
-      AND s.submitter_id <> %(id)s
+    FROM user_shows us
+    JOIN song_show ss ON ss.show_id = us.show_id
+    JOIN song s ON s.id = ss.song_id
+    JOIN show sh ON sh.id = ss.show_id
+    WHERE s.submitter_id <> %(id)s
+      AND sh.access_type = 'full'
     GROUP BY s.submitter_id
 ),
-voting_from_targets AS (
+all_votes AS (
     SELECT
-        vs.voter_id AS target_id,
-        SUM(score) AS pts_target_to_user
+        s.submitter_id AS submitter_id,
+        SUM(v.score) AS total_given
+    FROM user_shows us
+    JOIN vote_set vs ON vs.show_id = us.show_id
+    JOIN vote v ON v.vote_set_id = vs.id
+    JOIN song s ON s.id = v.song_id
+    JOIN show sh ON sh.id = vs.show_id
+    WHERE s.submitter_id <> %(id)s
+      AND sh.access_type = 'full'
+    GROUP BY s.submitter_id
+),
+all_totals AS (
+    SELECT COALESCE(SUM(total_given), 0) AS total_given_all
+    FROM all_votes
+),
+show_user_points AS (
+    SELECT
+        vs.show_id,
+        SUM(v.score) AS user_points_in_show
+    FROM vote_set vs
+    JOIN vote v ON v.vote_set_id = vs.id
+    JOIN show sh ON sh.id = vs.show_id
+    WHERE vs.voter_id = %(id)s
+      AND sh.access_type = 'full'
+      AND vs.show_id IN (SELECT show_id FROM user_shows)
+    GROUP BY vs.show_id
+),
+submitter_shows AS (
+    SELECT DISTINCT
+        ss.show_id,
+        s.submitter_id
+    FROM user_shows us
+    JOIN song_show ss ON ss.show_id = us.show_id
+    JOIN song s ON s.id = ss.song_id
+    JOIN show sh ON sh.id = ss.show_id
+    WHERE s.submitter_id <> %(id)s
+      AND sh.access_type = 'full'
+),
+user_exposure AS (
+    SELECT
+        ss.submitter_id,
+        COALESCE(SUM(sup.user_points_in_show), 0) AS exposure_points
+    FROM submitter_shows ss
+    LEFT JOIN show_user_points sup ON sup.show_id = ss.show_id
+    GROUP BY ss.submitter_id
+),
+user_votes AS (
+    SELECT
+        s.submitter_id AS submitter_id,
+        SUM(v.score) AS user_given,
+        COUNT(DISTINCT v.id) AS user_votes
+    FROM user_shows us
+    JOIN vote_set vs ON vs.show_id = us.show_id
+    JOIN vote v ON v.vote_set_id = vs.id
+    JOIN song s ON s.id = v.song_id
+    JOIN show sh ON sh.id = vs.show_id
+    WHERE s.submitter_id <> %(id)s
+      AND sh.access_type = 'full'
+      AND vs.voter_id = %(id)s
+    GROUP BY s.submitter_id
+),
+user_total AS (
+    SELECT
+        COALESCE(SUM(user_given), 0) AS user_total_given,
+        COALESCE(SUM(user_votes), 0) AS user_vote_events
+    FROM user_votes
+),
+combined AS (
+    SELECT
+        COALESCE(av.submitter_id, uv.submitter_id, sa.submitter_id, ue.submitter_id) AS submitter_id,
+        COALESCE(sa.songs_available, 0) AS songs_available,
+        COALESCE(uv.user_given, 0) AS user_given,
+        COALESCE(uv.user_votes, 0) AS user_votes,
+        COALESCE(av.total_given, 0) AS total_given,
+        COALESCE(ue.exposure_points, 0) AS exposure_points
+    FROM all_votes av
+    FULL OUTER JOIN user_votes uv
+        ON uv.submitter_id = av.submitter_id
+    FULL OUTER JOIN songs_available sa
+        ON sa.submitter_id = COALESCE(av.submitter_id, uv.submitter_id)
+    FULL OUTER JOIN user_exposure ue
+        ON ue.submitter_id = COALESCE(av.submitter_id, uv.submitter_id, sa.submitter_id)
+),
+bias_values AS (
+    SELECT
+        ctry.submitter_id,
+        ctry.songs_available,
+        ctry.user_given,
+        ctry.user_votes,
+        ctry.total_given,
+        ctry.exposure_points,
+        ut.user_total_given::numeric AS user_total_given,
+        at.total_given_all::numeric AS total_given_all,
+        CASE
+            WHEN ut.user_total_given > 0
+            THEN ctry.user_given::numeric / ut.user_total_given
+            ELSE 0
+        END AS q_s,
+        CASE
+            WHEN at.total_given_all > 0
+            THEN ctry.total_given::numeric / at.total_given_all
+            ELSE 0
+        END AS p_s
+    FROM combined ctry
+    CROSS JOIN user_total ut
+    CROSS JOIN all_totals at
+),
+scored AS (
+    SELECT
+        bv.submitter_id,
+        bv.songs_available,
+        bv.user_given,
+        bv.user_votes,
+        bv.total_given,
+        bv.exposure_points,
+        bv.user_total_given,
+        bv.total_given_all,
+        bv.q_s,
+        bv.p_s,
+        bv.exposure_points::numeric AS N_s,
+        100.0::numeric AS s0,
+        CASE
+            WHEN bv.p_s > 0 AND bv.exposure_points > 0
+            THEN (bv.exposure_points / (bv.exposure_points + 100.0)) * bv.q_s
+               + (100.0 / (bv.exposure_points + 100.0)) * bv.p_s
+            WHEN bv.p_s > 0
+            THEN bv.p_s
+            ELSE 0
+        END AS q_hat
+    FROM bias_values bv
+),
+final_bias AS (
+    SELECT
+        s.*,
+        CASE
+            WHEN s.p_s > 0
+            THEN (s.q_hat - s.p_s) / (s.p_s + 0.0005)
+            ELSE 0
+        END AS bias
+    FROM scored s
+),
+reciprocal_points AS (
+    SELECT
+        vs.voter_id AS submitter_id,
+        SUM(v.score) AS pts_target_to_user
     FROM vote_set vs
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN song s ON s.id = v.song_id
+    JOIN show sh ON sh.id = vs.show_id
     WHERE s.submitter_id = %(id)s
       AND vs.voter_id <> %(id)s
+      AND sh.access_type = 'full'
     GROUP BY vs.voter_id
 ),
-max_points_calc AS (
+classified AS (
     SELECT
-        sc.target_id,
-        SUM(
-            (SELECT SUM(score)
-             FROM (
-                SELECT score
-                FROM point
-                WHERE point_system_id = sh.point_system_id
-                ORDER BY score DESC
-                LIMIT sc.entry_cnt
-             ) top_scores)
-        ) AS max_pts_user,
-        SUM(
-            (SELECT SUM(score)
-             FROM (
-                SELECT score
-                FROM point
-                WHERE point_system_id = sh.point_system_id
-                ORDER BY score DESC
-                LIMIT sc.entry_cnt
-             ) top_scores) * vc.voter_count
-        ) AS max_pts_all
-    FROM (
-        SELECT
-            ss.show_id,
-            s.submitter_id AS target_id,
-            COUNT(*) AS entry_cnt
-        FROM song_show ss
-        JOIN song s ON s.id = ss.song_id
-        WHERE ss.show_id IN (SELECT show_id FROM user_shows)
-          AND s.submitter_id <> %(id)s
-        GROUP BY ss.show_id, s.submitter_id
-    ) sc
-    JOIN show sh ON sh.id = sc.show_id
-    JOIN (
-        SELECT show_id, COUNT(*) AS voter_count
-        FROM vote_set
-        WHERE show_id IN (SELECT show_id FROM user_shows)
-        GROUP BY show_id
-    ) vc ON vc.show_id = sc.show_id
-    GROUP BY sc.target_id
+        fb.*,
+        rp.pts_target_to_user,
+        CASE
+            WHEN fb.songs_available < 5 OR fb.N_s < 50
+                THEN 'inconclusive'
+            WHEN fb.bias < -0.5
+                THEN 'very-negative'
+            WHEN fb.bias < -0.1
+                THEN 'negative'
+            WHEN fb.bias < 0.1
+                THEN 'neutral'
+            WHEN fb.bias < 0.5
+                THEN 'positive'
+            ELSE 'very-positive'
+        END AS bias_class,
+        CASE
+            WHEN fb.songs_available < 5 OR rp.pts_target_to_user IS NULL OR rp.pts_target_to_user = 0
+                THEN 'inconclusive'
+            WHEN (fb.user_given::numeric / rp.pts_target_to_user) - 1 < -0.5
+                THEN 'very-negative'
+            WHEN (fb.user_given::numeric / rp.pts_target_to_user) - 1 < -0.1
+                THEN 'negative'
+            WHEN (fb.user_given::numeric / rp.pts_target_to_user) - 1 < 0.1
+                THEN 'neutral'
+            WHEN (fb.user_given::numeric / rp.pts_target_to_user) - 1 < 0.5
+                THEN 'positive'
+            ELSE 'very-positive'
+        END AS reciprocal_bias_class,
+        CASE
+            WHEN rp.pts_target_to_user > 0
+            THEN (fb.user_given::numeric / rp.pts_target_to_user) - 1
+            ELSE 0
+        END AS reciprocal_bias
+    FROM final_bias fb
+    LEFT JOIN reciprocal_points rp ON rp.submitter_id = fb.submitter_id
 )
 SELECT
-    COALESCE(vt.target_id, vf.target_id, mp.target_id) AS submitter_id,
-    u.username AS submitter_name,
-    COALESCE(vt.songs_available, 0) AS parts,
-    COALESCE(vt.pts_user_to_target, 0) AS user_given,
-    COALESCE(vf.pts_target_to_user, 0) AS submitter_given,
-    COALESCE(vt.pts_all_to_target, 0) AS total_given,
-    COALESCE(vt.pts_user_to_target, 0) - COALESCE(vf.pts_target_to_user, 0) AS points_deficit,
-    COALESCE(mp.max_pts_user, 0) AS user_max,
-    COALESCE(mp.max_pts_all, 0) AS all_max,
-    CASE
-        WHEN mp.max_pts_user > 0
-        THEN COALESCE(vt.pts_user_to_target, 0)::numeric / mp.max_pts_user
-        ELSE 0
-    END AS user_ratio,
-    CASE
-        WHEN mp.max_pts_all > 0
-        THEN COALESCE(vt.pts_all_to_target, 0)::numeric / mp.max_pts_all
-        ELSE 0
-    END AS total_ratio,
-    CASE
-        WHEN vf.pts_target_to_user > 0
-        THEN (COALESCE(vt.pts_user_to_target, 0)::numeric / vf.pts_target_to_user) - 1
-        ELSE 0
-    END AS reciprocal_bias,
-    CASE
-        WHEN mp.max_pts_all > 0 AND vt.pts_all_to_target > 0
-        THEN ((COALESCE(vt.pts_user_to_target, 0)::numeric / mp.max_pts_user) /
-              (COALESCE(vt.pts_all_to_target, 0)::numeric / mp.max_pts_all)) - 1
-        ELSE 0
-    END AS bias,
-    CASE
-        WHEN COALESCE(vt.songs_available, 0) < 5 THEN 'inconclusive'
-        WHEN ((COALESCE(vt.pts_user_to_target, 0)::numeric / NULLIF(mp.max_pts_user, 0)) /
-              NULLIF((COALESCE(vt.pts_all_to_target, 0)::numeric / NULLIF(mp.max_pts_all, 0)), 0)) - 1 < -0.5 THEN 'very-negative'
-        WHEN ((COALESCE(vt.pts_user_to_target, 0)::numeric / NULLIF(mp.max_pts_user, 0)) /
-              NULLIF((COALESCE(vt.pts_all_to_target, 0)::numeric / NULLIF(mp.max_pts_all, 0)), 0)) - 1 < -0.1 THEN 'negative'
-        WHEN ((COALESCE(vt.pts_user_to_target, 0)::numeric / NULLIF(mp.max_pts_user, 0)) /
-              NULLIF((COALESCE(vt.pts_all_to_target, 0)::numeric / NULLIF(mp.max_pts_all, 0)), 0)) - 1 < 0.1 THEN 'neutral'
-        WHEN ((COALESCE(vt.pts_user_to_target, 0)::numeric / NULLIF(mp.max_pts_user, 0)) /
-              NULLIF((COALESCE(vt.pts_all_to_target, 0)::numeric / NULLIF(mp.max_pts_all, 0)), 0)) - 1 < 0.5 THEN 'positive'
-        ELSE 'very-positive'
-    END AS bias_class,
-    CASE
-        WHEN COALESCE(vt.songs_available, 0) < 5 THEN 'inconclusive'
-        WHEN (COALESCE(vt.pts_user_to_target, 0)::numeric / NULLIF(vf.pts_target_to_user, 0)) - 1 < -0.5 THEN 'very-negative'
-        WHEN (COALESCE(vt.pts_user_to_target, 0)::numeric / NULLIF(vf.pts_target_to_user, 0)) - 1 < -0.1 THEN 'negative'
-        WHEN (COALESCE(vt.pts_user_to_target, 0)::numeric / NULLIF(vf.pts_target_to_user, 0)) - 1 < 0.1 THEN 'neutral'
-        WHEN (COALESCE(vt.pts_user_to_target, 0)::numeric / NULLIF(vf.pts_target_to_user, 0)) - 1 < 0.5 THEN 'positive'
-        ELSE 'very-positive'
-    END AS reciprocal_bias_class
-FROM voting_to_targets vt
-FULL OUTER JOIN voting_from_targets vf ON vf.target_id = vt.target_id
-FULL OUTER JOIN max_points_calc mp ON mp.target_id = COALESCE(vt.target_id, vf.target_id)
-LEFT JOIN account u ON u.id = COALESCE(vt.target_id, vf.target_id, mp.target_id)
-WHERE COALESCE(vt.songs_available, 0) > 0
+    ctry.submitter_id,
+    a.username AS submitter_name,
+    ctry.songs_available AS parts,
+    ctry.user_given,
+    COALESCE(ctry.pts_target_to_user, 0) AS submitter_given,
+    ctry.total_given,
+    (ctry.user_given - COALESCE(ctry.pts_target_to_user, 0)) AS points_deficit,
+    ctry.user_total_given AS user_max,
+    ctry.total_given_all AS all_max,
+    ctry.q_s AS user_ratio,
+    ctry.p_s AS total_ratio,
+    ctry.reciprocal_bias,
+    ctry.bias,
+    ctry.bias_class,
+    ctry.reciprocal_bias_class
+FROM classified ctry
+LEFT JOIN account a ON a.id = ctry.submitter_id
+WHERE ctry.songs_available > 0
 ORDER BY
-    CASE
-        WHEN mp.max_pts_all > 0 AND vt.pts_all_to_target > 0
-        THEN ((COALESCE(vt.pts_user_to_target, 0)::numeric / mp.max_pts_user) /
-              (COALESCE(vt.pts_all_to_target, 0)::numeric / mp.max_pts_all)) - 1
-        ELSE 0
-    END DESC,
-    COALESCE(vt.songs_available, 0),
-    CASE
-        WHEN mp.max_pts_all > 0
-        THEN COALESCE(vt.pts_all_to_target, 0)::numeric / mp.max_pts_all
-        ELSE 0
-    END
+    ctry.bias DESC,
+    ctry.songs_available,
+    ctry.p_s
     ''', {'id': user_id})
 
     for r in cursor.fetchall():
