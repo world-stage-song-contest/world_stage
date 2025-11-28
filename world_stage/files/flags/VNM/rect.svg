@@ -1,8 +1,8 @@
-<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 540 360">
-	<path fill="#d23" d="M0 0h540v360H0z"/>
-	<g transform="translate(270,180)" fill="#fd0">
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 12 8">
+	<path fill="#d23" d="M0 0h12v8H0z"/>
+	<g transform="translate(6,4)" fill="#fd0">
 		<g id="c">
-			<path id="t" d="M 0,-100 V 0 H 50" transform="rotate(18 0,-100)"/>
+			<path id="t" d="M 0,-2 V 0 H 1" transform="rotate(18 0,-2)"/>
 			<use href="#t" transform="scale(-1,1)"/>
 			</g>
 		<use href="#c" transform="rotate(72)"/>

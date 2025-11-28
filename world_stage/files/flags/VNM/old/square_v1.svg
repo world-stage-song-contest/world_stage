@@ -1,0 +1,13 @@
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 360 360">
+	<path fill="#d23" d="M0 0h540v360H0z"/>
+	<g transform="translate(180,180)" fill="#fd0">
+		<g id="c">
+			<path id="t" d="M 0,-100 V 0 H 50" transform="rotate(18 0,-100)"/>
+			<use href="#t" transform="scale(-1,1)"/>
+			</g>
+		<use href="#c" transform="rotate(72)"/>
+		<use href="#c" transform="rotate(144)"/>
+		<use href="#c" transform="rotate(216)"/>
+		<use href="#c" transform="rotate(288)"/>
+	</g>
+</svg>
