@@ -1,1 +1,35 @@
-<svg height="96" viewBox="0 0 96 96" width="96" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g display="none" transform="matrix(.08727273 0 0 .17454545 -.000002 0)"><path d="m0 0h1100v550h-1100z" fill="#fff"/><path id="a" d="m0 500h1100v50h-1100z" fill="#cc0001"/><g fill="#cc0001"><use transform="translate(0 -100)" xlink:href="#a"/><use transform="translate(0 -200)" xlink:href="#a"/><use transform="translate(0 -300)" xlink:href="#a"/><use transform="translate(0 -400)" xlink:href="#a"/><use transform="translate(0 -500)" xlink:href="#a"/></g><path d="m0 0h550v350h-550z" fill="#106"/><g display="none" fill="#fc0"><path d="m314.043 206.28-54.15 8.958 42.232-35.055-50.396-21.738 54.478-6.66-30.644-45.533 49.43 23.853-1.16-54.872 28.688 46.79 28.69-46.79-1.164 54.872 49.43-23.85-30.643 45.53 54.48 6.66-50.397 21.738 42.232 35.055-54.15-8.96 16.575 52.322-40.71-36.81-14.343 52.978-14.345-52.98-40.706 36.812z"/><path d="m137.003 175.11c-.704-35.63 15.493-72.055 45.44-92.264 27.337-19.11 62.362-24.368 94.92-19.79-37.138-19.22-83.946-17.522-119.394 4.753-41.928 24.937-67.54 75.505-60.078 124.107 7.223 55.392 55.328 102.177 110.94 107.696 23.45 2.618 47.48-2.153 68.533-12.67-39.75 5.872-84-4.1-111.873-34.526-19.388-20.668-28.7-49.25-28.49-77.307z"/></g></g><g stroke-linecap="round" stroke-linejoin="round"><path d="m-.00000213.00000022h95.99999974v95.99999974h-95.99999974z" fill="#fff" stroke-width="16"/><g stroke-width="16.000018"><g fill="#c02"><path d="m-.00000213-.00000044h96.00000501v8.00000064h-96.00000501z"/><path d="m-.00000213 16.99999951h96.00000501v8.00000064h-96.00000501z"/><path d="m-.00000213 33.99999946h96.00000501v8.00000064h-96.00000501z"/><path d="m-.00000213 51.99999941h96.00000501v8.00000064h-96.00000501z"/><path d="m-.00000213 68.99999871h96.00000501v9.00000129h-96.00000501z"/><path d="m-.00000213 87.0000013h96.00000501v8.99999668h-96.00000501z"/></g><path d="m-.00000213-.00000044h60.00000181v60.00000181h-60.00000181z" fill="#106"/><circle cx="27.999995" cy="32" fill="#fc0" r="15.999999"/><circle cx="33.999994" cy="32" fill="#106" r="14"/></g><path d="m31.999999 22 1.408663 5.202535 3.997746-3.615071-1.62766 5.138232 5.317572-.879847-4.147213 3.442576 4.949108 2.134723-5.350055.653927 3.009336 4.471532-4.854291-2.34234.114121 5.388663-2.817325-4.59493-2.817326 4.59493.114121-5.388662-4.854291 2.34234 3.009335-4.471532-5.350054-.653927 4.949107-2.134723-4.147213-3.442575 5.317572.879846-1.627661-5.138232 3.997746 3.61507z" fill="#fc0" stroke-width="4.23333" transform="matrix(1.00000002 0 0 1.00000002 7.999997 0)"/></g></svg>
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 1050 1050">
+<style>
+<![CDATA[.R{fill:#c01}.B{fill:#106}.W{fill:#fff}.Y{fill:#fc0}]]>
+.my {
+    transform: rotate(calc(var(--n)*360deg/14));
+    transform-origin: 0px 0px;
+}
+</style>
+	<path class="W" d="M0 0h1050v1050H0z"/>
+	<g class="R">
+		<path id="s" d="M0 0h1050v75H0z"/>
+		<use href="#s" transform="translate(0 150)"/>
+		<use href="#s" transform="translate(0 300)"/>
+		<use href="#s" transform="translate(0 450)"/>
+		<use href="#s" transform="translate(0 600)"/>
+		<use href="#s" transform="translate(0 750)"/>
+		<use href="#s" transform="translate(0 900)"/>
+		</g>
+	<path class="B" d="M0 0h600v600H0z"/>
+	<circle class="Y" cx="270" cy="300" r="175"/>
+	<circle class="B" cx="320" cy="300" r="150"/>
+	<g class="Y" transform="translate(420,300)">
+		<g id="q">
+			<path id="t" d="M0,-100L-20 0H20z"/>
+			<use href="#t" transform="scale(1,-1)"/>
+			</g>
+		<use href="#q" class="my" style="--n:1"/>
+		<use href="#q" class="my" style="--n:2"/>
+		<use href="#q" class="my" style="--n:3"/>
+		<use href="#q" class="my" style="--n:4"/>
+		<use href="#q" class="my" style="--n:5"/>
+		<use href="#q" class="my" style="--n:6"/>
+		<use href="#q" class="my" style="--n:7"/>
+		</g>
+</svg>
