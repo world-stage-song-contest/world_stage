@@ -66,4 +66,16 @@
     </tbody>
 </table>
 
+{% if free_countries %}
+<h2>Free countries</h2>
+<div class="country-list">
+    {% for country in free_countries %}
+    <div class="country-item">
+        <div class="flag-container">{{ flag(country.id, 52, country.name) }}</div>
+        <div class="country-name"><a href="{{ url_for('country.country', code=country.id.lower()) }}">{{ country.name }}</a></div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% endblock %}

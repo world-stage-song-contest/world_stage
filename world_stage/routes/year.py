@@ -82,11 +82,24 @@ def year(year: str):
 
     if _year:
         cursor.execute('SELECT closed FROM year WHERE id = %s', (year,))
-        closed = cursor.fetchone()
-        if not closed:
-            return render_template('error.html', error='Year not closed yet'), 404
+        closed = cursor.fetchone() or {'closed': 0}
+        cl = closed['closed']
 
         songs = get_year_songs(_year, select_languages=True)
+
+        free_countries = []
+
+        if cl == 0:
+            cursor.execute('''
+                SELECT id, name FROM country
+                WHERE id <> ALL(%(ccs)s)
+                  AND is_participating = true
+                  AND available_from <= %(year)s
+                  AND available_until >= %(year)s
+                ORDER BY name
+            ''', {'ccs': [s.country.cc for s in songs], 'year': _year})
+
+            free_countries = cursor.fetchall()
 
         cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder', (_year,))
         total_entries = cursor.fetchone()['c'] # type: ignore
@@ -95,10 +108,11 @@ def year(year: str):
         shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
         shows.sort()
 
-        return render_template('year/year.html', year=year, songs=songs,
+        return render_template('year/year.html', year=year, songs=songs, free_countries=free_countries,
                                closed=closed['closed'], shows=shows, total=total_entries, placeholders=total_placeholders)
     else:
         return render_template('year/specials.html', specials=get_specials())
+
 
 @bp.get('/<year>/<show>')
 def results(year: str, show: str):
