@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#fff">
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
 <style>
-<![CDATA[.R{fill:#c12}.B{fill:#125}]]>
+<![CDATA[.R{fill:#c12}.B{fill:#125}.W{fill:#fff}]]>
 </style>
 <defs>
 	<g id="a">
@@ -14,6 +14,7 @@
 		<use href="#c" transform="rotate(288)"/>
 		</g>
 	</defs>
+	<path class="W" d="M0 0h16v16H0z"/>
 	<g class="R">
 		<path d="M8 8V0h8v8z"/>
 		<use href="#a" transform="translate(12,12)"/>
