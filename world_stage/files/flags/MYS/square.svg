@@ -1,27 +1,30 @@
-<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 1050 1050">
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 10 10">
 <style>
 <![CDATA[.R{fill:#c01}.B{fill:#106}.W{fill:#fff}.Y{fill:#fc0}]]>
 .my {
     transform: rotate(calc(var(--n)*360deg/14));
     transform-origin: 0px 0px;
 }
+.canton {
+    transform: scale(calc(5/9));
+    transform-origin: 0px 0px;
+}
 </style>
-	<path class="W" d="M0 0h1050v1050H0z"/>
+	<path class="W" d="M0 0h10v10H0z"/>
 	<g class="R">
-		<path id="s" d="M0 0h1050v75H0z"/>
-		<use href="#s" transform="translate(0 150)"/>
-		<use href="#s" transform="translate(0 300)"/>
-		<use href="#s" transform="translate(0 450)"/>
-		<use href="#s" transform="translate(0 600)"/>
-		<use href="#s" transform="translate(0 750)"/>
-		<use href="#s" transform="translate(0 900)"/>
+		<path id="s" d="M0 0h10v1H0z"/>
+		<use href="#s" transform="translate(0 2)"/>
+		<use href="#s" transform="translate(0 4)"/>
+		<use href="#s" transform="translate(0 6)"/>
+		<use href="#s" transform="translate(0 8)"/>
 		</g>
-	<path class="B" d="M0 0h600v600H0z"/>
-	<circle class="Y" cx="270" cy="300" r="175"/>
-	<circle class="B" cx="320" cy="300" r="150"/>
-	<g class="Y" transform="translate(420,300)">
+<g class="canton">
+	<path class="B" d="M0 0h11v9H0z"/>
+	<circle class="Y" cx="4" cy="4.5" r="3"/>
+	<circle class="B" cx="5" cy="4.5" r="2.5"/>
+	<g class="Y" transform="translate(8,4.5)">
 		<g id="q">
-			<path id="t" d="M0,-100L-20 0H20z"/>
+			<path id="t" d="M0,-2.5L-0.5 0H0.5z"/>
 			<use href="#t" transform="scale(1,-1)"/>
 			</g>
 		<use href="#q" class="my" style="--n:1"/>
@@ -32,4 +35,5 @@
 		<use href="#q" class="my" style="--n:6"/>
 		<use href="#q" class="my" style="--n:7"/>
 		</g>
+	</g>
 </svg>

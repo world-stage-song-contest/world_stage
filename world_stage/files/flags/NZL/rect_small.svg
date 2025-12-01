@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="90" height="60">
-<style><![CDATA[.R{fill:#c12;stroke:#c12}.B{fill:#027}.W{fill:#fff;stroke:#fff}.O{scale:1.6}]]></style>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16" viewBox="0 0 90 60">
+<style><![CDATA[.R{fill:#c12;stroke:#c12}.B{fill:#027}.W{fill:#fff;stroke:#fff}.O{scale:1.75}]]></style>
 	<defs>
 		<g id="a">
 			<g id="c">
-				<path id="t" d="M0,-5V0H2.5" transform="rotate(18 0,-5)"/>
+				<path id="t" d="M0,-6V0H3" transform="rotate(18 0,-6)"/>
 				<use href="#t" transform="scale(-1,1)"/>
 				</g>
 			<use href="#c" transform="rotate(72)"/>
@@ -30,6 +30,6 @@
 		</g>
 	<use href="#x" style="transform:translate(67.5px,12px);stroke-width:0"/>
 	<use href="#x" style="transform:translate(67.5px,48px);stroke-width:0"/>
-	<use href="#x" style="transform:translate(55px,28px);stroke-width:0"/>
-	<use href="#x" style="transform:translate(80px,24px);stroke-width:0"/>
+	<use href="#x" style="transform:translate(56px,30px);stroke-width:0"/>
+	<use href="#x" style="transform:translate(79px,27px);stroke-width:0"/>
 </svg>
