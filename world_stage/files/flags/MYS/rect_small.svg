@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16" viewBox="0 0 900 600">
+<style>
+<![CDATA[.R{fill:#c01}.B{fill:#106}.W{fill:#fff}.Y{fill:#fc0}]]>
+.my {
+    transform: rotate(calc(var(--n)*360deg/14));
+    transform-origin: 0px 0px;
+}
+</style>
+	<path class="W" d="M0 0h900v600H0z"/>
+	<g class="R">
+		<path id="s" d="M0 0h900v60H0z"/>
+		<use href="#s" transform="translate(0 120)"/>
+		<use href="#s" transform="translate(0 240)"/>
+		<use href="#s" transform="translate(0 360)"/>
+		<use href="#s" transform="translate(0 480)"/>
+		</g>
+	<path class="B" d="M0 0h540v360H0z"/>
+	<circle class="Y" cx="210" cy="175" r="125"/>
+	<circle class="B" cx="240" cy="175" r="110"/>
+	<g class="Y" transform="translate(350,175)">
+		<g id="q">
+			<path id="t" d="M0,-100L-20 0H20z"/>
+			<use href="#t" transform="scale(1,-1)"/>
+			</g>
+		<use href="#q" class="my" style="--n:1"/>
+		<use href="#q" class="my" style="--n:2"/>
+		<use href="#q" class="my" style="--n:3"/>
+		<use href="#q" class="my" style="--n:4"/>
+		<use href="#q" class="my" style="--n:5"/>
+		<use href="#q" class="my" style="--n:6"/>
+		<use href="#q" class="my" style="--n:7"/>
+		</g>
+</svg>
