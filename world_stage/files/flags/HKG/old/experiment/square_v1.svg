@@ -1,0 +1,32 @@
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 600 600">
+<style>
+<![CDATA[.R{fill:#c01}.B{fill:#106}.W{fill:#fff}.Y{fill:#fc0}]]>
+.star {
+    transform: rotate(calc(var(--n)*360deg/5));
+    transform-origin: 100px 100px;
+}
+.leg {
+    transform: rotate(calc(var(--n)*360deg/5));
+    transform-origin: 0px 0px;
+}
+</style>
+	<path class="B" d="M0 0h600v600H0z"/>
+	<g class="Y" transform="rotate(72 300,300) translate(200,200)">
+		<g id="c">
+			<g id="q">
+				<path id="t" d="M0,-12V0H6" transform="rotate(18 0,-12)"/>
+				<use href="#t" transform="scale(-1,1)"/>
+				</g>
+			<use href="#q" class="leg" style="--n:1"/>
+			<use href="#q" class="leg" style="--n:2"/>
+			<use href="#q" class="leg" style="--n:3"/>
+			<use href="#q" class="leg" style="--n:4"/>
+			<use href="#q" class="leg" style="--n:5"/>
+			</g>
+		<use href="#c" class="star" style="--n:1"/>
+		<use href="#c" class="star" style="--n:2"/>
+		<use href="#c" class="star" style="--n:3"/>
+		<use href="#c" class="star" style="--n:4"/>
+		<use href="#c" class="star" style="--n:5"/>
+		</g>
+</svg>
