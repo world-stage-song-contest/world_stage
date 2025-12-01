@@ -1,0 +1,40 @@
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 600 600">
+<style>
+<![CDATA[.R{fill:#d12}.W{fill:#fff}.Y{fill:#fff}.N{fill:#000}.sketch{stroke:#000;fill:none;stroke-linecap:round;stroke-linejoin:round}]]>
+.leg {
+    transform: rotate(calc(var(--n)*360deg/5));
+    transform-origin: 0px 0px;
+}
+.petal {
+    transform: rotate(calc(var(--n)*360deg/5));
+    transform-origin: 300px 300px;
+}
+</style>
+	<path class="R" d="M0 0h600v600H0z"/>
+	<g class="thing">
+		<mask id="mask">
+			<g id="petal" transform="translate(0,-100)">
+				<circle cx="300" cy="300" r="100" class="Y"/>
+				<circle cx="250" cy="300" r="50" class="Y"/>
+				<circle cx="340" cy="300" r="40" transform="rotate(45 250,300)" class="N"/>
+				<circle cx="250" cy="210" r="40" transform="rotate(30 250,300)" class="N"/>
+				<g transform="translate(250,300)">
+					<g id="q">
+						<path id="t" d="M0,-20V0H10" transform="rotate(18 0,-20)"/>
+						<use href="#t" transform="scale(-1,1)"/>
+						</g>
+					<use href="#q" class="leg" style="--n:1"/>
+					<use href="#q" class="leg" style="--n:2"/>
+					<use href="#q" class="leg" style="--n:3"/>
+					<use href="#q" class="leg" style="--n:4"/>
+					<use href="#q" class="leg" style="--n:5"/>
+					</g>
+				</g>
+				<use href="#petal" class="petal" style="--n:1"/>
+				<use href="#petal" class="petal" style="--n:2"/>
+				<use href="#petal" class="petal" style="--n:3"/>
+				<use href="#petal" class="petal" style="--n:4"/>
+			</mask>
+		<path class="W" d="M0 0h600v600H0z" mask="url(#mask)"/>
+		</g>
+</svg>

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 36 24">
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="16" viewBox="0 0 36 24">
 <style>
-<![CDATA[.R{fill:#c12}.W{fill:#fff}.B{fill:#039}.Y{fill:#fc0;scale:calc(3/2);transform-origin:18px 12px}]]>
+<![CDATA[.R{fill:#c12}.W{fill:#fff}.B{fill:#039}.Y{fill:#fc0;scale:calc(7/4);transform-origin:18px 12px}]]>
 </style>
 <defs>
 	<g id="a" transform="translate(18,12)">
@@ -17,7 +17,6 @@
 	<path class="R" d="M0 0h36v24H0z"/>
 	<path class="W" d="M0 0h36v16H0z"/>
 	<path class="B" d="M0 0h36v8H0z"/>
-	<path class="R" d="M12 24l6 -12l6 12-z"/>
 	<use href="#a" class="Y"/>
 	<use href="#a" class="R"/>
 </svg>

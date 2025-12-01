@@ -1,28 +1,22 @@
-<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="45 30 810 540">
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 600 600">
 <style>
-<![CDATA[.R{fill:#d12}.W{fill:#fff}.Y{fill:#fff}.N{fill:#000}]]>
+<![CDATA[.R{fill:#d12}.W{fill:#fff}.Y{fill:#fff}.N{fill:#000}.sketch{stroke:#08f;fill:none;stroke-linecap:round;stroke-linejoin:round}]]>
 .leg {
     transform: rotate(calc(var(--n)*360deg/5));
+    transform-origin: 0px 0px;
 }
 .petal {
     transform: rotate(calc(var(--n)*360deg/5));
-    transform-origin: 450px 300px;
-}
-.emblem {
-    transform: rotate(calc(360deg/5/3));
-    transform-origin: 450px 300px;
+    transform-origin: 300px 300px;
 }
 </style>
-	<defs>
-		<path id="a" d="M0 0h900v600H0z"/>
-		</defs>
-	<use href="#a" class="R"/>
-	<g class="emblem" >
+	<path class="R" d="M0 0h600v600H0z"/>
+	<g class="thing">
 		<mask id="mask0">
-			<g id="petal" transform="translate(150,-100)">
+			<g id="petal" transform="translate(0,-100)">
 				<circle class="Y" cx="300" cy="300" r="100"/>
-				<path class="N" d="M0 0h150v-150H0z" transform="rotate(30 250,300) translate(250 300)"/>
-				<path class="N" d="M0 0h150v-150H0z" transform="rotate(45 250,300) translate(250 300)"/>
+				<path class="N" d="M0 0h150v-125H0z" transform="rotate(30 250,300) translate(250 300)"/>
+				<path class="N" d="M0 0h140v-120H0z" transform="rotate(45 250,300) translate(250 300)"/>
 				<circle class="Y" cx="250" cy="300" r="50"/>
 				<circle class="N" cx="340" cy="300" r="40" transform="rotate(45 250,300)"/>
 				<circle class="N" cx="250" cy="210" r="40" transform="rotate(30 250,300)"/>
@@ -51,10 +45,10 @@
 		<mask id="mask4">
 			<use href="#petal" class="petal" style="--n:4"/>
 			</mask>
-		<use href="#a" class="W" mask="url(#mask0)"/>
-		<use href="#a" class="W" mask="url(#mask1)"/>
-		<use href="#a" class="W" mask="url(#mask2)"/>
-		<use href="#a" class="W" mask="url(#mask3)"/>
-		<use href="#a" class="W" mask="url(#mask4)"/>
+		<path class="W" d="M0 0h600v600H0z" mask="url(#mask0)"/>
+		<path class="W" d="M0 0h600v600H0z" mask="url(#mask1)"/>
+		<path class="W" d="M0 0h600v600H0z" mask="url(#mask2)"/>
+		<path class="W" d="M0 0h600v600H0z" mask="url(#mask3)"/>
+		<path class="W" d="M0 0h600v600H0z" mask="url(#mask4)"/>
 		</g>
 </svg>
