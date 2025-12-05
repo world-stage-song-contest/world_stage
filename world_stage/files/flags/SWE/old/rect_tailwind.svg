@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
+<path fill="oklch(0.391 0.09 240.876)" d="M0 0h144v96H0z"/>
+<g fill="oklch(0.828 0.189 84.429)">
+	<rect width="20" height="96" x="44"/>
+	<rect width="144" height="20" y="38"/>
+	</g>
+</svg>
