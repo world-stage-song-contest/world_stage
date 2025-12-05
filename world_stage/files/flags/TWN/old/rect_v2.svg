@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
+<style>
+<![CDATA[.R{fill:#c12}.B{fill:#026}.W{fill:#fff}]]>
+</style>
+<g id="a" transform="translate(36 24)">
+	<g id="c">
+		<path id="t" d="M 0 21 l 6 -24 v 4 l -6 -24 l -6 24 v -4 z"/>
+		</g>
+	</g>
+	<path class="R" d="M0 0h144v96H0z"/>
+	<path class="B" d="M0 0h72v48H0z"/>
+	<use class="W" href="#a"/>
+</svg>
