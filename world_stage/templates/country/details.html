@@ -21,6 +21,16 @@
             width: 100%;
         }
     </style>
+    <script>
+        function copyValue(th) {
+            if (th.tagName != "TH") return;
+
+            const td = th.nextElementSibling;
+            td.select();
+            document.execCommand("copy");
+            td.s
+        }
+    </script>
 {% endblock %}
 {% block onload%}onLoad(){% endblock %}
 {% block content %}

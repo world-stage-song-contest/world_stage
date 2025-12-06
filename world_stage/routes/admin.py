@@ -751,7 +751,7 @@ ORDER BY show_id, running_order
 
             cursor.execute('''
 WITH song_data AS (
-    SELECT song.year_id as show_id, LOWER(cc2) AS show, UPPER(cc2) AS running_order,
+    SELECT song.year_id as show_id, song.year_id AS show, UPPER(cc2) AS running_order,
            LOWER(cc2) AS country, country.name AS country_name,
            artist, title, video_link, snippet_start, snippet_end,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
