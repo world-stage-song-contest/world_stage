@@ -4,12 +4,13 @@ import datetime
 from enum import Enum
 from functools import total_ordering
 import json
-from typing import Optional
+from typing import Any, Optional
 
-from flask import Response, request
+from flask import Response, request, url_for
 import flask
+
 from .db import get_db
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Tuple, Deque, TypeAlias
 import urllib.parse
 
@@ -1307,3 +1308,32 @@ def get_markdown_parser():
         .use(make_entity_plugin())
         )
     return md
+
+def resp(data: Any, code: int = 200) -> tuple[dict[str, Any], int]:
+    return {
+        "result": data
+    }, code
+
+class ErrorID(Enum):
+    NONE = 0
+    NOT_FOUND = 1
+
+    def http_code(self):
+        match self:
+            case ErrorID.NONE:
+                return 200
+            case ErrorID.NOT_FOUND:
+                return 404
+            case _:
+                return 400
+
+def err(id: ErrorID, desc: str) -> tuple[dict[str, Any], int]:
+    return ({
+        "error": {
+            "id": id.value,
+            "description": desc
+        }
+    }, id.http_code())
+
+def url_bool(datum: str) -> bool:
+    return datum in ('true', '1', 'y', 'on', 'yes', 'y')
