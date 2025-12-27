@@ -114,6 +114,9 @@ def vote(show: str):
     country = ''
     country_id = ''
 
+    if not session_id:
+        return render_template('error.html', error="Please log in to vote"), 403
+
     selected: dict[int, dict[str, Any]] = defaultdict(dict)
 
     show_data = get_show_id(show)
@@ -128,10 +131,11 @@ def vote(show: str):
     db = get_db()
     cursor = db.cursor()
 
-    if session_id:
-        d = get_user_id_from_session(session_id)
-        if d:
-            _, username = d
+    d = get_user_id_from_session(session_id)
+    if not d:
+        return render_template('error.html', error="Unknown user ID"), 404
+
+    _, username = d
 
     vote_set_id = None
     countries = []
@@ -186,6 +190,10 @@ def vote_post(show: str):
 
     show_data = get_show_id(show)
 
+    session_id = request.cookies.get('session')
+    if not session_id:
+        return render_template('error.html', error="Please log in to vote"), 403
+
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
 
@@ -197,12 +205,11 @@ def vote_post(show: str):
 
     errors = []
 
-    username_invalid = False
-    username = request.form['username']
-    username = unicodedata.normalize('NFKC', username)
-    username = username.strip()
+    d = get_user_id_from_session(session_id)
+    if not d:
+        return render_template('error.html', error="Unknown user ID"), 404
 
-    session_id = request.cookies.get('session')
+    voter_id, username = d
 
     nickname = request.form['nickname']
     nickname = nickname.strip()
@@ -210,19 +217,8 @@ def vote_post(show: str):
     if not country_id:
         country_id = None
 
-    if not username:
-        username_invalid = True
-        errors.append("Username is required.")
-
     db = get_db()
     cursor = db.cursor()
-
-    cursor.execute('SELECT id FROM account WHERE username = %s', (username,))
-    voter = cursor.fetchone()
-    if voter:
-        voter_id = voter['id']
-    else:
-        voter_id = 0
 
     cursor.execute('''
         SELECT 1
@@ -236,24 +232,16 @@ def vote_post(show: str):
 
     country_codes = []
     country_names = []
-    if voter_id:
-        user_songs = get_user_songs(voter_id, show_data.year)
-        countries = list(map(lambda s: s.country, user_songs))
-        country_codes = [c.cc for c in countries]
-        country_names = [c.name for c in countries]
+
+    user_songs = get_user_songs(voter_id, show_data.year)
+    user_song_ids = [s.id for s in user_songs]
+    countries = [s.country for s in user_songs]
+    country_codes = [c.cc for c in countries]
+    country_names = [c.name for c in countries]
 
     if country_codes and country_id not in country_codes:
         errors.append(f"You can only vote as one of the countries you submitted: ({', '.join(country_names)})")
         country_id = None
-
-    cursor.execute('''
-        SELECT id FROM song WHERE submitter_id = %s
-    ''', (voter_id,))
-    submitted_song = cursor.fetchone()
-    if submitted_song:
-        submitted_song = submitted_song['id']
-    else:
-        submitted_song = None
 
     missing = []
     for point in show_data.points:
@@ -262,7 +250,7 @@ def vote_post(show: str):
             missing.append(point)
             continue
         song_id = int(id_str)
-        if song_id == submitted_song:
+        if song_id in user_song_ids:
             errors.append(f"You cannot vote for your own song ({point} points).")
             invalid.append(point)
         votes[point] = song_id
@@ -293,7 +281,7 @@ def vote_post(show: str):
     return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, errors=errors,
                            selected=votes, invalid=invalid,
-                           username=username, username_invalid=username_invalid, nickname=nickname,
+                           username=username, nickname=nickname,
                            year=show_data.year, show_name=show_data.name, show=show,
                            selected_country=country_id, countries=get_countries())
 

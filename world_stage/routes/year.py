@@ -2,6 +2,7 @@ from collections import defaultdict
 import io
 from flask import Response, request, Blueprint
 import typing
+import math
 
 from ..utils import (LCG, AbstractVoteSequencer, RandomVoteSequencer, Show, SuspensefulVoteSequencer,
                      ChronologicalVoteSequencer, ShowData,
@@ -568,8 +569,55 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
         write(buf, "#EXTINF:0")
         write(buf, "#EXTVLCOPT:network-caching=3000")
 
+    def write_country(buf: io.StringIO, cc: str, url: str) -> str | None:
+        if postcards:
+            write_header(buf)
+            write(buf, f"https://media.world-stage.org/postcards/{cc.lower()}.mov")
+
+        write_header(buf)
+        v = None
+        if 'media.world-stage.org' not in url:
+            v = cc
+
+        write(buf, url)
+
+        return v
+
+    def show_needs_host(show_data: ShowData) -> bool:
+        if show_data.access_type != 'draw':
+            return False
+
+        if not show_data.short_name.startswith('sf'):
+            return False
+
+        sn = int(show_data.short_name[2])
+        if sn % 2 == 0:
+            return False
+
+        return True
+
     db = get_db()
     cursor = db.cursor()
+
+    insert_after = -1
+    host = 'XX'
+    host_link = 'BAD LINK REPLACE ME THIS IS A BUG'
+    if show_needs_host(show_data):
+        cursor.execute('''
+            SELECT COUNT(id) AS c FROM song_show
+            WHERE show_id = %s
+        ''', (show_data.id,))
+        insert_after = math.ceil(cursor.fetchone()['c'] / 2) # type: ignore
+
+        cursor.execute('''
+            SELECT cc2, video_link FROM year
+            JOIN country ON year.host = country.id
+            JOIN song ON song.country_id = host AND song.year_id = %(y)s
+            WHERE id = %(y)s
+        ''', {'y': show_data.year})
+        data = cursor.fetchone()
+        host = data['host'] # type: ignore
+        host_link = data['video_link'] # type: ignore
 
     cursor.execute('''
         SELECT cc2, video_link FROM song
@@ -584,18 +632,15 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
 
     bad_countries = []
 
-    for song in cursor.fetchall():
+    for i, song in enumerate(cursor.fetchall()):
         cc = song['cc2']
         url = song['video_link']
-        if postcards:
-            write_header(output)
-            write(output, f"https://media.world-stage.org/postcards/{cc.lower()}.mov")
+        b = write_country(output, cc, url)
+        if b is not None:
+            bad_countries.append(b)
 
-        write_header(output)
-        if 'media.world-stage.org' not in url:
-            bad_countries.append(cc)
-
-        write(output, url)
+        if i == insert_after:
+            write_country(output, host, host_link)
 
     write_header(output)
     write(output, f"https://media.world-stage.org/recaps/{show_data.year}{show_data.short_name}.mov")

@@ -36,9 +36,9 @@
 <form method="POST">
     <fieldset class="grid-3">
         <legend>User data</legend>
-            <label class="req" title="Your submitter name. Doesn't change." for="username">Voter Name</label>
+            <label class="req" title="Your submitter name. It's autofilled and can't be edited." for="username">Voter Name</label>
             <div></div>
-            <input type="text" name="username" value="{{ username or "" }}" maxlength="64" required>
+            <input type="text" name="username" value="{{ username or "" }}" maxlength="64" required readonly>
             <label title="The name you want to be displayed on the scoreboard." for="nickname">Display Name</label>
             <div></div>
             <input type="text" name="nickname" value="{{ nickname or "" }}" maxlength="64">

@@ -597,6 +597,8 @@ def set_pots_post(year: int):
     db = get_db()
     cursor = db.cursor()
 
+    cursor.execute('UPDATE country SET pot = NULL')
+
     for country_id, pot_str in request.form.items():
         try:
             pot: int | None = int(pot_str)
@@ -604,8 +606,6 @@ def set_pots_post(year: int):
                 pot = None
         except ValueError:
             return render_template('error.html', error=f"Invalid priority value for country {country_id}"), 400
-
-        cursor.execute('UPDATE country SET pot = NULL')
 
         cursor.execute('''
             UPDATE country

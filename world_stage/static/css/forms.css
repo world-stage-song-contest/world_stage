@@ -83,6 +83,10 @@ optgroup:empty {
     width: 100%;
 }
 
+:read-only {
+    background-color: lightgrey;
+}
+
 @media (max-width: 600px) {
     fieldset.grid {
         grid-template-columns: 1fr;
