@@ -607,16 +607,16 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
             SELECT COUNT(id) AS c FROM song_show
             WHERE show_id = %s
         ''', (show_data.id,))
-        insert_after = math.ceil(cursor.fetchone()['c'] / 2) # type: ignore
+        insert_after = math.ceil(cursor.fetchone()['c'] / 2) - 1 # type: ignore
 
         cursor.execute('''
-            SELECT cc2, video_link FROM year
+            SELECT LOWER(cc2) AS cc2, video_link FROM year
             JOIN country ON year.host = country.id
             JOIN song ON song.country_id = host AND song.year_id = %(y)s
-            WHERE id = %(y)s
+            WHERE year.id = %(y)s
         ''', {'y': show_data.year})
         data = cursor.fetchone()
-        host = data['host'] # type: ignore
+        host = data['cc2'] # type: ignore
         host_link = data['video_link'] # type: ignore
 
     cursor.execute('''

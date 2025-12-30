@@ -648,8 +648,7 @@ def recap_data():
 
     return render_template('admin/recap_data.html')
 
-@bp.post('/recapdata')
-def recap_data_post() -> Response | tuple[Response, int]:
+def get_recap_data(type: str, form_data: list[str]) -> list[dict] | None:
     db = get_db()
     cursor = db.cursor()
 
@@ -711,13 +710,6 @@ def recap_data_post() -> Response | tuple[Response, int]:
                 raise RuntimeError(f"User '{user}' is unknown")
             users.append(user_id['id'])
         return users
-
-    resp = verify_user()
-    if resp:
-        return render_template('error.html', error="Not an admin"), 401
-
-    form_data = request.form.getlist('show')
-    type = request.form.get('type', '')
 
     try:
         if type == 'show':
@@ -791,7 +783,7 @@ WITH song_data AS (
 SELECT show, running_order, country, country_name,
        artist, title, video_link, snippet_start, snippet_end, language
 FROM song_data
-ORDER BY year
+ORDER BY year_id
     ''', (countries,))
 
         elif type == 'submitter':
@@ -817,12 +809,26 @@ WITH song_data AS (
 SELECT year, show, running_order, country, country_name,
        artist, title, video_link, snippet_start, snippet_end, language
 FROM song_data
-ORDER BY year, country_name
+ORDER BY year_id, country_name
     ''', (submitters,))
-    except RuntimeError as e:
-        return render_template('error.html', error=e.args[0])
+    except RuntimeError:
+        return None
 
-    csv_data = cursor.fetchall()
+    return cursor.fetchall()
+
+@bp.post('/recapdata')
+def recap_data_post() -> Response | tuple[Response, int]:
+    resp = verify_user()
+    if resp:
+        return render_template('error.html', error="Not an admin"), 401
+
+    form_data = request.form.getlist('show')
+    type = request.form.get('type', '')
+    action = request.form.get('action', 'render')
+
+    csv_data = get_recap_data(type, form_data)
+    if csv_data is None:
+        return render_template('error.html', error="An error has occured")
 
     w = io.StringIO()
     writer = csv.DictWriter(w, fieldnames=['show', 'running_order', 'country', 'country_name', 'artist', 'title', 'video_link', 'snippet_start', 'snippet_end', 'language'])
@@ -832,4 +838,14 @@ ORDER BY year, country_name
     w.seek(0)
     form = w.getvalue()
 
-    return render_template('admin/recap_data.html', data=form)
+    if action == 'render':
+        return render_template('admin/recap_data.html', data=form)
+    elif action == 'download':
+        response = Response(
+            form,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={'+'.join(form_data)}'}
+        )
+        return response
+    else:
+        return render_template('error.html', error=f"Unknown action: {action}")

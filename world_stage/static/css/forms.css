@@ -83,7 +83,7 @@ optgroup:empty {
     width: 100%;
 }
 
-:read-only {
+input:read-only {
     background-color: lightgrey;
 }
 
