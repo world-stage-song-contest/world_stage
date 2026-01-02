@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 18 12">
 	<path fill="#fff" d="M0 0h18v12H0z"/>
-	<path fill="#111" d="M5 0H1L13 12h4z"/>
-	<path fill="#c12" d="M18 0H6l12 12ZM0 0v12h12Z"/>
+	<path fill="#111" d="M5 12H1L13 0h4z"/>
+	<g fill="#c12">
+		<path d="M18 0v12H6Z"/>
+		<path d="M0 0h12L0 12Z"/>
+		</g>
 	</svg>
