@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="144">
+<style>
+<![CDATA[.R{fill:#c12}.B{fill:#026}.W{fill:#fff}]]>
+</style>
+<defs>
+	<g id="a">
+		<g id="c">
+			<path d="M0 21 6-3 3-6l-24 6L3 6l3-3-6-24-6 24 3 3 24-6-24-6-3 3z"/>
+			</g>
+		<use href="#c" transform="rotate(30)"/>
+		<use href="#c" transform="rotate(60)"/>
+		</g>
+	</defs>
+<path class="R" d="M0 0h96v144H0z"/>
+<path class="B" d="M0 0h48v72H0z"/>
+<g transform="translate(24 36)">
+	<use class="W" href="#a"/>
+	<circle class="B" r="12"/>
+	<circle class="W" r="10"/>
+	</g>
+</svg>
