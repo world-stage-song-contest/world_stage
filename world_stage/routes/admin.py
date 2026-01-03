@@ -766,7 +766,7 @@ ORDER BY country_name
 
             cursor.execute('''
 WITH song_data AS (
-    SELECT LOWER(cc2) as show_id, LOWER(cc2) AS show,
+    SELECT song.year_id AS year, LOWER(cc2) as show_id, LOWER(cc2) AS show,
            MOD(song.year_id, 100) AS running_order,
            LOWER(cc2) AS country, country.name AS country_name,
            artist, title, video_link, snippet_start, snippet_end,
@@ -783,7 +783,7 @@ WITH song_data AS (
 SELECT show, running_order, country, country_name,
        artist, title, video_link, snippet_start, snippet_end, language
 FROM song_data
-ORDER BY year_id
+ORDER BY year
     ''', (countries,))
 
         elif type == 'submitter':
@@ -809,7 +809,7 @@ WITH song_data AS (
 SELECT year, show, running_order, country, country_name,
        artist, title, video_link, snippet_start, snippet_end, language
 FROM song_data
-ORDER BY year_id, country_name
+ORDER BY year, country_name
     ''', (submitters,))
     except RuntimeError:
         return None
@@ -844,7 +844,7 @@ def recap_data_post() -> Response | tuple[Response, int]:
         response = Response(
             form,
             mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={'+'.join(form_data)}'}
+            headers={'Content-Disposition': f'attachment; filename={'+'.join(form_data)}.csv'}
         )
         return response
     else:
