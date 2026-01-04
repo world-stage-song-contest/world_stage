@@ -310,6 +310,10 @@ h1 {
     text-align: center;
 }
 
+button.big {
+    font-size: xxx-large;
+}
+
 .banner {
     width: 100%;
     box-sizing: border-box;
