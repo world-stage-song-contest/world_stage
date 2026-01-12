@@ -1,12 +1,15 @@
 from abc import ABC
 from dataclasses import asdict, dataclass
-from typing import Any
-
+from typing import Any, Self
 
 @dataclass(kw_only=True)
 class Model:
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def by(cls, **kwargs) -> list[Self]:
+        raise NotImplementedError
 
 @dataclass(kw_only=True)
 class Country(Model):

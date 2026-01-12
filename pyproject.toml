@@ -1,6 +1,6 @@
 [project]
 name = "world-stage"
-version = "3.4.3"
+version = "3.4.4"
 description = "Voting website for World Stage."
 requires-python = ">= 3.12"
 dependencies = [
