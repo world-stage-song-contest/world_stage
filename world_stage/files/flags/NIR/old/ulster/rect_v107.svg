@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
+<style>
+<![CDATA[.R{fill:#c12}.r{stroke:#c12;stroke-width:20}.W{fill:#fff}.K{fill:#111}.k{fill:#111;stroke:#111;stroke-width:4}.A{fill:#ccc}.Y1{fill:#fc0}.Y2{fill:#fd0}.D{fill:#ea3}]]>
+.xi {
+    transform: rotate(calc(var(--n)*360deg/6));
+    transform-origin: 0px 0px;
+}
+</style>
+	<rect class="W" width="144" height="96"/>
+	<g class="r" >
+		<path d="M0 48h144z"/>
+		<path d="M72 0v96z"/>
+		</g>
+	<use href="#x" class="k"/>
+	<g class="D" transform="translate(72,54)">
+		<path transform="translate(0,-24)" id="f" d="M0 1v-2l4 1v1z"/>
+		<use href="#f" transform="scale(-1,1)"/>
+		</g>
+	<g id="x" class="W" transform="translate(72,48)">
+		<g id="q">
+			<path id="t" d="M0,-24L-12 0H12z"/>
+			<use href="#t" transform="scale(1,-1)"/>
+			</g>
+		<use href="#q" class="xi" style="--n:1"/>
+		<use href="#q" class="xi" style="--n:2"/>
+		</g>
+	<g transform="translate(72,54)">
+		<g transform="translate(0,-24)" id="z">
+			<path class="Y2" d="M0 0v-12l1 12H4l2 -9z"/>
+			<path class="Y1" d="M0 0v-1l4 1v1z"/>
+			</g>
+		<use href="#z" transform="scale(-1,1)"/>
+		</g>
+	</svg>
