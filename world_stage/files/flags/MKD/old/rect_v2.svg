@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="96">
+	<path fill="#c22" d="M0 0h144v96H0z"/>
+	<g fill="#fd1">
+		<path d="M72  00m-12 0h24L72 48z"/>
+		<path d="M72  96m-12 0h24L72 48z"/>
+		<path d="M0   48m0 -12v24L72 48z"/>
+		<path d="M144 48m0 -12v24L72 48z"/>
+		<path d="M0    0h32L72 48z"/>
+		<path d="M144  0h-32L72 48z"/>
+		<path d="M0   96h32L72 48z"/>
+		<path d="M144 96h-32L72 48z"/>
+		</g>
+	<g transform="translate(72,48)">
+		<circle fill="#c22" r="16"/>
+		<circle fill="#fd1" r="12"/>
+		</g>
+	</svg>
