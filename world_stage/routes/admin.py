@@ -581,7 +581,7 @@ def set_pots(year: int):
         SELECT country.id, name, pot FROM song
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id
-        WHERE year_id = %s AND year.host <> country.id
+        WHERE year_id = %s AND year.host IS DISTINCT FROM country.id
         ORDER BY pot, name
     ''', (year,))
     countries = cursor.fetchall()

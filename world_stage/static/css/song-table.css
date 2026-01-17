@@ -15,7 +15,7 @@
 
     width: fit-content;
     max-width: 300px;
-    padding: 0.05em 0.1em;
+    padding: 0.15em;
 }
 
 .song-artist {
@@ -26,4 +26,6 @@
     overflow: hidden;
     max-width: 300px;
     word-wrap: break-word;
+
+    padding: 0.15em;
 }

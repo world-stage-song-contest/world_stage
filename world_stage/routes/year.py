@@ -576,7 +576,7 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
 
         write_header(buf)
         v = None
-        if 'media.world-stage.org' not in url:
+        if url is not None and 'media.world-stage.org' not in url:
             v = cc
 
         write(buf, url)
