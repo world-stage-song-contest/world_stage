@@ -20,6 +20,10 @@ li:target > div {
     color: black;
 }
 
+div.source-link {
+    font-family: monospace;
+}
+
 .footnote-link {
     position: relative;
 }

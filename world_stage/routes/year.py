@@ -576,10 +576,10 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
 
         write_header(buf)
         v = None
-        if url is not None and 'media.world-stage.org' not in url:
+        if 'media.world-stage.org' not in url:
             v = cc
 
-        write(buf, url)
+        write(buf, url or 'BAD LINK REPLACE ME THIS IS A BUG')
 
         return v
 
@@ -613,11 +613,11 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
             SELECT LOWER(cc2) AS cc2, video_link FROM year
             JOIN country ON year.host = country.id
             JOIN song ON song.country_id = host AND song.year_id = %(y)s
-            WHERE year.id = %(y)s
+            WHERE song.year_id = %(y)s
         ''', {'y': show_data.year})
         data = cursor.fetchone()
-        host = data['cc2'] # type: ignore
-        host_link = data['video_link'] # type: ignore
+        host = data.get('cc2') or '' # type: ignore
+        host_link = data.get('video_link') or '' # type: ignore
 
     cursor.execute('''
         SELECT cc2, video_link FROM song
@@ -633,8 +633,8 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
     bad_countries = []
 
     for i, song in enumerate(cursor.fetchall()):
-        cc = song['cc2']
-        url = song['video_link']
+        cc = song.get('cc2') or ''
+        url = song.get('video_link') or ''
         b = write_country(output, cc, url)
         if b is not None:
             bad_countries.append(b)
@@ -645,10 +645,7 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
     write_header(output)
     write(output, f"https://media.world-stage.org/recaps/{show_data.year}{show_data.short_name}.mov")
 
-    if bad_countries:
-        return "", bad_countries
-
-    return output.getvalue(), []
+    return output.getvalue(), bad_countries
 
 @bp.get('/<year>/<show>/playlist')
 def show_playlist(year: str, show: str):
@@ -664,6 +661,12 @@ def show_playlist(year: str, show: str):
     postcards = request.args.get('postcards', 'false') == 'true'
 
     value, bad_countries = generate_playlist(show_data, postcards)
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if permissions.can_view_restricted:
+        bad_countries = []
 
     if bad_countries:
         bad_countries.sort()
