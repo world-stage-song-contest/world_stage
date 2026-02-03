@@ -20,8 +20,9 @@ li:target > div {
     color: black;
 }
 
-div.source-link {
+div.source-links {
     font-family: monospace;
+    white-space: pre;
 }
 
 .footnote-link {

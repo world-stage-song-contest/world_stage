@@ -1,8 +1,10 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
+import json
 from pathlib import Path
 import subprocess
+from typing import LiteralString, Sequence, Callable, Any
 import psycopg
 from flask import Blueprint, Response, current_app, redirect, request, url_for
 import math
@@ -648,83 +650,88 @@ def recap_data():
 
     return render_template('admin/recap_data.html')
 
-def get_recap_data(type: str, form_data: list[str]) -> list[dict] | None:
-    db = get_db()
-    cursor = db.cursor()
+class BadRecapRequest(ValueError):
+    pass
 
-    def process_shows(data: list) -> list[int]:
-        shows: list[int] = []
-        for show in data:
-            try:
-                _year, short_name = show.split('-')
-            except ValueError:
-                raise RuntimeError(f"Invalid number of dashes in the value '{show}'")
+def _require(condition: bool, msg: str) -> None:
+    if not condition:
+        raise BadRecapRequest(msg)
 
-            try:
-                year = int(_year)
-            except ValueError:
-                raise RuntimeError(f"Invalid year '{_year}' in show '{show}'")
+def _parse_year(s: str) -> int:
+    _require(len(s) == 4 and s.isdigit(), f"Year '{s}' is invalid. It needs to have exactly four digits.")
+    return int(s)
 
-            if not short_name:
-                raise RuntimeError(f"Invalid show name '{short_name}' in show '{show}'")
+def _parse_cc2(s: str) -> str:
+    _require(len(s) == 2, f"Code '{s}' is invalid. It needs to have exactly two characters.")
+    return s
 
-            cursor.execute('''
-                SELECT id FROM show WHERE year_id = %s AND short_name = %s
-            ''', (year, short_name))
-            show_id = cursor.fetchone()
-            if not show_id:
-                raise RuntimeError(f"Show '{show}' not found")
-            shows.append(show_id['id'])
-
-        return shows
-
-    def process_countries(data: list) -> list[str]:
-        for country in data:
-            if len(country) != 2:
-                raise RuntimeError(f"Code '{country}' is invalid. It needs to have exactly two characters.")
-
-        return data
-
-    def process_years(data: list) -> list[int]:
-        years: list[int] = []
-        for year in data:
-            if len(year) != 4:
-                raise RuntimeError(f"Year '{year}' is invalid. It needs to have exactly four digits.")
-
-            try:
-                yr = int(year)
-                years.append(yr)
-            except ValueError:
-                raise RuntimeError(f"Year '{year}' is invalid. It needs to have exactly four digits.")
-
-        return years
-
-    def process_submitters(data: list) -> list[int]:
-        users: list[int] = []
-        for user in data:
-            cursor.execute('''
-                SELECT id FROM account WHERE username = %s
-            ''', (user,))
-            user_id = cursor.fetchone()
-            if not user_id:
-                raise RuntimeError(f"User '{user}' is unknown")
-            users.append(user_id['id'])
-        return users
-
+def _parse_show_key(s: str) -> tuple[int, str]:
     try:
-        if type == 'show':
-            shows = process_shows(form_data)
+        year_s, short_name = s.split("-", 1)
+    except ValueError:
+        raise BadRecapRequest(f"Invalid number of dashes in the value '{s}'")
 
-            cursor.execute('''
+    year = _parse_year(year_s)
+    _require(bool(short_name), f"Invalid show name '{short_name}' in show '{s}'")
+    return year, short_name
+
+def _lookup_many(
+    cursor,
+    sql: LiteralString,
+    params_list: Sequence[tuple[Any, ...]],
+    *,
+    not_found_msg: Callable[[tuple[Any, ...]], str],
+) -> list[int]:
+    out: list[int] = []
+    for params in params_list:
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        if not row:
+            raise BadRecapRequest(not_found_msg(params))
+        out.append(row["id"])
+    return out
+
+@dataclass(frozen=True)
+class Spec:
+    parse: Callable[[list[str], Any], Any]   # (form_data, cursor) -> param
+    sql: LiteralString
+
+def _parse_show_ids(form_data: list[str], cursor) -> list[int]:
+    keys = [_parse_show_key(s) for s in form_data]
+    return _lookup_many(
+        cursor,
+        "SELECT id FROM show WHERE year_id = %s AND short_name = %s",
+        keys,
+        not_found_msg=lambda p: f"Show '{p[0]}-{p[1]}' not found",
+    )
+
+def _parse_years(form_data: list[str], cursor) -> list[int]:
+    return [_parse_year(s) for s in form_data]
+
+def _parse_countries(form_data: list[str], cursor) -> list[str]:
+    return [_parse_cc2(s) for s in form_data]
+
+def _parse_submitter_ids(form_data: list[str], cursor) -> list[int]:
+    params_list = [(u,) for u in form_data]
+    return _lookup_many(
+        cursor,
+        "SELECT id FROM account WHERE username = %s",
+        params_list,
+        not_found_msg=lambda p: f"User '{p[0]}' is unknown",
+    )
+
+_SQL_SHOW = """
 WITH song_data AS (
     SELECT DISTINCT ON (song.id, show.id)
-           show.id as show_id, show.year_id || short_name AS show, running_order,
-           LOWER(cc2) AS country, country.name AS country_name,
-           artist, title, video_link, snippet_start, snippet_end,
+           show.id as show_id, show.year_id || short_name AS show, running_order AS ro,
+           LOWER(cc2) AS cc, country.name AS country,
+           artist, title, video_link AS media_link, snippet_start, snippet_end,
+           poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
-            WHERE sl.song_id = song.id) AS language
+            WHERE sl.song_id = song.id) AS language,
+           CASE WHEN poster_link IS NULL THEN 'video' ELSE 'audio' END AS type
     FROM song_show
     JOIN song ON song_show.song_id = song.id
     JOIN show ON song_show.show_id = show.id
@@ -732,89 +739,115 @@ WITH song_data AS (
     WHERE show.id = ANY(%s)
     ORDER BY song.id, show.id
 )
-SELECT show, running_order, country, country_name,
-       artist, title, video_link, snippet_start, snippet_end, language
+SELECT show, ro, cc, country,
+       artist, title, media_link, snippet_start, snippet_end, language,
+       type, image_link
 FROM song_data
-ORDER BY show_id, running_order
-    ''', (shows,))
+ORDER BY show_id, ro
+"""
 
-        elif type == 'year':
-            years = process_years(form_data)
-
-            cursor.execute('''
+_SQL_YEAR = """
 WITH song_data AS (
-    SELECT song.year_id as show_id, song.year_id AS show, UPPER(cc2) AS running_order,
-           LOWER(cc2) AS country, country.name AS country_name,
-           artist, title, video_link, snippet_start, snippet_end,
+    SELECT song.year_id as show_id, song.year_id AS show, UPPER(cc2) AS ro,
+           LOWER(cc2) AS cc, country.name AS country,
+           artist, title, video_link AS media_link, snippet_start, snippet_end,
+           poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
-            WHERE sl.song_id = song.id) AS language
+            WHERE sl.song_id = song.id) AS language,
+           CASE WHEN poster_link IS NULL THEN 'video' ELSE 'audio' END AS type
     FROM song
     JOIN country ON song.country_id = country.id
     WHERE song.year_id = ANY(%s)
     ORDER BY LOWER(cc2)
 )
-SELECT show, running_order, country, country_name,
-       artist, title, video_link, snippet_start, snippet_end, language
+SELECT show, ro, cc, country,
+       artist, title, media_link, snippet_start, snippet_end, language,
+       type, image_link
 FROM song_data
-ORDER BY country_name
-    ''', (years,))
+ORDER BY country
+"""
 
-        elif type == 'country':
-            countries = process_countries(form_data)
-
-            cursor.execute('''
+_SQL_COUNTRY = """
 WITH song_data AS (
     SELECT song.year_id AS year, LOWER(cc2) as show_id, LOWER(cc2) AS show,
-           MOD(song.year_id, 100) AS running_order,
-           LOWER(cc2) AS country, country.name AS country_name,
-           artist, title, video_link, snippet_start, snippet_end,
+           MOD(song.year_id, 100) AS ro,
+           LOWER(cc2) AS cc, country.name AS country,
+           artist, title, video_link AS media_link, snippet_start, snippet_end,
+           poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
-            WHERE sl.song_id = song.id) AS language
+            WHERE sl.song_id = song.id) AS language,
+           CASE WHEN poster_link IS NULL THEN 'video' ELSE 'audio' END AS type
     FROM song
     JOIN country ON song.country_id = country.id
     JOIN year ON song.year_id = year.id
     WHERE country.cc2 = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
     ORDER BY song.year_id
 )
-SELECT show, running_order, country, country_name,
-       artist, title, video_link, snippet_start, snippet_end, language
+SELECT show, ro, cc, country,
+       artist, title, media_link, snippet_start, snippet_end, language,
+       type, image_link
 FROM song_data
 ORDER BY year
-    ''', (countries,))
+"""
 
-        elif type == 'submitter':
-            submitters = process_submitters(form_data)
-
-            cursor.execute('''
+_SQL_SUBMITTER = """
 WITH song_data AS (
     SELECT account.username as show_id, song.year_id AS year, account.username AS show,
-           MOD(song.year_id, 100) AS running_order,
-           LOWER(cc2) AS country, country.name AS country_name,
-           artist, title, video_link, snippet_start, snippet_end,
+           MOD(song.year_id, 100) AS ro,
+           LOWER(cc2) AS cc, country.name AS country,
+           artist, title, video_link AS media_link, snippet_start, snippet_end,
+           poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
             JOIN language l ON sl.language_id = l.id
-            WHERE sl.song_id = song.id) AS language
+            WHERE sl.song_id = song.id) AS language,
+           CASE WHEN poster_link IS NULL THEN 'video' ELSE 'audio' END AS type
     FROM song
     JOIN country ON song.country_id = country.id
     JOIN year ON song.year_id = year.id
     JOIN account ON song.submitter_id = account.id
     WHERE song.submitter_id = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
-    ORDER BY song.year_id, country_name
+    ORDER BY song.year_id, country
 )
-SELECT year, show, running_order, country, country_name,
-       artist, title, video_link, snippet_start, snippet_end, language
+SELECT year, show, ro, cc, country,
+       artist, title, media_link, snippet_start, snippet_end, language,
+       type, image_link
 FROM song_data
-ORDER BY year, country_name
-    ''', (submitters,))
-    except RuntimeError:
+ORDER BY year, country
+"""
+
+_SPECS: dict[str, Spec] = {
+    "show": Spec(parse=_parse_show_ids, sql=_SQL_SHOW),
+    "year": Spec(parse=_parse_years, sql=_SQL_YEAR),
+    "country": Spec(parse=_parse_countries, sql=_SQL_COUNTRY),
+    "submitter": Spec(parse=_parse_submitter_ids, sql=_SQL_SUBMITTER),
+}
+
+def get_recap_data(mode: str, form_data: list[str]) -> list[dict] | None:
+    db = get_db()
+    cursor = db.cursor()
+
+    spec = _SPECS.get(mode)
+    if not spec:
         return None
 
-    return cursor.fetchall()
+    try:
+        param = spec.parse(form_data, cursor)
+        cursor.execute(spec.sql, (param,))
+        return cursor.fetchall()
+    except BadRecapRequest:
+        return None
+
+def drop_none(obj):
+    if isinstance(obj, dict):
+        return {k: drop_none(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, list):
+        return [drop_none(v) for v in obj]
+    return obj
 
 @bp.post('/recapdata')
 def recap_data_post() -> Response | tuple[Response, int]:
@@ -825,26 +858,27 @@ def recap_data_post() -> Response | tuple[Response, int]:
     form_data = request.form.getlist('show')
     type = request.form.get('type', '')
     action = request.form.get('action', 'render')
+    pretty = request.form.get('pretty', 'off') == 'on'
+    if pretty:
+        indent = 2
+    else:
+        indent = None
 
-    csv_data = get_recap_data(type, form_data)
-    if csv_data is None:
+    data = get_recap_data(type, form_data)
+    if data is None:
         return render_template('error.html', error="An error has occured")
 
-    w = io.StringIO()
-    writer = csv.DictWriter(w, fieldnames=['show', 'running_order', 'country', 'country_name', 'artist', 'title', 'video_link', 'snippet_start', 'snippet_end', 'language'])
-    writer.writeheader()
-    for row in csv_data:
-        writer.writerow(row)
-    w.seek(0)
-    form = w.getvalue()
+    json_data = json.dumps(drop_none(data), ensure_ascii=False, indent=indent)
 
     if action == 'render':
-        return render_template('admin/recap_data.html', data=form)
+        return render_template('admin/recap_data.html', data=json_data)
     elif action == 'download':
         response = Response(
-            form,
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={'+'.join(form_data)}.csv'}
+            json_data,
+            mimetype='application/json; charset=utf-8',
+            headers={
+                'Content-Disposition': f'attachment; filename={'+'.join(form_data)}.json',
+            }
         )
         return response
     else:

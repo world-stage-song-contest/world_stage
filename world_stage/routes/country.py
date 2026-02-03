@@ -91,10 +91,7 @@ def details(code: str, year: int):
     latin_lyrics = []
     native_lyrics = []
     notes = []
-    sources = []
-
-    if song.sources:
-        sources = song.sources.splitlines()
+    sources = song.sources or ''
 
     md = get_markdown_parser()
 

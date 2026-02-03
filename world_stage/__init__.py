@@ -1,9 +1,66 @@
 import os
+import re
 from flask import Flask
 from psycopg_pool import ConnectionPool
 from psycopg.rows import dict_row
 from werkzeug.middleware.proxy_fix import ProxyFix
 import urllib.parse
+
+from urllib.parse import unquote
+from markupsafe import Markup, escape
+
+URL_RE = re.compile(r"https?://[^\s<>'\"]+", re.I)
+
+TRAILING_PUNCT = ".,;:!?"
+
+BRACKET_PAIRS = {
+    ")": "(",
+    "]": "[",
+    "}": "{",
+}
+
+def _trim_trailing(url: str) -> str:
+    url = url.rstrip(TRAILING_PUNCT)
+    changed = True
+    while changed and url:
+        changed = False
+        last = url[-1]
+        if last in BRACKET_PAIRS:
+            opener = BRACKET_PAIRS[last]
+            if url.count(last) > url.count(opener):
+                url = url[:-1]
+                url = url.rstrip(TRAILING_PUNCT)
+                changed = True
+    return url
+
+def urlize_decoded(value):
+    if not value:
+        return ""
+
+    parts = []
+    last = 0
+
+    for m in URL_RE.finditer(value):
+        start, end = m.span()
+        raw = m.group(0)
+        url = _trim_trailing(raw)
+
+        trimmed_tail = raw[len(url):]
+
+        parts.append(escape(value[last:start]))
+        parts.append(
+            Markup('<a href="{href}" rel="noopener">{text}</a>').format(
+                href=escape(url),
+                text=escape(unquote(url)),
+            )
+        )
+        if trimmed_tail:
+            parts.append(escape(trimmed_tail))
+
+        last = end
+
+    parts.append(escape(value[last:]))
+    return Markup("").join(parts)
 
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
@@ -37,6 +94,7 @@ def create_app(config: dict | None = None) -> Flask:
     app.jinja_env.globals.update(int=int)
 
     app.jinja_env.filters.update(urldecode=urllib.parse.unquote)
+    app.jinja_env.filters.update(urlize_decoded=urlize_decoded)
 
     @app.before_request
     def clear_trailing():
