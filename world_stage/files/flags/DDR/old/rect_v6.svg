@@ -1,10 +1,10 @@
-<svg width="96" height="96" viewBox="210 60 480 480" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="144" height="96" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 	<g transform="translate(0 0)">
 		<g stroke-width=".94868">
-			<path fill="#fc0" d="M0 0h900v600H0z"/>
-			<path fill="#c12" d="M0 0h900v380H0z"/>
-			<path fill="#111" d="M0 0h900v220H0z"/>
-			</g>
+		<path d="m0 0h900v200h-900z" fill="#111"/>
+		<path d="m0 200h900v200h-900z" fill="#c12"/>
+		<path d="m0 400h900v200h-900z" fill="#fc0"/>
+		</g>
 		<g transform="matrix(.2046 0 0 .20455 283.49 254.74)">
 			<path d="m224.25 214.16h1177.3l-215.53 670.59h-746.21z" fill="#fc0"/>
 			<path d="m1361.7 188.7c0 302.82-245.42 548.3-548.16 548.3s-548.16-245.48-548.16-548.3 245.42-548.3 548.16-548.3 548.16 245.48 548.16 548.3z" fill="#c12"/>
