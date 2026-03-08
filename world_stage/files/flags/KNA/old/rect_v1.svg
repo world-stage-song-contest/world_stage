@@ -29,34 +29,26 @@
 		#c13;
 	}
 
-.o
+.y
 {	transform:
-		translate(calc(75px/2),calc(50px/2))
-		rotate(atan2(-2, 3));
-	transform-origin:
-		calc(75px/2),
-		calc(50px/2);
+		rotate(atan2(-2, 3))
+		translate(0px,42px)
 	}
 
-.p
+.z
 {	transform:
-		translate(
-			calc(
-				var(--n) * 52px / 3
-				),
-			calc(
-				(21px - 7px * sqrt(5) ) / 8
-				)
-			)
+		translate(75px,50px)
+		rotate(atan2(-2, 3))
+		translate(0px,-42px)
 	}
 </style>
 	<defs>
 		<clipPath id="f">
 			<path d="m0 0h75v50H0z"/>
 			</clipPath>
-		<g id="s" transform="scale(7)">
+		<g id="s" transform="scale(3.5)">
 			<g id="B">
-				<path id="A" class="W" d="M0-1v1h.5" transform="rotate(18 0-1)"/>
+				<path id="A" class="W" d="M0-2v2h1" transform="rotate(18 0-2)"/>
 				<use href="#A" transform="scale(-1 1)"/>
 				</g>
 			<g id="C">
@@ -71,9 +63,7 @@
 		<path class="R" d="M75 0V50H0"/>
 		<path class="Y" d="M0 50 75 0"/>
 		<path class="K" d="M0 50 75 0"/>
-		<g class="o">
-			<use href="#s" class="p" style="--n:1"/>
-			<use href="#s" class="p" style="--n:-1"/>
-			</g>
 		</g>
+	<use href="#s" class="y"/>
+	<use href="#s" class="z"/>
 	</svg>

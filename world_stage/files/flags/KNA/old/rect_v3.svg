@@ -49,6 +49,18 @@
 				)
 			)
 	}
+
+.q
+{	stroke:
+		none;
+	stroke-width:
+		.01;
+	transform:
+		rotate(atan2(-2, 3));
+	transform-origin:
+		75px
+		50px;
+	}
 </style>
 	<defs>
 		<clipPath id="f">
@@ -76,4 +88,5 @@
 			<use href="#s" class="p" style="--n:-1"/>
 			</g>
 		</g>
+	<path class="q" d="M75 0V50"/>
 	</svg>
