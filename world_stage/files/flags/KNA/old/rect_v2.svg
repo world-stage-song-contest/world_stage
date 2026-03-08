@@ -40,14 +40,12 @@
 
 .p
 {	transform:
-		translate(
-			calc(
-				var(--n) * 52px / 3
-				),
-			calc(
-				(21px - 7px * sqrt(5) ) / 8
-				)
-			)
+		translateX(10px)
+	}
+
+.q
+{	transform:
+		translateY(1px)
 	}
 </style>
 	<defs>
@@ -72,8 +70,7 @@
 		<path class="Y" d="M0 50 75 0"/>
 		<path class="K" d="M0 50 75 0"/>
 		<g class="o">
-			<use href="#s" class="p" style="--n:1"/>
-			<use href="#s" class="p" style="--n:-1"/>
+			<use href="#s" class="p q"/>
 			</g>
 		</g>
 	</svg>
