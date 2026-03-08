@@ -1,1 +1,25 @@
-<svg height="600" viewBox="0 0 900.66669 600" width="900.66669" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1.3333333 0 0 -1.3333333 0 600)"><path d="m0 0h675.5v450h-675.5z"/><path d="m0 150h675.5v149.999h-675.5z" fill="#fff"/><path d="m0 0h675.5v150h-675.5z" fill="#007a3d"/></g><path d="m0 0v-450l337.75 225z" fill="#ce1126" transform="scale(1.3333333 -1.3333333)"/><path d="m0 0-19.176-1.788 2.527-19.153-13.351 13.921-13.352-13.921 2.527 19.153-19.175 1.788 16.5 9.961-10.559 16.161 18.051-6.736 6.008 18.356 6.007-18.356 18.051 6.736-10.562-16.161z" fill="#fff" transform="matrix(1.3333333 0 0 -1.3333333 196.0788 310.36453)"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 96">
+<style>
+<![CDATA[.R{fill:#c12}.G{fill:#073}.W{fill:#fff}.K{fill:#111}]]>
+.jo {
+    transform: rotate(calc(var(--n)*360deg/7));
+    transform-origin: 0px 0px;
+}
+</style>
+<path class="W" d="M0 0h144v96H0z"/>
+<path class="K" d="M0 0h144v32H0z"/>
+<path class="G" d="M0 64h144v32H0z"/>
+<path class="R" d="M72 48 0 0v96z"/>
+<g class="W" transform="translate(24,48)">
+	<g id="q">
+		<path d="M0,-16L-8 0H8z"/>
+		</g>
+	<use href="#q" class="jo" style="--n:1"/>
+	<use href="#q" class="jo" style="--n:2"/>
+	<use href="#q" class="jo" style="--n:3"/>
+	<use href="#q" class="jo" style="--n:4"/>
+	<use href="#q" class="jo" style="--n:5"/>
+	<use href="#q" class="jo" style="--n:6"/>
+	<use href="#q" class="jo" style="--n:7"/>
+	</g>
+</svg>

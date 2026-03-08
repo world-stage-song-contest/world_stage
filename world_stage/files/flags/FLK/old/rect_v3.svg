@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="90" height="60">
+<style><![CDATA[.R{fill:#c12;stroke:#c12}.B{fill:#026}.W{fill:#fff;stroke:#fff}.O{scale:1.6}]]></style>
+	<defs>
+		<g id="a">
+			<g id="c">
+				<path id="t" d="M0,-5V0H2.5" transform="rotate(18 0,-5)"/>
+				<use href="#t" transform="scale(-1,1)"/>
+				</g>
+			<use href="#c" transform="rotate(72)"/>
+			<use href="#c" transform="rotate(144)"/>
+			<use href="#c" transform="rotate(216)"/>
+			<use href="#c" transform="rotate(288)"/>
+			</g>
+		<path id="b" d="M0 0h45v30H0z"/>
+		<g id="x">
+			<use href="#a" class="W O"/>
+			<use href="#a" class="R"/>
+			</g>
+		</defs>
+	<mask id="m">
+		<use href="#b" fill="#fff"/>
+		</mask>
+	<clipPath id="u"><path d="M22.5,15 h22.5 v15 z v15 h-22.5 z h-22.5 v-15 z v-15 h22.5 z"/></clipPath>
+	<path class="B" d="M0 0h90v60H0z"/>
+	<g mask="url(#m)">
+		<path class="W" d="M0,0 L45,30 M45,0 L0,30" stroke-width="6"/>
+		<path class="R" d="M0,0 L45,30 M45,0 L0,30" stroke-width="4" clip-path="url(#u)"/>
+		<path class="W" d="M22.5,0 v30 M0,15 h45" stroke-width="10"/>
+		<path class="R" d="M22.5,0 v30 M0,15 h45" stroke-width="6"/>
+		</g>
+</svg>

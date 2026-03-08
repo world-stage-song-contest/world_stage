@@ -1,1 +1,13 @@
-<svg height="600" viewBox="0 0 900 600" width="900" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><clipPath id="a"><path d="m0 .001h675v449.999h-675z" transform="translate(-.0002 .000503)"/></clipPath><clipPath id="b"><path d="m0 .001h675v449.999h-675z" transform="translate(-.0002 .000503)"/></clipPath><path d="m0 0v-449.999h.003l674.997 449.999z" fill="#1eb53a" transform="scale(1.3333333 -1.3333333)"/><path d="m0 0-674.997-449.999h674.997z" fill="#00a3dd" transform="matrix(1.3333333 0 0 -1.3333333 900 0)"/><path d="m0 0-674.997-449.999z" transform="matrix(1.3333333 0 0 -1.3333333 900 0)"/><path clip-path="url(#a)" d="m0 0 675 450" fill="none" stroke="#fcd116" stroke-width="178.125" transform="matrix(1.3333333 0 0 -1.3333333 .000267 600.00067)"/><path d="m0 0-674.997-449.999z" transform="matrix(1.3333333 0 0 -1.3333333 900 0)"/><path clip-path="url(#b)" d="m0 0 675 450" fill="none" stroke="#000" stroke-width="121.875" transform="matrix(1.3333333 0 0 -1.3333333 .000267 600.00067)"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="48" viewBox="0 0 9 6" fill="none">
+	<defs>
+		<clipPath id="c">
+			<path d="m0 0h9v6H0z"/>
+			</clipPath>
+		</defs>
+	<path fill="#174" d="m0 6V0h9z"/>
+	<path fill="#149" d="m9 0v6H0z"/>
+	<g clip-path="url(#c)">
+		<path stroke="#fc1" stroke-width="2.375" d="m0 6L9 0"/>
+		<path stroke="#111" stroke-width="1.625" d="m0 6L9 0"/>
+		</g>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -4 6 4">
+<style><![CDATA[.R{fill:#BF0A30}.B{fill:#00205B}.W{fill:#fff}]]></style>
+	<path class="B" d="M0 0h-6v-4H0z"/>
+	<path class="R" d="M0 0v-4l-6 2z"/>
+	<path class="W" d="M1 0v-4l-6 2z"/>
+	</svg>

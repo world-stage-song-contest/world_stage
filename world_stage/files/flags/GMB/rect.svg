@@ -1,1 +1,6 @@
-<svg height="533.33331" viewBox="0 0 800 533.33331" width="800" xmlns="http://www.w3.org/2000/svg"><g transform="matrix(1.3333333 0 0 -1.3333333 0 533.33333)"><path d="m0 266.666h600v133.333h-600z" fill="#ce1126"/><path d="m0 133.333h600v133.333h-600z" fill="#fff"/><path d="m0 155.556h600v88.889h-600z" fill="#0c1c8c"/><path d="m0 0h600v133.333h-600z" fill="#3a7728"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 27 18">
+	<path fill="#fff" d="m0 0h27v18H0z"/>
+	<path fill="#c12" d="m0 0h27v6H0z"/>
+	<path fill="#127" d="m0 7h27v4H0z"/>
+	<path fill="#273" d="m0 12h27v6H0z"/>
+	</svg>

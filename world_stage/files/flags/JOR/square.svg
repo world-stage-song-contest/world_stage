@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
+<style>
+<![CDATA[.R{fill:#c12}.G{fill:#073}.W{fill:#fff}.K{fill:#111}]]>
+.jo {
+    transform: rotate(calc(var(--n)*360deg/7));
+    transform-origin: 0px 0px;
+}
+</style>
+<path class="W" d="M0 0h144v144H0z"/>
+<path class="K" d="M0 0h144v48H0z"/>
+<path class="G" d="M0 96h144v96H0z"/>
+<path class="R" d="M72 72 0 0v144z"/>
+<g class="W" transform="translate(24,72)">
+	<g id="q">
+		<path d="M0,-16L-8 0H8z"/>
+		</g>
+	<use href="#q" class="jo" style="--n:1"/>
+	<use href="#q" class="jo" style="--n:2"/>
+	<use href="#q" class="jo" style="--n:3"/>
+	<use href="#q" class="jo" style="--n:4"/>
+	<use href="#q" class="jo" style="--n:5"/>
+	<use href="#q" class="jo" style="--n:6"/>
+	<use href="#q" class="jo" style="--n:7"/>
+	</g>
+</svg>
