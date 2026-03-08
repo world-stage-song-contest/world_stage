@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 20 20">
+	<path fill="#7ad" d="M-10-10h20v20h-20z"/>
+	<g id="x" transform="translate(0,-6)" fill="#fff">
+		<g id="c">
+			<path id="t" d="M0-2v2h1" transform="rotate(18 0,-2)"/>
+			<use href="#t" transform="scale(-1,1)"/>
+		</g>
+		<use href="#c" transform="rotate(72)"/>
+		<use href="#c" transform="rotate(144)"/>
+		<use href="#c" transform="rotate(216)"/>
+		<use href="#c" transform="rotate(288)"/>
+	</g>
+	<use href="#x" transform="rotate(90)"/>
+	<use href="#x" transform="rotate(180)"/>
+	<use href="#x" transform="rotate(270)"/>
+</svg>

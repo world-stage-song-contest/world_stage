@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-9 -9 18 18">
+<style><![CDATA[.Y{fill:#fc0}.B{fill:#039}.eu{transform:rotate(calc(var(--n)*360deg/12))}]]></style>
+	<defs>
+		<g id="s" transform="translate(0 -6)">
+			<g id="B">
+				<path id="A" class="Y" d="M0 0v1h.5z" transform="translate(0-1) rotate(18)"/>
+				<use href="#A" transform="scale(-1 1)"/>
+				</g>
+			<g id="C">
+				<use href="#B" transform="rotate(72)"/>
+				<use href="#B" transform="rotate(216)"/>
+				</g>
+			<use href="#C" transform="rotate(72)"/>
+			</g>
+		</defs>
+	<path class="B" d="M-9-9h18V18h-18z"/>
+	<use href="#s" class="eu" style="--n:0"/>
+	<use href="#s" class="eu" style="--n:1"/>
+	<use href="#s" class="eu" style="--n:2"/>
+	<use href="#s" class="eu" style="--n:3"/>
+	<use href="#s" class="eu" style="--n:4"/>
+	<use href="#s" class="eu" style="--n:5"/>
+	<use href="#s" class="eu" style="--n:6"/>
+	<use href="#s" class="eu" style="--n:7"/>
+	<use href="#s" class="eu" style="--n:8"/>
+	<use href="#s" class="eu" style="--n:9"/>
+	<use href="#s" class="eu" style="--n:10"/>
+	<use href="#s" class="eu" style="--n:11"/>
+	</svg>
