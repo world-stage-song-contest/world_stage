@@ -612,8 +612,8 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
         cursor.execute('''
             SELECT LOWER(cc2) AS cc2, video_link FROM year
             JOIN country ON year.host = country.id
-            JOIN song ON song.country_id = host AND song.year_id = %(y)s
-            WHERE song.year_id = %(y)s
+            JOIN song ON song.country_id = year.host
+            WHERE year.id = %(y)s AND song.year_id = %(y)s
         ''', {'y': show_data.year})
         data = cursor.fetchone()
         host = data.get('cc2') or '' # type: ignore

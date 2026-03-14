@@ -471,7 +471,7 @@ def fuckup_db_post():
     if not query:
         return render_template('admin/fuckupdb.html', error="No query provided"), 400
 
-    subprocess.run(os.environ["BACKUP_SCRIPT"])
+    subprocess.run(current_app.config.get('BACKUP_SCRIPT', os.environ.get('DATABASE_URI', '')))
 
     try:
         cursor.execute("SET ROLE dml_only_role")
