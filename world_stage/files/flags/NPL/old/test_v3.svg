@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="864" height="1152" viewBox="0 0 864 1152">
+	<style>
+		<![CDATA[.R{fill:#d13}.B{fill:#139}.W{fill:#fff}.Y{fill:#fc0}.T{fill:#ccc}.X{fill:none;stroke:#0f0;stroke-width:6px}]]>
+		.my {
+			transform: rotate(calc(var(--n)*360deg/14));
+			transform-origin: 0px 0px;
+		}
+		.canton {
+			transform: scale(calc(7/9));
+			transform-origin: 0px 0px;
+		}
+		</style>
+	<g transform="matrix(1 0 0 -1 0 1152)">
+		<g class="R">
+			<path d="M864 610.94H0V1152z"/>
+			<path d="M864 0H0V864z"/>
+			</g>
+		</g>
+	</svg>

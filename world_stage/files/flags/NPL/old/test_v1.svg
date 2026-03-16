@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="672" height="504" viewBox="0 0 6720 5040">
+	<style>
+		<![CDATA[.R{fill:#c01}.B{fill:#106}.W{fill:#fff}.Y{fill:#fc0}.T{fill:#ccc}]]>
+		.my {
+			transform: rotate(calc(var(--n)*360deg/14));
+			transform-origin: 0px 0px;
+		}
+		.canton {
+			transform: scale(calc(7/9));
+			transform-origin: 0px 0px;
+		}
+		</style>
+	<g transform="matrix(1 0 0 -1 0 6720)">
+		<g class="T">
+			<path d="M5040 0H0v5040z"/>
+			</g>
+		</g>
+	</svg>

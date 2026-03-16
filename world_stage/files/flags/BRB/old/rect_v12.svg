@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">
+<style>
+.på
+{	fill:
+		#fff;
+	}
+
+.av
+{	fill:
+		#000;
+	}
+
+.Q
+{	stroke:
+		#6ff;
+	stroke-width:
+		calc( 60px / 1000);
+	fill:
+		none;
+	stroke-linecap:
+		round;
+	stroke-linejoin:
+		round;
+	}
+	</style>
+<defs>
+	<path id="rekt" d="M0 0h60v40H0z"/>
+	<path id="halva" d="M0 0h30v40H0z"/>
+	<path id="skaft" d="M29 30v-16h2v16z"/>
+	<path id="sned" d="M26 24v-2l15 2v2z"/>
+	<path id="snedÖ" d="M26 0v22l30 4V0z"/>
+	<path id="snedU" d="M26 40v-16l30 4V40z"/>
+	<circle id="r8" r="8" cx="36" cy="23"/>
+	<circle id="r9" r="9" cx="40" cy="22"/>
+	<circle id="r14" r="14" cx="30" cy="29"/>
+	<circle id="r16V" r="16" cx="15" cy="5"/>
+	<circle id="r16H" r="16" cx="45" cy="5"/>
+	<circle id="r20" r="20" cx="55" cy="25"/>
+	<circle id="r22" r="22" cx="55" cy="25"/>
+	</defs>
+<mask id="r8p">
+	<use class="på" href="#r8"/>
+	</mask>
+<mask id="r8a">
+	<use class="på" href="#rekt"/>
+	<use class="av" href="#r8"/>
+	</mask>
+<mask id="r9p">
+	<use class="på" href="#r9"/>
+	</mask>
+<mask id="r9a">
+	<use class="på" href="#rekt"/>
+	<use class="av" href="#r9"/>
+	</mask>
+<mask id="r20p">
+	<use class="på" href="#r20"/>
+	</mask>
+<mask id="r20a">
+	<use class="på" href="#rekt"/>
+	<use class="av" href="#r20"/>
+	</mask>
+<mask id="sÖp">
+	<use class="på" href="#snedtop"/>
+	</mask>
+<mask id="sÖv">
+	<use class="på" href="#rekt"/>
+	<use class="av" href="#snedÖ"/>
+	</mask>
+<mask id="sUp">
+	<use class="på" href="#snedU"/>
+	</mask>
+<mask id="sUa">
+	<use class="på" href="#rekt"/>
+	<use class="av" href="#snedU"/>
+	</mask>
+<g mask="url(#r20a)">
+	<g mask="url(#sUa)">
+		<use class="på" href="#snedU" mask="url(#r9p)"/>
+		<use class="på" href="#r22" mask="url(#r9p)"/>
+		<use class="på" href="#r9" mask="url(#r8a)"/>
+		</g>
+	</g>
+<g id="skiss" class="Q">
+	<use href="#sned"/>
+	<use href="#skaft"/>
+	<use href="#r8"/>
+	<use href="#r9"/>
+	<use href="#r20"/>
+	<use href="#r22"/>
+	</g>
+</svg>
