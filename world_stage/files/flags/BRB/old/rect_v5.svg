@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">
+<style>
+.TRUE
+{	fill:
+		#fc0;
+	}
+
+.FALSE
+{	fill:
+		#111;
+	}
+
+.Q
+{	stroke:
+		#6ff;
+	stroke-width:
+		calc( 60px / 100);
+	}
+	</style>
+<defs>
+	<path id="rect" d="M0 0h60v40H0z"/>
+	<path id="half" d="M0 0h30v40H0z"/>
+	<path id="slant" d="M26 24v-2l15 2v2z"/>
+	</defs>
+<g id="spear">
+	<circle class="TRUE" r="22" cx="55" cy="25"/>
+	<use class="TRUE" href="#slant"/>
+	<path class="FALSE" d="M26 40v-16l30 4V40z"/>
+	<use class="FALSE" href="#half"/>
+	<circle class="FALSE" r="20" cx="55" cy="25"/>
+	</g>
+</svg>

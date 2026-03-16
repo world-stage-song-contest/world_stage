@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">
+<style>
+.TRUE
+{	fill:
+		#fff;
+	}
+
+.FALSE
+{	fill:
+		#000;
+	}
+
+.Q
+{	stroke:
+		#6ff;
+	stroke-width:
+		calc( 60px / 1000);
+	fill:
+		none;
+	stroke-linecap:
+		round;
+	stroke-linejoin:
+		round;
+	}
+	</style>
+<defs>
+	<path id="rect" d="M0 0h60v40H0z"/>
+	<path id="half" d="M0 0h30v40H0z"/>
+	<path id="slant" d="M26 24v-2l15 2v2z"/>
+	<circle id="r8" r="8" cx="36" cy="23"/>
+	<circle id="r9" r="9" cx="40" cy="22"/>
+	<circle id="r14" r="14" cx="30" cy="29"/>
+	<circle id="r16L" r="16" cx="15" cy="5"/>
+	<circle id="r16R" r="16" cx="45" cy="5"/>
+	<circle id="r20" r="20" cx="55" cy="25"/>
+	<circle id="r22" r="22" cx="55" cy="25"/>
+	</defs>
+<clipPath id="r8clip">
+	<use href="#r8"/>
+	</clipPath>
+<clipPath id="r9clip">
+	<use href="#r9"/>
+	</clipPath>
+<g id="spear">
+	<use class="TRUE" href="#r22" clip-path="url(#r9clip)"/>
+	<use class="FALSE" href="#half"/>
+	<use class="FALSE" href="#r20"/>
+	</g>
+<g id="sketch" class="Q">
+	<use href="#slant"/>
+	<use href="#r8"/>
+	<use href="#r9"/>
+	<use href="#r20"/>
+	<use href="#r22"/>
+	</g>
+</svg>

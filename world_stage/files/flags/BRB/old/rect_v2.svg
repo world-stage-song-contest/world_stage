@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">
+<style>
+.TRUE
+{	fill:
+		#fff;
+	}
+
+.FALSE
+{	fill:
+		#000;
+	}
+
+.Y
+{	fill:
+		#ec1;
+	}
+
+.B
+{	fill:
+		#127;
+	}
+
+.K
+{	fill:
+		#111;
+	}
+	
+.Q
+{	stroke:
+		#6ff;
+	stroke-width:
+		calc(	0.1px	);
+	}
+
+.line
+{	fill:
+		none;
+	stroke-linecap:
+		round;
+	stroke-linejoin:
+		round;
+	}
+	</style>
+<defs>
+	<path d="M0 0h60v40H0z" id="rect"/>
+	</defs>
+<use class="B" href="#rect"/>
+<path class="Y" d="M20 0h20v40H20z"/>
+<mask id="arrow" mask-type="luminance">
+	<use class="TRUE" href="#rect"/>
+	<g class="FALSE" fill-rule="evenodd">
+		<circle r="16" cx="15" cy="5"/>
+		<circle r="16" cx="45" cy="5"/>
+		<circle r="14" cx="30" cy="29"/>
+		</g>
+	</mask>
+<g id="trident" class="K">
+	<circle r="16" cx="30" cy="5" mask="url(#arrow)"/>
+	</g>
+</svg>

@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 0 60 40" width="600" height="400">
-<style>.y{fill:#fff}.n{fill:#000}.K{fill:#111}.Y{fill:#fc2}.B{fill:#027}</style>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 0 60 40">
+<style>.y{fill:#fff}.n{fill:#000}.K{fill:#111}.Y{fill:#ec1}.B{fill:#127}.l{scale:-1 1}</style>
 <defs>
 	<path id="b" d="M-30 0H30v40H-30z"/>
 	<path id="m" d="M-10 40V0h20v40z"/>
 	<path id="h" d="M0 0h60v40H0z"/>
 	<path id="s" d="M-1 30v-16h2v16z"/>
-	<path id="o" d="M-4 0V22l60 8V0z"/>
-	<path id="u" d="M-4 50V24l60 8V50z"/>
+	<path id="o" d="M-4 0v22l60 8V0z"/>
+	<path id="u" d="M-4 50v-26l60 8V50z"/>
 	<circle id="r8" r="8" cx="6" cy="23"/>
 	<circle id="r9" r="9" cx="10" cy="22"/>
 	<circle id="r20" r="20" cx="25" cy="25"/>
@@ -16,7 +16,7 @@
 		<use class="y" href="#b"/>
 		<g class="n" fill-rule="evenodd">
 			<circle id="e" r="16" cx="15" cy="5"/>
-			<use href="#e" transform="scale(-1 1)"/>
+			<use href="#e" class="l"/>
 			<circle r="14" cy="29"/>
 			</g>
 		</mask>
@@ -55,7 +55,7 @@
 			<use href="#h" mask="url(#hi)"/>
 			</g>
 		</g>
-	<use href="#w" transform="scale(-1 1)"/>
+	<use href="#w" class="l"/>
 	<use href="#p" mask="url(#a)"/>
 	<use href="#s"/>
 	</g>

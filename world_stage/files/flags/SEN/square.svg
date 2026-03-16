@@ -1,9 +1,9 @@
-<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="144" height="96" viewBox="0 0 30 20">
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 30 30">
 <style><![CDATA[.R{fill:#b11}.G{fill:#073}.Y{fill:#fc1}]]></style>
-	<path class="R" d="M0 0h30v20H0z"/>
-	<path class="Y" d="M0 0h20v20H0z"/>
-	<path class="G" d="M0 0h10v20H0z"/>
-	<g class="G" transform="translate(15,10)">
+	<path class="R" d="M0 0h30v30H0z"/>
+	<path class="Y" d="M0 0h20v30H0z"/>
+	<path class="G" d="M0 0h10v30H0z"/>
+	<g class="G" transform="translate(15,15)">
 		<g id="c">
 			<path id="t" d="M 0,-4 V 0 H 2" transform="rotate(18 0,-4)"/>
 			<use href="#t" transform="scale(-1,1)"/>

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">
+<style>
+.y
+{	fill:
+		#fff;
+	}
+
+.n
+{	fill:
+		#000;
+	}
+
+.K
+{	fill:
+		#111;
+	}
+
+.Y
+{	fill:
+		#ec1;
+	}
+
+.B
+{	fill:
+		#127;
+	}
+
+.l
+{	scale:
+		-1 1;
+	transform-origin:
+		30px 20px;
+	}
+	</style>
+<defs>
+	<path id="b" d="M0 0h60v40H0z"/>
+	<path id="m" d="M20 0h20v40H20z"/>
+	<path id="h" d="M30 0h60v40H30z"/>
+	<path id="s" d="M29 30v-16h2v16z"/>
+	<path id="o" d="M26 0v22l60 8V0z"/>
+	<path id="u" d="M26 40v-16l60 8V40z"/>
+	<circle id="r8" r="8" cx="36" cy="23"/>
+	<circle id="r9" r="9" cx="40" cy="22"/>
+	<circle id="r14" r="14" cx="30" cy="29"/>
+	<circle id="r16V" r="16" cx="15" cy="5"/>
+	<circle id="r16H" r="16" cx="45" cy="5"/>
+	<circle id="r20" r="20" cx="55" cy="25"/>
+	<circle id="r22" r="22" cx="55" cy="25"/>
+	<circle id="p" r="16" cx="30" cy="5"/>
+	</defs>
+<mask id="a">
+	<use class="y" href="#b"/>
+	<g class="n" fill-rule="evenodd">
+		<circle r="16" cx="15" cy="5"/>
+		<circle r="16" cx="45" cy="5"/>
+		<circle r="14" cx="30" cy="29"/>
+		</g>
+	</mask>
+<mask id="q8">
+	<use class="y" href="#b"/>
+	<use class="n" href="#r8"/>
+	</mask>
+<mask id="q9">
+	<use class="y" href="#r9"/>
+	</mask>
+<mask id="q20">
+	<use class="y" href="#b"/>
+	<use class="n" href="#r20"/>
+	</mask>
+<mask id="q22">
+	<use class="y" href="#r22"/>
+	</mask>
+<mask id="hi">
+	<use class="y" href="#b"/>
+	<use class="n" href="#o"/>
+	</mask>
+<mask id="lo">
+	<use class="y" href="#b"/>
+	<use class="n" href="#u"/>
+	</mask>
+<use class="B" href="#b"/>
+<use class="Y" href="#m"/>
+<g class="K">
+	<g id="w" mask="url(#q20)">
+		<g mask="url(#lo)">
+			<g mask="url(#q9)">
+				<use href="#r9" mask="url(#q8)"/>
+				<use href="#h" mask="url(#q22)"/>
+				</g>
+			<use href="#h" mask="url(#hi)"/>
+			</g>
+		</g>
+	<use class="l" href="#w"/>
+	<use href="#p" mask="url(#a)"/>
+	<use href="#s"/>
+	</g>
+</svg>
