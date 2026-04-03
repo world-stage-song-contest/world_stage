@@ -13,6 +13,7 @@
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
+    <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=show) }}">Predictions</a>
 {% endblock %}
 {% block content %}
 {% if secret %}

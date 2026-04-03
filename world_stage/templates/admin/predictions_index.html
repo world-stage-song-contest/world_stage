@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Predictions – All Shows{% endblock %}
+{% block content %}
+
+<h2>Predictions by show</h2>
+
+{% if shows %}
+<table class="sort-table">
+    <thead>
+        <tr>
+            <th>Show</th>
+            <th>Predictors</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for show in shows %}
+        <tr>
+            <td>{{ (show.year | string ~ " ") if show.year else "" }}{{ show.show_name }}</td>
+            <td>{{ show.prediction_count }}</td>
+            <td>
+                {% if show.year and show.prediction_count > 0 %}
+                <a href="{{ url_for('year.show_predictions', year=show.year, show=show.short_name) }}">View predictions &amp; odds</a>
+                {% elif show.prediction_count > 0 %}
+                <a href="{{ url_for('year.show_predictions', year='specials', show=show.short_name) }}">View predictions &amp; odds</a>
+                {% else %}
+                <span class="muted">No predictions yet</span>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No shows found.</p>
+{% endif %}
+
+{% endblock %}

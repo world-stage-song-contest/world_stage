@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Predictions – {{ year }} {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/predict.css">
+{% endblock %}
+{% block content %}
+
+<h2>{{ year }} {{ show_name }} — Predictions</h2>
+<p class="muted">{{ n_predictors }} {{ "predictor" if n_predictors == 1 else "predictors" }} total</p>
+
+<a href="{{ url_for('admin.predictions_index') }}">&larr; All shows</a>
+
+{% if n_predictors == 0 %}
+<p>No predictions have been submitted for this show yet.</p>
+{% else %}
+
+{# ── Odds table ──────────────────────────────────────────────────── #}
+<h3>Win odds</h3>
+<p class="muted">Percentage of predictors who ranked each song 1st.</p>
+
+<table class="sort-table predictions-odds-table">
+    <thead>
+        <tr>
+            <th>Song</th>
+            <th>Artist</th>
+            <th>Country</th>
+            <th>Win odds</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for song in songs_by_odds %}
+        <tr>
+            <td>{{ song.title }}</td>
+            <td>{{ song.artist }}</td>
+            <td>
+                {{ flag(song.country.cc, 24, song.country.name) }}
+                {{ song.country.name }}
+            </td>
+            <td>
+                <div class="odds-bar-wrap">
+                    <div class="odds-bar" style="width: {{ odds[song.id] }}%"></div>
+                    <span class="odds-label">{{ odds[song.id] }}%</span>
+                </div>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{# ── Full prediction grid ────────────────────────────────────────── #}
+<h3>All predictions</h3>
+<p class="muted">Each column is one predictor's complete ranking. Position 1 = predicted winner.</p>
+
+<div class="predictions-grid-wrap">
+<table class="sort-table predictions-grid">
+    <thead>
+        <tr>
+            <th>Song</th>
+            <th>Country</th>
+            {% for p in predictions %}
+            <th title="{{ p.username }}">{{ p.username }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for song in songs %}
+        <tr>
+            <td>{{ song.title }}</td>
+            <td>
+                {{ flag(song.country.cc, 24, song.country.name) }}
+                {{ song.country.name }}
+            </td>
+            {% for p in predictions %}
+            {% set pos = p.preds.get(song.id) %}
+            <td class="pos-cell {% if pos == 1 %}pos-first{% elif pos and pos == songs | length %}pos-last{% endif %}">
+                {{ pos if pos is not none else "—" }}
+            </td>
+            {% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{# ── Per-predictor detail ────────────────────────────────────────── #}
+<h3>Predictor detail</h3>
+{% for p in predictions %}
+<details class="predictor-detail">
+    <summary>
+        <strong>{{ p.username }}</strong>
+        <span class="muted">submitted {{ p.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    </summary>
+    <ol class="predictor-ranking">
+        {% for song in p.ranked_songs %}
+        <li>
+            {{ flag(song.country.cc, 24, song.country.name) }}
+            <span class="song-title">{{ song.title }}</span>
+            <span class="song-meta">{{ song.artist }} · {{ song.country.name }}</span>
+        </li>
+        {% endfor %}
+    </ol>
+</details>
+{% endfor %}
+
+{% endif %}
+
+{% endblock %}

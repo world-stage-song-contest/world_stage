@@ -5,7 +5,11 @@
 {% if shows %}
 <ul>
     {% for show in shows %}
-        <li><a href="{{ url_for('vote.vote', show=show.short_name) }}">{{ show.name }}</a></li>
+        <li>
+            <a href="{{ url_for('vote.vote', show=show.short_name) }}">{{ show.name }}</a>
+            &nbsp;·&nbsp;
+            <a href="{{ url_for('vote.predict', show=show.short_name) }}">Predict</a>
+        </li>
     {% endfor %}
 </ul>
 {% else %}

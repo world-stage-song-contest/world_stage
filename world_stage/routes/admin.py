@@ -642,6 +642,28 @@ def upload_post():
 
     return render_template('admin/upload.html', message=f"File '{file.filename}' uploaded successfully.", file_path=str(file_path))
 
+@bp.get('/predictions')
+def predictions_index():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT show.id, show.show_name, show.short_name, show.year_id AS year,
+               COUNT(prediction_set.id) AS prediction_count
+        FROM show
+        LEFT JOIN prediction_set ON prediction_set.show_id = show.id
+        GROUP BY show.id, show.show_name, show.short_name, show.year_id
+        ORDER BY show.id
+    ''')
+    shows = cursor.fetchall()
+
+    return render_template('admin/predictions_index.html', shows=shows)
+
+
 @bp.get('/recapdata')
 def recap_data():
     resp = verify_user()

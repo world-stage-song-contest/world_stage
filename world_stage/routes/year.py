@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, Counter
 import io
 from flask import Response, request, Blueprint
 import typing
@@ -530,6 +530,191 @@ def qualifiers_scores(year: str, show: str):
 
     return {'countries': countries,'reveal_order': {'dtf': dtf_countries, 'sc': sc_countries},
             'dtf': show_data.dtf, 'sc': show_data.sc or 0, 'special': show_data.special or 0}
+
+def _compute_prediction_odds(
+    songs: list,
+    pred_by_set: dict,
+    n_predictors: int,
+    n_qualifiers: int,
+) -> dict[int, float]:
+    """
+    Compute qualifying probability for each song from prediction data.
+
+    Based on the World Stage predictions spreadsheet formula:
+    1. Ranking points per predictor: 12 * 0.827^(position - 1)
+    2. Qualifier flag per predictor: 1 if predicted position <= n_qualifiers else 0
+    3. Combined raw score using place percentage, points percentage and qualifier fraction
+    4. Normalised so that sum of all probabilities = n_qualifiers
+
+    For finals (n_qualifiers == 0) every song is treated as a potential qualifier
+    and results are normalised so they sum to n_songs (average probability = 1.0).
+
+    Returns a dict of {song_id: probability} where sum(values) == effective_n_qualifiers.
+    """
+    n_songs = len(songs)
+    if n_predictors == 0 or n_songs == 0:
+        return {song.id: 0.0 for song in songs}
+
+    # For shows without an explicit qualifier count (e.g. grand finals) treat
+    # all songs as eligible so the normalisation denominator is meaningful.
+    effective_n_qual = n_qualifiers if n_qualifiers > 0 else n_songs
+
+    raw: dict[int, float] = {}
+    for song in songs:
+        positions = [set_preds.get(song.id, n_songs) for set_preds in pred_by_set.values()]
+
+        # PlacePct: 1 = predicted 1st, 0 = predicted last
+        avg_rank = sum(positions) / n_predictors
+        place_pct = (1 - (avg_rank - 1) / (n_songs - 1)) if n_songs > 1 else 1.0
+
+        # PtsPct: average ranking points normalised by (n_predictors * 12)
+        avg_pts = sum(12 * (0.827 ** (p - 1)) for p in positions) / n_predictors
+        pts_pct = avg_pts / (n_predictors * 12)
+
+        # QPct: AVERAGE(1, qual_flag_1, …) — always positive, biased toward qualifying
+        qual_flags = [1 if pos <= effective_n_qual else 0 for pos in positions]
+        q_pct = (1 + sum(qual_flags)) / (1 + n_predictors)
+
+        # QBonus: extra weight based on whether the average prediction is a qualifier
+        is_avg_qual = avg_rank <= effective_n_qual
+        q_bonus = 0.125 * (2 * place_pct if is_avg_qual else 8 * pts_pct)
+
+        # Raw score (A4 = 0.1 is the spreadsheet baseline constant)
+        raw_val = (0.1 + place_pct * pts_pct) * (q_pct + 0.05) + q_bonus
+        res = (0.9 + raw_val * 0.04) if raw_val > 0.9 else (raw_val + 0.01)
+        raw[song.id] = res
+
+    total = sum(raw.values())
+    if total == 0:
+        return {song.id: 0.0 for song in songs}
+
+    # Normalise with iterative capping so no probability exceeds 1.0.
+    # Any song whose scaled value would exceed 1.0 is fixed at 1.0 and removed
+    # from the pool; its excess budget is redistributed among the rest.
+    # Repeat until all remaining values are ≤ 1.0.
+    unfixed: dict[int, float] = dict(raw)
+    result: dict[int, float] = {}
+    remaining = float(effective_n_qual)
+
+    while unfixed:
+        pool_total = sum(unfixed.values())
+        if pool_total <= 0:
+            result.update({k: 0.0 for k in unfixed})
+            break
+
+        scale = remaining / pool_total
+        scaled = {k: v * scale for k, v in unfixed.items()}
+
+        over = {k for k, v in scaled.items() if v >= 1.0}
+        if not over:
+            result.update(scaled)
+            break
+
+        for k in over:
+            result[k] = 1.0
+        remaining -= len(over)
+        unfixed = {k: raw[k] for k in unfixed if k not in over}
+
+        if remaining <= 0:
+            result.update({k: 0.0 for k in unfixed})
+            break
+
+    return result
+
+
+@bp.get('/<year>/<show>/predictions')
+def show_predictions(year: str, show: str):
+    try:
+        _year = int(year)
+    except ValueError:
+        _year = None
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access the predictions yet"), 400
+
+    if (show_data.voting_closes
+            and show_data.voting_closes > dt_now()
+            and not permissions.can_view_restricted):
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
+
+    # select_votes=True populates song.vote_data, which carries the running order
+    songs = get_show_songs(_year, show, select_votes=True)
+    if not songs:
+        return render_template('error.html', error="No songs found for this show."), 404
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT prediction_set.id, account.username, prediction_set.created_at
+        FROM prediction_set
+        JOIN account ON prediction_set.user_id = account.id
+        WHERE prediction_set.show_id = %s
+        ORDER BY prediction_set.created_at
+    ''', (show_data.id,))
+    pred_sets = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT prediction.set_id, prediction.song_id, prediction.position
+        FROM prediction
+        JOIN prediction_set ON prediction.set_id = prediction_set.id
+        WHERE prediction_set.show_id = %s
+    ''', (show_data.id,))
+
+    pred_by_set: dict[int, dict[int, int]] = defaultdict(dict)
+    for row in cursor.fetchall():
+        pred_by_set[row['set_id']][row['song_id']] = row['position']
+
+    n_predictors = len(pred_sets)
+    n_qualifiers = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
+
+    odds = _compute_prediction_odds(songs, pred_by_set, n_predictors, n_qualifiers)
+
+    # Apply a per-rank soft cap so no entry can show 100% odds.
+    # epsilon is in (0, 0.005] and is consistent per show via LCG.
+    # Rank 1 cap = 0.98 + ε, rank 2 = 0.98, rank 3 = 0.98 − ε, …
+    if n_predictors > 0:
+        lcg = LCG(show_data.id)
+        epsilon = 0.0001 + (lcg.next(None) / (2 ** 32)) * 0.0049  # (0.0001, 0.005)
+        for rank, sid in enumerate(sorted(odds, key=lambda s: odds[s], reverse=True), 1):
+            cap = 0.98 + epsilon * (2 - rank)
+            if cap > 0:
+                odds[sid] = min(odds[sid], cap)
+
+    # Build predictor dict ordered by submission time: {username: {song_id: position}}
+    predictors: dict[str, dict] = {}
+    for ps in pred_sets:
+        predictors[ps['username']] = pred_by_set.get(ps['id'], {})
+
+    # Sort songs by qualifying probability descending (mirrors detailed sort by total points)
+    songs.sort(key=lambda s: odds[s.id], reverse=True)
+
+    # Pre-render copyable odds text
+    copy_lines: list[str] = []
+    for i, song in enumerate(songs, 1):
+        prob = odds[song.id]
+        decimal_odds = (1 / prob) if prob > 0 else float('inf')
+        pct = prob * 100
+        copy_lines.append(f"{i}. {song.country.name}: {decimal_odds:.2f} ({pct:.2f}%)")
+    copy_text = '\n'.join(copy_lines)
+
+    # Copy box is an admin tool — hide it when the page is publicly visible
+    show_copy = show_data.access_type != 'full'
+
+    return render_template('year/predictions.html',
+                           songs=songs, predictors=predictors, odds=odds,
+                           n_predictors=n_predictors, n_qualifiers=n_qualifiers,
+                           copy_text=copy_text, show_copy=show_copy,
+                           show=show, show_name=show_data.name, year=year,
+                           other_shows=get_other_shows(_year, show))
+
 
 @bp.get('/<year>/<show>/voters')
 def show_voters(year: str, show: str):

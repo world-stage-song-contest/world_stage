@@ -1,8 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Vote - {{ show_name }}{% endblock %}
+{% block title %}Predict – {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/predict.css">
-    <script src="/static/js/predict.js"></script>
 {% endblock %}
 {% block content %}
 
@@ -10,25 +9,151 @@
     <p class="error">{{ error }}</p>
 {% endfor %}
 
-<div class="big">{{ prediction_count }} people have already predicted</div>
+<div class="big">
+    {{ prediction_count }}
+    {{ "person has" if prediction_count == 1 else "people have" }}
+    already predicted
+</div>
 
-<form method="POST">
-        <fieldset class="predictions">
-            <legend>Predictions</legend>
+{% if has_existing %}
+<div class="banner">
+    Your existing prediction is pre-loaded. Drag songs to reorder, then hit <strong>Update Prediction</strong>.
+</div>
+{% endif %}
+
+<div class="banner long-text">
+    Drag songs into the order you think they will finish — 1st at the top, last at the bottom.
+    You can submit or update your prediction at any time while voting is open.
+</div>
+
+<form method="POST" id="predict-form">
+    <fieldset class="predictions" id="sortable-list">
+        <legend>Your predicted ranking</legend>
         {% for song in songs %}
-            <div class="predictions-item" draggable="true">
-                <input type="hidden" value="{{loop.index}}" name="{{song.country.cc}}">
-                <div class="flag-container">
-                    {{ flag(song.country.cc, 45, song.country.name) }}
-                    <div class="song-title">{{ song.title }}</div>
+        <div class="predictions-item" draggable="true" data-song-id="{{ song.id }}">
+            <span class="drag-handle" aria-hidden="true">⠿</span>
+            <span class="position-label">{{ loop.index }}</span>
+            <input type="hidden" name="{{ song.id }}" value="{{ loop.index }}" class="position-input">
+            <div class="song-details">
+                {{ flag(song.country.cc, 40, song.country.name) }}
+                <div class="song-text">
+                    <span class="song-title">{{ song.title }}</span>
+                    <span class="song-meta">{{ song.artist }} · {{ song.country.name }}</span>
                 </div>
             </div>
+        </div>
         {% endfor %}
-        </fieldset>
-    </div>
-    <div>
-        <button type="submit">Submit</button>
+    </fieldset>
+
+    <div class="submit-row">
+        <button type="submit" class="big">
+            {{ "Update Prediction" if has_existing else "Submit Prediction" }}
+        </button>
     </div>
 </form>
+
+<script>
+(function () {
+    const list = document.getElementById('sortable-list');
+    let dragSrc = null;
+
+    list.addEventListener('dragstart', function (e) {
+        dragSrc = e.target.closest('.predictions-item');
+        dragSrc.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+
+    list.addEventListener('dragend', function () {
+        if (dragSrc) dragSrc.classList.remove('dragging');
+        document.querySelectorAll('.predictions-item').forEach(function (el) {
+            el.classList.remove('drag-over');
+        });
+        dragSrc = null;
+        updatePositions();
+    });
+
+    list.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const target = e.target.closest('.predictions-item');
+        if (!target || target === dragSrc) return;
+
+        const rect = target.getBoundingClientRect();
+        const insertBefore = e.clientY < rect.top + rect.height / 2;
+        if (insertBefore) {
+            list.insertBefore(dragSrc, target);
+        } else {
+            list.insertBefore(dragSrc, target.nextElementSibling);
+        }
+    });
+
+    list.addEventListener('dragenter', function (e) {
+        const target = e.target.closest('.predictions-item');
+        if (target && target !== dragSrc) {
+            target.classList.add('drag-over');
+        }
+    });
+
+    list.addEventListener('dragleave', function (e) {
+        const target = e.target.closest('.predictions-item');
+        if (target) target.classList.remove('drag-over');
+    });
+
+    // Touch support: rudimentary touch-drag via long-press simulation
+    let touchItem = null;
+    let touchClone = null;
+    let touchOffsetY = 0;
+
+    list.addEventListener('touchstart', function (e) {
+        touchItem = e.target.closest('.predictions-item');
+        if (!touchItem) return;
+        const touch = e.touches[0];
+        const rect = touchItem.getBoundingClientRect();
+        touchOffsetY = touch.clientY - rect.top;
+
+        touchClone = touchItem.cloneNode(true);
+        touchClone.classList.add('touch-clone');
+        touchClone.style.width = rect.width + 'px';
+        touchClone.style.top = touch.clientY - touchOffsetY + 'px';
+        document.body.appendChild(touchClone);
+        touchItem.classList.add('dragging');
+    }, { passive: true });
+
+    list.addEventListener('touchmove', function (e) {
+        if (!touchItem || !touchClone) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        touchClone.style.top = touch.clientY - touchOffsetY + 'px';
+
+        const items = Array.from(list.querySelectorAll('.predictions-item:not(.dragging)'));
+        for (const item of items) {
+            const rect = item.getBoundingClientRect();
+            if (touch.clientY < rect.top + rect.height / 2) {
+                list.insertBefore(touchItem, item);
+                return;
+            }
+        }
+        // If past all items, append to end
+        const last = items[items.length - 1];
+        if (last) list.insertBefore(touchItem, last.nextElementSibling);
+    }, { passive: false });
+
+    list.addEventListener('touchend', function () {
+        if (touchItem) touchItem.classList.remove('dragging');
+        if (touchClone) touchClone.remove();
+        touchItem = null;
+        touchClone = null;
+        updatePositions();
+    }, { passive: true });
+
+    function updatePositions() {
+        list.querySelectorAll('.predictions-item').forEach(function (item, idx) {
+            const pos = idx + 1;
+            item.querySelector('.position-label').textContent = pos;
+            item.querySelector('.position-input').value = pos;
+        });
+    }
+}());
+</script>
 
 {% endblock %}

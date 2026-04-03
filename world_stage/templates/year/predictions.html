@@ -1,0 +1,115 @@
+{%extends "base.html" %}
+{% block title %}Predictions: {{year or ''}} {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
+    <link rel="stylesheet" href="/static/css/predict.css">
+    <script src="/static/js/sort-table.js"></script>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
+    <span class="nav-separator"></span>
+    {% for other_show in other_shows %}
+    <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=other_show) }}">{{ other_show|upper }}</a>
+    {% endfor %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
+    <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
+{% endblock %}
+{% block content %}
+
+{% if n_predictors == 0 %}
+<p>No predictions have been submitted for this show yet.</p>
+{% else %}
+
+{# ── Main table ───────────────────────────────────────────────────── #}
+<div id="scroll-container">
+    <table class="sortable compact with-sticky">
+        <thead>
+            <tr>
+                <th>RO</th>
+                <th class="sticky">Country</th>
+                <th>Artist</th>
+                <th>Title</th>
+                <th title="Probability of qualifying based on predictions">
+                    {% if n_qualifiers > 0 %}Qualify odds{% else %}Win odds{% endif %}
+                </th>
+            {% for username in predictors.keys() %}
+                <th class="user-vote">
+                    <div class="user-vote-container" title="{{ username }}">
+                        <div class="voter-name">{{ username }}</div>
+                    </div>
+                </th>
+            {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for song in songs %}
+            {% set prob = odds[song.id] %}
+            {# bar width: probability as % of the maximum possible value (1.0 for a single qualifier) #}
+            {% set bar_pct = [prob * 100, 100] | min %}
+            <tr>
+                <td class="number header-like">{{ song.vote_data.ro if song.vote_data else '—' }}</td>
+                <td class="sticky">
+                    <div class="country">
+                        {{ flag(song.country.cc, 24, song.country.name) }}
+                        {{ song.country.name }}
+                    </div>
+                </td>
+                <td>{{ song.artist }}</td>
+                {% if song.year is not none %}
+                <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">{{ song.title }}</a></td>
+                {% else %}
+                <td>{{ song.title }}</td>
+                {% endif %}
+                <td class="number" data-value="{{ prob }}">
+                    <div class="odds-bar-wrap">
+                        <div class="odds-bar" style="width: {{ bar_pct }}%"></div>
+                        <span class="odds-label">{{ "%.2f"|format(prob * 100) }}%</span>
+                    </div>
+                </td>
+            {% for username, preds in predictors.items() %}
+            {% set pos = preds.get(song.id) %}
+                <td class="number pos-cell {% if pos == 1 %}pos-first{% elif pos and pos == songs | length %}pos-last{% endif %}">
+                    {{ pos if pos is not none else '' }}
+                </td>
+            {% endfor %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if show_copy %}
+{# ── Copy box (admin-only, hidden when show is publicly visible) ───── #}
+<div class="predictions-copy-wrap">
+    <div class="predictions-copy-header">
+        <span>Odds — copy-ready format</span>
+        <button type="button" id="copy-odds-btn" onclick="copyOdds()">Copy</button>
+    </div>
+    <textarea id="odds-copy-box" readonly rows="6">{{ copy_text }}</textarea>
+</div>
+
+<script>
+function copyOdds() {
+    var box = document.getElementById('odds-copy-box');
+    box.select();
+    box.setSelectionRange(0, 99999);
+    var btn = document.getElementById('copy-odds-btn');
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(box.value).then(function () {
+            btn.textContent = 'Copied!';
+            setTimeout(function () { btn.textContent = 'Copy'; }, 2000);
+        });
+    } else {
+        document.execCommand('copy');
+        btn.textContent = 'Copied!';
+        setTimeout(function () { btn.textContent = 'Copy'; }, 2000);
+    }
+}
+</script>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}
