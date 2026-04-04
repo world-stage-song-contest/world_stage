@@ -23,6 +23,7 @@ li:target > div {
 div.source-links {
     font-family: monospace;
     white-space: pre;
+    tab-size: 4;
 }
 
 .footnote-link {
@@ -83,4 +84,8 @@ div.source-links {
     font-style: italic;
     display: flex;
     flex-direction: column;
+}
+
+.song-results {
+    margin-top: 1em;
 }

@@ -2,7 +2,7 @@ from collections import defaultdict
 import re
 from flask import Blueprint, request
 
-from ..utils import get_countries, get_country_name, get_country_songs, get_song, get_user_id_from_session, get_user_permissions, render_template, get_markdown_parser
+from ..utils import get_countries, get_country_name, get_country_songs, get_show_results_for_songs, get_song, get_user_id_from_session, get_user_permissions, render_template, get_markdown_parser
 
 bp = Blueprint('country', __name__, url_prefix='/country')
 
@@ -22,7 +22,8 @@ def country(code: str):
     if not songs:
         return render_template('error.html', error=f"Songs not found for country {code}")
     name = get_country_name(code.upper())
-    return render_template('country/country.html', songs=songs, country=code, country_name=name)
+    results = get_show_results_for_songs([s.id for s in songs])
+    return render_template('country/country.html', songs=songs, country=code, country_name=name, results=results)
 
 mime_types = {
     'mp4': 'video/mp4',
@@ -107,7 +108,9 @@ def details(code: str, year: int):
     rows = max(len(translated_lyrics), len(latin_lyrics), len(native_lyrics))
     columns = (1 if translated_lyrics else 0) + (1 if latin_lyrics else 0) + (1 if native_lyrics else 0)
 
+    song_results = get_show_results_for_songs([song.id]).get(song.id, {})
+
     return render_template('country/details.html', song=song, embed=embed, name=name, year=year, rows=rows,
                             columns=columns, sources=sources,
                             native_lyrics=native_lyrics, latin_lyrics=latin_lyrics, translated_lyrics=translated_lyrics,
-                            can_edit=can_edit, notes=notes)
+                            can_edit=can_edit, notes=notes, song_results=song_results)

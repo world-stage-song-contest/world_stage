@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Overview: {{ name }} {{ year }}{% endblock %}
 {% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
     <link rel="stylesheet" href="/static/css/song-overview.css">
     <script src="/static/js/sort-table.js"></script>
     <script src="/static/js/year.js"></script>
@@ -78,6 +79,40 @@
         </tr>
     </table>
 </div>
+
+{% if song_results %}
+<div class="song-results">
+    <table>
+        <thead>
+            <tr>
+                <th></th>
+                <th class="number">Place</th>
+                <th class="number">Points</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for key, label, cat_class in [('f', 'Final', 'final'), ('sc', 'Repechage', 'repechage'), ('sf', 'Semi-Final', 'semifinal')] %}
+            {% set entry = song_results.get(key) %}
+            {% if entry %}
+                {% set place = entry.place %}
+                {% set total = entry.total_countries %}
+                {% set is_last = (place == total) %}
+                {% set place_class = (
+                     'first' if place == 1 else
+                     'second' if place == 2 else
+                     'third' if place == 3 else ''
+                   ) ~ (' last' if is_last else '') %}
+                <tr class="{{ cat_class }}">
+                    <th>{{ label }}</th>
+                    <td class="number place-cell {{ cat_class }} {{ place_class }}">{{ place }}{% if is_last %}<span class="last-marker" aria-hidden="true">◁</span>{% endif %}</td>
+                    <td class="number pts-cell  {{ cat_class }} {{ place_class }}">{{ entry.pts }}</td>
+                </tr>
+            {% endif %}
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 
 <div id="video-player-container" class="video">
     {{ embed|safe }}

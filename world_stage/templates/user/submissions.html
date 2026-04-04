@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Submissions: {{ username }}{% endblock %}
 {% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
     <link rel="stylesheet" href="/static/css/submissions.css">
+    <link rel="stylesheet" href="/static/css/country.css">
     <link rel="stylesheet" href="/static/css/song-table.css">
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
@@ -17,6 +19,24 @@
 </div>
 {% endif %}
 
+{% macro result_cells(entry, cat_class) %}
+  {% if entry %}
+    {% set place = entry.place %}
+    {% set total = entry.total_countries %}
+    {% set is_last = (place == total) %}
+    {% set place_class = (
+         'first'  if place == 1 else
+         'second' if place == 2 else
+         'third'  if place == 3 else ''
+       ) ~ (' last' if is_last else '') %}
+    <td class="number {{ cat_class }} place-cell {{ place_class }}">{{ place }}{% if is_last %}<span class="last-marker" aria-hidden="true">◁</span>{% endif %}</td>
+    <td class="number {{ cat_class }} pts-cell   {{ place_class }}">{{ entry.pts }}</td>
+  {% else %}
+    <td class="number {{ cat_class }} place-cell no-entry"></td>
+    <td class="number {{ cat_class }} pts-cell   no-entry"></td>
+  {% endif %}
+{% endmacro %}
+
 <table class="songs-table sortable">
     <thead>
         <tr>
@@ -25,10 +45,17 @@
             <th>Artist</th>
             <th>Title</th>
             <th>Language</th>
+            <th class="final">Final</th>
+            <th class="final">Points</th>
+            <th class="repechage">Repe</th>
+            <th class="repechage">Points</th>
+            <th class="semifinal">Semi</th>
+            <th class="semifinal">Points</th>
         </tr>
     </thead>
     <tbody>
     {% for song in songs %}
+        {% set r = results.get(song.id, {}) %}
         <tr data-value="{{ loop.index }}" class="{{ "placeholder" if song.placeholder else "" }}">
             <td><a href="{{ url_for('year.year', year=song.year) }}">{{ song.year }}</a></td>
             <td><a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">
@@ -49,6 +76,9 @@
                 </div>
             </td>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+            {{ result_cells(r.get('f'),  'final') }}
+            {{ result_cells(r.get('sc'), 'repechage') }}
+            {{ result_cells(r.get('sf'), 'semifinal') }}
         </tr>
     {% endfor %}
     </tbody>

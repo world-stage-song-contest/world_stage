@@ -7,3 +7,41 @@
     height: 28px;
     vertical-align: center;
 }
+
+/* ── Result cell layout ────────────────────────────────────────── */
+
+/* Only remove the border between the two cells of a show the country
+   didn't enter — participating shows keep all their borders. */
+td.place-cell.no-entry { border-right: none; }
+td.pts-cell.no-entry   { border-left:  none; }
+
+/* ── Non-participation: plain grey ─────────────────────────────── */
+td.no-entry {
+    background-color: #e0e0e0;
+    color: transparent;
+}
+
+/* ── Last-place marker: cosmetic only, cannot be selected/copied ─ */
+.last-marker {
+    margin-left: 0.25em;
+    font-size: 0.75em;
+    opacity: 0.7;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* ── Song-details results table ────────────────────────────────── */
+.song-results table {
+    margin-bottom: 16px;
+}
+
+.song-results th {
+    text-align: left;
+    padding-right: 16px;
+}
+
+.song-results td.number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding-left: 12px;
+}

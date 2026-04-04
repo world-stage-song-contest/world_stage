@@ -753,11 +753,28 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
     cursor = db.cursor()
 
     cursor.execute('''
+        SELECT total_points, total_votes_received, point_distribution,
+               max_pts, total_voters
+        FROM country_show_results
+        WHERE song_id = %s AND show_id = %s
+    ''', (song_id, show_id))
+
+    row = cursor.fetchone()
+    if row:
+        res = VoteData(ro=ro, total_votes=row['total_votes_received'],
+                       max_pts=row['max_pts'], show_voters=row['total_voters'])
+        res.sum = row['total_points']
+        res.count = row['total_votes_received']
+        for pt_str, cnt in (row['point_distribution'] or {}).items():
+            res.pts[int(pt_str)] = cnt
+        return res
+
+    # Fallback: query raw vote table if cache is not yet populated
+    cursor.execute('''
         SELECT COUNT(*) AS c FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         WHERE song_id = %s AND show_id = %s
     ''', (song_id, show_id))
-
     count = cursor.fetchone()['c'] # type: ignore
 
     cursor.execute('''
@@ -968,6 +985,60 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
         for song in songs:
             song.languages = get_song_languages(song.id)
     return songs
+
+def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
+    """Return published show results for a list of song IDs.
+
+    Returns a dict keyed by song_id.  Each value is a dict with keys
+    'f', 'sc', 'sf' (or absent when the entry didn't participate in
+    that round).  Each present value is a dict with 'pts', 'place',
+    and 'show_name'.  Only rows from fully-published shows
+    (access_type = 'full') are included.
+    """
+    if not song_ids:
+        return {}
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT csr.song_id,
+               csr.short_name,
+               csr.total_points AS pts,
+               csr.place,
+               csr.total_countries,
+               csr.show_name
+        FROM country_show_results csr
+        JOIN show ON show.id = csr.show_id
+        WHERE csr.song_id = ANY(%s)
+          AND show.access_type = 'full'
+        ORDER BY csr.song_id, csr.year_id, csr.short_name
+    ''', (song_ids,))
+
+    results: dict[int, dict] = {}
+    for row in cursor.fetchall():
+        sid = row['song_id']
+        if sid not in results:
+            results[sid] = {}
+        sn = row['short_name']
+        if sn == 'f':
+            key = 'f'
+        elif sn == 'sc':
+            key = 'sc'
+        elif sn and (sn == 'sf' or sn.startswith('sf')):
+            key = 'sf'
+        else:
+            continue
+        # Keep the first match per key (there should be at most one per type)
+        if key not in results[sid]:
+            results[sid][key] = {
+                'pts': row['pts'],
+                'place': row['place'],
+                'total_countries': row['total_countries'],
+                'show_name': row['show_name'],
+            }
+    return results
+
 
 def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
     db = get_db()

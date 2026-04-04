@@ -197,15 +197,6 @@
     font-variant-numeric: tabular-nums;
 }
 
-.pos-first {
-    background: rgba(255, 215, 0, 0.25);
-    font-weight: 700;
-}
-
-.pos-last {
-    background: rgba(180, 0, 0, 0.08);
-    color: var(--muted, #888);
-}
 
 /* ── Per-predictor detail ───────────────────────────────────────── */
 

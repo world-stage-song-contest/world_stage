@@ -3,7 +3,7 @@ import urllib.parse
 import unicodedata
 from flask import Blueprint, request
 
-from ..utils import get_user_songs, render_template
+from ..utils import get_user_songs, get_show_results_for_songs, render_template
 from ..db import get_db
 
 bp = Blueprint('user', __name__, url_prefix='/user')
@@ -144,8 +144,9 @@ def submissions(username: str):
     user_id = user_id_g['id']
 
     songs = get_user_songs(user_id, select_languages=True)
+    results = get_show_results_for_songs([s.id for s in songs])
 
-    return render_template('user/submissions.html', songs=songs, username=username)
+    return render_template('user/submissions.html', songs=songs, username=username, results=results)
 
 def get_country_biases(user_id: int):
     db = get_db()
