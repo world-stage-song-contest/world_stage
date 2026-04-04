@@ -1,29 +1,82 @@
 {% extends "base.html" %}
-{% block title %}Recent changes{% endblock %}
+{% block title %}Song audit log{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/changes.css">
+    <style>
+        .event-badge {
+            display: inline-block;
+            padding: 0.15em 0.5em;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .event-create           { background: #d0f0d0; color: #005700; }
+        .event-song_modification      { background: #d0e8ff; color: #003870; }
+        .event-song_replacement { background: #fff0b3; color: #5a4000; }
+        .event-placeholder_on  { background: #e8d0ff; color: #3a0070; }
+        .event-placeholder_off { background: #d0f0e0; color: #005730; }
+        .event-delete          { background: #ffd0d0; color: #700000; }
+        td.changed-fields    { font-size: 0.85em; max-width: 28em; word-break: break-word; }
+        .arrow { margin: 0 0.3em; color: #888; }
+    </style>
 {% endblock %}
 {% block content %}
+<h2>Song audit log <small style="font-weight:normal;font-size:0.65em">(last 200 entries)</small></h2>
 <table>
     <thead>
         <tr>
-        <th>Country</th>
-        <th>Year</th>
-        <th>Artist</th>
-        <th>Title</th>
-        <th>Submitter</th>
-        <th>Datetime modified</th>
+            <th>Event</th>
+            <th>When</th>
+            <th>By</th>
+            <th>Country</th>
+            <th>Year</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Details</th>
         </tr>
     </thead>
     <tbody>
-    {% for change in changes %}
+    {% for entry in changes %}
         <tr>
-            <td><a href="{{ url_for('country.country', code=change.cc.lower()) }}">{{ flag(change.cc, 24, change.name) }} {{ change.name }}</a></td>
-            <td><a href="{{ url_for('year.year', year=(change.year)) }}">{{ change.year }}</a></td>
-            <td>{{ change.artist }}</td>
-            <td>{{ change.title }}</td>
-            <td>{{ change.submitter }}</td>
-            <td>{{ change.modified_at.strftime('%Y-%m-%d %H:%M:%S %Z') }}</td>
+            <td>
+                <span class="event-badge event-{{ entry.event_type }}">
+                    {{ entry.event_type | replace('_', ' ') }}
+                </span>
+            </td>
+            <td style="white-space:nowrap">{{ entry.changed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ entry.changed_by_username or '—' }}</td>
+            <td>
+                {% if entry.song_country_id %}
+                <a href="{{ url_for('country.country', code=entry.song_country_id.lower()) }}">
+                    {{ flag(entry.song_country_id, 20, entry.country_name or entry.song_country_id) }}
+                    {{ entry.country_name or entry.song_country_id }}
+                </a>
+                {% else %}—{% endif %}
+            </td>
+            <td>
+                {% if entry.song_year_id %}
+                <a href="{{ url_for('year.year', year=entry.song_year_id) }}">{{ entry.song_year_id }}</a>
+                {% else %}—{% endif %}
+            </td>
+            <td>{{ entry.song_artist or '—' }}</td>
+            <td>{{ entry.song_title or '—' }}</td>
+            <td class="changed-fields">
+                {% if entry.event_type == 'song_replacement' and entry.changed_fields %}
+                    {% if entry.changed_fields.title.old != entry.changed_fields.title.new %}
+                        Title: {{ entry.changed_fields.title.old or '' }}<span class="arrow">→</span>{{ entry.changed_fields.title.new or '' }}<br>
+                    {% endif %}
+                    {% if entry.changed_fields.artist.old != entry.changed_fields.artist.new %}
+                        Artist: {{ entry.changed_fields.artist.old or '' }}<span class="arrow">→</span>{{ entry.changed_fields.artist.new or '' }}
+                    {% endif %}
+                {% elif entry.event_type == 'song_modification' and entry.changed_fields %}
+                    {{ entry.changed_fields.keys() | join(', ') }}
+                {% endif %}
+            </td>
         </tr>
     {% endfor %}
+    {% if not changes %}
+        <tr><td colspan="8" style="text-align:center;padding:1em">No entries yet.</td></tr>
+    {% endif %}
+    </tbody>
+</table>
 {% endblock %}

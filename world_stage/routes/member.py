@@ -235,9 +235,15 @@ class SongRepository:
 
         return True, None, result['submitter_id']
 
-    def delete_song(self, year: int, country: str) -> bool:
-        """Delete song and associated data"""
-        # Get song ID first
+    def _set_audit_user(self, user_id: int | None) -> None:
+        """Store the acting user in a session variable for the audit trigger.
+        The third arg (false) = session-level, reset on connection return to pool."""
+        self.cursor.execute(
+            "SELECT set_config('app.current_user_id', %s, false)",
+            (str(user_id) if user_id else '',))
+
+    def delete_song(self, year: int, country: str, user_id: int | None) -> bool:
+        """Delete song and associated data."""
         self.cursor.execute('''
             SELECT id FROM song
             WHERE year_id = %s AND country_id = %s
@@ -248,6 +254,7 @@ class SongRepository:
             return False
 
         song_id = result['id']
+        self._set_audit_user(user_id)
 
         # Delete in correct order (foreign key constraints)
         self.cursor.execute('DELETE FROM song_language WHERE song_id = %s', (song_id,))
@@ -256,9 +263,11 @@ class SongRepository:
         self.db.commit()
         return True
 
-    def upsert_song(self, data: FormData, user_id: int | None) -> int:
+    def upsert_song(self, data: FormData, user_id: int | None, *, acting_user_id: int | None = None) -> int:
         """Insert or update song, return song_id"""
         existing_song = self.find_song(data.year, data.country)
+
+        self._set_audit_user(acting_user_id if acting_user_id is not None else user_id)
 
         if existing_song:
             song_id, _ = existing_song
@@ -325,13 +334,13 @@ class SongService:
         if not permissions.can_edit and submitter_id != user_id:
             return Result(False, "", "You are not the submitter")
 
-        success = self.repo.delete_song(year, country)
+        success = self.repo.delete_song(year, country, user_id)
         if success:
             return Result(True, f'The song "{artist} — {title}" has been deleted from {year}')
         else:
             return Result(False, "", "Failed to delete song")
 
-    def submit_song(self, data: FormData, user_id: int | None, permissions: UserPermissions) -> Result:
+    def submit_song(self, data: FormData, user_id: int | None, permissions: UserPermissions, *, acting_user_id: int | None = None) -> Result:
         """Submit song with validation"""
         validation_errors = self.validator.validate_submission(data, permissions)
 
@@ -339,7 +348,7 @@ class SongService:
             return Result(False, "", "; ".join(validation_errors))
 
         try:
-            song_id = self.repo.upsert_song(data, user_id)
+            song_id = self.repo.upsert_song(data, user_id, acting_user_id=acting_user_id)
             return Result(True, f'The song "{data.artist} — {data.title}" has been submitted for {data.year}')
         except Exception as e:
             return Result(False, "", f"Database error: {str(e)}")
@@ -549,13 +558,13 @@ def submit_song_post():
     try:
         if action == 'delete':
             result = service.delete_song(form_data.year, form_data.country,
-                                       form_data.artist or "", form_data.title or "", user_id)
+                                       form_data.artist or "", form_data.title or "", default_user_id)
         elif action == 'submit':
             validation_errors = service.validator.validate_submission(form_data, permissions)
             if validation_errors:
                 return render_error_template(form_data, validation_errors[0], [])
 
-            result = service.submit_song(form_data, user_id, permissions)
+            result = service.submit_song(form_data, user_id, permissions, acting_user_id=default_user_id)
         else:
             result = Result(False, "", f"Unknown action: '{action}'")
 

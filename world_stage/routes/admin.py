@@ -214,12 +214,27 @@ def changes():
     db = get_db()
     cursor = db.cursor()
 
+    cursor.execute("DELETE FROM song_audit_log WHERE changed_at < CURRENT_TIMESTAMP - interval '30 days'")
+    db.commit()
+
     cursor.execute('''
-        SELECT country_id AS cc, country.name, year_id AS year, artist, title, username AS submitter, modified_at FROM song
-        JOIN country ON song.country_id = country.id
-        JOIN account ON song.submitter_id = account.id
-        WHERE modified_at >= CURRENT_TIMESTAMP - interval '1 day'
-        ORDER BY modified_at DESC
+        SELECT
+            sal.id,
+            sal.event_type,
+            sal.changed_at,
+            sal.song_id,
+            sal.song_title,
+            sal.song_artist,
+            sal.song_country_id,
+            sal.song_year_id,
+            sal.changed_fields,
+            a.username  AS changed_by_username,
+            c.name      AS country_name
+        FROM song_audit_log sal
+        LEFT JOIN account a ON a.id = sal.changed_by
+        LEFT JOIN country c ON c.id = sal.song_country_id
+        ORDER BY sal.changed_at DESC
+        LIMIT 200
     ''')
     changes = cursor.fetchall()
 
