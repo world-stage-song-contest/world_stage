@@ -923,7 +923,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute(f'''
+    cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, country.name, country.is_participating, country.cc2,
                song.is_placeholder, account.username, song.year_id, song.poster_link,
@@ -934,8 +934,12 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
+        LEFT JOIN year ON year.id = song.year_id
+        LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
         WHERE song.year_id = %s
-        ORDER BY country.name
+        ORDER BY
+            CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
+            country.name
         ''', (year,))
     songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
 
@@ -944,6 +948,16 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
             song.languages = get_song_languages(song.id)
 
     return songs
+
+
+def get_year_placements(year: int) -> dict[int, int]:
+    """Return {song_id: place} from country_year_results for a closed year."""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT song_id, place FROM country_year_results WHERE year_id = %s
+    ''', (year,))
+    return {row['song_id']: row['place'] for row in cursor.fetchall()}
 
 def get_user_songs(user_id: int, year: int | None = None, *, select_languages = False) -> list[Song]:
     db = get_db()
@@ -961,8 +975,12 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN account ON song.submitter_id = account.id
+            LEFT JOIN year ON year.id = song.year_id
+            LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
             WHERE song.submitter_id = %s AND song.year_id = %s AND song.year_id IS NOT NULL
-            ORDER BY song.year_id, country.name
+            ORDER BY song.year_id,
+                     CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
+                     country.name
         ''', (user_id, year))
     else:
         cursor.execute('''
@@ -976,8 +994,12 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN account ON song.submitter_id = account.id
+            LEFT JOIN year ON year.id = song.year_id
+            LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
             WHERE song.submitter_id = %s AND song.year_id IS NOT NULL
-            ORDER BY song.year_id, country.name
+            ORDER BY song.year_id,
+                     CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
+                     country.name
         ''', (user_id,))
     songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
 
@@ -1036,7 +1058,26 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
                 'place': row['place'],
                 'total_countries': row['total_countries'],
                 'show_name': row['show_name'],
+                'short_name': row['short_name'],
             }
+
+    # Year-level placements (only for closed years)
+    cursor.execute('''
+        SELECT cyr.song_id, cyr.place, cyr.total_countries
+        FROM country_year_results cyr
+        JOIN year ON year.id = cyr.year_id
+        WHERE cyr.song_id = ANY(%s)
+          AND year.closed = 1
+    ''', (song_ids,))
+    for row in cursor.fetchall():
+        sid = row['song_id']
+        if sid not in results:
+            results[sid] = {}
+        results[sid]['year'] = {
+            'place': row['place'],
+            'total_countries': row['total_countries'],
+        }
+
     return results
 
 
@@ -1055,8 +1096,12 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
+        LEFT JOIN year ON year.id = song.year_id
+        LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
         WHERE (song.country_id = %(cc)s OR country.cc2 = %(cc)s) AND song.year_id IS NOT NULL
-        ORDER BY song.year_id, country.name
+        ORDER BY song.year_id,
+                 CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
+                 country.name
     ''', {'cc':code})
     songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
 

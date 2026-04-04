@@ -24,6 +24,22 @@
   cat_class : "final" | "repechage" | "semifinal"
   entry     : dict {pts, place, total_countries} or None
 #}
+{% macro year_result_cell(entry, cat_class) %}
+  {% if entry %}
+    {% set place = entry.place %}
+    {% set total = entry.total_countries %}
+    {% set is_last = (place == total) %}
+    {% set place_class = (
+         'first'  if place == 1 else
+         'second' if place == 2 else
+         'third'  if place == 3 else ''
+       ) ~ (' last' if is_last else '') %}
+    <td class="number {{ cat_class }} {{ place_class }}">{{ place }}{% if is_last %}<span class="last-marker" aria-hidden="true">◁</span>{% endif %}</td>
+  {% else %}
+    <td class="number {{ cat_class }} no-entry"></td>
+  {% endif %}
+{% endmacro %}
+
 {% macro result_cells(entry, cat_class) %}
   {% if entry %}
     {% set place = entry.place %}
@@ -50,6 +66,7 @@
             <th>Title</th>
             <th>Language</th>
             <th>Submitter</th>
+            <th class="year-result">Year</th>
             <th class="final">Final</th>
             <th class="final">Points</th>
             <th class="repechage">Repe</th>
@@ -79,6 +96,7 @@
             </div></td>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
             <td>{{ song.submitter or '' }}</td>
+            {{ year_result_cell(r.get('year'), 'year-result') }}
             {{ result_cells(r.get('f'),  'final') }}
             {{ result_cells(r.get('sc'), 'repechage') }}
             {{ result_cells(r.get('sf'), 'semifinal') }}

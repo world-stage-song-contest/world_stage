@@ -8,6 +8,12 @@
     vertical-align: center;
 }
 
+/* ── Year-level result column ──────────────────────────────────── */
+th.year-result,
+td.year-result {
+    border-left: 2px solid var(--foreground1);
+}
+
 /* ── Result cell layout ────────────────────────────────────────── */
 
 /* Only remove the border between the two cells of a show the country

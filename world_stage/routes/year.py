@@ -7,8 +7,8 @@ import math
 from ..utils import (LCG, AbstractVoteSequencer, RandomVoteSequencer, Show, SuspensefulVoteSequencer,
                      ChronologicalVoteSequencer, ShowData,
                      get_show_id, dt_now, get_user_role_from_session,
-                     get_votes_for_song, get_year_songs, get_year_winner,
-                     get_special_winner, render_template, get_show_songs)
+                     get_votes_for_song, get_year_songs, get_year_placements, get_year_winner,
+                     get_show_results_for_songs, get_special_winner, render_template, get_show_songs)
 from ..db import get_db
 
 bp = Blueprint('year', __name__, url_prefix='/year')
@@ -84,13 +84,13 @@ def year(year: str):
     if _year:
         cursor.execute('SELECT closed FROM year WHERE id = %s', (year,))
         closed = cursor.fetchone() or {'closed': 0}
-        cl = closed['closed']
+        cl = closed['closed'] == 1
 
         songs = get_year_songs(_year, select_languages=True)
 
         free_countries = []
 
-        if cl == 0:
+        if closed['closed'] == 0:
             cursor.execute('''
                 SELECT id, name FROM country
                 WHERE id <> ALL(%(ccs)s)
@@ -109,8 +109,33 @@ def year(year: str):
         shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
         shows.sort()
 
+        year_placements = get_year_placements(_year) if cl else {}
+
+        show_names = {s.short_name for s in shows}
+        has_sc = 'sc' in show_names
+        has_sf = any(sn == 'sf' or sn.startswith('sf') for sn in show_names)
+        multi_show = has_sc or has_sf
+
+        results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl == 1) else {}
+
+        # SF assignment: which semi-final each song competed in, regardless of
+        # whether the show is published yet (no access_type gate).
+        sf_numbers: dict[int, str] = {}
+        if has_sf:
+            cursor.execute('''
+                SELECT ss.song_id, sh.short_name
+                FROM song_show ss
+                JOIN show sh ON sh.id = ss.show_id
+                WHERE sh.year_id = %s
+                  AND (sh.short_name = 'sf' OR sh.short_name LIKE 'sf%%')
+            ''', (_year,))
+            sf_numbers = {row['song_id']: row['short_name'] for row in cursor.fetchall()}
+
         return render_template('year/year.html', year=year, songs=songs, free_countries=free_countries,
-                               closed=closed['closed'], shows=shows, total=total_entries, placeholders=total_placeholders)
+                               is_closed=cl, shows=shows, total=total_entries, placeholders=total_placeholders,
+                               year_placements=year_placements, results=results,
+                               multi_show=multi_show, has_sc=has_sc, has_sf=has_sf,
+                               sf_numbers=sf_numbers)
     else:
         return render_template('year/specials.html', specials=get_specials())
 

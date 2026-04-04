@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Overview: {{ year }}{% endblock %}
 {% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
     <link rel="stylesheet" href="/static/css/year.css">
     <link rel="stylesheet" href="/static/css/song-table.css">
     <link rel="stylesheet" href="/static/css/country-list.css">
+    <link rel="stylesheet" href="/static/css/country.css">
     <script src="/static/js/sort-table.js"></script>
     <script src="/static/js/year.js"></script>
 {% endblock %}
@@ -15,7 +17,7 @@
     {% endfor %}
 {% endblock %}
 {% block content %}
-{% if not closed %}
+{% if not is_closed %}
 <div class="banner compact">
     <p>Highlighted songs are placeholders and can be replaced.</p>
 </div>
@@ -29,20 +31,67 @@
     <strong><big>Total entries:{{total}} ({{placeholders}} placeholders)</big></strong>
 </div>
 
+{#
+  Render the two cells (place + pts) for one show category.
+  cat_class : "final" | "repechage" | "semifinal"
+  entry     : dict {pts, place, total_countries} or None
+#}
+{% macro result_cells(entry, cat_class) %}
+  {% if entry %}
+    {% set place = entry.place %}
+    {% set total = entry.total_countries %}
+    {% set is_last = (place == total) %}
+    {% set place_class = (
+         'first'  if place == 1 else
+         'second' if place == 2 else
+         'third'  if place == 3 else ''
+       ) ~ (' last' if is_last else '') %}
+    <td class="number {{ cat_class }} place-cell {{ place_class }}">{{ place }}{% if is_last %}<span class="last-marker" aria-hidden="true">◁</span>{% endif %}</td>
+    <td class="number {{ cat_class }} pts-cell   {{ place_class }}">{{ entry.pts }}</td>
+  {% else %}
+    <td class="number {{ cat_class }} place-cell no-entry"></td>
+    <td class="number {{ cat_class }} pts-cell   no-entry"></td>
+  {% endif %}
+{% endmacro %}
+
+{% set n = songs | length %}
 <table class="songs-table sortable">
     <thead>
         <tr>
+            {% if is_closed %}<th>#</th>{% endif %}
             <th>Country</th>
             <th>Artist</th>
             <th>Title</th>
             <th>Language</th>
             <th>Submitter</th>
+            {% if has_sf %}<th>SF #</th>{% endif %}
+            {% if is_closed and multi_show %}
+            <th class="final">Final</th>
+            <th class="final">Points</th>
+            {% if has_sc %}
+            <th class="repechage">Repe</th>
+            <th class="repechage">Points</th>
+            {% endif %}
+            {% if has_sf %}
+            <th class="semifinal">Semi</th>
+            <th class="semifinal">Points</th>
+            {% endif %}
+            {% endif %}
         </tr>
     </thead>
     <tbody>
     {% for song in songs %}
+        {% set place = year_placements.get(song.id) %}
+        {% set place_class = '' %}
+        {% if place %}
+            {% set place_class = 'first' if place == 1 else 'second' if place == 2 else 'third' if place == 3 else 'last' if place == n else '' %}
+        {% endif %}
+        {% set r = results.get(song.id, {}) %}
         <tr data-value="{{ loop.index }}"
-            class="{{ "placeholder" if song.placeholder else "finalised" }}" data-value="{{ loop.index }}">
+            class="{{ "placeholder" if song.placeholder else "finalised" }} {{ place_class }}">
+            {% if is_closed %}
+            <td class="number {{ place_class }}">{{ place or '' }}</td>
+            {% endif %}
             <td><a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">
                     {{ flag(song.country.cc, 42, song.country.name) }}
                     <span>{{ song.country.name }}</span>
@@ -55,13 +104,31 @@
                     </a>
                 {% if song.native_title %}
                     <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
-                        <bdi lang="{{song.native_lang.str(), song.country.cc2}}">{{ song.native_title }}</bdi>
+                        <bdi lang="{{song.native_lang.str(None, song.country.cc2)}}">{{ song.native_title }}</bdi>
                     </a>
                 {% endif %}
                 </div>
             </td>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
             <td>{{ song.submitter or '' }}</td>
+            {% if has_sf %}
+            {% set sf_sn = sf_numbers.get(song.id) %}
+            {% if sf_sn %}
+              {% set sf_num = sf_sn[2:] %}
+              <td class="number">{{ 'SF' if not sf_num else sf_num }}</td>
+            {% else %}
+              <td class="number">AQ</td>
+            {% endif %}
+            {% endif %}
+            {% if is_closed and multi_show %}
+            {{ result_cells(r.get('f'),  'final') }}
+            {% if has_sc %}
+            {{ result_cells(r.get('sc'), 'repechage') }}
+            {% endif %}
+            {% if has_sf %}
+            {{ result_cells(r.get('sf'), 'semifinal') }}
+            {% endif %}
+            {% endif %}
         </tr>
     {% endfor %}
     </tbody>
