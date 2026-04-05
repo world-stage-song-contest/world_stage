@@ -1,28 +1,28 @@
 @keyframes winner {
     from {
-        color: #ae2900;
+        color: oklch(49.3% 0.174 34.6);
     }
 
     20% {
-        color: #ae2900;
+        color: oklch(49.3% 0.174 34.6);
     }
 
     80% {
-        color: #ae6300;
+        color: oklch(57.3% 0.132 61.9);
     }
 
     to {
-        color: #ae6300;
+        color: oklch(57.3% 0.132 61.9);
     }
 }
 
 @keyframes voting {
     from {
-        background-color: black;
+        background-color: oklch(0% 0 none);
     }
 
     to {
-        background-color: white;
+        background-color: oklch(100% 0 none);
     }
 }
 
@@ -56,14 +56,6 @@
     align-items: center;
 }
 
-#controls, #navigation {
-    clear: both;
-    float: right;
-    background: lightblue;
-    border: 1px solid black;
-    padding: 0.5em;
-}
-
 #navigation {
     margin-top: 8px;
 }
@@ -81,7 +73,7 @@
 
 .voting-card-flag {
     height: 96px;
-    border: 1px solid grey;
+    border: 1px solid var(--border-subtle);
 }
 
 .voting-card-user-wrapper {
@@ -98,11 +90,9 @@
 
 .voting-card-country {
     font-size: 0.75em;
-    /*font-weight: bold;*/
 }
 
 #points-row {
-    /*display: flex;*/
     display: none;
     gap: 0.5em;
     align-items: center;
@@ -118,50 +108,36 @@
     justify-content: center;
     padding: 2px;
     font-family: 'DSEG7 Classic Mini', sans-serif;
-    background-color: black;
-    color: #e30;
+    background-color: var(--scoreboard-led-bg);
+    color: var(--scoreboard-led-color);
     font-size: 150%;
-    transition: filter 1.5s;
-    border-radius: 4px;
-
     border: 2px solid var(--foreground1);
     border-radius: 8px;
     width: 2ch;
     height: 2ch;
     font-weight: bold;
-
+    transition: filter 1.5s;
     filter: brightness(2);
 }
-
-/*
-.voting-card-points-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(to bottom, rgba(0,0,0,0) 20%, rgba(0,0,0,0.1));
-    border-radius: 8px;
-}*/
 
 .points-value.spent {
     filter: brightness(0.5);
 }
 
 .gold {
-    border-color: gold;
+    border-color: var(--result-gold);
 }
 
 .silver {
-    border-color: #CCC;
+    border-color: var(--result-silver);
 }
 
 .bronze {
-    border-color: #C96;
+    border-color: var(--result-bronze);
 }
 
 .wooden-spoon {
-    border-color: #FE8080;
+    border-color: var(--result-last);
 }
 
 .unloaded {
@@ -202,16 +178,6 @@
 .element-overlay {
     display: none;
 }
-
-/*
-.element-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(to bottom, rgba(0,0,0,0) 20%, rgba(0,0,0,0.1));
-}*/
 
 .name-container {
     font-family: 'Eurostile', sans-serif;
@@ -259,7 +225,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    border-right: 1px solid grey;
+    border-right: 1px solid var(--border-subtle);
 }
 
 .flag-overlay {
@@ -302,37 +268,17 @@
     font-style: italic;
 }
 
-.number {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-
 .point-display {
     position: relative;
     padding: 2px;
     font-family: 'DSEG7 Classic Mini', sans-serif;
-    background-color: black;
-    color: #ae2900;
+    background-color: var(--scoreboard-led-bg);
+    color: var(--scoreboard-led-alt);
     font-size: 1.5em;
     height: 1em;
     transition: filter 1s;
     border-radius: 4px;
 }
-
-/*
-.currently-voting {
-    border-radius: 50%;
-    height: 16px;
-    width: 16px;
-    background-color: black;
-    border: 2px solid black;
-    margin-right: 0.5em;
-}
-
-.own-entry .currently-voting {
-    animation: voting 1s infinite alternate;
-}
-*/
 
 .current-points {
     min-width: 2ch;
@@ -406,10 +352,6 @@
     z-index: -50;
 }
 
-.hidden {
-    display: none;
-}
-
 #jury-container {
     font-family: 'Eurostile', sans-serif;
     position: fixed;
@@ -439,7 +381,7 @@
 }
 
 #jury-bar {
-    background: green;
+    background: var(--jury-bar);
     height: 100%;
     width: 0;
     transition: width 2s, filter 1s;

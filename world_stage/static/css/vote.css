@@ -3,9 +3,9 @@ select, input[type="text"] {
 }
 
 .invalid {
-    border-color: red;
+    border-color: var(--error);
 }
 
 .valid {
-    border-color: grey;
+    border-color: var(--border-subtle);
 }

@@ -127,7 +127,7 @@ def year(year: str):
                 FROM song_show ss
                 JOIN show sh ON sh.id = ss.show_id
                 WHERE sh.year_id = %s
-                  AND (sh.short_name = 'sf' OR sh.short_name LIKE 'sf%%')
+                  AND LEFT(sh.short_name, 2) = 'sf'
             ''', (_year,))
             sf_numbers = {row['song_id']: row['short_name'] for row in cursor.fetchall()}
 

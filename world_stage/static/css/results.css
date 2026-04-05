@@ -1,15 +1,9 @@
-
 .point-header {
     width: 3ch;
 }
 
 .zero {
     color: transparent;
-}
-
-.number.number {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
 }
 
 .user-vote-container {
@@ -32,21 +26,22 @@
 
 .vote-flag {
     width: 24px;
-    border: 1px solid grey;
+    border: 1px solid var(--border-subtle);
 }
 
 #scroll-container {
     overflow-x: auto;
 }
 
-#scroll-container th, #scroll-container td {
+#scroll-container th,
+#scroll-container td {
     white-space: nowrap;
 }
 
 .country {
     display: flex;
     gap: 0.25em;
-	align-items: center;
+    align-items: center;
 }
 
 th.plain {
@@ -59,41 +54,29 @@ td.header-like {
     text-align: center;
 }
 
-.direct-to-final {
-    background: navajowhite;
-    color: black;
-}
-
-.second-chance {
-    background: paleturquoise;
-    color: black;
-}
-
-.first {
-    background: gold;
-    color: black;
-}
-
-.second {
-    background: #CCC;
-    color: black;
-}
-
-.third {
-    background: #C96;
-    color: black;
-}
-
+/* Result placement highlights — all share the same text colour */
+.direct-to-final,
+.second-chance,
+.first,
+.second,
+.third,
 .last {
-    background: #FE8080;
-    color: black;
+    color: var(--result-text);
 }
+
+.direct-to-final { background: var(--result-dtf); }
+.second-chance   { background: var(--result-sc); }
+.first           { background: var(--result-gold); }
+.second          { background: var(--result-silver); }
+.third           { background: var(--result-bronze); }
+.last            { background: var(--result-last); }
 
 td, th {
     transition: opacity 2s;
 }
 
-.unrevealed > td, .unrevealed > th {
+.unrevealed > td,
+.unrevealed > th {
     opacity: 0;
 }
 

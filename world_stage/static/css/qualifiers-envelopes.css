@@ -21,11 +21,11 @@
 }
 
 .card-back {
-    background: #f6eee3;
+    background: var(--card-dtf-bg);
 }
 
 .envelope.second-chance .card-back {
-    background: #e3f2f6;
+    background: var(--card-sc-bg);
 }
 
 .envelope-card {
@@ -38,11 +38,11 @@
 
 .envelope-card h2 {
     text-align: center;
-    color: black;
+    color: var(--card-text);
 }
 
 .envelope-number {
-    color: black;
+    color: var(--card-text);
     z-index: 99999;
 
     position: absolute;

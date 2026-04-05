@@ -1,11 +1,3 @@
-#controls, #navigation {
-    clear: both;
-    float: right;
-    background: lightblue;
-    border: 1px solid black;
-    padding: 0.5em;
-}
-
 #wrapper {
     height: 98vh;
     display: grid;
@@ -68,7 +60,7 @@
     width: 300px;
     box-sizing: content-box;
 
-    border: 2px solid grey;
+    border: 2px solid var(--border-subtle);
     padding: 0 0.25em;
 
     display: flex;
@@ -89,7 +81,7 @@
 }
 
 .country.revealed {
-    color: black;
+    color: var(--result-text);
     background-position: left;
 }
 
@@ -97,7 +89,7 @@
     width: 24px;
     max-height: 24px;
     object-fit: contain;
-    border: 1px solid lightgrey;
+    border: 1px solid var(--border-subtle);
 }
 
 .country .reveal-country {
@@ -127,22 +119,18 @@
     max-width: fit-content;
 }
 
-.hidden {
-    display: none;
-}
-
 table {
     border-collapse: collapse;
     width: max-content;
 }
 
 th, td {
-    border: 1px solid black;
+    border: 1px solid var(--foreground1);
     padding: 0.5em;
 }
 
 th {
-    background: lightgrey;
+    background: var(--background3);
     position: sticky;
     top: 0;
 }
@@ -175,7 +163,7 @@ td.revealable.revealed {
 td.results-country .results-flag {
     width: 24px;
     max-height: 24px;
-    border: 1px solid lightgray;
+    border: 1px solid var(--border-subtle);
 }
 
 .results-small-number-col {
@@ -183,12 +171,12 @@ td.results-country .results-flag {
 }
 
 .results-score, .results-voters {
-    border-left: 2px solid black;
-    border-right: 2px solid black;
+    border-left: 2px solid var(--foreground1);
+    border-right: 2px solid var(--foreground1);
 }
 
 .results-header {
-    border-bottom: 2px solid black;
+    border-bottom: 2px solid var(--foreground1);
 }
 
 .form-column-wrapper {

@@ -16,8 +16,8 @@ li > div {
 }
 
 li:target > div {
-    background: yellow;
-    color: black;
+    background: var(--target-bg);
+    color: var(--target-fg);
 }
 
 div.source-links {

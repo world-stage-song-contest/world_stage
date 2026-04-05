@@ -1,7 +1,3 @@
-.placeholder {
-    background-color: var(--background2);
-}
-
 .year {
     text-align: right;
     height: 28px;
@@ -23,7 +19,7 @@ td.pts-cell.no-entry   { border-left:  none; }
 
 /* ── Non-participation: plain grey ─────────────────────────────── */
 td.no-entry {
-    background-color: #e0e0e0;
+    background-color: var(--no-entry-bg);
     color: transparent;
 }
 

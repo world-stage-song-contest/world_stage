@@ -1,11 +1,3 @@
-#controls, #navigation {
-    clear: both;
-    float: right;
-    background: lightblue;
-    border: 1px solid black;
-    padding: 0.5em;
-}
-
 #pots, #shows {
     display: flex;
     gap: 0.5em;
@@ -22,7 +14,7 @@
 }
 
 .pot, .show {
-    border: 1px solid black;
+    border: 1px solid var(--foreground1);
 }
 
 .pot {
@@ -55,13 +47,13 @@
 
 .pot-item, .show-country {
     box-sizing: border-box;
-    border: 1px solid black;
+    border: 1px solid var(--foreground1);
     display: flex;
     align-items: center;
     gap: 0.25em;
     padding: 3.5px;
     height: 32px;
-    background: white;
+    background: var(--draw-item-bg);
 }
 
 .pot-item {
@@ -74,15 +66,15 @@
     width: 228px;
     top: calc(var(--row) * 36px);
     left: calc(var(--column) * 232px);
-    transition: top 2s, left 2s, background-color 0.1s;;
+    transition: top 2s, left 2s, background-color 0.1s;
 }
 
 .pot-item:last-child {
-    border-bottom: 1px solid black;
+    border-bottom: 1px solid var(--foreground1);
 }
 
 .active1 {
-    background-color: beige;
+    background-color: var(--draw-active1);
 }
 
 .active2 {

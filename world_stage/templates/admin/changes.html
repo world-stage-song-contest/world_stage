@@ -10,14 +10,14 @@
             font-weight: bold;
             white-space: nowrap;
         }
-        .event-create           { background: #d0f0d0; color: #005700; }
-        .event-song_modification      { background: #d0e8ff; color: #003870; }
-        .event-song_replacement { background: #fff0b3; color: #5a4000; }
-        .event-placeholder_on  { background: #e8d0ff; color: #3a0070; }
-        .event-placeholder_off { background: #d0f0e0; color: #005730; }
-        .event-delete          { background: #ffd0d0; color: #700000; }
+        .event-create           { background: var(--audit-create-bg); color: var(--audit-create-fg); }
+        .event-song_modification      { background: var(--audit-modification-bg); color: var(--audit-modification-fg); }
+        .event-song_replacement { background: var(--audit-replacement-bg); color: var(--audit-replacement-fg); }
+        .event-placeholder_on  { background: var(--audit-placeholder-on-bg); color: var(--audit-placeholder-on-fg); }
+        .event-placeholder_off { background: var(--audit-placeholder-off-bg); color: var(--audit-placeholder-off-fg); }
+        .event-delete          { background: var(--audit-delete-bg); color: var(--audit-delete-fg); }
         td.changed-fields    { font-size: 0.85em; max-width: 28em; word-break: break-word; }
-        .arrow { margin: 0 0.3em; color: #888; }
+        .arrow { margin: 0 0.3em; color: var(--audit-arrow); }
     </style>
 {% endblock %}
 {% block content %}

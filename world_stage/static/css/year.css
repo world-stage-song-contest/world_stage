@@ -12,10 +12,6 @@
     font-weight: bold;
 }
 
-.placeholder {
-    background-color: var(--background2);
-}
-
 .upcoming-year {
     border: 1px solid var(--foreground2);
     background: var(--background3);

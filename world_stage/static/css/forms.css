@@ -84,7 +84,7 @@ optgroup:empty {
 }
 
 input:read-only {
-    background-color: lightgrey;
+    background-color: var(--input-readonly);
 }
 
 @media (max-width: 600px) {

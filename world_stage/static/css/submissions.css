@@ -3,7 +3,3 @@
     align-items: center;
     gap: 0.5em;
 }
-
-.placeholder {
-    background-color: var(--background2);
-}

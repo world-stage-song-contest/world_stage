@@ -17,15 +17,15 @@
     gap: 10px;
     padding: 8px 12px;
     border-radius: 6px;
-    background: var(--surface, #fff);
-    border: 1px solid var(--border, #ddd);
+    background: var(--surface);
+    border: 1px solid var(--border-ui);
     cursor: grab;
     user-select: none;
     transition: box-shadow 0.15s, opacity 0.15s, background 0.15s;
 }
 
 .predictions-item:hover {
-    border-color: var(--accent, #888);
+    border-color: var(--accent);
 }
 
 .predictions-item.dragging {
@@ -35,8 +35,8 @@
 }
 
 .predictions-item.drag-over {
-    border-color: var(--accent, #555);
-    background: var(--surface-hover, #f0f0f0);
+    border-color: var(--accent);
+    background: var(--surface-hover);
 }
 
 /* Touch clone that follows the finger */
@@ -52,7 +52,7 @@
 
 .drag-handle {
     font-size: 18px;
-    color: var(--muted, #999);
+    color: var(--muted);
     cursor: grab;
     flex-shrink: 0;
     line-height: 1;
@@ -63,7 +63,7 @@
     text-align: right;
     font-weight: 700;
     font-size: 1rem;
-    color: var(--muted, #888);
+    color: var(--muted);
     flex-shrink: 0;
 }
 
@@ -90,7 +90,7 @@
 
 .song-meta {
     font-size: 0.82rem;
-    color: var(--muted, #777);
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -108,7 +108,7 @@
 
 .predictions-copy-wrap {
     margin-bottom: 20px;
-    border: 1px solid var(--border, #ddd);
+    border: 1px solid var(--border-ui);
     border-radius: 6px;
     overflow: hidden;
     max-width: 640px;
@@ -119,8 +119,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 6px 12px;
-    background: var(--surface, #f5f5f5);
-    border-bottom: 1px solid var(--border, #ddd);
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--border-ui);
     font-size: 0.85rem;
     font-weight: 600;
 }
@@ -140,7 +140,7 @@
     font-size: 0.85rem;
     border: none;
     resize: vertical;
-    background: var(--surface, #fff);
+    background: var(--surface);
     color: inherit;
 }
 
@@ -160,7 +160,7 @@
 
 .odds-bar {
     height: 14px;
-    background: var(--accent, #4a90d9);
+    background: var(--accent);
     border-radius: 3px;
     min-width: 2px;
     transition: width 0.3s;
@@ -202,7 +202,7 @@
 
 .predictor-detail {
     margin-bottom: 8px;
-    border: 1px solid var(--border, #ddd);
+    border: 1px solid var(--border-ui);
     border-radius: 6px;
     padding: 0 12px;
 }
@@ -233,6 +233,6 @@
 /* ── Admin index list ─────────────────────────────────────────────── */
 
 .muted {
-    color: var(--muted, #888);
+    color: var(--muted);
     font-size: 0.9rem;
 }
