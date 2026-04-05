@@ -205,6 +205,11 @@ def draw_final_post(year: int, show: str):
     db.commit()
     return {}, 204
 
+ALL_EVENT_TYPES = [
+    'create', 'delete', 'song_replacement', 'song_modification',
+    'placeholder_on', 'placeholder_off', 'ownership_change',
+]
+
 @bp.get('/changes')
 def changes():
     resp = verify_user()
@@ -216,6 +221,29 @@ def changes():
 
     cursor.execute("DELETE FROM song_audit_log WHERE changed_at < CURRENT_TIMESTAMP - interval '30 days'")
     db.commit()
+
+    per_page = 250
+
+    # Event type filtering
+    selected_events = request.args.getlist('events')
+    if not selected_events:
+        selected_events = list(ALL_EVENT_TYPES)
+    # Ensure only valid event types
+    selected_events = [e for e in selected_events if e in ALL_EVENT_TYPES]
+    if not selected_events:
+        selected_events = list(ALL_EVENT_TYPES)
+
+    # Count total matching entries
+    cursor.execute(
+        'SELECT COUNT(*) AS cnt FROM song_audit_log WHERE event_type = ANY(%s)',
+        (selected_events,)
+    )
+    total = cursor.fetchone()['cnt']
+    total_pages = max(1, math.ceil(total / per_page))
+
+    page = request.args.get('page', 1, type=int)
+    page = max(1, min(page, total_pages))
+    offset = (page - 1) * per_page
 
     cursor.execute('''
         SELECT
@@ -233,12 +261,19 @@ def changes():
         FROM song_audit_log sal
         LEFT JOIN account a ON a.id = sal.changed_by
         LEFT JOIN country c ON c.id = sal.song_country_id
+        WHERE sal.event_type = ANY(%s)
         ORDER BY sal.changed_at DESC
-        LIMIT 200
-    ''')
+        LIMIT %s OFFSET %s
+    ''', (selected_events, per_page, offset))
     changes = cursor.fetchall()
 
-    return render_template('admin/changes.html', changes=changes)
+    return render_template('admin/changes.html',
+                           changes=changes,
+                           page=page,
+                           total_pages=total_pages,
+                           total=total,
+                           all_event_types=ALL_EVENT_TYPES,
+                           selected_events=selected_events)
 
 @bp.get('/move')
 def move():

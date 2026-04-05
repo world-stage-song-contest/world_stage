@@ -15,13 +15,62 @@
         .event-song_replacement { background: var(--audit-replacement-bg); color: var(--audit-replacement-fg); }
         .event-placeholder_on  { background: var(--audit-placeholder-on-bg); color: var(--audit-placeholder-on-fg); }
         .event-placeholder_off { background: var(--audit-placeholder-off-bg); color: var(--audit-placeholder-off-fg); }
+        .event-ownership_change { background: var(--audit-ownership-bg); color: var(--audit-ownership-fg); }
         .event-delete          { background: var(--audit-delete-bg); color: var(--audit-delete-fg); }
         td.changed-fields    { font-size: 0.85em; max-width: 28em; word-break: break-word; }
         .arrow { margin: 0 0.3em; color: var(--audit-arrow); }
+
+        .filter-form {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75em;
+            margin-bottom: 1em;
+            padding: 0.5em;
+            background: var(--background3);
+            border: 1px solid var(--border-ui);
+        }
+        .filter-form label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3em;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            margin-top: 0.75em;
+            font-size: 0.9em;
+        }
+        .pagination a, .pagination span.current {
+            padding: 0.2em 0.6em;
+            border: 1px solid var(--border-subtle);
+            text-decoration: none;
+        }
+        .pagination span.current {
+            background: var(--foreground2);
+            color: var(--background2);
+            font-weight: bold;
+        }
     </style>
 {% endblock %}
 {% block content %}
-<h2>Song audit log <small style="font-weight:normal;font-size:0.65em">(last 200 entries)</small></h2>
+<h2>Song audit log <small style="font-weight:normal;font-size:0.65em">({{ total }} entries)</small></h2>
+
+<form method="get" action="{{ url_for('admin.changes') }}" class="filter-form">
+    <strong>Filter:</strong>
+    {% for et in all_event_types %}
+    <label>
+        <input type="checkbox" name="events" value="{{ et }}"
+               {{ 'checked' if et in selected_events else '' }}>
+        {{ et | replace('_', ' ') }}
+    </label>
+    {% endfor %}
+    <button type="submit">Apply</button>
+</form>
+
 <table>
     <thead>
         <tr>
@@ -68,6 +117,8 @@
                     {% if entry.changed_fields.artist.old != entry.changed_fields.artist.new %}
                         Artist: {{ entry.changed_fields.artist.old or '' }}<span class="arrow">→</span>{{ entry.changed_fields.artist.new or '' }}
                     {% endif %}
+                {% elif entry.event_type == 'ownership_change' and entry.changed_fields %}
+                    Submitter: {{ entry.changed_fields.submitter_id.old or '—' }}<span class="arrow">→</span>{{ entry.changed_fields.submitter_id.new or '—' }}
                 {% elif entry.event_type == 'song_modification' and entry.changed_fields %}
                     {{ entry.changed_fields.keys() | join(', ') }}
                 {% endif %}
@@ -79,4 +130,24 @@
     {% endif %}
     </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<nav class="pagination">
+    {% if page > 1 %}
+        <a href="{{ url_for('admin.changes', page=page-1, events=selected_events) }}">← Prev</a>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+            <span class="current">{{ p }}</span>
+        {% elif p <= 3 or p > total_pages - 3 or (p >= page - 2 and p <= page + 2) %}
+            <a href="{{ url_for('admin.changes', page=p, events=selected_events) }}">{{ p }}</a>
+        {% elif p == 4 or p == total_pages - 3 %}
+            <span>…</span>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+        <a href="{{ url_for('admin.changes', page=page+1, events=selected_events) }}">Next →</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

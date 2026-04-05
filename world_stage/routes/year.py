@@ -810,15 +810,9 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
     cursor = db.cursor()
 
     insert_after = -1
-    host = 'XX'
-    host_link = 'BAD LINK REPLACE ME THIS IS A BUG'
+    host = ''
+    host_link = ''
     if show_needs_host(show_data):
-        cursor.execute('''
-            SELECT COUNT(id) AS c FROM song_show
-            WHERE show_id = %s
-        ''', (show_data.id,))
-        insert_after = math.ceil(cursor.fetchone()['c'] / 2) - 1 # type: ignore
-
         cursor.execute('''
             SELECT LOWER(cc2) AS cc2, video_link FROM year
             JOIN country ON year.host = country.id
@@ -826,8 +820,14 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
             WHERE year.id = %(y)s AND song.year_id = %(y)s
         ''', {'y': show_data.year})
         data = cursor.fetchone()
-        host = data.get('cc2') or '' # type: ignore
-        host_link = data.get('video_link') or '' # type: ignore
+        if data:
+            cursor.execute('''
+                SELECT COUNT(id) AS c FROM song_show
+                WHERE show_id = %s
+            ''', (show_data.id,))
+            insert_after = math.ceil(cursor.fetchone()['c'] / 2) - 1 # type: ignore
+            host = data.get('cc2') or ''
+            host_link = data.get('video_link') or ''
 
     cursor.execute('''
         SELECT cc2, video_link FROM song

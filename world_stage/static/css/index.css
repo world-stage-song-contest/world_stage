@@ -92,6 +92,8 @@
     --audit-placeholder-off-fg:oklch(40.1% 0.098 155.5);
     --audit-delete-bg:         oklch(89.8% 0.053 18.2);
     --audit-delete-fg:         oklch(34.2% 0.140 29.2);
+    --audit-ownership-bg:      oklch(91.5% 0.055 54.8);
+    --audit-ownership-fg:      oklch(36.8% 0.120 48.2);
     --audit-arrow:             oklch(62.7% 0 none);
 
     /* Highlighted target */
@@ -180,6 +182,8 @@
         --audit-placeholder-off-fg:oklch(75.0% 0.098 155.5);
         --audit-delete-bg:         oklch(25.0% 0.053 18.2);
         --audit-delete-fg:         oklch(75.0% 0.140 29.2);
+        --audit-ownership-bg:      oklch(25.0% 0.055 54.8);
+        --audit-ownership-fg:      oklch(75.0% 0.120 48.2);
         --audit-arrow:             oklch(68.3% 0 none);
 
         --target-bg: oklch(40.9% 0.084 109.8);       /* same hue */
@@ -262,6 +266,8 @@
     --audit-placeholder-off-fg:oklch(40.1% 0.098 155.5);
     --audit-delete-bg:         oklch(89.8% 0.053 18.2);
     --audit-delete-fg:         oklch(34.2% 0.140 29.2);
+    --audit-ownership-bg:      oklch(91.5% 0.055 54.8);
+    --audit-ownership-fg:      oklch(36.8% 0.120 48.2);
     --audit-arrow:             oklch(62.7% 0 none);
 
     --target-bg: oklch(96.8% 0.211 109.8);
@@ -341,6 +347,8 @@
     --audit-placeholder-off-fg:oklch(75.0% 0.098 155.5);
     --audit-delete-bg:         oklch(25.0% 0.053 18.2);
     --audit-delete-fg:         oklch(75.0% 0.140 29.2);
+    --audit-ownership-bg:      oklch(25.0% 0.055 54.8);
+    --audit-ownership-fg:      oklch(75.0% 0.120 48.2);
     --audit-arrow:             oklch(68.3% 0 none);
 
     --target-bg: oklch(40.9% 0.084 109.8);
