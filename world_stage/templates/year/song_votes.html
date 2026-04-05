@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}{{ song.artist }} — {{ song.title }} | {{ year or '' }} {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
+    <style>
+        .song-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            margin-bottom: 1em;
+        }
+        .song-header h2 {
+            margin: 0;
+        }
+        .song-header .song-meta {
+            font-size: 0.9em;
+            color: var(--muted);
+        }
+        .vote-breakdown {
+            border-collapse: collapse;
+            width: 100%;
+            max-width: 60em;
+        }
+        .vote-breakdown th {
+            text-align: left;
+            padding: 0.4em 0.75em;
+        }
+        .vote-breakdown td {
+            padding: 0.4em 0.75em;
+            vertical-align: top;
+        }
+        .vote-breakdown .points-cell {
+            white-space: nowrap;
+            width: 14em;
+            vertical-align: top;
+        }
+        .points-cell strong {
+            font-size: 1.1em;
+        }
+        .points-cell .detail {
+            font-size: 0.85em;
+            color: var(--muted);
+        }
+        .voters-cell {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3em 1em;
+            align-items: center;
+            min-height: 2em;
+        }
+        .voter-entry {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25em;
+            white-space: nowrap;
+        }
+        .voter-entry a {
+            text-decoration: none;
+        }
+        .no-voters {
+            color: var(--muted);
+            font-style: italic;
+        }
+    </style>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
+    <span class="nav-separator"></span>
+    {% for other_show in other_shows %}
+    <a class="nav-item" href="{{ url_for('year.results', year=year, show=other_show) }}">{{ other_show|upper }}</a>
+    {% endfor %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
+    <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
+{% endblock %}
+{% block content %}
+<div class="song-header">
+    {{ flag(song.country_id, 32, song.country_name) }}
+    <div>
+        <h2>{{ song.artist }} — {{ song.title }}</h2>
+        <div class="song-meta">{{ song.country_name }} | {{ show_name }} | {{ total_points }} points from {{ voters_who_gave }} voter{{ 's' if voters_who_gave != 1 else '' }}</div>
+    </div>
+</div>
+
+<table class="vote-breakdown">
+    <thead>
+        <tr>
+            <th>Points</th>
+            <th>Juries who gave points</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for group in point_groups %}
+        <tr>
+            <td class="points-cell">
+                <strong>Awarded {{ group.points }} point{{ 's' if group.points != 1 else '' }}</strong><br>
+                <span class="detail">{{ group.voter_count }} voter{{ 's' if group.voter_count != 1 else '' }}</span><br>
+                <span class="detail">{{ group.total }} points</span>
+            </td>
+            <td>
+                <div class="voters-cell">
+                {% if group.voters %}
+                    {% for voter in group.voters %}
+                    <span class="voter-entry">
+                        {{ flag(voter.code, 21, voter.country_name) }}
+                        <a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>
+                    </span>
+                    {% endfor %}
+                {% endif %}
+                </div>
+            </td>
+        </tr>
+    {% endfor %}
+        <tr>
+            <td class="points-cell">
+                <strong>Gave no points</strong><br>
+                <span class="detail">{{ no_points_voters | length }} voter{{ 's' if no_points_voters | length != 1 else '' }}</span>
+            </td>
+            <td>
+                <div class="voters-cell">
+                {% if no_points_voters %}
+                    {% for voter in no_points_voters %}
+                    <span class="voter-entry">
+                        {{ flag(voter.code, 21, voter.country_name) }}
+                        <a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>
+                    </span>
+                    {% endfor %}
+                {% else %}
+                    <span class="no-voters">Everyone voted for this song!</span>
+                {% endif %}
+                </div>
+            </td>
+        </tr>
+    </tbody>
+</table>
+{% endblock %}

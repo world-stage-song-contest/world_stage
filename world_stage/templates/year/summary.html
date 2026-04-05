@@ -60,8 +60,8 @@
                 <th class="number">{{ ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
-                {% if not hidden and song.year is not none %}
-                <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">{{ song.title }}</a></td>
+                {% if not song.hidden and song.year is not none and access not in ('none', 'draw') %}
+                <td><a href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower()) }}">{{ song.title }}</a></td>
                 {% else %}
                 <td>{{ song.title }}</td>
                 {% endif %}

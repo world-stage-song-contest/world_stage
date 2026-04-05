@@ -1,12 +1,4 @@
-
-/* ══════════════════════════════════════════════════════════════════
-   All colours use oklch(Lightness Chroma Hue).
-   Dark-mode variants reuse the same Chroma + Hue with adjusted
-   Lightness so the palette stays consistent across modes.
-   ══════════════════════════════════════════════════════════════════ */
-
 :root {
-    /* Core chrome */
     --background1: oklch(97.6% 0 none);
     --foreground1: oklch(32.1% 0 none);
     --background2: oklch(88.5% 0.071 84.4);
@@ -16,7 +8,6 @@
     --link:         oklch(47.7% 0.172 259.5);
     --visited-link: oklch(52.2% 0.240 320.5);
 
-    /* Entry highlights */
     --active-entry-color: oklch(66.6% 0.141 262.0);
     --own-entry-color:    oklch(73.2% 0.152 28.1);
 
@@ -26,7 +17,6 @@
     --qualifier-color:    oklch(85.8% 0.159 144.0);
     --sc-qualifier-color: oklch(89.3% 0.071 195.9);
 
-    /* Syntax palette */
     --red:     oklch(45.9% 0.175 27.7);
     --green:   oklch(43.6% 0.148 142.5);
     --yellow:  oklch(65.4% 0.134 85.7);
@@ -34,7 +24,6 @@
     --magenta: oklch(48.6% 0.144 328.5);
     --cyan:    oklch(61.3% 0.100 222.1);
 
-    /* Semantic */
     --placeholder-bg: oklch(88.5% 0.071 84.4);
     --error:          oklch(52.3% 0.215 29.2);
     --success:        oklch(52.0% 0.177 142.5);
@@ -48,7 +37,6 @@
     --no-entry-bg:    oklch(90.7% 0 none);
     --input-readonly: oklch(93.1% 0 none);
 
-    /* Results highlights (same in both modes) */
     --result-dtf:    oklch(91.6% 0.073 77.4);
     --result-sc:     oklch(90.7% 0.063 196.1);
     --result-gold:   oklch(88.7% 0.182 95.3);
@@ -57,29 +45,23 @@
     --result-last:   oklch(74.3% 0.154 21.5);
     --result-text:   oklch(0% 0 none);
 
-    /* Controls / admin panels */
     --controls-bg:     oklch(85.6% 0.049 219.7);
     --controls-border: oklch(32.1% 0 none);
 
-    /* Draw */
     --draw-item-bg: oklch(100% 0 none);
     --draw-active1: oklch(96.4% 0.033 107.0);
 
-    /* Bias heatmap */
     --bias-text: oklch(100% 0 none);
 
-    /* Scoreboard */
     --scoreboard-led-bg:    oklch(0% 0 none);
     --scoreboard-led-color: oklch(61.6% 0.226 33.2);
     --scoreboard-led-alt:   oklch(49.3% 0.174 34.6);
     --jury-bar:             oklch(52.0% 0.177 142.5);
 
-    /* Envelope card */
     --card-dtf-bg: oklch(95.2% 0.017 76.1);
     --card-sc-bg:  oklch(95.1% 0.017 215.5);
     --card-text:   oklch(0% 0 none);
 
-    /* Audit log badges — light: L≈92% bg, L≈35% fg */
     --audit-create-bg:         oklch(92.3% 0.054 145.1);
     --audit-create-fg:         oklch(39.6% 0.135 142.5);
     --audit-modification-bg:   oklch(92.1% 0.040 247.1);
@@ -96,42 +78,39 @@
     --audit-ownership-fg:      oklch(36.8% 0.120 48.2);
     --audit-arrow:             oklch(62.7% 0 none);
 
-    /* Highlighted target */
     --target-bg: oklch(96.8% 0.211 109.8);
     --target-fg: oklch(0% 0 none);
 }
-
-/* ── Dark mode: same hue + chroma, adjusted lightness ──────────── */
 
 @media (prefers-color-scheme: dark) {
     :root {
         --background1: oklch(17.8% 0 none);
         --foreground1: oklch(94.9% 0 none);
-        --background2: oklch(31.3% 0.041 255.4);   /* fg2 hue, dimmed */
-        --foreground2: oklch(88.5% 0.071 84.4);     /* bg2 hue, bright */
+        --background2: oklch(31.3% 0.041 255.4);
+        --foreground2: oklch(88.5% 0.071 84.4);
         --background3: oklch(23.1% 0 none);
         --background4: oklch(25.2% 0 none);
-        --link:         oklch(58.3% 0.175 259.5);   /* same hue, +L */
+        --link:         oklch(58.3% 0.175 259.5);
         --visited-link: oklch(61.2% 0.269 320.5);
 
         --active-entry-color: oklch(35.2% 0.103 262.0);
         --own-entry-color:    oklch(41.9% 0.121 28.1);
 
-        --dtf-color: oklch(45.0% 0.073 77.4);       /* same C+H, dark */
+        --dtf-color: oklch(45.0% 0.073 77.4);
         --sc-color:  oklch(45.0% 0.063 196.1);
 
         --qualifier-color:    oklch(43.9% 0.149 144.0);
         --sc-qualifier-color: oklch(54.9% 0.046 195.9);
 
-        --red:     oklch(64.8% 0.210 27.7);         /* same hue, +L */
+        --red:     oklch(64.8% 0.210 27.7);
         --green:   oklch(63.2% 0.109 142.5);
         --yellow:  oklch(88.2% 0.066 85.7);
         --blue:    oklch(67.1% 0.112 248.5);
         --magenta: oklch(70.2% 0.109 328.5);
         --cyan:    oklch(76.0% 0.115 222.1);
 
-        --placeholder-bg: oklch(42.1% 0.043 84.4);  /* same hue as bg2, dark */
-        --error:          oklch(70.2% 0.190 29.2);   /* same hue, +L */
+        --placeholder-bg: oklch(25% 0.075 12);
+        --error:          oklch(70.2% 0.190 29.2);
         --success:        oklch(75.3% 0.158 142.5);
         --muted:          oklch(68.3% 0 none);
         --border-subtle:  oklch(51.0% 0 none);
@@ -143,7 +122,6 @@
         --no-entry-bg:    oklch(32.1% 0 none);
         --input-readonly: oklch(32.1% 0 none);
 
-        /* Results: identical to light mode */
         --result-dtf:    oklch(91.6% 0.073 77.4);
         --result-sc:     oklch(90.7% 0.063 196.1);
         --result-gold:   oklch(88.7% 0.182 95.3);
@@ -152,11 +130,11 @@
         --result-last:   oklch(74.3% 0.154 21.5);
         --result-text:   oklch(0% 0 none);
 
-        --controls-bg:     oklch(33.6% 0.049 219.7); /* same hue, dark */
+        --controls-bg:     oklch(33.6% 0.049 219.7);
         --controls-border: oklch(51.0% 0 none);
 
         --draw-item-bg: oklch(28.5% 0 none);
-        --draw-active1: oklch(32.8% 0.035 107.0);    /* same hue */
+        --draw-active1: oklch(32.8% 0.035 107.0);
 
         --bias-text: oklch(100% 0 none);
 
@@ -165,11 +143,10 @@
         --scoreboard-led-alt:   oklch(49.3% 0.174 34.6);
         --jury-bar:             oklch(56.3% 0.164 142.5);
 
-        --card-dtf-bg: oklch(31.0% 0.032 76.1);      /* same hue, dark */
+        --card-dtf-bg: oklch(31.0% 0.032 76.1);
         --card-sc-bg:  oklch(29.3% 0.031 215.5);
         --card-text:   oklch(94.9% 0 none);
 
-        /* Audit dark: bg L≈25%, fg L≈75% — same C+H as light */
         --audit-create-bg:         oklch(25.0% 0.054 145.1);
         --audit-create-fg:         oklch(75.0% 0.135 142.5);
         --audit-modification-bg:   oklch(25.0% 0.040 247.1);
@@ -186,12 +163,10 @@
         --audit-ownership-fg:      oklch(75.0% 0.120 48.2);
         --audit-arrow:             oklch(68.3% 0 none);
 
-        --target-bg: oklch(40.9% 0.084 109.8);       /* same hue */
+        --target-bg: oklch(40.9% 0.084 109.8);
         --target-fg: oklch(94.9% 0 none);
     }
 }
-
-/* ── Explicit overrides for cookie-based theme toggle ──────────── */
 
 :root[data-theme="light"] {
     --background1: oklch(97.6% 0 none);
@@ -297,7 +272,7 @@
     --magenta: oklch(70.2% 0.109 328.5);
     --cyan:    oklch(76.0% 0.115 222.1);
 
-    --placeholder-bg: oklch(42.1% 0.043 84.4);
+    --placeholder-bg: oklch(25% 0.075 12);
     --error:          oklch(70.2% 0.190 29.2);
     --success:        oklch(75.3% 0.158 142.5);
     --muted:          oklch(68.3% 0 none);
