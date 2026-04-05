@@ -12,22 +12,13 @@ async function onLoad() {
         await populateSongData();
     } else {
         yearSelect.value = '';
-        const form = document.forms.submit_song;
-        for (const element of form.elements) {
-            if (element.tagName === 'SELECT' || element.tagName === 'TEXTAREA') {
-                element.value = '';
-            } else if (element.tagName === 'INPUT') {
-                if (element.type === 'checkbox' || element.type === 'radio') {
-                    element.checked = false;
-                } else {
-                    element.value = '';
-                }
-            }
-        }
+        clearFormFields();
     }
 
     const doesMatchCb = document.getElementById('does_match');
-    doesMatchCb.checked = true;
+    if (!yearVal || !countryVal) {
+        doesMatchCb.checked = true;
+    }
     toggleTitleLanguageSelect(doesMatchCb);
 
     document.querySelectorAll('.time-input').forEach(el => {
@@ -42,6 +33,57 @@ async function onLoad() {
             el.value = value;
         });
     });
+}
+
+function clearFormFields() {
+    const form = document.forms.submit_song;
+    for (const element of form.elements) {
+        // Skip year, country, action buttons, and language management buttons
+        if (element.name === 'year' || element.name === 'country' || element.name === 'action') continue;
+        if (element.type === 'button' || element.type === 'submit') continue;
+
+        if (element.tagName === 'SELECT') {
+            element.value = '';
+        } else if (element.tagName === 'TEXTAREA') {
+            element.value = '';
+        } else if (element.tagName === 'INPUT') {
+            if (element.type === 'checkbox' || element.type === 'radio') {
+                element.checked = false;
+            } else {
+                element.value = '';
+            }
+        }
+    }
+
+    // Reset to a single language row
+    resetLanguageRows();
+
+    // Reset does_match to checked (default)
+    const doesMatchCb = document.getElementById('does_match');
+    doesMatchCb.checked = true;
+    toggleTitleLanguageSelect(doesMatchCb);
+
+    // Reset force_submitter if present
+    const forceSubmitter = document.getElementById('force_submitter');
+    if (forceSubmitter) {
+        forceSubmitter.value = 'none';
+    }
+}
+
+function resetLanguageRows() {
+    const insertBefore = document.querySelector('#language-insert-before');
+    // Remove all language rows except the first one
+    const labels = document.querySelectorAll('.language-label');
+    const selects = document.querySelectorAll('.language-select');
+    for (let i = labels.length - 1; i >= 1; i--) {
+        labels[i].remove();
+        selects[i].remove();
+    }
+    // Clear the first language select
+    if (selects.length > 0) {
+        selects[0].value = '';
+    }
+    document.getElementById('remove-language-button').disabled = true;
 }
 
 function toggleTitleLanguageSelect(checkbox) {
@@ -82,7 +124,7 @@ function clearError() {
     const errorMessage = document.getElementById('error-message');
     errorMessage.textContent = '';
     errorMessage.classList.add('hidden');
-        for (const element of document.querySelectorAll('.hidable')) {
+    for (const element of document.querySelectorAll('.hidable')) {
         element.classList.remove('hidden');
     }
 }
@@ -95,12 +137,13 @@ function addLanguageRow() {
     const newLanguageLabel = languageLabel.cloneNode(true);
     const n = newLanguageLabel.dataset.n;
     newLanguageLabel.dataset.n = parseInt(n) + 1;
-    newLanguageLabel.htmlFor = `language${n}`;
+    newLanguageLabel.htmlFor = `language${parseInt(n) + 1}`;
     newLanguageLabel.textContent = `Language ${parseInt(n) + 1}`;
     const newLanguageSelect = languageSelect.cloneNode(true);
     newLanguageSelect.name = `language${parseInt(n) + 1}`;
     newLanguageSelect.id = `language${parseInt(n) + 1}`;
     newLanguageSelect.dataset.n = parseInt(n) + 1;
+    newLanguageSelect.value = '';
 
     insertBefore.parentNode.insertBefore(newLanguageLabel, insertBefore);
     insertBefore.parentNode.insertBefore(newLanguageSelect, insertBefore);
@@ -131,6 +174,10 @@ async function populateCountries(yearSelect) {
 
     const countries = countriesData.countries;
     clearCountriesSelect();
+    const countrySelect = document.getElementById('country');
+    countrySelect.value = '';
+    clearFormFields();
+
     const ownGroup = document.getElementById('own-countries');
     const availableGroup = document.getElementById('available-countries');
 
@@ -162,9 +209,18 @@ async function populateSongData() {
     const year = yearSelect.value;
     const country = countrySelect.value;
     if (year === '' || country === '') {
+        clearFormFields();
         return;
     }
     const songData = await fetchSongData(year, country);
+
+    // Clear form before populating with new data
+    clearFormFields();
+
+    if (songData.error) {
+        // No existing song — form is already cleared, ready for new entry
+        return;
+    }
 
     const languages = songData.languages;
     delete songData.languages;
@@ -174,7 +230,7 @@ async function populateSongData() {
         try {
             const forceSubmitter = document.getElementById('force_submitter');
             if (forceSubmitter && key == "user_id") {
-                document.getElementById('force_submitter').value = value;
+                forceSubmitter.value = value;
                 continue;
             }
             const newVal = value === null ? '' : value;
@@ -197,6 +253,8 @@ async function populateSongData() {
         }
     }
 
+    // Reset language rows, then add the right number
+    resetLanguageRows();
     for (const [i, {id, name}] of languages.entries()) {
         if (i != 0) {
             addLanguageRow();
@@ -204,4 +262,8 @@ async function populateSongData() {
         const languageSelect = document.querySelector(`#language${i + 1}`);
         languageSelect.value = id;
     }
+
+    // Update does_match visibility
+    const doesMatchCb = document.getElementById('does_match');
+    toggleTitleLanguageSelect(doesMatchCb);
 }

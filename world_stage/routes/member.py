@@ -521,7 +521,7 @@ def get_country_data(year: int, country: str):
     song_data = SongData(
         year=year,
         country=country,
-        is_placeholder=bool(is_placeholder) and user_id is not None and user_id != submitter_id,
+        is_placeholder=bool(is_placeholder),
         snippet_start=snippet_start,
         snippet_end=snippet_end,
         languages=languages,
