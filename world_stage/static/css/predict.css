@@ -15,14 +15,22 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 8px 12px 8px 14px;
     border-radius: 6px;
     background: var(--surface);
     border: 1px solid var(--border-ui);
+    border-left: 6px solid var(--border-ui);
     cursor: grab;
     user-select: none;
-    transition: box-shadow 0.15s, opacity 0.15s, background 0.15s;
+    transition: box-shadow 0.15s, opacity 0.15s, background 0.15s, border-left-color 0.15s;
 }
+
+.predictions-item.pred-first           { border-left-color: var(--result-gold); }
+.predictions-item.pred-second          { border-left-color: var(--result-silver); }
+.predictions-item.pred-third           { border-left-color: var(--result-bronze); }
+.predictions-item.pred-direct-to-final { border-left-color: var(--result-dtf); }
+.predictions-item.pred-second-chance   { border-left-color: var(--result-sc); }
+.predictions-item.pred-last            { border-left-color: var(--result-last); }
 
 .predictions-item:hover {
     border-color: var(--accent);
@@ -51,11 +59,14 @@
 }
 
 .drag-handle {
-    font-size: 18px;
+    font-size: 22px;
     color: var(--muted);
     cursor: grab;
     flex-shrink: 0;
     line-height: 1;
+    padding: 8px 6px;
+    margin: -8px -2px;
+    touch-action: none;
 }
 
 .position-label {
@@ -155,14 +166,21 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    min-width: 160px;
+}
+
+.odds-bar-track {
+    width: 140px;
+    height: 14px;
+    background: rgba(127, 127, 127, 0.2);
+    border-radius: 3px;
+    overflow: hidden;
+    flex: 0 0 140px;
 }
 
 .odds-bar {
-    height: 14px;
+    height: 100%;
     background: var(--accent);
     border-radius: 3px;
-    min-width: 2px;
     transition: width 0.3s;
 }
 
@@ -170,6 +188,17 @@
     font-size: 0.9rem;
     white-space: nowrap;
 }
+
+/* Coloured left strip indicating predicted finishing position.
+   Uses an inset box-shadow on the first cell so it shows through
+   border-collapse table borders. */
+.predicted-first           > td:first-child { box-shadow: inset 5px 0 0 0 var(--result-gold); }
+.predicted-second          > td:first-child { box-shadow: inset 5px 0 0 0 var(--result-silver); }
+.predicted-third           > td:first-child { box-shadow: inset 5px 0 0 0 var(--result-bronze); }
+.predicted-direct-to-final > td:first-child { box-shadow: inset 5px 0 0 0 var(--result-dtf); }
+.predicted-second-chance   > td:first-child { box-shadow: inset 5px 0 0 0 var(--result-sc); }
+.predicted-last            > td:first-child { box-shadow: inset 5px 0 0 0 var(--result-last); }
+.predicted-row > td:first-child { padding-left: 10px; }
 
 /* ── Admin predictions grid ─────────────────────────────────────── */
 

@@ -339,7 +339,8 @@ def predict(show: str):
     return render_template('vote/predict.html',
                            songs=songs, show=show, show_name=show_data.name,
                            year=show_data.year, prediction_count=prediction_count,
-                           has_existing=has_existing)
+                           has_existing=has_existing,
+                           dtf=show_data.dtf or 0, sc=show_data.sc or 0)
 
 
 @bp.post('/<show>/predict')
@@ -405,7 +406,8 @@ def predict_post(show: str):
         return render_template('vote/predict.html',
                                songs=songs, show=show, show_name=show_data.name,
                                year=show_data.year, prediction_count=prediction_count,
-                               has_existing=False, errors=errors), 400
+                               has_existing=False, errors=errors,
+                               dtf=show_data.dtf or 0, sc=show_data.sc or 0), 400
 
     db = get_db()
     cursor = db.cursor()

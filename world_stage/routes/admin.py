@@ -219,9 +219,6 @@ def changes():
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("DELETE FROM song_audit_log WHERE changed_at < CURRENT_TIMESTAMP - interval '30 days'")
-    db.commit()
-
     per_page = 250
 
     # Event type filtering
@@ -267,8 +264,26 @@ def changes():
     ''', (selected_events, per_page, offset))
     changes = cursor.fetchall()
 
+    # Resolve submitter IDs to usernames for ownership_change entries.
+    submitter_ids: set[int] = set()
+    for entry in changes:
+        if entry['event_type'] == 'ownership_change' and entry['changed_fields']:
+            cf = entry['changed_fields']
+            if 'submitter_id' in cf:
+                for key in ('old', 'new'):
+                    val = cf['submitter_id'].get(key)
+                    if val is not None:
+                        submitter_ids.add(int(val))
+    username_map: dict = {}
+    if submitter_ids:
+        cursor.execute('SELECT id, username FROM account WHERE id = ANY(%s)', (list(submitter_ids),))
+        for row in cursor.fetchall():
+            username_map[row['id']] = row['username']
+            username_map[str(row['id'])] = row['username']
+
     return render_template('admin/changes.html',
                            changes=changes,
+                           username_map=username_map,
                            page=page,
                            total_pages=total_pages,
                            total=total,

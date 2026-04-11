@@ -31,6 +31,7 @@
                 <th class="sticky">Country</th>
                 <th>Artist</th>
                 <th>Title</th>
+                <th title="Predicted finishing position (weighted prediction points)">Place</th>
                 <th title="Probability of qualifying based on predictions">
                     {% if n_qualifiers > 0 %}Qualify odds{% else %}Win odds{% endif %}
                 </th>
@@ -48,7 +49,8 @@
             {% set prob = odds[song.id] %}
             {# bar width: probability as % of the maximum possible value (1.0 for a single qualifier) #}
             {% set bar_pct = [prob * 100, 100] | min %}
-            <tr>
+            {% set pclass = predicted_class.get(song.id) %}
+            <tr class="predicted-row{% if pclass %} predicted-{{ pclass }}{% endif %}">
                 <td class="number header-like">{{ song.vote_data.ro if song.vote_data else '—' }}</td>
                 <td class="sticky">
                     <div class="country">
@@ -62,9 +64,12 @@
                 {% else %}
                 <td>{{ song.title }}</td>
                 {% endif %}
+                <td class="number" data-value="{{ pred_rank[song.id] }}">{{ pred_rank[song.id] }}</td>
                 <td class="number" data-value="{{ prob }}">
                     <div class="odds-bar-wrap">
-                        <div class="odds-bar" style="width: {{ bar_pct }}%"></div>
+                        <div class="odds-bar-track">
+                            <div class="odds-bar" style="width: {{ bar_pct }}%"></div>
+                        </div>
                         <span class="odds-label">{{ "%.2f"|format(prob * 100) }}%</span>
                     </div>
                 </td>

@@ -118,7 +118,7 @@
                         Artist: {{ entry.changed_fields.artist.old or '' }}<span class="arrow">→</span>{{ entry.changed_fields.artist.new or '' }}
                     {% endif %}
                 {% elif entry.event_type == 'ownership_change' and entry.changed_fields %}
-                    Submitter: {{ entry.changed_fields.submitter_id.old or '—' }}<span class="arrow">→</span>{{ entry.changed_fields.submitter_id.new or '—' }}
+                    Submitter: {{ username_map.get(entry.changed_fields.submitter_id.old, '—') }}<span class="arrow">→</span>{{ username_map.get(entry.changed_fields.submitter_id.new, '—') }}
                 {% elif entry.event_type == 'song_modification' and entry.changed_fields %}
                     {{ entry.changed_fields.keys() | join(', ') }}
                 {% endif %}

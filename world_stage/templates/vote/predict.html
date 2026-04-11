@@ -27,7 +27,7 @@
 </div>
 
 <form method="POST" id="predict-form">
-    <fieldset class="predictions" id="sortable-list">
+    <fieldset class="predictions" id="sortable-list" data-dtf="{{ dtf }}" data-sc="{{ sc }}">
         <legend>Your predicted ranking</legend>
         {% for song in songs %}
         <div class="predictions-item" draggable="true" data-song-id="{{ song.id }}">
@@ -35,7 +35,7 @@
             <span class="position-label">{{ loop.index }}</span>
             <input type="hidden" name="{{ song.id }}" value="{{ loop.index }}" class="position-input">
             <div class="song-details">
-                {{ flag(song.country.cc, 40, song.country.name) }}
+                {{ flag(song.country.cc, 42, song.country.name) }}
                 <div class="song-text">
                     <span class="song-title">{{ song.title }}</span>
                     <span class="song-meta">{{ song.artist }} · {{ song.country.name }}</span>
@@ -105,6 +105,9 @@
     let touchOffsetY = 0;
 
     list.addEventListener('touchstart', function (e) {
+        // Only start a drag when the touch begins on the drag handle,
+        // so the rest of the card stays scrollable on mobile.
+        if (!e.target.closest('.drag-handle')) return;
         touchItem = e.target.closest('.predictions-item');
         if (!touchItem) return;
         const touch = e.touches[0];
@@ -146,13 +149,38 @@
         updatePositions();
     }, { passive: true });
 
+    const POS_CLASSES = ['pred-first', 'pred-second', 'pred-third',
+                         'pred-direct-to-final', 'pred-second-chance', 'pred-last'];
+    const dtf = parseInt(list.dataset.dtf || '0', 10);
+    const sc = parseInt(list.dataset.sc || '0', 10);
+    const isFinal = (dtf + sc) <= 0;
+
+    function classForPosition(pos, total) {
+        if (pos === 1) return 'pred-first';
+        if (pos === 2) return 'pred-second';
+        if (pos === 3) return 'pred-third';
+        if (pos === total) return 'pred-last';
+        if (!isFinal) {
+            if (pos <= dtf) return 'pred-direct-to-final';
+            if (pos <= dtf + sc) return 'pred-second-chance';
+        }
+        return null;
+    }
+
     function updatePositions() {
-        list.querySelectorAll('.predictions-item').forEach(function (item, idx) {
+        const items = list.querySelectorAll('.predictions-item');
+        const total = items.length;
+        items.forEach(function (item, idx) {
             const pos = idx + 1;
             item.querySelector('.position-label').textContent = pos;
             item.querySelector('.position-input').value = pos;
+            POS_CLASSES.forEach(function (c) { item.classList.remove(c); });
+            const cls = classForPosition(pos, total);
+            if (cls) item.classList.add(cls);
         });
     }
+
+    updatePositions();
 }());
 </script>
 

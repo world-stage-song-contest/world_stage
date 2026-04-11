@@ -57,6 +57,19 @@ tr.sc-qualifier > td {
     text-align: right;
 }
 
+.result-data {
+    white-space: nowrap;
+    text-align: right;
+    border-left: none !important;
+}
+
+.user-votes td:nth-child(2) {
+    border-right: none !important;
+}
+.user-votes td:nth-child(3) {
+    border-left: none !important;
+}
+
 .song-container {
     display: flex;
     align-items: center;

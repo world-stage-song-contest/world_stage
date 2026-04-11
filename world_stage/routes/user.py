@@ -86,7 +86,7 @@ def votes(username: str):
     user_id = user_id['id']
 
     cursor.execute('''
-        SELECT vote_set.id, account.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id, show.access_type FROM vote_set
+        SELECT vote_set.id, vote_set.show_id, account.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id, show.access_type FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         JOIN show ON vote_set.show_id = show.id
         WHERE vote_set.voter_id = %s AND (show.access_type = 'full' OR show.access_type = 'partial')
@@ -96,6 +96,7 @@ def votes(username: str):
     for row in cursor.fetchall():
         val = {
             'id': row['id'],
+            'show_id': row['show_id'],
             'username': row['username'],
             'nickname': row['nickname'] or username,
             'code': row['country_id'],
@@ -106,6 +107,19 @@ def votes(username: str):
             'year': row['year_id']
         }
         votes.append(val)
+
+    # Batch-fetch show results for all shows this user voted in,
+    # keyed by (show_id, song_id) → place.
+    show_ids = list({v['show_id'] for v in votes})
+    show_results: dict[tuple[int, int], int] = {}
+    if show_ids:
+        cursor.execute('''
+            SELECT show_id, song_id, place
+            FROM country_show_results
+            WHERE show_id = ANY(%s)
+        ''', (show_ids,))
+        for row in cursor.fetchall():
+            show_results[(row['show_id'], row['song_id'])] = row['place']
 
     for vote in votes:
         cursor.execute('''
@@ -121,6 +135,7 @@ def votes(username: str):
                 redact_song_if_show(val, vote['year'], 'f', vote['access_type'])
                 if vote['short_name'] != 'sc':
                     redact_song_if_show(val, vote['year'], 'sc', vote['access_type'])
+            val['result_place'] = show_results.get((vote['show_id'], val['id']))
             songs.append(val)
 
         vote['points'] = songs

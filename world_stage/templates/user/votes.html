@@ -20,8 +20,9 @@
         <tbody>
         {% for v in vote.points %}
             <tr class="{{ v.class }}">
+                <td class="points-data">{{ v.pts }}p</td>
                 <td><div class="song-container">{{ flag(v.code, 36) }} <div class="song-title">{{ v.title }}</div></div></td>
-                <td class="points-data">{{ v.pts}} pts</td>
+                <td class="result-data">{% if v.result_place %}{{ v.result_place }}{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>

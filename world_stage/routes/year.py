@@ -675,95 +675,101 @@ def qualifiers_scores(year: str, show: str):
     return {'countries': countries,'reveal_order': {'dtf': dtf_countries, 'sc': sc_countries},
             'dtf': show_data.dtf, 'sc': show_data.sc or 0, 'special': show_data.special or 0}
 
-def _compute_prediction_odds(
+def _compute_qualification_odds(
     songs: list,
     pred_by_set: dict,
     n_predictors: int,
     n_qualifiers: int,
 ) -> dict[int, float]:
     """
-    Compute qualifying probability for each song from prediction data.
+    Compute qualification probability for each song in a semifinal.
 
-    Based on the World Stage predictions spreadsheet formula:
-    1. Ranking points per predictor: 12 * 0.827^(position - 1)
-    2. Qualifier flag per predictor: 1 if predicted position <= n_qualifiers else 0
-    3. Combined raw score using place percentage, points percentage and qualifier fraction
-    4. Normalised so that sum of all probabilities = n_qualifiers
+    Mean-rank sigmoid model: for each song we compute a smoothed average
+    rank across all predictors (with a neutral Beta-style prior pulling
+    toward the middle of the leaderboard), then pass it through a logistic
+    centred at the qualifier cutoff (N + 0.5). Lower-rank predictions
+    (closer to 1) dominate, so a song with many 1st-place picks scores
+    very highly even if a few predictors had it much lower.
 
-    For finals (n_qualifiers == 0) every song is treated as a potential qualifier
-    and results are normalised so they sum to n_songs (average probability = 1.0).
+    Properties of this formula:
+    - Songs unanimously ranked in the top N approach 1.0.
+    - Songs unanimously ranked outside the top N approach 0.0.
+    - A song with mean rank exactly at the cutoff sits at 0.5.
+    - 1st-place picks pull the score up much harder than mid-table picks
+      pull it down (because the sigmoid saturates well above the cutoff).
+    - Sum of probabilities does NOT need to equal N — they are independent
+      per-song qualification probabilities.
+    """
+    n_songs = len(songs)
+    if n_predictors == 0 or n_songs == 0 or n_qualifiers <= 0:
+        return {song.id: 0.0 for song in songs}
 
-    Returns a dict of {song_id: probability} where sum(values) == effective_n_qualifiers.
+    cutoff = n_qualifiers + 0.5
+    # Temperature scales with show size so the transition zone covers
+    # roughly the same fraction of the leaderboard regardless of n_songs.
+    temperature = max(1.5, n_songs / 8.0)
+    # Neutral prior rank — sits at the middle of the field.
+    prior_rank = (n_songs + 1) / 2.0
+    prior_weight = 1.0
+
+    odds: dict[int, float] = {}
+    for song in songs:
+        rank_sum = prior_rank * prior_weight
+        weight_sum = prior_weight
+        for set_preds in pred_by_set.values():
+            pos = set_preds.get(song.id, n_songs)
+            rank_sum += pos
+            weight_sum += 1.0
+        mean_rank = rank_sum / weight_sum
+        # Logistic centred at cutoff: mean_rank << cutoff → ~1, >> cutoff → ~0.
+        odds[song.id] = 1.0 / (1.0 + math.exp((mean_rank - cutoff) / temperature))
+
+    return odds
+
+
+def _compute_winning_odds(
+    songs: list,
+    pred_by_set: dict,
+    n_predictors: int,
+) -> dict[int, float]:
+    """
+    Compute winning probability for each song in a final.
+
+    Plackett–Luce / softmax model: for each predictor we convert their
+    full ranking into a per-song winning probability via
+        score(s) = exp(-k * (rank(s) - 1))
+        P_i(s wins) = score(s) / sum_j score(j)
+    Then we average those distributions across all predictors.
+
+    Properties:
+    - Probabilities for all songs sum to exactly 1.0 (it's a true win
+      probability distribution).
+    - A song unanimously ranked 1st gets ≈1.0, with the rest sharing tiny
+      shares from the exponential tail.
+    - k controls how peaked the per-predictor distribution is. k≈0.55 puts
+      the 2nd-place share at ~58% of the 1st-place share, which feels
+      realistic for a strong-but-beatable favourite.
+    - High disagreement spreads the mass across multiple songs naturally.
     """
     n_songs = len(songs)
     if n_predictors == 0 or n_songs == 0:
         return {song.id: 0.0 for song in songs}
 
-    # For shows without an explicit qualifier count (e.g. grand finals) treat
-    # all songs as eligible so the normalisation denominator is meaningful.
-    effective_n_qual = n_qualifiers if n_qualifiers > 0 else n_songs
+    k = 0.55  # decay rate per rank
+    accumulator: dict[int, float] = {song.id: 0.0 for song in songs}
 
-    raw: dict[int, float] = {}
-    for song in songs:
-        positions = [set_preds.get(song.id, n_songs) for set_preds in pred_by_set.values()]
+    for set_preds in pred_by_set.values():
+        scores: dict[int, float] = {}
+        for song in songs:
+            rank = set_preds.get(song.id, n_songs)
+            scores[song.id] = math.exp(-k * (rank - 1))
+        total = sum(scores.values())
+        if total <= 0:
+            continue
+        for sid, score in scores.items():
+            accumulator[sid] += score / total
 
-        # PlacePct: 1 = predicted 1st, 0 = predicted last
-        avg_rank = sum(positions) / n_predictors
-        place_pct = (1 - (avg_rank - 1) / (n_songs - 1)) if n_songs > 1 else 1.0
-
-        # PtsPct: average ranking points normalised by (n_predictors * 12)
-        avg_pts = sum(12 * (0.827 ** (p - 1)) for p in positions) / n_predictors
-        pts_pct = avg_pts / (n_predictors * 12)
-
-        # QPct: AVERAGE(1, qual_flag_1, …) — always positive, biased toward qualifying
-        qual_flags = [1 if pos <= effective_n_qual else 0 for pos in positions]
-        q_pct = (1 + sum(qual_flags)) / (1 + n_predictors)
-
-        # QBonus: extra weight based on whether the average prediction is a qualifier
-        is_avg_qual = avg_rank <= effective_n_qual
-        q_bonus = 0.125 * (2 * place_pct if is_avg_qual else 8 * pts_pct)
-
-        # Raw score (A4 = 0.1 is the spreadsheet baseline constant)
-        raw_val = (0.1 + place_pct * pts_pct) * (q_pct + 0.05) + q_bonus
-        res = (0.9 + raw_val * 0.04) if raw_val > 0.9 else (raw_val + 0.01)
-        raw[song.id] = res
-
-    total = sum(raw.values())
-    if total == 0:
-        return {song.id: 0.0 for song in songs}
-
-    # Normalise with iterative capping so no probability exceeds 1.0.
-    # Any song whose scaled value would exceed 1.0 is fixed at 1.0 and removed
-    # from the pool; its excess budget is redistributed among the rest.
-    # Repeat until all remaining values are ≤ 1.0.
-    unfixed: dict[int, float] = dict(raw)
-    result: dict[int, float] = {}
-    remaining = float(effective_n_qual)
-
-    while unfixed:
-        pool_total = sum(unfixed.values())
-        if pool_total <= 0:
-            result.update({k: 0.0 for k in unfixed})
-            break
-
-        scale = remaining / pool_total
-        scaled = {k: v * scale for k, v in unfixed.items()}
-
-        over = {k for k, v in scaled.items() if v >= 1.0}
-        if not over:
-            result.update(scaled)
-            break
-
-        for k in over:
-            result[k] = 1.0
-        remaining -= len(over)
-        unfixed = {k: raw[k] for k in unfixed if k not in over}
-
-        if remaining <= 0:
-            result.update({k: 0.0 for k in unfixed})
-            break
-
-    return result
+    return {sid: v / n_predictors for sid, v in accumulator.items()}
 
 
 @bp.get('/<year>/<show>/predictions')
@@ -819,26 +825,57 @@ def show_predictions(year: str, show: str):
     n_predictors = len(pred_sets)
     n_qualifiers = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
 
-    odds = _compute_prediction_odds(songs, pred_by_set, n_predictors, n_qualifiers)
-
-    # Apply a per-rank soft cap so no entry can show 100% odds.
-    # epsilon is in (0, 0.005] and is consistent per show via LCG.
-    # Rank 1 cap = 0.98 + ε, rank 2 = 0.98, rank 3 = 0.98 − ε, …
-    if n_predictors > 0:
-        lcg = LCG(show_data.id)
-        epsilon = 0.0001 + (lcg.next(None) / (2 ** 32)) * 0.0049  # (0.0001, 0.005)
-        for rank, sid in enumerate(sorted(odds, key=lambda s: odds[s], reverse=True), 1):
-            cap = 0.98 + epsilon * (2 - rank)
-            if cap > 0:
-                odds[sid] = min(odds[sid], cap)
+    # Finals (no qualifier cutoff) get a winning-probability distribution;
+    # semifinals get an independent per-song qualification probability.
+    is_final = n_qualifiers <= 0
+    if is_final:
+        odds = _compute_winning_odds(songs, pred_by_set, n_predictors)
+    else:
+        odds = _compute_qualification_odds(songs, pred_by_set, n_predictors, n_qualifiers)
 
     # Build predictor dict ordered by submission time: {username: {song_id: position}}
     predictors: dict[str, dict] = {}
     for ps in pred_sets:
         predictors[ps['username']] = pred_by_set.get(ps['id'], {})
 
+    # Weighted prediction points: each predictor awards 12 * 0.827^(pos-1) points.
+    # Songs are then ranked by total points to produce a predicted finishing order
+    # that is independent of the qualification/winning odds.
+    pred_points: dict[int, float] = {song.id: 0.0 for song in songs}
+    for set_preds in pred_by_set.values():
+        for sid, pos in set_preds.items():
+            if sid in pred_points:
+                pred_points[sid] += 12 * (0.827 ** (pos - 1))
+
+    pred_rank: dict[int, int] = {}
+    for rank, song in enumerate(
+        sorted(songs, key=lambda s: pred_points[s.id], reverse=True), start=1
+    ):
+        pred_rank[song.id] = rank
+
     # Sort songs by qualifying probability descending (mirrors detailed sort by total points)
     songs.sort(key=lambda s: odds[s.id], reverse=True)
+
+    # Assign predicted-position colour classes (used as a left strip on each row).
+    predicted_class: dict[int, str] = {}
+    n_total = len(songs)
+    if n_total:
+        if is_final:
+            predicted_class[songs[0].id] = 'first'
+            if n_total >= 2:
+                predicted_class[songs[1].id] = 'second'
+            if n_total >= 3:
+                predicted_class[songs[2].id] = 'third'
+            predicted_class[songs[-1].id] = 'last'
+        else:
+            dtf_n = show_data.dtf or 0
+            sc_n = show_data.sc or 0
+            for i, song in enumerate(songs):
+                if i < dtf_n:
+                    predicted_class[song.id] = 'direct-to-final'
+                elif i < dtf_n + sc_n:
+                    predicted_class[song.id] = 'second-chance'
+            predicted_class[songs[-1].id] = 'last'
 
     # Pre-render copyable odds text
     copy_lines: list[str] = []
@@ -854,6 +891,8 @@ def show_predictions(year: str, show: str):
 
     return render_template('year/predictions.html',
                            songs=songs, predictors=predictors, odds=odds,
+                           predicted_class=predicted_class,
+                           pred_points=pred_points, pred_rank=pred_rank,
                            n_predictors=n_predictors, n_qualifiers=n_qualifiers,
                            copy_text=copy_text, show_copy=show_copy,
                            show=show, show_name=show_data.name, year=year,
