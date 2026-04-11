@@ -411,7 +411,7 @@ def manage(year: int):
         return render_template('error.html', error=f"Year {year} not found"), 404
 
     cursor.execute('''
-        SELECT show_name, short_name, date, access_type FROM show WHERE year_id = %s
+        SELECT show_name, short_name, date, access_type, voting_opens, voting_closes, predictions_close FROM show WHERE year_id = %s
         ORDER BY id
     ''', (year,))
     shows = cursor.fetchall()
@@ -480,6 +480,18 @@ def manage_show_post(year: int, show: str):
             cursor.execute('''
                 UPDATE show
                 SET voting_closes = CURRENT_TIMESTAMP
+                WHERE year_id = %s AND short_name = %s
+            ''', (year, show))
+        case 'close_predictions':
+            cursor.execute('''
+                UPDATE show
+                SET predictions_close = CURRENT_TIMESTAMP
+                WHERE year_id = %s AND short_name = %s
+            ''', (year, show))
+        case 'open_predictions':
+            cursor.execute('''
+                UPDATE show
+                SET predictions_close = NULL
                 WHERE year_id = %s AND short_name = %s
             ''', (year, show))
         case 'set_access_type':

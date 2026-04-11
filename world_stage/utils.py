@@ -223,6 +223,7 @@ class ShowData:
     short_name: str
     voting_opens: datetime.datetime | None
     voting_closes: datetime.datetime | None
+    predictions_close: datetime.datetime | None
     year: int | None
     dtf: int | None
     sc: int | None
@@ -606,12 +607,12 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
 
     if year:
         cursor.execute('''
-            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, access_type FROM show
+            SELECT id, point_system_id, show_name, voting_opens, voting_closes, predictions_close, dtf, sc, special, access_type FROM show
             WHERE year_id = %s AND short_name = %s
         ''', (year, short_show_name))
     else:
         cursor.execute('''
-            SELECT id, point_system_id, show_name, voting_opens, voting_closes, dtf, sc, special, access_type FROM show
+            SELECT id, point_system_id, show_name, voting_opens, voting_closes, predictions_close, dtf, sc, special, access_type FROM show
             WHERE short_name = %s AND year_id IS NULL
         ''', (short_show_name,))
 
@@ -622,6 +623,7 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         show_name = show_row['show_name']
         voting_opens = show_row['voting_opens']
         voting_closes = show_row['voting_closes']
+        predictions_close = show_row['predictions_close']
         dtf = show_row['dtf']
         sc = show_row['sc']
         special = show_row['special']
@@ -639,6 +641,7 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         short_name=short_show_name,
         voting_opens=voting_opens,
         voting_closes=voting_closes,
+        predictions_close=predictions_close,
         year=year,
         dtf=dtf,
         sc=sc,

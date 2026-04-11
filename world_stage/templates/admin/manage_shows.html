@@ -4,6 +4,14 @@
     <script src="/static/js/manage.js"></script>
 {% endblock %}
 {% block content %}
+<style>
+    .state-cell {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5em;
+    }
+</style>
 
 <div class="error" id="error">
 </div>
@@ -19,8 +27,8 @@
     <thead>
         <tr>
             <th>Show</th>
-            <th>Open Voting</th>
-            <th>Close Voting</th>
+            <th>Voting</th>
+            <th>Predictions</th>
             <th>Change Access Type</th>
             <th>Change Date</th>
         </tr>
@@ -30,8 +38,31 @@
         {% for show in shows %}
         <tr>
             <td>{{ show.show_name }}</td>
-            <td><button onclick="openVoting('{{ show.short_name }}')">Open Voting</button></td>
-            <td><button onclick="closeVoting('{{ show.short_name }}')">Close Voting</button></td>
+            <td>
+                <div class="state-cell">
+                {% if show.voting_closes %}
+                    <span>Closed</span>
+                    <button onclick="openVoting('{{ show.short_name }}')">Reopen</button>
+                {% elif show.voting_opens %}
+                    <span>Open</span>
+                    <button onclick="closeVoting('{{ show.short_name }}')">Close</button>
+                {% else %}
+                    <span>Not started</span>
+                    <button onclick="openVoting('{{ show.short_name }}')">Open</button>
+                {% endif %}
+                </div>
+            </td>
+            <td>
+                <div class="state-cell">
+                {% if show.predictions_close %}
+                    <span title="{{ show.predictions_close }}">Closed</span>
+                    <button onclick="openPredictions('{{ show.short_name }}')">Reopen</button>
+                {% else %}
+                    <span>Open</span>
+                    <button onclick="closePredictions('{{ show.short_name }}')">Close</button>
+                {% endif %}
+                </div>
+            </td>
             <td>
                 <select id="access_type_{{ show.short_name }}">
                     {% for access_type in access_types %}

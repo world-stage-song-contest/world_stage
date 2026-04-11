@@ -45,6 +45,28 @@ async function closeVoting(showId) {
     setError(data.error);
 }
 
+async function closePredictions(showId) {
+    const url = window.location.href + `/${showId}`;
+    const body = { 'action': 'close_predictions' };
+    const data = await fetchHelper(url, body);
+    if (data.error) {
+        setError(data.error);
+    } else {
+        location.reload();
+    }
+}
+
+async function openPredictions(showId) {
+    const url = window.location.href + `/${showId}`;
+    const body = { 'action': 'open_predictions' };
+    const data = await fetchHelper(url, body);
+    if (data.error) {
+        setError(data.error);
+    } else {
+        location.reload();
+    }
+}
+
 async function changeAccessType(el, showId) {
     const select = document.getElementById(el.dataset.select);
     if (!select) {

@@ -135,7 +135,11 @@ def votes(username: str):
                 redact_song_if_show(val, vote['year'], 'f', vote['access_type'])
                 if vote['short_name'] != 'sc':
                     redact_song_if_show(val, vote['year'], 'sc', vote['access_type'])
-            val['result_place'] = show_results.get((vote['show_id'], val['id']))
+            # Only show result placement for non-redacted songs.
+            if val.get('code') == 'XXX':
+                val['result_place'] = None
+            else:
+                val['result_place'] = show_results.get((vote['show_id'], val['id']))
             songs.append(val)
 
         vote['points'] = songs

@@ -85,7 +85,7 @@ def index():
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, show_name AS name, short_name, year_id AS year, voting_opens, voting_closes
+        SELECT id, show_name AS name, short_name, year_id AS year, voting_opens, voting_closes, predictions_close
         FROM show
         WHERE voting_opens <= CURRENT_TIMESTAMP
           AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
@@ -96,12 +96,15 @@ def index():
         left = None
         if row['voting_closes']:
             left = row['voting_closes'] - dt_now()
+        pred_deadline = row['predictions_close'] or row['voting_closes']
+        predictions_open = not pred_deadline or pred_deadline >= dt_now()
         open_votings.append({
             'id': row['id'],
             'name': f"{row['year']} {row['name']}" if row['year'] else row['name'],
             'short_name': f"{row['year']}-{row['short_name']}" if row['year'] else row['short_name'],
             'voting_opens': row['voting_opens'],
             'voting_closes': row['voting_closes'],
+            'predictions_open': predictions_open,
             'left': format_timedelta(left),
         })
     return render_template('vote/index.html', shows=open_votings)
@@ -302,8 +305,10 @@ def predict(show: str):
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
 
+    # Predictions close at predictions_close if set, otherwise fall back to voting_closes.
+    pred_deadline = show_data.predictions_close or show_data.voting_closes
     if (show_data.voting_opens and show_data.voting_opens > dt_now()
-            or show_data.voting_closes and show_data.voting_closes < dt_now()):
+            or pred_deadline and pred_deadline < dt_now()):
         return render_template('error.html', error="Predictions are closed for this show"), 400
 
     songs = get_show_songs(show_data.year, show_data.short_name)
@@ -359,8 +364,9 @@ def predict_post(show: str):
     if not show_data or not show_data.id:
         return render_template('error.html', error="Show not found"), 404
 
+    pred_deadline = show_data.predictions_close or show_data.voting_closes
     if (show_data.voting_opens and show_data.voting_opens > dt_now()
-            or show_data.voting_closes and show_data.voting_closes < dt_now()):
+            or pred_deadline and pred_deadline < dt_now()):
         return render_template('error.html', error="Predictions are closed for this show"), 400
 
     songs = get_show_songs(show_data.year, show_data.short_name)
