@@ -10,7 +10,7 @@ from ..utils import (LCG, AbstractVoteSequencer, RandomVoteSequencer, Show, Susp
                      get_votes_for_song, get_year_songs, get_year_placements, get_year_winner,
                      get_show_results_for_songs, get_special_winner, render_template, get_show_songs,
                      resolve_country_code)
-from ..db import get_db
+from ..db import fetchone, get_db
 
 bp = Blueprint('year', __name__, url_prefix='/year')
 
@@ -104,7 +104,7 @@ def year(year: str):
             free_countries = cursor.fetchall()
 
         cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder', (_year,))
-        total_entries = cursor.fetchone()['c'] # type: ignore
+        total_entries = fetchone(cursor)['c']
         total_placeholders = len(songs)-total_entries
         cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = %s ORDER BY id', (year,))
         shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
@@ -184,7 +184,7 @@ def results(year: str, show: str):
     db = get_db()
     cursor = db.cursor()
     cursor.execute('SELECT COUNT(voter_id) AS c FROM vote_set WHERE show_id = %s', (show_data.id,))
-    voter_count = cursor.fetchone()['c'] # type: ignore
+    voter_count = fetchone(cursor)['c']
     songs.sort(reverse=True)
 
     off = 0
@@ -382,17 +382,18 @@ def song_votes(year: str, show: str, country_code: str):
 
     # Build ordered list of point groups
     point_groups = []
+    total_points = 0
     for pts in points:
         voters_at_pts = groups.get(pts, [])
         voter_count = len(voters_at_pts)
+        group_total = pts * voter_count
+        total_points += group_total
         point_groups.append({
             'points': pts,
             'voters': voters_at_pts,
             'voter_count': voter_count,
-            'total': pts * voter_count,
+            'total': group_total,
         })
-
-    total_points = sum(g['total'] for g in point_groups)
     total_voters = len(all_voters)
     voters_who_gave = len(votes_by_voter)
 
@@ -988,7 +989,7 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
                 SELECT COUNT(id) AS c FROM song_show
                 WHERE show_id = %s
             ''', (show_data.id,))
-            insert_after = math.ceil(cursor.fetchone()['c'] / 2) - 1 # type: ignore
+            insert_after = math.ceil(fetchone(cursor)['c'] / 2) - 1
             host = data.get('cc') or ''
             host_link = data.get('video_link') or ''
 

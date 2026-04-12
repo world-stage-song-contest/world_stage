@@ -5,7 +5,7 @@ import datetime
 import unicodedata
 
 from ..utils import format_timedelta, get_show_id, get_countries, dt_now, get_show_songs, get_user_id_from_session, get_user_songs, get_vote_count_for_show, render_template
-from ..db import get_db
+from ..db import fetchone, get_db
 
 bp = Blueprint('vote', __name__, url_prefix='/vote')
 
@@ -66,7 +66,7 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
             VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             RETURNING id
             ''', (voter_id, show_id, country_id or 'XX', nickname, request.remote_addr))
-        vote_set_id = cursor.fetchone()['id'] # type: ignore
+        vote_set_id = fetchone(cursor)['id']
         for score, song_id in votes.items():
             cursor.execute('INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)', (vote_set_id, song_id, score))
         action = "added"
@@ -339,7 +339,7 @@ def predict(show: str):
     cursor.execute('''
         SELECT COUNT(*) AS count FROM prediction_set WHERE show_id = %s
     ''', (show_data.id,))
-    prediction_count = cursor.fetchone()['count'] # type: ignore
+    prediction_count = fetchone(cursor)['count']
 
     return render_template('vote/predict.html',
                            songs=songs, show=show, show_name=show_data.name,
@@ -408,7 +408,7 @@ def predict_post(show: str):
         db = get_db()
         cursor = db.cursor()
         cursor.execute('SELECT COUNT(*) AS count FROM prediction_set WHERE show_id = %s', (show_data.id,))
-        prediction_count = cursor.fetchone()['count'] # type: ignore
+        prediction_count = fetchone(cursor)['count']
         return render_template('vote/predict.html',
                                songs=songs, show=show, show_name=show_data.name,
                                year=show_data.year, prediction_count=prediction_count,
@@ -424,7 +424,7 @@ def predict_post(show: str):
         ON CONFLICT (user_id, show_id) DO UPDATE SET user_id = EXCLUDED.user_id
         RETURNING id
     ''', (user_id, show_data.id))
-    prediction_set_id = cursor.fetchone()['id']  # type: ignore
+    prediction_set_id = fetchone(cursor)['id']
 
     cursor.execute('DELETE FROM prediction WHERE set_id = %s', (prediction_set_id,))
     was_update = cursor.rowcount > 0

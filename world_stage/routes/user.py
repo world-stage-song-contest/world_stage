@@ -4,7 +4,7 @@ import unicodedata
 from flask import Blueprint, request
 
 from ..utils import get_user_songs, get_show_results_for_songs, render_template
-from ..db import get_db
+from ..db import fetchone, get_db
 
 bp = Blueprint('user', __name__, url_prefix='/user')
 
@@ -57,7 +57,7 @@ def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type
             SELECT COUNT(*) AS c FROM song_show
             WHERE show_id = %s AND song_id = %s
         ''', (show['id'], song['id']))
-        if cursor.fetchone()['c'] > 0: # type: ignore
+        if fetchone(cursor)['c'] > 0:
             song_modified = True
             song['class'] = f'qualifier {show_short_name}-qualifier'
             if access_type == 'partial':

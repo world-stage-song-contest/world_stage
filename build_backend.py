@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-import brotli
-import flit_core.buildapi as flit_buildapi
+import brotli # type: ignore
+import flit_core.buildapi as flit_buildapi # type: ignore
 
 # Adjust this if your import package directory is named differently.
 PACKAGE_DIRS = [

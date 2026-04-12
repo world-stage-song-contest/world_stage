@@ -67,7 +67,8 @@
     <p class="error">{{ error }}</p>
 {% endif %}
 <p id="error-message" class="error hidden"></p>
-<form id="submit-song" name="submit_song" method="POST">
+<p id="success-message" class="success hidden"></p>
+<form id="submit-song" name="submit_song">
     <fieldset class="grid" id="select-submission">
         <legend>Submit for</legend>
         <label for="year">Year</label>
@@ -173,7 +174,7 @@
         <legend>Languages</legend>
         {% for lang_id in selected_languages or [''] %}
             <label data-n="{{loop.index}}" class="req language-label" for="language{{loop.index}}">Language {{loop.index}}</label>
-            <select data-n="{{loop.index}}" class="language-select" id="language{{loop.index}}" name="language{{loop.index}}" required>
+            <select data-n="{{loop.index}}" class="language-select" id="language{{loop.index}}" name="language" required>
                 <option value="">Select a language</option>
                 {% for lang in languages %}
                     <option value="{{ lang.id }}" {% if lang.id == lang_id %}selected{% endif %}>{{ lang.name }}</option>
@@ -286,9 +287,7 @@
     </fieldset>
     <div class="hidable buttons">
         <button type="submit" name="action" value="submit">Submit</button>
-        <button type="submit" name="action" value="delete"
-                onclick="return confirm('Are you sure you want to delete your song?')"
-                formnovalidate>
+        <button type="submit" name="action" value="delete" formnovalidate>
             DELETE
         </button>
     </div>

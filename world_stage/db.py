@@ -8,6 +8,16 @@ from pathlib import Path
 
 from psycopg_pool import ConnectionPool
 
+def fetchone(cursor: psycopg.Cursor[dict[str, Any]]) -> dict[str, Any]:
+    """Fetch one row, raising if the query returned no rows.
+
+    Use for queries that are guaranteed to return a result
+    (e.g. SELECT COUNT, INSERT ... RETURNING)."""
+    row = cursor.fetchone()
+    assert row is not None, "expected a row but got None"
+    return row
+
+
 def get_db() -> psycopg.Connection[dict[str, Any]]:
     if "db" not in g:
         pool: ConnectionPool = current_app.config["DB_POOL"]

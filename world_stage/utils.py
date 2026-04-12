@@ -9,7 +9,7 @@ from typing import Any, Optional
 from flask import Response, request, url_for
 import flask
 
-from .db import get_db
+from .db import fetchone, get_db
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Tuple, Deque, TypeAlias
 import urllib.parse
@@ -778,20 +778,20 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         WHERE song_id = %s AND show_id = %s
     ''', (song_id, show_id))
-    count = cursor.fetchone()['c'] # type: ignore
+    count = fetchone(cursor)['c']
 
     cursor.execute('''
         SELECT MAX(score) AS m FROM show
         JOIN point ON show.point_system_id = point.point_system_id
         WHERE show.id = %s
     ''', (show_id,))
-    max_pts = cursor.fetchone()['m'] # type: ignore
+    max_pts = fetchone(cursor)['m']
 
     cursor.execute('''
         SELECT COUNT(DISTINCT voter_id) AS c FROM vote_set
         WHERE show_id = %s
     ''', (show_id,))
-    show_voters = cursor.fetchone()['c'] # type: ignore
+    show_voters = fetchone(cursor)['c']
 
     cursor.execute('''
         SELECT score FROM vote
@@ -913,7 +913,7 @@ def get_year_winner(year: int) -> Song | None:
         WHERE id = %s
         ''', (year,))
 
-    closed = cursor.fetchone()['closed'] # type: ignore
+    closed = fetchone(cursor)['closed']
     if not closed:
         return None
 
@@ -1192,7 +1192,7 @@ def get_vote_count_for_show(show_id: int) -> int:
         SELECT COUNT(*) AS c FROM vote_set
         WHERE show_id = %s
     ''', (show_id,))
-    count = cursor.fetchone()['c'] # type: ignore
+    count = fetchone(cursor)['c']
     return count
 
 def resolve_country_code(code: str) -> str | None:
@@ -1504,7 +1504,7 @@ def get_user_from_api_token(token: str) -> tuple[int, str] | None:
     cursor.execute('''
         SELECT account.id, account.username FROM api_token
         JOIN account ON api_token.user_id = account.id
-        WHERE api_token.token_hash = %s AND account.approved = true
+        WHERE api_token.token_hash = %s AND account.approved = 1
     ''', (token_hash,))
     row = cursor.fetchone()
     if row:

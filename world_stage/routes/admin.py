@@ -11,7 +11,7 @@ import math
 import datetime
 import csv, io
 
-from ..db import get_db
+from ..db import fetchone, get_db
 from ..utils import LCG, get_show_id, get_show_songs, get_user_role_from_session, get_year_countries, get_year_shows, get_years, render_template
 import shutil
 import os
@@ -235,7 +235,7 @@ def changes():
         'SELECT COUNT(*) AS cnt FROM song_audit_log WHERE event_type = ANY(%s)',
         (selected_events,)
     )
-    total = cursor.fetchone()['cnt']
+    total = fetchone(cursor)['cnt']
     total_pages = max(1, math.ceil(total / per_page))
 
     page = request.args.get('page', 1, type=int)
