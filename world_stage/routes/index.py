@@ -1,6 +1,28 @@
-from flask import Blueprint, request, send_file, make_response, current_app
-from ..utils import create_cookie, parse_cookie, render_template
+from flask import Blueprint, request, send_file, make_response, redirect, url_for, current_app
+from ..db import get_db
+from ..utils import (create_cookie, parse_cookie, render_template,
+                     get_user_id_from_session, generate_api_token)
 import os.path
+
+# Lazy cache: 2-letter code → 3-letter code (populated on first miss).
+_cc2_to_cc3: dict[str, str] = {}
+_cc3_cache_loaded = False
+
+def _ensure_cc3_cache():
+    global _cc3_cache_loaded
+    if _cc3_cache_loaded:
+        return
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT id, cc3 FROM country')
+    for row in cursor.fetchall():
+        _cc2_to_cc3[row['id'].upper()] = row['cc3'].upper()
+    _cc3_cache_loaded = True
+
+def _get_cc3(cc2: str) -> str | None:
+    """Return the 3-letter code for a 2-letter code, or None."""
+    _ensure_cc3_cache()
+    return _cc2_to_cc3.get(cc2.upper())
 
 bp = Blueprint('main', __name__, url_prefix='/')
 
@@ -57,22 +79,87 @@ def error_json():
     errors = request.args.getlist('error')
     return {'errors': errors}, 400
 
+def _get_user_tokens(user_id: int) -> list[dict]:
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT id, label, created_at, last_used_at
+        FROM api_token WHERE user_id = %s
+        ORDER BY created_at DESC
+    ''', (user_id,))
+    return cursor.fetchall()
+
 @bp.get('/settings')
 def settings():
     preferences = request.cookies.get('preferences', '')
     settings = parse_cookie(preferences)
 
-    return render_template('settings.html', settings=settings)
+    session_id = request.cookies.get('session')
+    user = get_user_id_from_session(session_id) if session_id else None
+    tokens = _get_user_tokens(user[0]) if user else []
+
+    return render_template('settings.html', settings=settings,
+                           user=user, tokens=tokens)
 
 @bp.post('/settings')
 def settings_post():
     settings = {}
     for key, value in request.form.items():
-        settings[key] = value
+        if key not in ('token_label', 'delete_token'):
+            settings[key] = value
 
     resp = make_response(render_template('settings.html', settings=settings, message="Settings saved successfully."))
     resp.set_cookie('preferences', create_cookie(**settings), max_age=60*60*24*30)
     return resp
+
+@bp.post('/settings/token')
+def create_token():
+    session_id = request.cookies.get('session')
+    user = get_user_id_from_session(session_id) if session_id else None
+    if not user:
+        return redirect(url_for('session.login'))
+
+    user_id, _ = user
+    label = request.form.get('token_label', '').strip()
+
+    plaintext, token_hash = generate_api_token()
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        INSERT INTO api_token (user_id, token_hash, label)
+        VALUES (%s, %s, %s)
+    ''', (user_id, token_hash, label))
+    db.commit()
+
+    preferences = request.cookies.get('preferences', '')
+    settings = parse_cookie(preferences)
+    tokens = _get_user_tokens(user_id)
+
+    return render_template('settings.html', settings=settings,
+                           user=user, tokens=tokens,
+                           new_token=plaintext,
+                           message="API token created. Copy it now — it won't be shown again.")
+
+@bp.post('/settings/token/delete')
+def delete_token():
+    session_id = request.cookies.get('session')
+    user = get_user_id_from_session(session_id) if session_id else None
+    if not user:
+        return redirect(url_for('session.login'))
+
+    user_id, _ = user
+    token_id = request.form.get('token_id', type=int)
+
+    if token_id:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute('''
+            DELETE FROM api_token WHERE id = %s AND user_id = %s
+        ''', (token_id, user_id))
+        db.commit()
+
+    return redirect(url_for('main.settings'))
 
 @bp.get('/flag')
 def flag_index():
@@ -97,11 +184,28 @@ def flag(country: str):
         size = 'small'
 
     root = current_app.root_path
-    file = os.path.join(root, 'files', 'flags', country, f'{type}-{size}.svg')
-    if not os.path.exists(file):
-        file = os.path.join(root, 'files', 'flags', country, f'{type}.svg')
-    if not os.path.exists(file):
-        file = os.path.join(root, 'files', 'flags', 'XXX', f'{type}.svg')
+    flags_root = os.path.join(root, 'files', 'flags')
+
+    # Try the code as-is first (2-letter), then fall back to the 3-letter
+    # equivalent from the database, then to the XXX placeholder.
+    candidates = [country]
+    cc3 = _get_cc3(country)
+    if cc3 and cc3 != country:
+        candidates.append(cc3)
+
+    file = None
+    for candidate in candidates:
+        path = os.path.join(flags_root, candidate, f'{type}-{size}.svg')
+        if os.path.exists(path):
+            file = path
+            break
+        path = os.path.join(flags_root, candidate, f'{type}.svg')
+        if os.path.exists(path):
+            file = path
+            break
+
+    if not file:
+        file = os.path.join(flags_root, 'XXX', f'{type}.svg')
 
     resp = make_response(send_file(file))
     resp.headers['Content-Type'] = 'image/svg+xml'

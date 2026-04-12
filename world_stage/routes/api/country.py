@@ -3,7 +3,7 @@ from flask import Blueprint, Response, current_app, redirect, request, url_for
 from world_stage.models import Country, Language, Song, User
 
 from world_stage.db import get_db
-from world_stage.utils import ErrorID, err, format_seconds, resp, url_bool
+from world_stage.utils import ErrorID, err, format_seconds, resolve_country_code, resp, url_bool
 
 bp = Blueprint('country', __name__, url_prefix='/country')
 
@@ -12,9 +12,9 @@ def index():
     all = request.args.get('all', type=url_bool)
 
     if all:
-        query = "SELECT id, name, cc2 FROM country WHERE id <> 'XXX' ORDER BY name"
+        query = "SELECT id, name, cc3 FROM country WHERE id <> 'XX' ORDER BY name"
     else:
-        query = "SELECT id, name, cc2 FROM country WHERE is_participating AND id <> 'XXX' ORDER BY name"
+        query = "SELECT id, name, cc3 FROM country WHERE is_participating AND id <> 'XX' ORDER BY name"
     db = get_db()
     cursor = db.cursor()
 
@@ -25,10 +25,14 @@ def index():
 
 @bp.get('/<id>')
 def country(id: str):
+    canonical = resolve_country_code(id.upper())
+    if canonical and canonical.upper() != id.upper():
+        return redirect(url_for('api.country.country', id=canonical), 301)
+
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("SELECT id, name, cc2 FROM country WHERE id = %s ORDER BY name", (id,))
+    cursor.execute("SELECT id, name, cc3 FROM country WHERE id = %s ORDER BY name", (id,))
 
     res = cursor.fetchone()
     if not res:
@@ -38,6 +42,10 @@ def country(id: str):
 
 @bp.get('/<id>/songs')
 def songs(id: str):
+    canonical = resolve_country_code(id.upper())
+    if canonical and canonical.upper() != id.upper():
+        return redirect(url_for('api.country.songs', id=canonical), 301)
+
     db = get_db()
     cursor = db.cursor()
 
@@ -53,7 +61,7 @@ def songs(id: str):
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.cc2, song.is_placeholder,
+                song.country_id, country.name, country.cc3, song.is_placeholder,
                 tl.name AS t_name, tl.tag AS t_tag, tl.extlang AS t_extlang,
                 tl.region AS t_region, tl.subvariant AS t_subvariant, tl.suppress_script AS t_suppress_script,
                 nl.name AS n_name, nl.tag AS n_tag, nl.extlang AS n_extlang,
@@ -68,7 +76,7 @@ def songs(id: str):
         LEFT OUTER JOIN account ON song.submitter_id = account.id
         LEFT OUTER JOIN language tl ON song.title_language_id = tl.id
         LEFT OUTER JOIN language nl ON song.native_language_id = nl.id
-        WHERE (song.country_id = %(cc)s OR country.cc2 = %(cc)s) AND song.year_id IS NOT NULL
+        WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id IS NOT NULL
         ORDER BY song.year_id, country.name
     ''', {'cc': id})
 
@@ -79,7 +87,7 @@ def songs(id: str):
         title=d['title'],
         artist=d['artist'],
         country=Country(id=d['country_id'],
-                          cc2=d['cc2'],
+                          cc3=d['cc3'],
                           name=d['name']),
         native_title=d['native_title'],
         year=d['year_id'],

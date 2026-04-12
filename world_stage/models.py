@@ -14,7 +14,7 @@ class Model:
 @dataclass(kw_only=True)
 class Country(Model):
     id: str
-    cc2: str
+    cc3: str
     name: str
 
 @dataclass(kw_only=True)

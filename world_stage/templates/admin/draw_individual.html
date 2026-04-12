@@ -40,11 +40,11 @@
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
         {% for _ in songs %}
             <div class="show-country item transparent"
-                 data-code="XXX"
+                 data-code="XX"
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
-                <div class="flag-container value transparent">{{ flag("XXX", 24, "Unknown") }}</div>
+                <div class="flag-container value transparent">{{ flag("XX", 24, "Unknown") }}</div>
                 <div class="country-name value transparent"></div>
             </div>
         {% endfor %}

@@ -169,7 +169,7 @@ function makePointsRow() {
 }
 
 function makeVotingCard(from, code, country) {
-    code = code || "XXX";
+    code = code || "XX";
     country = country || "Somewhere";
 
     const container = document.createElement("div");
@@ -420,7 +420,7 @@ class Country {
         this.artist = data.artist;
         this.title = data.title;
         this.id = data.id;
-        this.code = data.cc || "XXX";
+        this.code = data.cc || "XX";
         this.bg = data.bg;
         this.fg1 = data.fg1;
         this.fg2 = data.fg2;

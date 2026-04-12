@@ -660,7 +660,7 @@ def set_pots(year: int):
         SELECT country.id, name, pot FROM song
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id
-        WHERE year_id = %s AND year.host IS DISTINCT FROM country.id
+        WHERE year_id = %s AND year.host_id IS DISTINCT FROM country.id
         ORDER BY pot, name
     ''', (year,))
     countries = cursor.fetchall()
@@ -823,7 +823,7 @@ _SQL_SHOW = """
 WITH song_data AS (
     SELECT DISTINCT ON (song.id, show.id)
            show.id as show_id, show.year_id || short_name AS show, running_order AS ro,
-           LOWER(cc2) AS cc, country.name AS country,
+           LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
@@ -847,8 +847,8 @@ ORDER BY show_id, ro
 
 _SQL_YEAR = """
 WITH song_data AS (
-    SELECT song.year_id as show_id, song.year_id AS show, UPPER(cc2) AS ro,
-           LOWER(cc2) AS cc, country.name AS country,
+    SELECT song.year_id as show_id, song.year_id AS show, UPPER(country.id) AS ro,
+           LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
@@ -859,7 +859,7 @@ WITH song_data AS (
     FROM song
     JOIN country ON song.country_id = country.id
     WHERE song.year_id = ANY(%s)
-    ORDER BY LOWER(cc2)
+    ORDER BY LOWER(country.id)
 )
 SELECT show, ro, cc, country,
        artist, title, media_link, snippet_start, snippet_end, language,
@@ -870,9 +870,9 @@ ORDER BY country
 
 _SQL_COUNTRY = """
 WITH song_data AS (
-    SELECT song.year_id AS year, LOWER(cc2) as show_id, LOWER(cc2) AS show,
+    SELECT song.year_id AS year, LOWER(country.id) as show_id, LOWER(country.id) AS show,
            MOD(song.year_id, 100) AS ro,
-           LOWER(cc2) AS cc, country.name AS country,
+           LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
@@ -883,7 +883,7 @@ WITH song_data AS (
     FROM song
     JOIN country ON song.country_id = country.id
     JOIN year ON song.year_id = year.id
-    WHERE country.cc2 = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
+    WHERE country.id = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
     ORDER BY song.year_id
 )
 SELECT show, ro, cc, country,
@@ -897,7 +897,7 @@ _SQL_SUBMITTER = """
 WITH song_data AS (
     SELECT account.username as show_id, song.year_id AS year, account.username AS show,
            MOD(song.year_id, 100) AS ro,
-           LOWER(cc2) AS cc, country.name AS country,
+           LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')

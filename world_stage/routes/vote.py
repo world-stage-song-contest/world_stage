@@ -33,7 +33,7 @@ def update_votes(voter_id, nickname, country_id, point_system_id, votes, show_id
     cursor.execute('''
         UPDATE vote_set SET nickname = %s, country_id = %s, ip_address = %s
         WHERE id = %s
-    ''', (nickname, country_id or 'XXX', request.remote_addr, vote_set_id))
+    ''', (nickname, country_id or 'XX', request.remote_addr, vote_set_id))
 
     cursor.execute('UPDATE vote SET song_id = NULL WHERE vote_set_id = %s', (vote_set_id,))
 
@@ -65,7 +65,7 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
             INSERT INTO vote_set (voter_id, show_id, country_id, nickname, ip_address, created_at)
             VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             RETURNING id
-            ''', (voter_id, show_id, country_id or 'XXX', nickname, request.remote_addr))
+            ''', (voter_id, show_id, country_id or 'XX', nickname, request.remote_addr))
         vote_set_id = cursor.fetchone()['id'] # type: ignore
         for score, song_id in votes.items():
             cursor.execute('INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)', (vote_set_id, song_id, score))

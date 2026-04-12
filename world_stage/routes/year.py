@@ -1,6 +1,6 @@
 from collections import defaultdict, Counter
 import io
-from flask import Response, request, Blueprint
+from flask import Response, redirect, request, url_for, Blueprint
 import typing
 import math
 
@@ -8,7 +8,8 @@ from ..utils import (LCG, AbstractVoteSequencer, RandomVoteSequencer, Show, Susp
                      ChronologicalVoteSequencer, ShowData,
                      get_show_id, dt_now, get_user_role_from_session,
                      get_votes_for_song, get_year_songs, get_year_placements, get_year_winner,
-                     get_show_results_for_songs, get_special_winner, render_template, get_show_songs)
+                     get_show_results_for_songs, get_special_winner, render_template, get_show_songs,
+                     resolve_country_code)
 from ..db import get_db
 
 bp = Blueprint('year', __name__, url_prefix='/year')
@@ -203,7 +204,7 @@ def results(year: str, show: str):
             songs[0].artist = ''
             songs[0].title = ''
             songs[0].country.name = ''
-            songs[0].country.cc = 'XXX'
+            songs[0].country.cc = 'XX'
     elif access == 'full' and reveal:
         if show_data.dtf:
             off = show_data.dtf - 1
@@ -252,7 +253,7 @@ def detailed_results(year: str, show: str):
 
     results: dict = {}
     cursor.execute('''
-        SELECT username, COALESCE(country_id, 'XXX') as code, country.name AS country FROM vote_set
+        SELECT username, COALESCE(country_id, 'XX') as code, country.name AS country FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         LEFT OUTER JOIN country ON vote_set.country_id = country.id
         WHERE vote_set.show_id = %s
@@ -283,6 +284,10 @@ def detailed_results(year: str, show: str):
 
 @bp.get('/<year>/<show>/song/<country_code>')
 def song_votes(year: str, show: str, country_code: str):
+    canonical = resolve_country_code(country_code.upper())
+    if canonical and canonical.lower() != country_code.lower():
+        return redirect(url_for('year.song_votes', year=year, show=show, country_code=canonical.lower()), 301)
+
     try:
         _year = int(year)
     except ValueError:
@@ -309,7 +314,7 @@ def song_votes(year: str, show: str, country_code: str):
     # Find the song for this country in this show
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.country_id,
-               country.name AS country_name, country.cc2,
+               country.name AS country_name, country.cc3,
                song_show.running_order
         FROM song
         JOIN song_show ON song.id = song_show.song_id
@@ -335,8 +340,8 @@ def song_votes(year: str, show: str, country_code: str):
 
     # Get all voters for this show with their country associations
     cursor.execute('''
-        SELECT account.username, COALESCE(vote_set.country_id, 'XXX') AS code,
-               country.name AS country_name, country.cc2
+        SELECT account.username, COALESCE(vote_set.country_id, 'XX') AS code,
+               country.name AS country_name, country.cc3
         FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         LEFT OUTER JOIN country ON vote_set.country_id = country.id
@@ -367,7 +372,7 @@ def song_votes(year: str, show: str, country_code: str):
         voter_entry = {
             'username': username,
             'code': voter_info['code'],
-            'cc2': voter_info.get('cc2', ''),
+            'cc3': voter_info.get('cc3', ''),
             'country_name': voter_info.get('country_name', ''),
         }
         if score > 0:
@@ -920,7 +925,7 @@ def show_voters(year: str, show: str):
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT username, nickname, COALESCE(country.id, 'XXX') FROM vote_set
+        SELECT username, nickname, COALESCE(country.id, 'XX') FROM vote_set
         JOIN account ON voter_id = account.id
         LEFT OUTER JOIN country ON country_id = country.id
         WHERE show_id = %s
@@ -972,9 +977,9 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
     host_link = ''
     if show_needs_host(show_data):
         cursor.execute('''
-            SELECT LOWER(cc2) AS cc2, video_link FROM year
-            JOIN country ON year.host = country.id
-            JOIN song ON song.country_id = year.host
+            SELECT LOWER(country.id) AS cc, video_link FROM year
+            JOIN country ON year.host_id = country.id
+            JOIN song ON song.country_id = year.host_id
             WHERE year.id = %(y)s AND song.year_id = %(y)s
         ''', {'y': show_data.year})
         data = cursor.fetchone()
@@ -984,11 +989,11 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
                 WHERE show_id = %s
             ''', (show_data.id,))
             insert_after = math.ceil(cursor.fetchone()['c'] / 2) - 1 # type: ignore
-            host = data.get('cc2') or ''
+            host = data.get('cc') or ''
             host_link = data.get('video_link') or ''
 
     cursor.execute('''
-        SELECT cc2, video_link FROM song
+        SELECT LOWER(country.id) AS cc, video_link FROM song
         JOIN song_show ON song_show.song_id = song.id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s
@@ -1001,7 +1006,7 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
     bad_countries = []
 
     for i, song in enumerate(cursor.fetchall()):
-        cc = song.get('cc2') or ''
+        cc = song.get('cc') or ''
         url = song.get('video_link') or ''
         b = write_country(output, cc, url)
         if b is not None:

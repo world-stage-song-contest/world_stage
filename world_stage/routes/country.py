@@ -1,8 +1,8 @@
 from collections import defaultdict
 import re
-from flask import Blueprint, request
+from flask import Blueprint, redirect, request, url_for
 
-from ..utils import get_countries, get_country_name, get_country_songs, get_show_results_for_songs, get_song, get_user_id_from_session, get_user_permissions, render_template, get_markdown_parser
+from ..utils import get_countries, get_country_name, get_country_songs, get_show_results_for_songs, get_song, get_user_id_from_session, get_user_permissions, render_template, get_markdown_parser, resolve_country_code
 
 bp = Blueprint('country', __name__, url_prefix='/country')
 
@@ -18,6 +18,9 @@ def index():
 
 @bp.get('/<code>')
 def country(code: str):
+    canonical = resolve_country_code(code.upper())
+    if canonical and canonical.lower() != code.lower():
+        return redirect(url_for('country.country', code=canonical.lower()), 301)
     songs = get_country_songs(code.upper(), select_languages=True)
     if not songs:
         return render_template('error.html', error=f"Songs not found for country {code}")
@@ -71,6 +74,9 @@ def generate_iframe(url: str, img_url: str | None):
 
 @bp.get('/<code>/<int:year>')
 def details(code: str, year: int):
+    canonical = resolve_country_code(code.upper())
+    if canonical and canonical.lower() != code.lower():
+        return redirect(url_for('country.details', code=canonical.lower(), year=year), 301)
     song = get_song(year, code.upper())
     if not song:
         return render_template('error.html', error=f"Songs not found for country {code} in year {year}")

@@ -45,13 +45,13 @@
             <label class="req" title="The country to display on the scoreboard." for="country">Country</label>
             <div class="flag-container">
                 <img class="flag" id="display-flag"
-                     src="/flag/{{selected_country or 'XXX'}}.svg?s=30"
+                     src="/flag/{{selected_country or 'XX'}}.svg?s=30"
                      height="30" width="45">
             </div>
             <select name="country" id="country"
                     onchange="updateFlag(this)"
                     data-flag="display-flag">
-                <option data-country="XXX" value="XXX">Select a country</option>
+                <option data-country="XX" value="XX">Select a country</option>
             {% for country in countries %}
                 <option value="{{ country.cc }}" data-country="{{country.cc}}"
                         {% if country.cc == selected_country %}selected{% endif %}>
@@ -67,13 +67,13 @@
             <label for="pts-{{point}}" class="req">{{point}} points</label>
             <div class="flag-container">
                 <img class="flag" id="flag-{{point}}"
-                     src="/flag/{{selected[point]['cc'] or 'XXX'}}.svg?s=30"
+                     src="/flag/{{selected[point]['cc'] or 'XX'}}.svg?s=30"
                      height="30" width="45">
             </div>
             <select name="pts-{{point}}" id="pts-{{point}}" data-flag="flag-{{point}}"
                     class="{% if point in invalid %}invalid{% else %}valid{% endif %}"
                     onchange="updateFlag(this)">
-                <option data-country="XXX" value=""></option>
+                <option data-country="XX" value=""></option>
             {% for song in songs %}
                 <option value="{{song.id}}"
                         data-country="{{song.country.cc}}"

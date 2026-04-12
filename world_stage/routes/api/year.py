@@ -37,25 +37,25 @@ def index():
 
     if status:
         cursor.execute("""
-SELECT year.id, year.closed, year.host, country.name, country.cc2
+SELECT year.id, year.closed, year.host_id, country.name, country.cc3
 FROM year
-LEFT OUTER JOIN country ON year.host = country.id
+LEFT OUTER JOIN country ON year.host_id = country.id
 WHERE year.closed = %s
 ORDER BY year.id
 """, (status,))
     else:
         cursor.execute("""
-SELECT year.id, year.closed, year.host, country.name, country.cc2
+SELECT year.id, year.closed, year.host_id, country.name, country.cc3
 FROM year
-LEFT OUTER JOIN country ON year.host = country.id
+LEFT OUTER JOIN country ON year.host_id = country.id
 ORDER BY year.id
 """)
 
     data = [Year(year=val['id'],
                  status=map_status(val['closed']),
-                 host=Country(id=val['host'],
-                              cc2=val['cc2'],
-                              name=val['name']) if val['host'] is not None else None).to_json()
+                 host=Country(id=val['host_id'],
+                              cc3=val['cc3'],
+                              name=val['name']) if val['host_id'] is not None else None).to_json()
             for val in cursor.fetchall()]
     return resp(data)
 
@@ -65,11 +65,11 @@ def year(id: int):
     cursor = db.cursor()
 
     cursor.execute("""
-SELECT year.id, year.closed, year.host, country.name, country.cc2,
+SELECT year.id, year.closed, year.host_id, country.name, country.cc3,
        COUNT(song.is_placeholder) FILTER(WHERE song.is_placeholder = false) AS entries,
        COUNT(song.is_placeholder) FILTER(WHERE song.is_placeholder = true) AS placeholders
 FROM year
-LEFT OUTER JOIN country ON year.host = country.id
+LEFT OUTER JOIN country ON year.host_id = country.id
 JOIN song ON song.year_id = year.id
 WHERE year.id = %s
 GROUP BY year.id, country.id
@@ -84,9 +84,9 @@ ORDER BY year.id
                 status=map_status(val['closed']),
                 entry_count=val['entries'],
                 placeholder_count=val['placeholders'],
-                host=Country(id=val['host'],
-                             cc2=val['cc2'],
-                             name=val['name']) if val['host'] is not None else None).to_json()
+                host=Country(id=val['host_id'],
+                             cc3=val['cc3'],
+                             name=val['name']) if val['host_id'] is not None else None).to_json()
     return resp(data)
 
 @bp.get('/<int:id>/songs')
@@ -106,7 +106,7 @@ def songs(id: int):
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.cc2, song.is_placeholder,
+                song.country_id, country.name, country.cc3, song.is_placeholder,
                 tl.name AS t_name, tl.tag AS t_tag, tl.extlang AS t_extlang,
                 tl.region AS t_region, tl.subvariant AS t_subvariant, tl.suppress_script AS t_suppress_script,
                 nl.name AS n_name, nl.tag AS n_tag, nl.extlang AS n_extlang,
@@ -132,7 +132,7 @@ def songs(id: int):
         title=d['title'],
         artist=d['artist'],
         country=Country(id=d['country_id'],
-                          cc2=d['cc2'],
+                          cc3=d['cc3'],
                           name=d['name']),
         native_title=d['native_title'],
         year=d['year_id'],

@@ -275,7 +275,7 @@ class Country:
     cc: str
     name: str
     is_participating: bool
-    cc2: str
+    cc3: str
 
 @total_ordering
 @dataclass
@@ -432,7 +432,7 @@ class Song:
             country=Country(cc=song['country_id'],
                             name=song['name'],
                             is_participating=bool(song['is_participating']),
-                            cc2=song['cc2']),
+                            cc3=song['cc3']),
             placeholder=bool(song['is_placeholder']),
             year=song['year_id'],
             title_lang=song['title_language_id'],
@@ -668,9 +668,9 @@ def get_points_for_system(point_system_id: int) -> list[int]:
 
 def get_countries(only_participating: bool = False) -> list[Country]:
     if only_participating:
-        query = "SELECT id, name, is_participating, cc2 FROM country WHERE is_participating AND id <> 'XXX' ORDER BY name"
+        query = "SELECT id, name, is_participating, cc3 FROM country WHERE is_participating AND id <> 'XX' ORDER BY name"
     else:
-        query = "SELECT id, name, is_participating, cc2 FROM country WHERE id <> 'XXX' ORDER BY name"
+        query = "SELECT id, name, is_participating, cc3 FROM country WHERE id <> 'XX' ORDER BY name"
     db = get_db()
     cursor = db.cursor()
 
@@ -680,7 +680,7 @@ def get_countries(only_participating: bool = False) -> list[Country]:
             cc=row['id'],
             name=row['name'],
             is_participating=bool(row['is_participating']),
-            cc2=row['cc2']
+            cc3=row['cc3']
         )
         for row in cursor.fetchall()
     ]
@@ -869,7 +869,7 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
 
     cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
-               song.country_id, country.name, country.is_participating, country.cc2,
+               song.country_id, country.name, country.is_participating, country.cc3,
                song.year_id, song_show.running_order, song.is_placeholder,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                account.username, song.title_language_id, song.native_language_id,
@@ -928,7 +928,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-               song.country_id, country.name, country.is_participating, country.cc2,
+               song.country_id, country.name, country.is_participating, country.cc3,
                song.is_placeholder, account.username, song.year_id, song.poster_link,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
@@ -969,7 +969,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
     if year:
         cursor.execute('''
             SELECT song.id, song.title, song.artist, song.native_title,
-                   song.country_id, country.name, country.is_participating, country.cc2,
+                   song.country_id, country.name, country.is_participating, country.cc3,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id, song.poster_link,
@@ -988,7 +988,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
     else:
         cursor.execute('''
             SELECT song.id, song.title, song.artist, song.native_title,
-                   song.country_id, country.name, country.is_participating, country.cc2,
+                   song.country_id, country.name, country.is_participating, country.cc3,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id, song.poster_link,
@@ -1090,7 +1090,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.is_participating, country.cc2,
+                song.country_id, country.name, country.is_participating, country.cc3,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id, song.poster_link,
@@ -1101,7 +1101,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
         LEFT OUTER JOIN account ON song.submitter_id = account.id
         LEFT JOIN year ON year.id = song.year_id
         LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
-        WHERE (song.country_id = %(cc)s OR country.cc2 = %(cc)s) AND song.year_id IS NOT NULL
+        WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id IS NOT NULL
         ORDER BY song.year_id,
                  CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
                  country.name
@@ -1119,7 +1119,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.is_participating, country.cc2,
+                song.country_id, country.name, country.is_participating, country.cc3,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id, song.poster_link,
@@ -1128,7 +1128,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
-        WHERE (song.country_id = %(cc)s OR country.cc2 = %(cc)s) AND song.year_id = %(year)s
+        WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id = %(year)s
         ORDER BY song.year_id, country.name
     ''', {'cc': code, 'year': year})
     song = cursor.fetchone()
@@ -1158,7 +1158,7 @@ def get_year_countries(year: int, *, exclude: list[str] = [], sort_by_priority: 
 
     add = ""
     if not host:
-        add = "AND country.id <> year.host"
+        add = "AND country.id <> year.host_id"
 
     cursor.execute(f'''
         SELECT country.id AS cc, country.name, country.pot, song.submitter_id AS submitter FROM song
@@ -1195,13 +1195,24 @@ def get_vote_count_for_show(show_id: int) -> int:
     count = cursor.fetchone()['c'] # type: ignore
     return count
 
+def resolve_country_code(code: str) -> str | None:
+    """Resolve a country code (cc2 or cc3) to the canonical cc2 id. Returns None if not found."""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT id FROM country
+        WHERE id = %(cc)s OR cc3 = %(cc)s
+    ''', {'cc': code})
+    row = cursor.fetchone()
+    return row['id'] if row else None
+
 def get_country_name(country_id: str) -> str:
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute('''
         SELECT name FROM country
-        WHERE id = %(cc)s OR cc2 = %(cc)s
+        WHERE id = %(cc)s OR cc3 = %(cc)s
     ''', {'cc':country_id})
     country_name = cursor.fetchone()
     if country_name:
@@ -1436,6 +1447,10 @@ def resp(data: Any, code: int = 200) -> tuple[dict[str, Any], int]:
 class ErrorID(Enum):
     NONE = 0
     NOT_FOUND = 1
+    UNAUTHORIZED = 2
+    FORBIDDEN = 3
+    BAD_REQUEST = 4
+    CONFLICT = 5
 
     def http_code(self):
         match self:
@@ -1443,6 +1458,14 @@ class ErrorID(Enum):
                 return 200
             case ErrorID.NOT_FOUND:
                 return 404
+            case ErrorID.UNAUTHORIZED:
+                return 401
+            case ErrorID.FORBIDDEN:
+                return 403
+            case ErrorID.BAD_REQUEST:
+                return 400
+            case ErrorID.CONFLICT:
+                return 409
             case _:
                 return 400
 
@@ -1456,3 +1479,62 @@ def err(id: ErrorID, desc: str) -> tuple[dict[str, Any], int]:
 
 def url_bool(datum: str) -> bool:
     return datum in ('true', '1', 'y', 'on', 'yes', 'y')
+
+
+# ── API token helpers ──────────────────────────────────────────────
+
+import hashlib
+import secrets
+
+def generate_api_token() -> tuple[str, bytes]:
+    """Generate a new API token. Returns (plaintext_token, token_hash)."""
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).digest()
+    return token, token_hash
+
+def hash_api_token(token: str) -> bytes:
+    """Hash a plaintext API token for database lookup."""
+    return hashlib.sha256(token.encode()).digest()
+
+def get_user_from_api_token(token: str) -> tuple[int, str] | None:
+    """Look up a user by API token. Returns (user_id, username) or None."""
+    token_hash = hash_api_token(token)
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT account.id, account.username FROM api_token
+        JOIN account ON api_token.user_id = account.id
+        WHERE api_token.token_hash = %s AND account.approved = true
+    ''', (token_hash,))
+    row = cursor.fetchone()
+    if row:
+        cursor.execute('''
+            UPDATE api_token SET last_used_at = CURRENT_TIMESTAMP
+            WHERE token_hash = %s
+        ''', (token_hash,))
+        db.commit()
+        return (row['id'], row['username'])
+    return None
+
+def get_api_auth() -> tuple[int, str, UserPermissions] | None:
+    """Authenticate an API request via Bearer token or session cookie.
+    Returns (user_id, username, permissions) or None."""
+    auth = request.headers.get('Authorization', '')
+    if auth.startswith('Bearer '):
+        token = auth[7:]
+        result = get_user_from_api_token(token)
+        if result:
+            user_id, username = result
+            perms = get_user_permissions(user_id)
+            return (user_id, username, perms)
+        return None
+
+    # Fall back to session cookie
+    session_id = request.cookies.get('session')
+    if session_id:
+        result = get_user_id_from_session(session_id)
+        if result:
+            user_id, username = result
+            perms = get_user_permissions(user_id)
+            return (user_id, username, perms)
+    return None

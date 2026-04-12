@@ -32,7 +32,7 @@ CREATE TABLE country (
     id text PRIMARY KEY COLLATE public.nocase,
     name text NOT NULL UNIQUE COLLATE public.nocase,
     is_participating boolean NOT NULL DEFAULT true,
-    cc2 text NOT NULL COLLATE public.nocase,
+    cc3 text NOT NULL COLLATE public.nocase,
     pot integer,
     priority integer,
     available_from bigint DEFAULT '0'::bigint,
@@ -49,7 +49,7 @@ CREATE TABLE alternative_name (
 
 CREATE TABLE year (
     id integer UNIQUE PRIMARY KEY,
-    host_id text REFERENCES country (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    host text REFERENCES country (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     status year_status NOT NULL DEFAULT 'closed',
     host_city text
 );
@@ -153,7 +153,7 @@ CREATE TABLE vote (
     UNIQUE(vote_set_id, score)
 );
 
-CREATE INDEX idx_country_alpha2 ON country (cc2);
+CREATE INDEX idx_country_cc3 ON country (cc3);
 CREATE INDEX idx_user_username ON user (username);
 CREATE INDEX idx_user_email ON user (email);
 CREATE INDEX idx_session_id ON session (session_id);

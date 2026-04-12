@@ -7,7 +7,8 @@ from ..db import get_db
 from ..utils import (
     UserPermissions,
     get_user_id_from_session, format_seconds, get_user_permissions,
-    get_user_role_from_session, get_years, parse_seconds, render_template
+    get_user_role_from_session, get_years, parse_seconds, render_template,
+    resolve_country_code
 )
 
 bp = Blueprint('member', __name__, url_prefix='/member')
@@ -127,11 +128,11 @@ class FormData:
         # Parse numeric fields
         try:
             year = int(form.get('year', 0))
-            country = form.get('country', 'XXX')
+            country = form.get('country', 'XX')
         except ValueError:
             errors.append('Invalid year format')
             year = 0
-            country = 'XXX'
+            country = 'XX'
 
         # Determine language IDs based on logic
         native_language_id = None
@@ -154,6 +155,103 @@ class FormData:
             native_language_id=native_language_id,
             **text_data, # type: ignore
             **boolean_data # type: ignore
+        ), errors
+
+    @classmethod
+    def from_json(cls, data: dict) -> tuple['FormData', list[str]]:
+        """Parse a JSON body and return (data, validation_errors).
+
+        Expected JSON structure:
+        {
+            "year": 2026,
+            "country": "JPN",
+            "title": "...",
+            "native_title": "...",
+            "artist": "...",
+            "languages": [1, 5],        // list of language IDs, ordered by priority
+            "is_placeholder": false,
+            "is_translation": false,
+            "does_match": true,
+            "admin_approved": false,
+            "video_link": "...",
+            "poster_link": "...",
+            "snippet_start": "1:30",
+            "snippet_end": "1:50",
+            "translated_lyrics": "...",
+            "romanized_lyrics": "...",
+            "native_lyrics": "...",
+            "notes": "...",
+            "sources": "..."
+        }
+        """
+        errors: list[str] = []
+
+        # Parse languages
+        language_ids = data.get('languages', [])
+        if not isinstance(language_ids, list):
+            errors.append('languages must be a list of language IDs')
+            language_ids = []
+        else:
+            try:
+                language_ids = [int(lid) for lid in language_ids]
+            except (ValueError, TypeError):
+                errors.append('Each language ID must be an integer')
+                language_ids = []
+
+        if not language_ids:
+            errors.append('At least one language must be selected')
+
+        # Parse boolean fields (default false for JSON)
+        boolean_data = {
+            'is_placeholder': bool(data.get('is_placeholder', False)),
+            'admin_approved': bool(data.get('admin_approved', False)),
+            'is_translation': bool(data.get('is_translation', False)),
+            'does_match': bool(data.get('does_match', False)),
+        }
+
+        # Parse and normalize text fields
+        text_data = {}
+        for key in ['title', 'native_title', 'artist', 'video_link', 'poster_link',
+                     'snippet_start', 'snippet_end', 'translated_lyrics',
+                     'romanized_lyrics', 'native_lyrics', 'notes', 'sources']:
+            value = data.get(key)
+            if value is None or value == '':
+                text_data[key] = None
+            else:
+                value = str(value).strip()
+                value = unicodedata.normalize('NFC', value)
+                value = value.replace('\r', '')
+                text_data[key] = None if value == '' else value
+
+        # Parse year and country
+        try:
+            year = int(data.get('year', 0))
+        except (ValueError, TypeError):
+            errors.append('Invalid year format')
+            year = 0
+        country = str(data.get('country', 'XX')).upper()
+
+        # Determine language IDs based on logic
+        native_language_id = None
+        title_language_id = None
+
+        if language_ids:
+            if boolean_data['does_match'] or not text_data.get('native_title'):
+                native_language_id = language_ids[0]
+
+            if boolean_data['is_translation']:
+                title_language_id = ENGLISH_LANG_ID
+            else:
+                title_language_id = native_language_id
+
+        return cls(
+            year=year,
+            country=country,
+            languages=language_ids,
+            title_language_id=title_language_id,
+            native_language_id=native_language_id,
+            **text_data,  # type: ignore
+            **boolean_data  # type: ignore
         ), errors
 
 class SongValidator:
@@ -275,7 +373,7 @@ class SongRepository:
                 UPDATE song
                 SET title = %s, native_title = %s, artist = %s, is_placeholder = %s,
                     title_language_id = %s, native_language_id = %s, video_link = %s,
-                    poster_link = coalesce(%s, poster_link),
+                    poster_link = %s,
                     snippet_start = %s, snippet_end = %s, translated_lyrics = %s,
                     romanized_lyrics = %s, native_lyrics = %s, submitter_id = %s,
                     notes = %s, sources = %s, admin_approved = %s,
@@ -498,6 +596,10 @@ def get_countries_for_year(year: int):
 
 @bp.get('/submit/<int:year>/<country>')
 def get_country_data(year: int, country: str):
+    canonical = resolve_country_code(country.upper())
+    if canonical and canonical.lower() != country.lower():
+        return redirect(url_for('member.get_country_data', year=year, country=canonical.lower()), 301)
+
     session_data = get_user_id_from_session(request.cookies.get('session'))
     user_id = session_data[0] if session_data else None
 

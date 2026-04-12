@@ -64,7 +64,7 @@ def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type
                     song['title'] = ''
                     song['artist'] = ''
                     song['country'] = ''
-                    song['code'] = 'XXX'
+                    song['code'] = 'XX'
 
     return (show_exists, song_modified)
 
@@ -136,7 +136,7 @@ def votes(username: str):
                 if vote['short_name'] != 'sc':
                     redact_song_if_show(val, vote['year'], 'sc', vote['access_type'])
             # Only show result placement for non-redacted songs.
-            if val.get('code') == 'XXX':
+            if val.get('code') == 'XX':
                 val['result_place'] = None
             else:
                 val['result_place'] = show_results.get((vote['show_id'], val['id']))

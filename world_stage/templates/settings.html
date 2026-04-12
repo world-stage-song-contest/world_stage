@@ -2,6 +2,27 @@
 {% block title %}Settings{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/forms.css">
+    <style>
+        .token-display {
+            font-family: monospace;
+            background: var(--background3);
+            border: 2px solid var(--foreground2);
+            padding: 0.75em;
+            margin: 0.5em 0;
+            word-break: break-all;
+            user-select: all;
+        }
+        .token-table { margin-top: 0.5em; }
+        .token-table td, .token-table th { padding: 0.4em 0.8em; }
+        .token-table .token-label { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+        .token-delete-btn {
+            background: var(--error);
+            color: white;
+            border: none;
+            padding: 0.3em 0.6em;
+            cursor: pointer;
+        }
+    </style>
 {% endblock %}
 {% block content %}
     <p>Here you can configure the settings for the World Stage Song Contest.</p>
@@ -33,4 +54,56 @@
         </fieldset>
         <input type="submit" value="Save Settings">
     </form>
+
+    {% if user %}
+    <hr>
+    <h2>API Tokens</h2>
+    <p>API tokens let you authenticate with the API using a <code>Bearer</code> token in the <code>Authorization</code> header.</p>
+
+    {% if new_token %}
+    <p><strong>Your new token:</strong></p>
+    <div class="token-display">{{ new_token }}</div>
+    <p>Copy this token now. It will not be shown again.</p>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('main.create_token') }}">
+        <fieldset>
+            <legend>Create new token</legend>
+            <label for="token_label">Label (optional):</label>
+            <input type="text" id="token_label" name="token_label" placeholder="e.g. my-script" maxlength="100">
+            <input type="submit" value="Create Token">
+        </fieldset>
+    </form>
+
+    {% if tokens %}
+    <table class="token-table">
+        <thead>
+            <tr>
+                <th>Label</th>
+                <th>Created</th>
+                <th>Last used</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for t in tokens %}
+            <tr>
+                <td class="token-label">{{ t.label or '(unlabelled)' }}</td>
+                <td>{{ t.created_at.strftime('%d %b %Y') }}</td>
+                <td>{{ t.last_used_at.strftime('%d %b %Y') if t.last_used_at else 'Never' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('main.delete_token') }}" style="display:inline">
+                        <input type="hidden" name="token_id" value="{{ t.id }}">
+                        <button type="submit" class="token-delete-btn" onclick="return confirm('Delete this token?')">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>You have no API tokens.</p>
+    {% endif %}
+
+    {% endif %}
 {% endblock %}
