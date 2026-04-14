@@ -86,9 +86,13 @@ def votes(username: str):
     user_id = user_id['id']
 
     cursor.execute('''
-        SELECT vote_set.id, vote_set.show_id, account.username, nickname, country_id, show.show_name, show.short_name, show.date, show.year_id, show.access_type FROM vote_set
+        SELECT vote_set.id, vote_set.show_id, account.username, nickname, country_id,
+               show.show_name, show.short_name, show.date, show.year_id, show.access_type,
+               year.special_name, year.special_short_name
+        FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         JOIN show ON vote_set.show_id = show.id
+        LEFT JOIN year ON show.year_id = year.id
         WHERE vote_set.voter_id = %s AND (show.access_type = 'full' OR show.access_type = 'partial')
         ORDER BY show.date DESC
     ''', (user_id,))
@@ -104,7 +108,9 @@ def votes(username: str):
             'short_name': row['short_name'],
             'access_type': row['access_type'],
             'date': row['date'].strftime("%d %b %Y"),
-            'year': row['year_id']
+            'year': row['year_id'],
+            'special_name': row['special_name'],
+            'special_short_name': row['special_short_name'],
         }
         votes.append(val)
 
@@ -165,7 +171,12 @@ def submissions(username: str):
     songs = get_user_songs(user_id, select_languages=True)
     results = get_show_results_for_songs([s.id for s in songs])
 
-    return render_template('user/submissions.html', songs=songs, username=username, results=results)
+    regular_songs = [s for s in songs if s.year is None or s.year >= 0]
+    special_songs = [s for s in songs if s.year is not None and s.year < 0]
+
+    return render_template('user/submissions.html',
+                           songs=regular_songs, special_songs=special_songs,
+                           username=username, results=results)
 
 def get_country_biases(user_id: int):
     db = get_db()

@@ -40,23 +40,36 @@ def init_db():
 def migrate_db() -> list[str]:
     applied_migrations = []
 
+    # Schema migrations (committed to repo) + instance-specific data migrations
+    # (excluded from git, e.g. show/song/vote imports). Files from both
+    # directories are merged and run in filename (timestamp) order.
+    migration_dirs = [
+        Path(current_app.root_path) / 'migrations',
+        Path(current_app.instance_path) / 'migrations',
+    ]
+
+    candidates = []
+    for d in migration_dirs:
+        if d.is_dir():
+            for f in d.iterdir():
+                if f.is_file() and f.suffix == '.sql':
+                    candidates.append(f)
+    candidates.sort(key=lambda p: p.name)
+
     with current_app.config["DB_POOL"] as pool:
         with pool.getconn() as db:
             with db.cursor() as cur:
-                migrations_path = Path(current_app.root_path) / 'migrations'
-
-                for f in sorted(migrations_path.iterdir()):
-                    if f.is_file() and f.suffix == '.sql':
-                        name = f.stem
-                        cur.execute('SELECT * FROM migration WHERE name = %s', (name,))
-                        if cur.fetchone():
-                            continue
-                        with f.open() as file:
-                            sql = file.read()
-                            db.execute(typing.cast(typing.LiteralString, sql))
-                        cur.execute('INSERT INTO migration (name) VALUES (%s)', (name,))
-                        db.commit()
-                        applied_migrations.append(name)
+                for f in candidates:
+                    name = f.stem
+                    cur.execute('SELECT * FROM migration WHERE name = %s', (name,))
+                    if cur.fetchone():
+                        continue
+                    with f.open() as file:
+                        sql = file.read()
+                        db.execute(typing.cast(typing.LiteralString, sql))
+                    cur.execute('INSERT INTO migration (name) VALUES (%s)', (name,))
+                    db.commit()
+                    applied_migrations.append(name)
 
     return applied_migrations
 

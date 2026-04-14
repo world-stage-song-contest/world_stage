@@ -105,4 +105,54 @@
     </tbody>
 </table>
 
+{% if special_songs %}
+<h2>Specials</h2>
+<table class="songs-table sortable">
+    <thead>
+        <tr>
+            <th style="text-align: left">Special</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Language</th>
+            <th>Submitter</th>
+            <th class="year-result">Place</th>
+            <th class="final">Final</th>
+            <th class="final">Points</th>
+            <th class="repechage">Repe</th>
+            <th class="repechage">Points</th>
+            <th class="semifinal">Semi</th>
+            <th class="semifinal">Points</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for song in special_songs %}
+        {% set r = results.get(song.id, {}) %}
+        <tr data-value="{{ loop.index }}"
+            class="{{ "placeholder" if song.placeholder else "finalised" }}">
+            <td style="text-align: left">
+                <a href="{{ url_for('year.special', short_name=song.special_short_name) }}">{{ song.special_name }}</a>
+            </td>
+            <td>{{ song.artist or '' }}</td>
+            <td><div class="song-title">
+                <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=song.special_short_name, entry_number=song.entry_number) }}">
+                    <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>
+                </a>
+                {% if song.native_title %}
+                <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=song.special_short_name, entry_number=song.entry_number) }}">
+                    <bdi lang="{{song.native_lang.str(None, song.country.cc)}}">{{ song.native_title }}</bdi>
+                </a>
+                {% endif %}
+            </div></td>
+            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+            <td>{{ song.submitter or '' }}</td>
+            {{ year_result_cell(r.get('year'), 'year-result') }}
+            {{ result_cells(r.get('f'),  'final') }}
+            {{ result_cells(r.get('sc'), 'repechage') }}
+            {{ result_cells(r.get('sf'), 'semifinal') }}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
 {% endblock %}

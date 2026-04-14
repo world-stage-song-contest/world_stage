@@ -64,20 +64,33 @@
     </style>
 {% endblock %}
 {% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
+    {% endif %}
     <span class="nav-separator"></span>
     {% for other_show in other_shows %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=other_show) }}">{{ other_show|upper }}</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=other_show) }}">{{ other_show|upper }}</a>
+    {% endif %}
     {% endfor %}
     <span class="nav-separator"></span>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results Summary</a>
+    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
+    {% endif %}
 {% endblock %}
 {% block content %}
 <div class="song-header">
     {{ flag(song.country_id, 32, song.country_name) }}
     <div>
-        <h2><a href="{{ url_for('country.details', code=song.country_id|lower, year=year) }}">{{ song.artist }} — {{ song.title }}</a></h2>
+        <h2>{% if special %}<a href="{{ url_for('country.special_details', code=song.country_id|lower, special_short_name=special, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>{% else %}<a href="{{ url_for('country.details', code=song.country_id|lower, year=year) }}">{{ song.artist }} — {{ song.title }}</a>{% endif %}</h2>
         <div class="song-meta">{{ song.country_name }} | {{ show_name }} | {{ total_points }} points from {{ voters_who_gave }} voter{{ 's' if voters_who_gave != 1 else '' }}</div>
     </div>
 </div>

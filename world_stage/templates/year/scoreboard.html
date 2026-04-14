@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Scoreboard: {{ year}} {{ show_name }}{% endblock %}
+{% block title %}Scoreboard: {{ special_name or year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/font-dseg.css">
     <link rel="stylesheet" href="/static/css/font-eurostile.css">
@@ -8,8 +8,13 @@
     <script src="/static/js/scoreboard.js"></script>
 {% endblock %}
 {% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results</a>
+    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results</a>
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
+    {% endif %}
 {% endblock %}
 
 {% block onload %}onLoad('{{ year }}', '{{ show }}'){% endblock %}

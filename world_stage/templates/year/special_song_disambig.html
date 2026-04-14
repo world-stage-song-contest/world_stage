@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ country_name }} — {{ special_name }} {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
+    <link rel="stylesheet" href="/static/css/song-table.css">
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">{{ show_name }}</a>
+{% endblock %}
+{% block content %}
+<h2>{{ country_name }} in {{ show_name }} ({{ special_name }})</h2>
+<p>{{ country_name }} has {{ songs|length }} entries in this show. Select one to view vote details:</p>
+
+<table class="results-table song-table">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Artist</th>
+            <th>Title</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for song in songs %}
+        <tr>
+            <td class="number">{{ song.entry_number }}</td>
+            <td><div class="song-artist">{{ song.artist }}</div></td>
+            <td><div class="song-title">
+                <a href="{{ url_for('year.special_song_votes', short_name=special, show=show, country_code=country.lower(), entry_number=song.entry_number) }}">
+                    {{ song.title }}
+                {% if song.native_title %}
+                    <bdi>{{ song.native_title }}</bdi>
+                {% endif %}
+                </a>
+            </div></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

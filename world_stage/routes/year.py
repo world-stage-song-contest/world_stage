@@ -8,7 +8,7 @@ from ..utils import (LCG, AbstractVoteSequencer, RandomVoteSequencer, Show, Susp
                      ChronologicalVoteSequencer, ShowData,
                      get_show_id, dt_now, get_user_role_from_session,
                      get_votes_for_song, get_year_songs, get_year_placements, get_year_winner,
-                     get_show_results_for_songs, get_special_winner, render_template, get_show_songs,
+                     get_show_results_for_songs, render_template, get_show_songs,
                      resolve_country_code)
 from ..db import fetchone, get_db
 
@@ -18,30 +18,35 @@ def get_specials() -> list[dict]:
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id IS NULL')
+    cursor.execute('''
+        SELECT id, closed, special_name, special_short_name
+        FROM year
+        WHERE id < 0
+        ORDER BY id DESC
+    ''')
     specials = [row for row in cursor.fetchall()]
 
     for special in specials:
-        special['winner'] = get_special_winner(special['short_name'])
+        special['winner'] = get_year_winner(special['id'])
 
     return specials
 
-def get_other_shows(year: int | None, exclude_show: str | None) -> list[str]:
+def resolve_special(short_name: str) -> dict | None:
+    """Look up a special by its short name. Returns the year row or None."""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT id, closed, special_name, special_short_name FROM year WHERE special_short_name = %s', (short_name,))
+    return cursor.fetchone()
+
+def get_other_shows(year: int, exclude_show: str | None) -> list[str]:
     db = get_db()
     cursor = db.cursor()
 
-    if year:
-        cursor.execute('''
-            SELECT short_name FROM show
-            WHERE year_id = %s AND short_name <> %s
-            ORDER BY id
-        ''', (year, exclude_show))
-    else:
-        cursor.execute('''
-            SELECT short_name FROM show
-            WHERE year_id IS NULL AND short_name <> %s
-            ORDER BY id
-        ''', (exclude_show,))
+    cursor.execute('''
+        SELECT short_name FROM show
+        WHERE year_id = %s AND short_name <> %s
+        ORDER BY id
+    ''', (year, exclude_show))
 
     return [row['short_name'] for row in cursor.fetchall()]
 
@@ -54,7 +59,7 @@ def index():
     upcoming = []
     ongoing = []
 
-    cursor.execute('SELECT id, closed FROM year ORDER BY id DESC')
+    cursor.execute('SELECT id, closed FROM year WHERE id >= 0 ORDER BY id DESC')
     for data in cursor.fetchall():
         if data['closed'] == 1:
             years.append(data)
@@ -72,81 +77,685 @@ def index():
 
     return render_template('year/index.html', years=years, upcoming=upcoming, specials=specials, ongoing=ongoing)
 
-@bp.get('/<year>')
-def year(year: str):
+@bp.get('/special/<short_name>')
+def special(short_name: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template('error.html', error="Special not found"), 404
+
+    _year = special_year['id']
     db = get_db()
     cursor = db.cursor()
 
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+    songs = get_year_songs(_year, select_languages=True)
 
-    if _year:
-        cursor.execute('SELECT closed FROM year WHERE id = %s', (year,))
-        closed = cursor.fetchone() or {'closed': 0}
-        cl = closed['closed'] == 1
+    cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder', (_year,))
+    total_entries = fetchone(cursor)['c']
+    total_placeholders = len(songs) - total_entries
+    cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = %s ORDER BY id', (_year,))
+    shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
+    shows.sort()
 
-        songs = get_year_songs(_year, select_languages=True)
+    cl = special_year['closed'] == 1
+    year_placements = get_year_placements(_year) if cl else {}
 
-        free_countries = []
+    show_names = {s.short_name for s in shows}
+    has_sc = 'sc' in show_names
+    has_sf = any(sn == 'sf' or sn.startswith('sf') for sn in show_names)
+    multi_show = has_sc or has_sf
 
-        if closed['closed'] == 0:
-            cursor.execute('''
-                SELECT id, name FROM country
-                WHERE id <> ALL(%(ccs)s)
-                  AND is_participating = true
-                  AND available_from <= %(year)s
-                  AND available_until >= %(year)s
-                ORDER BY name
-            ''', {'ccs': [s.country.cc for s in songs], 'year': _year})
+    results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl == 1) else {}
 
-            free_countries = cursor.fetchall()
+    sf_numbers: dict[int, str] = {}
+    if has_sf:
+        cursor.execute('''
+            SELECT ss.song_id, sh.short_name
+            FROM song_show ss
+            JOIN show sh ON sh.id = ss.show_id
+            WHERE sh.year_id = %s
+              AND LEFT(sh.short_name, 2) = 'sf'
+        ''', (_year,))
+        sf_numbers = {row['song_id']: row['short_name'] for row in cursor.fetchall()}
 
-        cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder', (_year,))
-        total_entries = fetchone(cursor)['c']
-        total_placeholders = len(songs)-total_entries
-        cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = %s ORDER BY id', (year,))
-        shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
-        shows.sort()
+    return render_template('year/year.html', year=short_name, songs=songs, free_countries=[],
+                           is_closed=cl, shows=shows, total=total_entries, placeholders=total_placeholders,
+                           year_placements=year_placements, results=results,
+                           multi_show=multi_show, has_sc=has_sc, has_sf=has_sf,
+                           sf_numbers=sf_numbers,
+                           special=short_name, special_name=special_year['special_name'])
 
-        year_placements = get_year_placements(_year) if cl else {}
+@bp.get('/special/<short_name>/<show>')
+def special_results(short_name: str, show: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template('error.html', error="Special not found"), 404
 
-        show_names = {s.short_name for s in shows}
-        has_sc = 'sc' in show_names
-        has_sf = any(sn == 'sf' or sn.startswith('sf') for sn in show_names)
-        multi_show = has_sc or has_sf
+    _year = special_year['id']
+    show_data = get_show_id(show, _year)
 
-        results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl == 1) else {}
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
 
-        # SF assignment: which semi-final each song competed in, regardless of
-        # whether the show is published yet (no access_type gate).
-        sf_numbers: dict[int, str] = {}
-        if has_sf:
-            cursor.execute('''
-                SELECT ss.song_id, sh.short_name
-                FROM song_show ss
-                JOIN show sh ON sh.id = ss.show_id
-                WHERE sh.year_id = %s
-                  AND LEFT(sh.short_name, 2) = 'sf'
-            ''', (_year,))
-            sf_numbers = {row['song_id']: row['short_name'] for row in cursor.fetchall()}
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
 
-        return render_template('year/year.html', year=year, songs=songs, free_countries=free_countries,
-                               is_closed=cl, shows=shows, total=total_entries, placeholders=total_placeholders,
-                               year_placements=year_placements, results=results,
-                               multi_show=multi_show, has_sc=has_sc, has_sf=has_sf,
-                               sf_numbers=sf_numbers)
+    if show_data.access_type == 'none' and not permissions.can_view_restricted:
+        return render_template('error.html', error="This show has no songs"), 400
+
+    reveal = ''
+    access = show_data.access_type
+
+    if permissions.can_view_restricted:
+        if access == 'draw':
+            access = 'partial'
+            reveal = "unrevealed"
+        elif access == 'partial':
+            access = 'full'
+            reveal = "unrevealed"
+        else:
+            access = 'full'
+
+    if access == 'draw':
+        songs = get_show_songs(_year, show, select_votes=False)
     else:
-        return render_template('year/specials.html', specials=get_specials())
+        songs = get_show_songs(_year, show, select_votes=True)
+
+    if not songs:
+        return render_template('error.html', error="No songs found for this show."), 404
+
+    participants = len(songs)
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT COUNT(voter_id) AS c FROM vote_set WHERE show_id = %s', (show_data.id,))
+    voter_count = fetchone(cursor)['c']
+    songs.sort(reverse=True)
+
+    off = 0
+    if access == 'partial':
+        if show_data.dtf:
+            off = show_data.dtf - 1
+        if show_data.sc:
+            off += show_data.sc
+        songs = songs[off:]
+        if reveal:
+            for s in songs:
+                s.hidden = True
+
+        if songs:
+            if songs[0].vote_data:
+                songs[0].vote_data.ro = -1
+            songs[0].artist = ''
+            songs[0].title = ''
+            songs[0].country.name = ''
+            songs[0].country.cc = 'XX'
+    elif access == 'full' and reveal:
+        if show_data.dtf:
+            off = show_data.dtf - 1
+        if show_data.sc:
+            off += show_data.sc
+        if reveal:
+            for i in range(off + 1):
+                songs[i].hidden = True
+        off = 0
+
+    qualifiers = show_data.dtf or 0
+    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+
+    return render_template('year/summary.html', hidden=reveal, qualifiers=qualifiers, sc_qualifiers=sc_qualifiers,
+                           songs=songs, points=show_data.points, show=show, access=access, offset=off, other_shows=get_other_shows(_year, show),
+                           show_name=show_data.name, short_name=show_data.short_name, show_id=show_data.id, year=short_name, participants=participants, voters=voter_count,
+                           special=short_name, special_name=special_year['special_name'])
+
+@bp.get('/special/<short_name>/<show>/detailed')
+def special_detailed_results(short_name: str, show: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template('error.html', error="Special not found"), 404
+
+    _year = special_year['id']
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access the detailed results yet"), 400
+
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
+
+    songs = get_show_songs(_year, show, select_votes=True)
+    if not songs:
+        return render_template('error.html', error="No songs found for this show."), 404
+
+    db = get_db()
+    cursor = db.cursor()
+
+    results: dict = {}
+    cursor.execute('''
+        SELECT username, COALESCE(country_id, 'XX') as code, country.name AS country FROM vote_set
+        JOIN account ON vote_set.voter_id = account.id
+        LEFT OUTER JOIN country ON vote_set.country_id = country.id
+        WHERE vote_set.show_id = %s
+        ORDER BY created_at
+    ''', (show_data.id,))
+    for row in cursor.fetchall():
+        results[row['username']] = row
+
+    for song in songs:
+        cursor.execute('''
+            SELECT score, username FROM vote
+            JOIN vote_set ON vote.vote_set_id = vote_set.id
+            JOIN account ON vote_set.voter_id = account.id
+            WHERE song_id = %s AND show_id = %s
+            ORDER BY created_at
+        ''', (song.id, show_data.id))
+
+        for row in cursor.fetchall():
+            results[row['username']][song.id] = row['score']
+
+    songs.sort(reverse=True)
+
+    qualifiers = show_data.dtf or 0
+    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+
+    return render_template('year/detailed.html', qualifiers=qualifiers, sc_qualifiers=sc_qualifiers, other_shows=get_other_shows(_year, show),
+                           songs=songs, results=results, show_name=show_data.name, show=show, year=short_name, participants=len(songs),
+                           special=short_name, special_name=special_year['special_name'])
+
+@bp.get('/special/<short_name>/<show>/scoreboard')
+def special_scoreboard(short_name: str, show: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template('error.html', error="Special not found"), 404
+
+    _year = special_year['id']
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access the scoreboard yet"), 400
+
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
+
+    return render_template('year/scoreboard.html', show=show, year=short_name, show_name=show_data.name,
+                           special=short_name, special_name=special_year['special_name'])
+
+@bp.get('/special/<short_name>/<show>/scoreboard/votes')
+def special_scores(short_name: str, show: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return {"error": "Special not found"}, 404
+
+    _year = special_year['id']
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return {"error": "Show not found"}, 404
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return {'error': "You aren't allowed to access the scoreboard"}, 400
+
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
+        return {'error': "Voting hasn't closed yet."}, 400
+
+    db = get_db()
+    cursor = db.cursor()
+    songs = get_show_songs(_year, show, select_votes=True)
+    if not songs:
+        return {"error": "No songs found for this show."}, 404
+
+    cursor.execute('''
+        SELECT song_id, score AS pts, username FROM vote
+        JOIN vote_set ON vote.vote_set_id = vote_set.id
+        JOIN account ON vote_set.voter_id = account.id
+        JOIN song ON vote.song_id = song.id
+        WHERE vote_set.show_id = %s
+        ORDER BY vote_set.created_at
+    ''', (show_data.id,))
+    results_raw = cursor.fetchall()
+    results: dict[str, dict[int, int]] = defaultdict(dict)
+    for row in results_raw:
+        results[row['username']][row['pts']] = row['song_id']
+
+    sequencer: AbstractVoteSequencer
+    if show_data.id < 60:
+        sequencer = SuspensefulVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+    elif show_data.id < 65:
+        sequencer = RandomVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+    else:
+        sequencer = ChronologicalVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+    vote_order = sequencer.get_order()
+
+    user_songs = defaultdict(list)
+    for voter_username in vote_order:
+        cursor.execute('''
+            SELECT song.id FROM song
+            JOIN account ON song.submitter_id = account.id
+            JOIN song_show ON song.id = song_show.song_id
+            WHERE account.username = %s AND song_show.show_id = %s
+        ''', (voter_username, show_data.id))
+        for song_id in cursor.fetchall():
+            user_songs[voter_username].append(song_id['id'])
+
+    cursor.execute('''
+        SELECT username, nickname, country_id AS code, country.name AS country FROM vote_set
+        JOIN account ON vote_set.voter_id = account.id
+        JOIN country ON vote_set.country_id = country.id
+        WHERE vote_set.show_id = %s
+    ''', (show_data.id,))
+    vote_set = cursor.fetchall()
+    voter_assoc = {}
+    for row in vote_set:
+        voter_assoc[row['username']] = row
+
+    return {'songs': songs, 'results': results, 'points': show_data.points, 'vote_order': vote_order, 'associations': voter_assoc, 'user_songs': user_songs}
+
+@bp.get('/special/<short_name>/<show>/predictions')
+def special_predictions(short_name: str, show: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template('error.html', error="Special not found"), 404
+
+    _year = special_year['id']
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access the predictions yet"), 400
+
+    if (show_data.voting_closes
+            and show_data.voting_closes > dt_now()
+            and not permissions.can_view_restricted):
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
+
+    songs = get_show_songs(_year, show, select_votes=True)
+    if not songs:
+        return render_template('error.html', error="No songs found for this show."), 404
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT prediction_set.id, account.username, prediction_set.created_at
+        FROM prediction_set
+        JOIN account ON prediction_set.user_id = account.id
+        WHERE prediction_set.show_id = %s
+        ORDER BY prediction_set.created_at
+    ''', (show_data.id,))
+    pred_sets = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT prediction.set_id, prediction.song_id, prediction.position
+        FROM prediction
+        JOIN prediction_set ON prediction.set_id = prediction_set.id
+        WHERE prediction_set.show_id = %s
+    ''', (show_data.id,))
+
+    pred_by_set: dict[int, dict[int, int]] = defaultdict(dict)
+    for row in cursor.fetchall():
+        pred_by_set[row['set_id']][row['song_id']] = row['position']
+
+    n_predictors = len(pred_sets)
+    n_qualifiers = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
+
+    is_final = n_qualifiers <= 0
+    if is_final:
+        odds = _compute_winning_odds(songs, pred_by_set, n_predictors)
+    else:
+        odds = _compute_qualification_odds(songs, pred_by_set, n_predictors, n_qualifiers)
+
+    predictors: dict[str, dict] = {}
+    for ps in pred_sets:
+        predictors[ps['username']] = pred_by_set.get(ps['id'], {})
+
+    pred_points: dict[int, float] = {song.id: 0.0 for song in songs}
+    for set_preds in pred_by_set.values():
+        for sid, pos in set_preds.items():
+            if sid in pred_points:
+                pred_points[sid] += 12 * (0.827 ** (pos - 1))
+
+    pred_rank: dict[int, int] = {}
+    for rank, song in enumerate(
+        sorted(songs, key=lambda s: pred_points[s.id], reverse=True), start=1
+    ):
+        pred_rank[song.id] = rank
+
+    songs.sort(key=lambda s: odds[s.id], reverse=True)
+
+    predicted_class: dict[int, str] = {}
+    n_total = len(songs)
+    if n_total:
+        if is_final:
+            predicted_class[songs[0].id] = 'first'
+            if n_total >= 2:
+                predicted_class[songs[1].id] = 'second'
+            if n_total >= 3:
+                predicted_class[songs[2].id] = 'third'
+            predicted_class[songs[-1].id] = 'last'
+        else:
+            dtf_n = show_data.dtf or 0
+            sc_n = show_data.sc or 0
+            for i, song in enumerate(songs):
+                if i < dtf_n:
+                    predicted_class[song.id] = 'direct-to-final'
+                elif i < dtf_n + sc_n:
+                    predicted_class[song.id] = 'second-chance'
+            predicted_class[songs[-1].id] = 'last'
+
+    copy_lines: list[str] = []
+    for i, song in enumerate(songs, 1):
+        prob = odds[song.id]
+        decimal_odds = (1 / prob) if prob > 0 else float('inf')
+        pct = prob * 100
+        copy_lines.append(f"{i}. {song.country.name}: {decimal_odds:.2f} ({pct:.2f}%)")
+    copy_text = '\n'.join(copy_lines)
+
+    show_copy = show_data.access_type != 'full'
+
+    return render_template('year/predictions.html',
+                           songs=songs, predictors=predictors, odds=odds,
+                           predicted_class=predicted_class,
+                           pred_points=pred_points, pred_rank=pred_rank,
+                           n_predictors=n_predictors, n_qualifiers=n_qualifiers,
+                           copy_text=copy_text, show_copy=show_copy,
+                           show=show, show_name=show_data.name, year=short_name,
+                           other_shows=get_other_shows(_year, show),
+                           special=short_name, special_name=special_year['special_name'])
+
+@bp.get('/special/<short_name>/<show>/song/<country_code>')
+def special_song_votes_disambig(short_name: str, show: str, country_code: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template('error.html', error="Special not found"), 404
+
+    canonical = resolve_country_code(country_code.upper())
+    if canonical and canonical.lower() != country_code.lower():
+        return redirect(url_for('year.special_song_votes_disambig',
+                                short_name=short_name, show=show,
+                                country_code=canonical.lower()), 301)
+
+    _year = special_year['id']
+    show_data = get_show_id(show, _year)
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT song.id, song.title, song.native_title, song.artist,
+               song.entry_number, country.name AS country_name
+        FROM song
+        JOIN song_show ON song.id = song_show.song_id
+        JOIN country ON song.country_id = country.id
+        WHERE song_show.show_id = %s AND song.country_id = UPPER(%s)
+        ORDER BY song.entry_number
+    ''', (show_data.id, country_code))
+    songs = cursor.fetchall()
+
+    if not songs:
+        return render_template('error.html', error="Song not found in this show"), 404
+
+    if len(songs) == 1:
+        return redirect(url_for('year.special_song_votes',
+                                short_name=short_name, show=show,
+                                country_code=country_code.lower(),
+                                entry_number=songs[0]['entry_number']))
+
+    return render_template('year/special_song_disambig.html',
+                           songs=songs, country=country_code,
+                           country_name=songs[0]['country_name'],
+                           show=show, show_name=show_data.name,
+                           special=short_name,
+                           special_name=special_year['special_name'])
+
+@bp.get('/special/<short_name>/<show>/song/<country_code>/<int:entry_number>')
+def special_song_votes(short_name: str, show: str, country_code: str, entry_number: int):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template('error.html', error="Special not found"), 404
+
+    canonical = resolve_country_code(country_code.upper())
+    if canonical and canonical.lower() != country_code.lower():
+        return redirect(url_for('year.special_song_votes', short_name=short_name, show=show, country_code=canonical.lower(), entry_number=entry_number), 301)
+
+    _year = special_year['id']
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if show_data.access_type not in ('full', 'partial') and not permissions.can_view_restricted:
+        return render_template('error.html', error="You aren't allowed to access the vote breakdown yet"), 400
+
+    if (show_data.voting_closes
+        and show_data.voting_closes > dt_now()
+        and not permissions.can_view_restricted):
+        return render_template('error.html', error="Voting hasn't closed yet."), 400
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT song.id, song.title, song.artist, song.country_id,
+               country.name AS country_name, country.cc3,
+               song_show.running_order, song.entry_number
+        FROM song
+        JOIN song_show ON song.id = song_show.song_id
+        JOIN country ON song.country_id = country.id
+        WHERE song_show.show_id = %s
+          AND song.country_id = UPPER(%s)
+          AND song.entry_number = %s
+    ''', (show_data.id, country_code, entry_number))
+    song = cursor.fetchone()
+
+    if not song:
+        return render_template('error.html', error="Song not found in this show"), 404
+
+    if show_data.access_type == 'partial' and not permissions.can_view_restricted:
+        qualifier_cutoff = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
+        if qualifier_cutoff > 0:
+            cursor.execute('''
+                SELECT place FROM country_show_results
+                WHERE song_id = %s AND show_id = %s
+            ''', (song['id'], show_data.id))
+            row = cursor.fetchone()
+            if row and row['place'] <= qualifier_cutoff:
+                return render_template('error.html', error="The results for this song haven't been revealed yet"), 400
+
+    cursor.execute('''
+        SELECT account.username, COALESCE(vote_set.country_id, 'XX') AS code,
+               country.name AS country_name, country.cc3
+        FROM vote_set
+        JOIN account ON vote_set.voter_id = account.id
+        LEFT OUTER JOIN country ON vote_set.country_id = country.id
+        WHERE vote_set.show_id = %s
+        ORDER BY account.username
+    ''', (show_data.id,))
+    all_voters = {row['username']: row for row in cursor.fetchall()}
+
+    cursor.execute('''
+        SELECT account.username, vote.score
+        FROM vote
+        JOIN vote_set ON vote.vote_set_id = vote_set.id
+        JOIN account ON vote_set.voter_id = account.id
+        WHERE vote.song_id = %s AND vote_set.show_id = %s
+    ''', (song['id'], show_data.id))
+    votes_by_voter = {row['username']: row['score'] for row in cursor.fetchall()}
+
+    points = sorted(show_data.points, reverse=True)
+
+    groups: dict[int, list[dict]] = defaultdict(list)
+    no_points_voters: list[dict] = []
+
+    for username, voter_info in sorted(all_voters.items(), key=lambda x: x[0].lower()):
+        score = votes_by_voter.get(username, 0)
+        voter_entry = {
+            'username': username,
+            'code': voter_info['code'],
+            'cc3': voter_info.get('cc3', ''),
+            'country_name': voter_info.get('country_name', ''),
+        }
+        if score > 0:
+            groups[score].append(voter_entry)
+        else:
+            no_points_voters.append(voter_entry)
+
+    point_groups = []
+    total_points = 0
+    for pts in points:
+        voters_at_pts = groups.get(pts, [])
+        voter_count = len(voters_at_pts)
+        group_total = pts * voter_count
+        total_points += group_total
+        point_groups.append({
+            'points': pts,
+            'voters': voters_at_pts,
+            'voter_count': voter_count,
+            'total': group_total,
+        })
+    total_voters = len(all_voters)
+    voters_who_gave = len(votes_by_voter)
+
+    return render_template('year/song_votes.html',
+                           song=song, show=show, show_name=show_data.name,
+                           year=short_name, point_groups=point_groups,
+                           no_points_voters=no_points_voters,
+                           total_points=total_points,
+                           total_voters=total_voters,
+                           voters_who_gave=voters_who_gave,
+                           other_shows=get_other_shows(_year, show),
+                           special=short_name, special_name=special_year['special_name'])
+
+@bp.get('/special/<short_name>/<show>/playlist')
+def special_playlist(short_name: str, show: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template('error.html', error="Special not found"), 404
+
+    _year = special_year['id']
+    show_data = get_show_id(show, _year)
+
+    if not show_data:
+        return render_template('error.html', error="Show not found"), 404
+
+    postcards = request.args.get('postcards', 'false') == 'true'
+
+    value, bad_countries = generate_playlist(show_data, postcards)
+
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+
+    if permissions.can_view_restricted:
+        bad_countries = []
+
+    if bad_countries:
+        bad_countries.sort()
+        return render_template('error.html', error=("Not all links for this show have been corrected. "
+                                                    "Please ping one of the admins. "
+                                                    f"Invalid links: {', '.join(bad_countries)}."))
+
+    extra = "" if postcards else "x"
+    filename = f"{short_name}{show}{extra}.m3u"
+
+    return Response(
+        value,
+        mimetype='audio/x-mpegurl',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+
+@bp.get('/<int:year>')
+def year(year: int):
+    _year = year
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('SELECT closed FROM year WHERE id = %s', (_year,))
+    closed = cursor.fetchone() or {'closed': 0}
+    cl = closed['closed'] == 1
+
+    songs = get_year_songs(_year, select_languages=True)
+
+    free_countries = []
+
+    if closed['closed'] == 0 and _year >= 0:
+        cursor.execute('''
+            SELECT id, name FROM country
+            WHERE id <> ALL(%(ccs)s)
+              AND is_participating = true
+              AND available_from <= %(year)s
+              AND available_until >= %(year)s
+            ORDER BY name
+        ''', {'ccs': [s.country.cc for s in songs], 'year': _year})
+
+        free_countries = cursor.fetchall()
+
+    cursor.execute('SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder', (_year,))
+    total_entries = fetchone(cursor)['c']
+    total_placeholders = len(songs)-total_entries
+    cursor.execute('SELECT short_name, show_name, date FROM show WHERE year_id = %s ORDER BY id', (_year,))
+    shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
+    shows.sort()
+
+    year_placements = get_year_placements(_year) if cl else {}
+
+    show_names = {s.short_name for s in shows}
+    has_sc = 'sc' in show_names
+    has_sf = any(sn == 'sf' or sn.startswith('sf') for sn in show_names)
+    multi_show = has_sc or has_sf
+
+    results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl == 1) else {}
+
+    # SF assignment: which semi-final each song competed in, regardless of
+    # whether the show is published yet (no access_type gate).
+    sf_numbers: dict[int, str] = {}
+    if has_sf:
+        cursor.execute('''
+            SELECT ss.song_id, sh.short_name
+            FROM song_show ss
+            JOIN show sh ON sh.id = ss.show_id
+            WHERE sh.year_id = %s
+              AND LEFT(sh.short_name, 2) = 'sf'
+        ''', (_year,))
+        sf_numbers = {row['song_id']: row['short_name'] for row in cursor.fetchall()}
+
+    return render_template('year/year.html', year=year, songs=songs, free_countries=free_countries,
+                           is_closed=cl, shows=shows, total=total_entries, placeholders=total_placeholders,
+                           year_placements=year_placements, results=results,
+                           multi_show=multi_show, has_sc=has_sc, has_sf=has_sf,
+                           sf_numbers=sf_numbers)
 
 
-@bp.get('/<year>/<show>')
-def results(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>')
+def results(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -222,12 +831,9 @@ def results(year: str, show: str):
                            songs=songs, points=show_data.points, show=show, access=access, offset=off, other_shows=get_other_shows(_year, show),
                            show_name=show_data.name, short_name=show_data.short_name, show_id=show_data.id, year=year, participants=participants, voters=voter_count)
 
-@bp.get('/<year>/<show>/detailed')
-def detailed_results(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>/detailed')
+def detailed_results(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -282,16 +888,13 @@ def detailed_results(year: str, show: str):
     return render_template('year/detailed.html', qualifiers=qualifiers, sc_qualifiers=sc_qualifiers, other_shows=get_other_shows(_year, show),
                            songs=songs, results=results, show_name=show_data.name, show=show, year=year, participants=len(songs))
 
-@bp.get('/<year>/<show>/song/<country_code>')
-def song_votes(year: str, show: str, country_code: str):
+@bp.get('/<int:year>/<show>/song/<country_code>')
+def song_votes(year: int, show: str, country_code: str):
     canonical = resolve_country_code(country_code.upper())
     if canonical and canonical.lower() != country_code.lower():
         return redirect(url_for('year.song_votes', year=year, show=show, country_code=canonical.lower()), 301)
 
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -406,12 +1009,9 @@ def song_votes(year: str, show: str, country_code: str):
                            voters_who_gave=voters_who_gave,
                            other_shows=get_other_shows(_year, show))
 
-@bp.get('/<year>/<show>/scoreboard')
-def scoreboard(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>/scoreboard')
+def scoreboard(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -430,12 +1030,9 @@ def scoreboard(year: str, show: str):
 
     return render_template('year/scoreboard.html', show=show, year=year, show_name=show_data.name)
 
-@bp.get('/<year>/<show>/scoreboard/votes')
-def scores(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>/scoreboard/votes')
+def scores(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -504,12 +1101,9 @@ def scores(year: str, show: str):
 
     return {'songs': songs, 'results': results, 'points': show_data.points, 'vote_order': vote_order, 'associations': voter_assoc, 'user_songs': user_songs}
 
-@bp.get('/<year>/<show>/qualifiers')
-def qualifiers(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>/qualifiers')
+def qualifiers(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -531,12 +1125,9 @@ def qualifiers(year: str, show: str):
 
     return render_template('year/qualifiers.html', show=show, year=year, show_name=show_data.name)
 
-@bp.post('/<year>/<show>/qualifiers')
-def qualifiers_post(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.post('/<int:year>/<show>/qualifiers')
+def qualifiers_post(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -615,12 +1206,9 @@ def qualifiers_post(year: str, show: str):
 
     return {'success': True, 'message': "Qualifiers saved successfully."}
 
-@bp.get('/<year>/<show>/qualifiers/votes')
-def qualifiers_scores(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>/qualifiers/votes')
+def qualifiers_scores(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -778,12 +1366,9 @@ def _compute_winning_odds(
     return {sid: v / n_predictors for sid, v in accumulator.items()}
 
 
-@bp.get('/<year>/<show>/predictions')
-def show_predictions(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>/predictions')
+def show_predictions(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -905,12 +1490,9 @@ def show_predictions(year: str, show: str):
                            other_shows=get_other_shows(_year, show))
 
 
-@bp.get('/<year>/<show>/voters')
-def show_voters(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>/voters')
+def show_voters(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
@@ -1021,12 +1603,9 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
 
     return output.getvalue(), bad_countries
 
-@bp.get('/<year>/<show>/playlist')
-def show_playlist(year: str, show: str):
-    try:
-        _year = int(year)
-    except ValueError:
-        _year = None
+@bp.get('/<int:year>/<show>/playlist')
+def show_playlist(year: int, show: str):
+    _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:

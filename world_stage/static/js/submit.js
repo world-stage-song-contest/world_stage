@@ -155,18 +155,16 @@ async function handleSubmit(e) {
 
         if (res.ok) {
             const song = data.result;
-            currentSongId = song.id;
-            const artist = song.artist || '';
-            const title = song.title || '';
-            const verb = res.status === 201 ? 'submitted' : 'updated';
-            showSuccess(`The song "${artist} — ${title}" has been ${verb} for ${body.year}.`);
-            // Re-populate countries (own list may have changed)
-            const yearSelect = document.getElementById('year');
-            if (yearSelect.value) {
-                const countryVal = document.getElementById('country').value;
-                await populateCountries(yearSelect);
-                document.getElementById('country').value = countryVal;
+            const cc = (song.country_id || '').toLowerCase();
+            // Specials use /country/<cc>/<short_name>/<entry_number>,
+            // regular years use /country/<cc>/<year>.
+            let target;
+            if (song.special_short_name) {
+                target = `/country/${cc}/${song.special_short_name}/${song.entry_number}`;
+            } else {
+                target = `/country/${cc}/${song.year}`;
             }
+            window.location.href = target;
         } else {
             handleError(data.error?.description || 'Submission failed');
         }

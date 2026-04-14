@@ -1,20 +1,34 @@
 {%extends "base.html" %}
-{% block title %}Predictions: {{year or ''}} {{ show_name }}{% endblock %}
+{% block title %}Predictions: {{ special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
     <link rel="stylesheet" href="/static/css/predict.css">
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
+    {% endif %}
     <span class="nav-separator"></span>
     {% for other_show in other_shows %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_predictions', short_name=special, show=other_show) }}">{{ other_show|upper }}</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=other_show) }}">{{ other_show|upper }}</a>
+    {% endif %}
     {% endfor %}
     <span class="nav-separator"></span>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results Summary</a>
+    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.special_scoreboard', short_name=special, show=show) }}">Scoreboard</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
     <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
+    {% endif %}
 {% endblock %}
 {% block content %}
 

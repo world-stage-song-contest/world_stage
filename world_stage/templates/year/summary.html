@@ -1,19 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Results: {{ year or '' }} {{ show_name }}{% endblock %}
+{% block title %}Results: {{ special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
     <script src="/static/js/year.js"></script>
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block navigation %}
-    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{% if year == 'special'%}Specials{%else%}{{year}}{%endif%}</a>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
+    {% endif %}
     <span class="nav-separator"></span>
     {% for other_show in other_shows %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=other_show) }}"> {{ other_show|upper }}</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=other_show)}}"> {{ other_show|upper }}</a>
+    {% endif %}
     {% endfor %}
     <span class="nav-separator"></span>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.special_scoreboard', short_name=special, show=show) }}">Scoreboard</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
     <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
+    {% endif %}
 {% endblock %}
 {% block content %}
 {% if secret %}
@@ -26,8 +39,13 @@
 </div>
 <div style="margin: 0.5em 0;">
     <strong>Download playlist:</strong>
+    {% if special %}
+    <a href="{{ url_for('year.special_playlist', short_name=special, show=show, postcards='true') }}">With postcards</a>/<a
+    href="{{ url_for('year.special_playlist', short_name=special, show=show, postcards='false') }}">Without postcards</a>
+    {% else %}
     <a href="{{ url_for('year.show_playlist', year=year, show=show, postcards='true') }}">With postcards</a>/<a
     href="{{ url_for('year.show_playlist', year=year, show=show, postcards='false') }}">Without postcards</a>
+    {% endif %}
 </div>
 <div id="scroll-container">
 <table class="sortable">
@@ -61,9 +79,13 @@
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
                 {% if not song.hidden and song.year is not none and access in ('partial', 'full') %}
-                <td><a href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower()) }}">{{ song.title }}</a></td>
+                {% if special %}
+                <td><a href="{{ url_for('year.special_song_votes', short_name=special, show=show, country_code=song.country.cc.lower(), entry_number=song.entry_number) }}">{{ song.title }}</a></td>
                 {% else %}
-                <td><a href="{{ url_for('country.details', year=year, code=song.country.cc.lower()) }}">{{ song.title }}</a></td>
+                <td><a href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower()) }}">{{ song.title }}</a></td>
+                {% endif %}
+                {% else %}
+                <td>{{ song.title }}</td>
                 {% endif %}
             {% if access != 'draw' %}
                 <td class="number extra-visible">{{ place }}</td>

@@ -591,30 +591,32 @@ def dt_now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 def get_show_id(show: str, year: int | None = None) -> ShowData | None:
-    if year:
-        short_show_name = show
-    else:
-        show_data = show.split('-')
-        if len(show_data) == 2:
-            year = int(show_data[0])
-            short_show_name = show_data[1]
-        else:
-            year = None
-            short_show_name = show_data[0]
-
     db = get_db()
     cursor = db.cursor()
 
     if year:
-        cursor.execute('''
-            SELECT id, point_system_id, show_name, voting_opens, voting_closes, predictions_close, dtf, sc, special, access_type FROM show
-            WHERE year_id = %s AND short_name = %s
-        ''', (year, short_show_name))
+        short_show_name = show
     else:
-        cursor.execute('''
-            SELECT id, point_system_id, show_name, voting_opens, voting_closes, predictions_close, dtf, sc, special, access_type FROM show
-            WHERE short_name = %s AND year_id IS NULL
-        ''', (short_show_name,))
+        # Format: "year-show" e.g. "2025-f" or "cs24-f" for specials
+        parts = show.split('-', 1)
+        if len(parts) == 2:
+            short_show_name = parts[1]
+            try:
+                year = int(parts[0])
+            except ValueError:
+                # Non-numeric prefix: look up as special short name
+                cursor.execute('SELECT id FROM year WHERE special_short_name = %s', (parts[0],))
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                year = row['id']
+        else:
+            return None
+
+    cursor.execute('''
+        SELECT id, point_system_id, show_name, voting_opens, voting_closes, predictions_close, dtf, sc, special, access_type FROM show
+        WHERE year_id = %s AND short_name = %s
+    ''', (year, short_show_name))
 
     show_row = cursor.fetchone()
     if show_row:
@@ -874,7 +876,8 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                account.username, song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
-               song.submitter_id, song.notes, song.sources, song.poster_link
+               song.submitter_id, song.notes, song.sources, song.poster_link,
+               song.entry_number
         FROM song
         JOIN song_show ON song.id = song_show.song_id
         JOIN show ON song_show.show_id = show.id
@@ -883,9 +886,12 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
         WHERE show.id = %s
         ORDER BY {additional_sort} song_show.running_order, song_show.id
         ''', (show_id,))
-    songs = [Song(RawSongData(song,
-                              show_id=show_id if select_votes else None))
-                for song in cursor.fetchall()]
+    rows = cursor.fetchall()
+    songs = []
+    for row in rows:
+        s = Song(RawSongData(row, show_id=show_id if select_votes else None))
+        s.entry_number = row['entry_number']
+        songs.append(s)
 
     if select_languages:
         for song in songs:
@@ -919,8 +925,8 @@ def get_year_winner(year: int) -> Song | None:
 
     return get_show_winner(year, 'f')
 
-def get_special_winner(show: str) -> Song | None:
-    return get_show_winner(None, show)
+def get_special_winner(show: str, year: int) -> Song | None:
+    return get_show_winner(year, show)
 
 def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
     db = get_db()
@@ -974,7 +980,8 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id, song.poster_link,
                    song.video_link, song.snippet_start, song.snippet_end,
-                   song.submitter_id, song.notes, song.sources
+                   song.submitter_id, song.notes, song.sources,
+                   song.entry_number, year.special_name, year.special_short_name
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN account ON song.submitter_id = account.id
@@ -993,7 +1000,8 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id, song.poster_link,
                    song.video_link, song.snippet_start, song.snippet_end,
-                   song.submitter_id, song.notes, song.sources
+                   song.submitter_id, song.notes, song.sources,
+                   song.entry_number, year.special_name, year.special_short_name
             FROM song
             JOIN country ON song.country_id = country.id
             LEFT OUTER JOIN account ON song.submitter_id = account.id
@@ -1004,7 +1012,13 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
                      CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
                      country.name
         ''', (user_id,))
-    songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
+    songs = []
+    for row in cursor.fetchall():
+        s = Song(RawSongData(row))
+        s.entry_number = row['entry_number']
+        s.special_name = row['special_name']
+        s.special_short_name = row['special_short_name']
+        songs.append(s)
 
     if select_languages:
         for song in songs:
@@ -1095,7 +1109,8 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id, song.poster_link,
                 song.video_link, song.snippet_start, song.snippet_end,
-                song.submitter_id, song.notes, song.sources
+                song.submitter_id, song.notes, song.sources,
+                song.entry_number, year.special_name, year.special_short_name
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
@@ -1106,7 +1121,13 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                  CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
                  country.name
     ''', {'cc':code})
-    songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
+    songs = []
+    for row in cursor.fetchall():
+        s = Song(RawSongData(row))
+        s.entry_number = row['entry_number']
+        s.special_name = row['special_name']
+        s.special_short_name = row['special_short_name']
+        songs.append(s)
 
     if select_languages:
         for song in songs:
@@ -1139,6 +1160,61 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
     ret.languages = get_song_languages(ret.id)
     return ret
 
+def get_special_songs_for_country(year: int, code: str) -> list[Song]:
+    """Get all songs for a country in a special (negative year_id)."""
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT song.id, song.title, song.artist, song.native_title,
+                song.country_id, country.name, country.is_participating, country.cc3,
+                song.is_placeholder, song.native_language_id, song.title_language_id,
+                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
+                account.username, song.year_id, song.poster_link,
+                song.video_link, song.snippet_start, song.snippet_end,
+                song.submitter_id, song.notes, song.sources, song.entry_number
+        FROM song
+        JOIN country ON song.country_id = country.id
+        LEFT OUTER JOIN account ON song.submitter_id = account.id
+        WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id = %(year)s
+        ORDER BY song.entry_number
+    ''', {'cc': code, 'year': year})
+
+    songs = []
+    for row in cursor.fetchall():
+        s = Song(RawSongData(row))
+        s.languages = get_song_languages(s.id)
+        s.entry_number = row['entry_number']
+        songs.append(s)
+    return songs
+
+def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
+    """Get a specific song by country and entry_number in a special."""
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+        SELECT song.id, song.title, song.artist, song.native_title,
+                song.country_id, country.name, country.is_participating, country.cc3,
+                song.is_placeholder, song.native_language_id, song.title_language_id,
+                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
+                account.username, song.year_id, song.poster_link,
+                song.video_link, song.snippet_start, song.snippet_end,
+                song.submitter_id, song.notes, song.sources, song.entry_number
+        FROM song
+        JOIN country ON song.country_id = country.id
+        LEFT OUTER JOIN account ON song.submitter_id = account.id
+        WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+          AND song.year_id = %(year)s AND song.entry_number = %(entry)s
+    ''', {'cc': code, 'year': year, 'entry': entry_number})
+    row = cursor.fetchone()
+    if not row:
+        return None
+    s = Song(RawSongData(row))
+    s.languages = get_song_languages(s.id)
+    s.entry_number = row['entry_number']
+    return s
+
 def get_years() -> list[int]:
     db = get_db()
     cursor = db.cursor()
@@ -1146,6 +1222,35 @@ def get_years() -> list[int]:
         SELECT id FROM year
     ''')
     return list(map(lambda x: x['id'], cursor.fetchall()))
+
+def get_years_grouped() -> dict:
+    """Return years split into groups for display in submission forms:
+      - open: closed = 0, ascending
+      - closed: closed <> 0, ascending
+      - specials: negative IDs with their special_name / special_short_name
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT id, closed, special_name, special_short_name
+        FROM year
+        ORDER BY id
+    ''')
+    open_years: list[int] = []
+    closed_years: list[int] = []
+    specials: list[dict] = []
+    for row in cursor.fetchall():
+        if row['id'] < 0:
+            specials.append({
+                'id': row['id'],
+                'special_name': row['special_name'],
+                'special_short_name': row['special_short_name'],
+            })
+        elif row['closed'] == 0:
+            open_years.append(row['id'])
+        else:
+            closed_years.append(row['id'])
+    return {'open': open_years, 'closed': closed_years, 'specials': specials}
 
 def get_year_countries(year: int, *, exclude: list[str] = [], sort_by_priority: bool = False, host: bool = True) -> list[dict]:
     db = get_db()

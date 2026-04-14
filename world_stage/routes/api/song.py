@@ -7,12 +7,27 @@ from world_stage.utils import (
     parse_seconds, resolve_country_code, resp,
 )
 
+
+def _resolve_year_token(token) -> int | None:
+    """Accept an int (regular or negative year ID) or a special short name
+    and return the numeric year ID, or None if not found."""
+    try:
+        return int(token)
+    except (ValueError, TypeError):
+        pass
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT id FROM year WHERE special_short_name = %s', (str(token),))
+    row = cursor.fetchone()
+    return row['id'] if row else None
+
 bp = Blueprint('song', __name__, url_prefix='/song')
 
 # ── Constants ────────────────────────────────────────────────────────
 ENGLISH_LANG_ID = 20
 MAX_SNIPPET_DURATION = 20
 MAX_USER_SUBMISSIONS = 2
+MAX_USER_SUBMISSIONS_SPECIAL = 1
 MAX_YEAR_SUBMISSIONS = 73
 
 MUTABLE_TEXT_FIELDS = (
@@ -20,6 +35,10 @@ MUTABLE_TEXT_FIELDS = (
     'snippet_start', 'snippet_end', 'translated_lyrics',
     'romanized_lyrics', 'native_lyrics', 'notes', 'sources',
 )
+
+
+def _is_special_year(year: int) -> bool:
+    return year < 0
 
 REQUIRED_FIELDS = {
     'artist': 'Artist',
@@ -88,7 +107,7 @@ def _get_request_data() -> tuple[dict | None, bool]:
                 data[field] = _form_bool(form.get(field))
 
         # Scalars
-        for field in ('year', 'country', 'submitter_id'):
+        for field in ('year', 'country', 'submitter_id', 'entry_number'):
             if field in form:
                 data[field] = form[field]
 
@@ -136,6 +155,8 @@ def _song_row_to_json(row: dict, languages: list[dict]) -> dict:
     return {
         'id': row['id'],
         'year': row['year_id'],
+        'entry_number': row.get('entry_number'),
+        'special_short_name': row.get('special_short_name'),
         'country_id': row['country_id'],
         'country_name': row['country_name'],
         'title': row['title'],
@@ -167,9 +188,11 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
                song.snippet_start, song.snippet_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
-               song.submitter_id, account.username
+               song.submitter_id, account.username, song.entry_number,
+               year.special_short_name
         FROM song
         JOIN country ON song.country_id = country.id
+        LEFT JOIN year ON year.id = song.year_id
         LEFT JOIN account ON song.submitter_id = account.id
         WHERE song.id = %s
     ''', (song_id,))
@@ -228,16 +251,13 @@ def get_song(id: int):
 
 # ── GET /api/song/<cc>/<year> ─────────────────────────────────────────
 
-@bp.get('/<cc>/<int:year>')
-def get_song_by_country(cc: str, year: int):
-    canonical = resolve_country_code(cc.upper())
-    if canonical and canonical.lower() != cc.lower():
-        return redirect(url_for('api.song.get_song_by_country', cc=canonical.lower(), year=year), 301)
-
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute('''
+def _select_song_by_country(cursor, cc: str, year: int, entry_number: int | None = None):
+    params: dict = {'cc': cc, 'year': year}
+    extra = ''
+    if entry_number is not None:
+        extra = 'AND song.entry_number = %(entry)s'
+        params['entry'] = entry_number
+    cursor.execute(f'''
         SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
                song.title, song.native_title, song.artist, song.is_placeholder,
                song.title_language_id, song.native_language_id,
@@ -245,17 +265,85 @@ def get_song_by_country(cc: str, year: int):
                song.snippet_start, song.snippet_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
-               song.submitter_id, account.username
+               song.submitter_id, account.username, song.entry_number,
+               year.special_short_name
         FROM song
         JOIN country ON song.country_id = country.id
+        LEFT JOIN year ON year.id = song.year_id
         LEFT JOIN account ON song.submitter_id = account.id
-        WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id = %(year)s
-    ''', {'cc': cc.upper(), 'year': year})
-    row = cursor.fetchone()
+        WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+          AND song.year_id = %(year)s {extra}
+        ORDER BY song.entry_number
+    ''', params)
 
+
+@bp.get('/<cc>/<year>')
+def get_song_by_country(cc: str, year: str):
+    canonical = resolve_country_code(cc.upper())
+    if canonical and canonical.lower() != cc.lower():
+        return redirect(url_for('api.song.get_song_by_country', cc=canonical.lower(), year=year), 301)
+
+    year_id = _resolve_year_token(year)
+    if year_id is None:
+        return err(ErrorID.NOT_FOUND, f"Year '{year}' not found")
+    year = year_id
+
+    db = get_db()
+    cursor = db.cursor()
+
+    if _is_special_year(year):
+        # Specials can have multiple entries per country. An entry_number
+        # query parameter disambiguates; without it, return the full list.
+        entry_raw = request.args.get('entry_number')
+        if entry_raw is not None:
+            try:
+                entry_number = int(entry_raw)
+            except (ValueError, TypeError):
+                return err(ErrorID.BAD_REQUEST, "entry_number must be an integer")
+            _select_song_by_country(cursor, cc.upper(), year, entry_number)
+            row = cursor.fetchone()
+            if not row:
+                return err(ErrorID.NOT_FOUND, f"No song found for {cc} in special {year} entry {entry_number}")
+            languages = _fetch_song_languages(cursor, row['id'])
+            return resp(_song_row_to_json(row, languages))
+
+        _select_song_by_country(cursor, cc.upper(), year)
+        rows = cursor.fetchall()
+        if not rows:
+            return err(ErrorID.NOT_FOUND, f"No song found for {cc} in special {year}")
+        results = []
+        for r in rows:
+            langs = _fetch_song_languages(cursor, r['id'])
+            results.append(_song_row_to_json(r, langs))
+        return resp(results)
+
+    _select_song_by_country(cursor, cc.upper(), year)
+    row = cursor.fetchone()
     if not row:
         return err(ErrorID.NOT_FOUND, f"No song found for {cc} in {year}")
 
+    languages = _fetch_song_languages(cursor, row['id'])
+    return resp(_song_row_to_json(row, languages))
+
+
+@bp.get('/<cc>/<year>/<int:entry_number>')
+def get_song_by_country_entry(cc: str, year: str, entry_number: int):
+    canonical = resolve_country_code(cc.upper())
+    if canonical and canonical.lower() != cc.lower():
+        return redirect(url_for('api.song.get_song_by_country_entry',
+                                cc=canonical.lower(), year=year,
+                                entry_number=entry_number), 301)
+
+    year_id = _resolve_year_token(year)
+    if year_id is None:
+        return err(ErrorID.NOT_FOUND, f"Year '{year}' not found")
+
+    db = get_db()
+    cursor = db.cursor()
+    _select_song_by_country(cursor, cc.upper(), year_id, entry_number)
+    row = cursor.fetchone()
+    if not row:
+        return err(ErrorID.NOT_FOUND, f"No song found for {cc} in {year} entry {entry_number}")
     languages = _fetch_song_languages(cursor, row['id'])
     return resp(_song_row_to_json(row, languages))
 
@@ -295,29 +383,49 @@ def create_song():
     if cc_err:
         return cc_err
 
-    # ── Check for duplicates ─────────────────────────────────────
-    cursor.execute(
-        'SELECT id FROM song WHERE year_id = %s AND country_id = %s',
-        (year, cc),
-    )
-    if cursor.fetchone():
-        return err(ErrorID.CONFLICT, f"A song already exists for {cc} in {year}. Use PATCH to update it.")
+    # ── Duplicate / entry_number handling ────────────────────────
+    # Specials allow multiple entries per country; auto-assign the next
+    # entry_number so each entry has a unique (year, country, entry) key.
+    # Regular years enforce one entry per country.
+    if _is_special_year(year):
+        cursor.execute(
+            'SELECT COALESCE(MAX(entry_number), 0) + 1 AS next FROM song WHERE year_id = %s AND country_id = %s',
+            (year, cc),
+        )
+        entry_number = fetchone(cursor)['next']
+    else:
+        cursor.execute(
+            'SELECT id FROM song WHERE year_id = %s AND country_id = %s',
+            (year, cc),
+        )
+        if cursor.fetchone():
+            return err(ErrorID.CONFLICT, f"A song already exists for {cc} in {year}. Use PATCH to update it.")
+        entry_number = 1
 
     # ── Submission limits (non-admins) ───────────────────────────
     if not permissions.can_edit:
-        cursor.execute(
-            'SELECT COUNT(*) AS c FROM song WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder',
-            (user_id, year),
-        )
-        if fetchone(cursor)['c'] >= MAX_USER_SUBMISSIONS:
-            return err(ErrorID.FORBIDDEN, f"You may submit at most {MAX_USER_SUBMISSIONS} songs per year")
+        if _is_special_year(year):
+            cursor.execute(
+                'SELECT COUNT(*) AS c FROM song WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder',
+                (user_id, year),
+            )
+            if fetchone(cursor)['c'] >= MAX_USER_SUBMISSIONS_SPECIAL:
+                return err(ErrorID.FORBIDDEN,
+                           f"You may submit at most {MAX_USER_SUBMISSIONS_SPECIAL} song per special")
+        else:
+            cursor.execute(
+                'SELECT COUNT(*) AS c FROM song WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder',
+                (user_id, year),
+            )
+            if fetchone(cursor)['c'] >= MAX_USER_SUBMISSIONS:
+                return err(ErrorID.FORBIDDEN, f"You may submit at most {MAX_USER_SUBMISSIONS} songs per year")
 
-        cursor.execute(
-            'SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder',
-            (year,),
-        )
-        if fetchone(cursor)['c'] >= MAX_YEAR_SUBMISSIONS:
-            return err(ErrorID.FORBIDDEN, f"This year already has the maximum number of entries ({MAX_YEAR_SUBMISSIONS})")
+            cursor.execute(
+                'SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder',
+                (year,),
+            )
+            if fetchone(cursor)['c'] >= MAX_YEAR_SUBMISSIONS:
+                return err(ErrorID.FORBIDDEN, f"This year already has the maximum number of entries ({MAX_YEAR_SUBMISSIONS})")
 
     # ── Parse body ───────────────────────────────────────────────
     language_ids, lang_errors = _parse_languages(data)
@@ -364,15 +472,15 @@ def create_song():
 
     cursor.execute('''
         INSERT INTO song (
-            year_id, country_id, title, native_title, artist, is_placeholder,
+            year_id, country_id, entry_number, title, native_title, artist, is_placeholder,
             title_language_id, native_language_id, video_link, poster_link,
             snippet_start, snippet_end, translated_lyrics,
             romanized_lyrics, native_lyrics, submitter_id,
             notes, sources, admin_approved, modified_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
         RETURNING id
     ''', (
-        year, cc, text['title'], text['native_title'], text['artist'],
+        year, cc, entry_number, text['title'], text['native_title'], text['artist'],
         is_placeholder, title_language_id, native_language_id,
         text['video_link'], text['poster_link'],
         parse_seconds(text['snippet_start']), parse_seconds(text['snippet_end']),

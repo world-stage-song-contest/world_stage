@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Overview: {{ year }}{% endblock %}
+{% block title %}Overview: {{ special_name or year }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
     <link rel="stylesheet" href="/static/css/year.css">
@@ -13,7 +13,11 @@
     <a class="nav-item" href="{{ url_for('year.index') }}">Years</a>
     <span class="nav-separator"></span>
     {% for show in shows %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show.short_name) }}"> {{ show.short_name|upper }}</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show.short_name)}}"> {{ show.short_name|upper }}</a>
+    {% endif %}
     {% endfor %}
 {% endblock %}
 {% block content %}
@@ -99,14 +103,25 @@
             <td><div class="song-artist">{{ song.artist or '' }}</div></td>
             <td>
                 <div class="song-title">
+                    {% if special %}
+                    <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special) }}">
+                        <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>
+                    </a>
+                    {% if song.native_title %}
+                    <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special) }}">
+                        <bdi lang="{{song.native_lang.str(None, song.country.cc)}}">{{ song.native_title }}</bdi>
+                    </a>
+                    {% endif %}
+                    {% else %}
                     <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
                         <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>
                     </a>
-                {% if song.native_title %}
+                    {% if song.native_title %}
                     <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
                         <bdi lang="{{song.native_lang.str(None, song.country.cc)}}">{{ song.native_title }}</bdi>
                     </a>
-                {% endif %}
+                    {% endif %}
+                    {% endif %}
                 </div>
             </td>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>

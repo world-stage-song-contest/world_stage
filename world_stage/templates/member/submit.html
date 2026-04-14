@@ -74,9 +74,19 @@
         <label for="year">Year</label>
         <select id="year" name="year" onchange="populateCountries(this)">
             <option value="">Select a year</option>
-            {% for y in years %}
-                <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+            {% for y in years.open %}
+                <option value="{{ y }}" {% if y|string == year|string %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
+            {% for y in years.closed %}
+                <option value="{{ y }}" {% if y|string == year|string %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+            {% if years.specials %}
+            <optgroup label="Specials">
+                {% for s in years.specials %}
+                    <option value="{{ s.id }}" {% if s.id|string == year|string %}selected{% endif %}>{{ s.special_name }}</option>
+                {% endfor %}
+            </optgroup>
+            {% endif %}
         </select>
 
         <label class="hidable" for="country">Country</label>

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ country_name }} — {{ special_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
+    <link rel="stylesheet" href="/static/css/song-table.css">
+{% endblock %}
+{% block content %}
+<h2>{{ country_name }} in {{ special_name }}</h2>
+<p>{{ country_name }} has {{ songs|length }} entries in this special. Select one to view details:</p>
+
+<table class="results-table song-table">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Language</th>
+            <th>Submitter</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for song in songs %}
+        <tr>
+            <td class="number">{{ song.entry_number }}</td>
+            <td><div class="song-artist">{{ song.artist }}</div></td>
+            <td><div class="song-title">
+                <a href="{{ url_for('country.special_details', code=country.lower(), special_short_name=special, entry_number=song.entry_number) }}">
+                    {{ song.title }}
+                {% if song.native_title %}
+                    <bdi>{{ song.native_title }}</bdi>
+                {% endif %}
+                </a>
+            </div></td>
+            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+            <td>{{ song.submitter or '' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

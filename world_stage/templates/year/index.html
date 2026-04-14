@@ -95,17 +95,28 @@
         {% for special in specials %}
         {% set winner = special.winner %}
             <tr data-value="{{ loop.index }}">
-                <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.results', year='special', show=special.short_name) }}"><b>{{ special.show_name }}</b></a></td>
-                <td><div class="country">
+                <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.special', short_name=special.special_short_name) }}"><b>{{ special.special_name }}</b></a></td>
+                {% if winner %}
+                <td><a href="{{ url_for('country.country', code=winner.country.cc) }}"><div class="country">
                     {{ flag(winner.country.cc, 42, winner.country.name) }}
-                    <span href="/country/{{ winner.country.cc }}">{{ winner.country.name }}</span>
-                </div></td>
-                <td class="artist">{{ winner.artist }}</td>
-                <td class="title">{{ winner.title }}</td>
+                    {{ winner.country.name }}
+                </div></a></td>
+                <td class="artist"><div class="song-artist">{{ winner.artist }}</div></td>
+                <td class="title">
+                    <div class="song-title">
+                        <span lang="{{winner.title_lang.str('Latn', winner.country.cc)}}">{{ winner.title }}</span>
+                    {% if winner.native_title %}
+                        <bdi lang="{{winner.native_lang.str(None, winner.country.cc)}}">{{ winner.native_title }}</bdi>
+                    {% endif %}
+                    </div>
+                </td>
                 <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
                 <td class="points">{{ winner.vote_data.sum }}</td>
                 <td class="percent">{{ winner.vote_data.pct() }}</td>
                 <td class="submitter">{{ winner.submitter }}</td>
+                {% else %}
+                <td colspan="7"></td>
+                {% endif %}
             </tr>
         {% endfor %}
         </tbody>

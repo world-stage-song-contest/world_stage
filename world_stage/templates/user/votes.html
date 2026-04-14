@@ -13,7 +13,13 @@
 <div class="vote-card-container">
 {% for vote in votes %}
 <div class="vote-card">
-    <h3 class="card-show-name"><a href="{{ url_for('year.results', year=(vote.year or 'special'), show=(vote.short_name)) }}">{{ vote.year or '' }} {{ vote.show_name }}</a></h3>
+    <h3 class="card-show-name">
+    {% if vote.special_short_name %}
+        <a href="{{ url_for('year.special_results', short_name=vote.special_short_name, show=vote.short_name) }}">{{ vote.special_name }} {{ vote.show_name }}</a>
+    {% else %}
+        <a href="{{ url_for('year.results', year=vote.year, show=vote.short_name) }}">{{ vote.year }} {{ vote.show_name }}</a>
+    {% endif %}
+    </h3>
     <p class="vote-date">{{ vote.date }}</p>
     <p class="voter-name">{{ flag(vote.code, 42) }}{{ vote.nickname }}</p>
     <table class="user-votes">

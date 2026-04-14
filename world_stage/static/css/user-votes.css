@@ -14,6 +14,16 @@
     justify-content: start;
     gap: 0.5em;
     padding: 0.5em;
+    container-type: inline-size;
+}
+
+.card-show-name {
+    text-align: center;
+    text-wrap: balance;
+    /* Scale with card width so long titles fit on one line when possible,
+       falling back to a balanced 2-line wrap on very narrow cards. */
+    font-size: clamp(0.8em, 5.5cqi, 1.17em);
+    margin: 0;
 }
 
 .voter-name {
