@@ -397,6 +397,110 @@ def create_song():
     return response
 
 
+# ── PUT /api/song/<id> ───────────────────────────────────────────────
+
+@bp.put('/<int:id>')
+def replace_song(id: int):
+    auth = get_api_auth()
+    if not auth:
+        return err(ErrorID.UNAUTHORIZED, "Authentication required")
+    user_id, _username, permissions = auth
+
+    data, _is_form = _get_request_data()
+    if not data:
+        return err(ErrorID.BAD_REQUEST, "Request body must be JSON or form-encoded")
+
+    db = get_db()
+    cursor = db.cursor()
+
+    row = _fetch_song(cursor, id)
+    if not row:
+        return err(ErrorID.NOT_FOUND, f"Song {id} not found")
+
+    # ── Permission check ─────────────────────────────────────────
+    if not permissions.can_edit and row['submitter_id'] != user_id:
+        return err(ErrorID.FORBIDDEN, "You can only edit your own submissions")
+
+    # ── Parse languages (required) ───────────────────────────────
+    language_ids, lang_errors = _parse_languages(data)
+    if lang_errors:
+        return err(ErrorID.BAD_REQUEST, '; '.join(lang_errors))
+
+    # ── Build full replacement values ────────────────────────────
+    text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
+
+    is_placeholder = bool(data.get('is_placeholder', False))
+    is_translation = bool(data.get('is_translation', False))
+    does_match = bool(data.get('does_match', False))
+    admin_approved = bool(data.get('admin_approved', False)) and permissions.can_edit
+
+    title_language_id, native_language_id = _resolve_language_ids(
+        language_ids, is_translation, does_match, text['native_title'],
+    )
+
+    # ── Validation (non-admins) ──────────────────────────────────
+    if not permissions.can_view_restricted:
+        for field, label in REQUIRED_FIELDS.items():
+            if not text.get(field):
+                return err(ErrorID.BAD_REQUEST, f"Missing required field: {label}")
+        if text['snippet_start'] and text['snippet_end']:
+            s = parse_seconds(text['snippet_start'])
+            e = parse_seconds(text['snippet_end'])
+            if s is not None and e is not None and (e - s) > MAX_SNIPPET_DURATION:
+                return err(ErrorID.BAD_REQUEST,
+                           f"Snippet duration ({e - s}s) exceeds maximum ({MAX_SNIPPET_DURATION}s)")
+
+    # ── Submitter override (admins only) ─────────────────────────
+    submitter_id = row['submitter_id']
+    if 'submitter_id' in data and permissions.can_edit:
+        raw = data['submitter_id']
+        if raw is None:
+            submitter_id = None
+        else:
+            try:
+                submitter_id = int(raw)
+            except (ValueError, TypeError):
+                return err(ErrorID.BAD_REQUEST, "submitter_id must be an integer or null")
+
+    # ── Execute ──────────────────────────────────────────────────
+    _set_audit_user(cursor, user_id)
+
+    cursor.execute('''
+        UPDATE song SET
+            title = %s, native_title = %s, artist = %s,
+            is_placeholder = %s, title_language_id = %s, native_language_id = %s,
+            video_link = %s, poster_link = %s,
+            snippet_start = %s, snippet_end = %s,
+            translated_lyrics = %s, romanized_lyrics = %s, native_lyrics = %s,
+            notes = %s, sources = %s,
+            admin_approved = %s, submitter_id = %s,
+            modified_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+    ''', (
+        text['title'], text['native_title'], text['artist'],
+        is_placeholder, title_language_id, native_language_id,
+        text['video_link'], text['poster_link'],
+        parse_seconds(text['snippet_start']), parse_seconds(text['snippet_end']),
+        text['translated_lyrics'], text['romanized_lyrics'], text['native_lyrics'],
+        text['notes'], text['sources'],
+        admin_approved, submitter_id,
+        id,
+    ))
+
+    cursor.execute('DELETE FROM song_language WHERE song_id = %s', (id,))
+    for i, lang_id in enumerate(language_ids):
+        cursor.execute(
+            'INSERT INTO song_language (song_id, language_id, priority) VALUES (%s, %s, %s)',
+            (id, lang_id, i),
+        )
+
+    db.commit()
+
+    updated = _fetch_song(cursor, id)
+    langs = _fetch_song_languages(cursor, id)
+    return resp(_song_row_to_json(updated, langs))
+
+
 # ── PATCH /api/song/<id> ─────────────────────────────────────────────
 
 @bp.patch('/<int:id>')

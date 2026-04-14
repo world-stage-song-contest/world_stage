@@ -136,9 +136,9 @@ async function handleSubmit(e) {
     try {
         let res;
         if (currentSongId) {
-            // PATCH existing
+            // PUT existing (full replacement)
             res = await fetch(`/api/song/${currentSongId}`, {
-                method: 'PATCH',
+                method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(body),
             });

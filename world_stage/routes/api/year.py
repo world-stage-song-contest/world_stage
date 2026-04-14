@@ -35,7 +35,7 @@ def index():
     db = get_db()
     cursor = db.cursor()
 
-    if status:
+    if status is not None:
         cursor.execute("""
 SELECT year.id, year.closed, year.host_id, country.name, country.cc3
 FROM year
