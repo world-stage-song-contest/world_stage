@@ -155,10 +155,12 @@ def submit():
 
     year = request.args.get('year')
     country = request.args.get('country')
+    entry_number = request.args.get('entry_number')
     permissions = get_user_role_from_session(session_id)
 
     return render_template('member/submit.html',
-                         year=year, country=country, elevated=permissions.can_edit,
+                         year=year, country=country, entry_number=entry_number,
+                         elevated=permissions.can_edit,
                          years=get_years_grouped(), languages=get_languages(),
                          countries={}, data={}, onLoad=True, users=get_users())
 

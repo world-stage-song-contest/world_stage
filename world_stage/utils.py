@@ -939,7 +939,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
-               song.submitter_id, song.notes, song.sources
+               song.submitter_id, song.notes, song.sources, song.entry_number
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
@@ -950,7 +950,11 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
             CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
             country.name
         ''', (year,))
-    songs = [Song(RawSongData(song)) for song in cursor.fetchall()]
+    songs = []
+    for row in cursor.fetchall():
+        s = Song(RawSongData(row))
+        s.entry_number = row['entry_number']
+        songs.append(s)
 
     if select_languages:
         for song in songs:

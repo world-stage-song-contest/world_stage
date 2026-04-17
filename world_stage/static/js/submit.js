@@ -14,7 +14,7 @@ async function onLoad() {
         yearSelect.value = yearVal;
         await populateCountries(yearSelect);
         countrySelect.value = countryVal.toUpperCase();
-        await populateSongData();
+        await populateSongData(entryNumber);
     } else {
         yearSelect.value = '';
         clearFormFields();
@@ -352,14 +352,17 @@ async function populateCountries(yearSelect) {
     }
 }
 
-async function fetchSongData(year, country) {
-    const url = `/member/submit/${year}/${country}`;
+async function fetchSongData(year, country, entryNumber) {
+    let url = `/member/submit/${year}/${country}`;
+    if (entryNumber) {
+        url += `?entry_number=${encodeURIComponent(entryNumber)}`;
+    }
     const res = await fetch(url);
     const songData = await res.json();
     return songData;
 }
 
-async function populateSongData() {
+async function populateSongData(entryNumberOverride) {
     const yearSelect = document.getElementById('year');
     const countrySelect = document.getElementById('country');
 
@@ -369,7 +372,7 @@ async function populateSongData() {
         clearFormFields();
         return;
     }
-    const songData = await fetchSongData(year, country);
+    const songData = await fetchSongData(year, country, entryNumberOverride);
 
     // Clear form before populating with new data
     clearFormFields();

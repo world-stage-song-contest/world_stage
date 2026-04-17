@@ -38,7 +38,11 @@
 
 {% if can_edit %}
 <div>
+    {% if special %}
+    <a class="button" href="{{ url_for('member.submit', country=song.country.cc.lower(), year=song.year, entry_number=song.entry_number) }}">Edit</a>
+    {% else %}
     <a class="button" href="{{ url_for('member.submit', country=song.country.cc.lower(), year=song.year) }}">Edit</a>
+    {% endif %}
 </div>
 {% endif %}
 

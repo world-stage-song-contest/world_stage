@@ -104,11 +104,11 @@
             <td>
                 <div class="song-title">
                     {% if special %}
-                    <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special) }}">
+                    <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special, entry_number=song.entry_number) }}">
                         <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>
                     </a>
                     {% if song.native_title %}
-                    <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special) }}">
+                    <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special, entry_number=song.entry_number) }}">
                         <bdi lang="{{song.native_lang.str(None, song.country.cc)}}">{{ song.native_title }}</bdi>
                     </a>
                     {% endif %}
