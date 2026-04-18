@@ -34,6 +34,19 @@
 <div>
     <strong><big>Total entries:{{total}} ({{placeholders}} placeholders)</big></strong>
 </div>
+{% if special %}
+<div>
+    <strong>Download playlist:</strong>
+    <a href="{{ url_for('year.special_year_playlist', short_name=special, postcards='true') }}">With postcards</a>/<a
+    href="{{ url_for('year.special_year_playlist', short_name=special, postcards='false') }}">Without postcards</a>
+</div>
+{% else %}
+<div>
+    <strong>Download playlist:</strong>
+    <a href="{{ url_for('year.year_playlist', year=year, postcards='true') }}">With postcards</a>/<a
+    href="{{ url_for('year.year_playlist', year=year, postcards='false') }}">Without postcards</a>
+</div>
+{% endif %}
 
 {#
   Render the two cells (place + pts) for one show category.
@@ -113,11 +126,11 @@
                     </a>
                     {% endif %}
                     {% else %}
-                    <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
+                    <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">
                         <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>
                     </a>
                     {% if song.native_title %}
-                    <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
+                    <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">
                         <bdi lang="{{song.native_lang.str(None, song.country.cc)}}">{{ song.native_title }}</bdi>
                     </a>
                     {% endif %}

@@ -3,8 +3,9 @@ from collections import defaultdict, deque
 import datetime
 from enum import Enum
 from functools import total_ordering
+import io
 import json
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from flask import Response, request, url_for
 import flask
@@ -247,6 +248,12 @@ class Country:
     cc3: str
     flag_variant: str | None = None
 
+@dataclass
+class Year:
+    id: int
+    special_name: str | None = None
+    special_short_name: str | None = None
+
 @total_ordering
 @dataclass
 class VoteData:
@@ -361,7 +368,8 @@ class Song:
     title: str
     artist: str
     country: Country
-    year: int | None
+    year: Year
+    entry_number: int
     placeholder: bool
     languages: list[Language]
     vote_data: VoteData | None
@@ -390,6 +398,9 @@ class Song:
             raise TypeError(f'Bad type: {type(song)}')
 
     def _RawSongData_init(self, song: RawSongData):
+        year = Year(id=song['year_id'],
+                    special_name=song.get('special_name'),
+                    special_short_name=song.get('special_short_name'))
         self._raw_init(
             id=song['id'],
             title=song['title'],
@@ -405,7 +416,8 @@ class Song:
                             cc3=song['cc3'],
                             flag_variant=song.get('flag_variant')),
             placeholder=bool(song['is_placeholder']),
-            year=song['year_id'],
+            year=year,
+            entry_number=song['entry_number'],
             title_lang=song['title_language_id'],
             submitter_id=song['submitter_id'],
             native_lang=song['native_language_id'],
@@ -421,7 +433,8 @@ class Song:
 
     def _raw_init(self, *,
                  id: int, title: str, native_title: str | None, artist: str,
-                 country: Country, year: int | None, poster_link: str | None,
+                 country: Country, year: Year, entry_number: int,
+                 poster_link: str | None,
                  placeholder: bool, submitter: str | None, submitter_id: int | None,
                  title_lang: int | None, native_lang: int | None, lyrics_notes: str | None,
                  translated_lyrics: str | None, latin_lyrics: str | None, native_lyrics: str | None,
@@ -434,6 +447,7 @@ class Song:
         self.country = country
         self.native_title = native_title
         self.year = year
+        self.entry_number = entry_number
         self.languages = languages
         self.placeholder = placeholder
         self.submitter = submitter
@@ -475,7 +489,7 @@ class Song:
             'title': self.title,
             'artist': self.artist,
             'country': self.country,
-            'year': self.year,
+            'year': self.year.id,
             'placeholder': self.placeholder,
             'languages': [lang.as_dict() for lang in self.languages],
             'submitter': self.submitter,
@@ -875,7 +889,8 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, COALESCE(an.name, country.name) AS name,
                country.is_participating, country.cc3, an.flag_variant,
-               song.year_id, song_show.running_order, song.is_placeholder,
+               song.year_id, y.special_name, y.special_short_name,
+               song_show.running_order, song.is_placeholder,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                account.username, song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
@@ -885,6 +900,7 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
         JOIN song_show ON song.id = song_show.song_id
         JOIN show ON song_show.show_id = show.id
         JOIN country ON song.country_id = country.id
+        LEFT JOIN year y ON y.id = song.year_id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
         LEFT JOIN alternative_name an
             ON an.country_id = song.country_id
@@ -893,12 +909,8 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
         WHERE show.id = %s
         ORDER BY {additional_sort} song_show.running_order, song_show.id
         ''', (show_id,))
-    rows = cursor.fetchall()
-    songs = []
-    for row in rows:
-        s = Song(RawSongData(row, show_id=show_id if select_votes else None))
-        s.entry_number = row['entry_number']
-        songs.append(s)
+    songs = [Song(RawSongData(row, show_id=show_id if select_votes else None))
+             for row in cursor.fetchall()]
 
     if select_languages:
         languages_by_song = get_languages_for_songs([s.id for s in songs])
@@ -943,7 +955,8 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
         SELECT song.id, song.title, song.artist, song.native_title,
                song.country_id, COALESCE(an.name, country.name) AS name,
                country.is_participating, country.cc3, an.flag_variant,
-               song.is_placeholder, account.username, song.year_id, song.poster_link,
+               song.is_placeholder, account.username, song.year_id,
+               year.special_name, year.special_short_name, song.poster_link,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
                song.video_link, song.snippet_start, song.snippet_end,
@@ -962,11 +975,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
             CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
             country.name
         ''', (year,))
-    songs = []
-    for row in cursor.fetchall():
-        s = Song(RawSongData(row))
-        s.entry_number = row['entry_number']
-        songs.append(s)
+    songs = [Song(RawSongData(row)) for row in cursor.fetchall()]
 
     if select_languages:
         languages_by_song = get_languages_for_songs([s.id for s in songs])
@@ -1039,13 +1048,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
                      CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
                      country.name
         ''', (user_id,))
-    songs = []
-    for row in cursor.fetchall():
-        s = Song(RawSongData(row))
-        s.entry_number = row['entry_number']
-        s.special_name = row['special_name']
-        s.special_short_name = row['special_short_name']
-        songs.append(s)
+    songs = [Song(RawSongData(row)) for row in cursor.fetchall()]
 
     if select_languages:
         languages_by_song = get_languages_for_songs([s.id for s in songs])
@@ -1157,13 +1160,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
                  CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
                  country.name
     ''', {'cc':code})
-    songs = []
-    for row in cursor.fetchall():
-        s = Song(RawSongData(row))
-        s.entry_number = row['entry_number']
-        s.special_name = row['special_name']
-        s.special_short_name = row['special_short_name']
-        songs.append(s)
+    songs = [Song(RawSongData(row)) for row in cursor.fetchall()]
 
     if select_languages:
         languages_by_song = get_languages_for_songs([s.id for s in songs])
@@ -1181,11 +1178,13 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                 country.is_participating, country.cc3, an.flag_variant,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                account.username, song.year_id, song.poster_link,
+                account.username, song.year_id,
+                year.special_name, year.special_short_name, song.poster_link,
                 song.video_link, song.snippet_start, song.snippet_end,
-                song.submitter_id, song.notes, song.sources
+                song.submitter_id, song.notes, song.sources, song.entry_number
         FROM song
         JOIN country ON song.country_id = country.id
+        LEFT JOIN year ON year.id = song.year_id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
         LEFT JOIN alternative_name an
             ON an.country_id = song.country_id
@@ -1213,11 +1212,13 @@ def get_special_songs_for_country(year: int, code: str) -> list[Song]:
                 country.is_participating, country.cc3, an.flag_variant,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                account.username, song.year_id, song.poster_link,
+                account.username, song.year_id,
+                year.special_name, year.special_short_name, song.poster_link,
                 song.video_link, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources, song.entry_number
         FROM song
         JOIN country ON song.country_id = country.id
+        LEFT JOIN year ON year.id = song.year_id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
         LEFT JOIN alternative_name an
             ON an.country_id = song.country_id
@@ -1227,12 +1228,9 @@ def get_special_songs_for_country(year: int, code: str) -> list[Song]:
         ORDER BY song.entry_number
     ''', {'cc': code, 'year': year})
 
-    songs = []
-    for row in cursor.fetchall():
-        s = Song(RawSongData(row))
+    songs = [Song(RawSongData(row)) for row in cursor.fetchall()]
+    for s in songs:
         s.languages = get_song_languages(s.id)
-        s.entry_number = row['entry_number']
-        songs.append(s)
     return songs
 
 def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
@@ -1246,11 +1244,13 @@ def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
                 country.is_participating, country.cc3, an.flag_variant,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                account.username, song.year_id, song.poster_link,
+                account.username, song.year_id,
+                year.special_name, year.special_short_name, song.poster_link,
                 song.video_link, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources, song.entry_number
         FROM song
         JOIN country ON song.country_id = country.id
+        LEFT JOIN year ON year.id = song.year_id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
         LEFT JOIN alternative_name an
             ON an.country_id = song.country_id
@@ -1264,7 +1264,6 @@ def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
         return None
     s = Song(RawSongData(row))
     s.languages = get_song_languages(s.id)
-    s.entry_number = row['entry_number']
     return s
 
 def get_years() -> list[int]:
@@ -1648,6 +1647,27 @@ def generate_api_token() -> tuple[str, bytes]:
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode()).digest()
     return token, token_hash
+
+def write_m3u(entries: Iterable[tuple[str, str | None]], postcards: bool = False) -> tuple[str, list[str]]:
+    """Emit an .m3u from (cc, video_link) pairs in the order given. When
+    postcards is True, each entry is preceded by a postcard video. Returns
+    (text, bad_ccs) where bad_ccs collects country codes whose link is empty
+    or not hosted on media.world-stage.org."""
+    output = io.StringIO(newline='\r\n')
+    output.write("#EXTM3U\n")
+    bad: list[str] = []
+    for cc, url in entries:
+        url = url or ''
+        if postcards:
+            output.write("#EXTINF:0\n")
+            output.write("#EXTVLCOPT:network-caching=3000\n")
+            output.write(f"https://media.world-stage.org/postcards/{cc.lower()}.mov\n")
+        output.write("#EXTINF:0\n")
+        output.write("#EXTVLCOPT:network-caching=3000\n")
+        if 'media.world-stage.org' not in url:
+            bad.append(cc)
+        output.write((url or 'BAD LINK REPLACE ME THIS IS A BUG') + "\n")
+    return output.getvalue(), bad
 
 def hash_api_token(token: str) -> bytes:
     """Hash a plaintext API token for database lookup."""

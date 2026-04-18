@@ -25,6 +25,11 @@
     <input type="checkbox" id="hidesolid" onchange="hideNonPlaceholders(this)">
     <label for="hidesolid">Only show placeholders</label>
 </div>
+<div>
+    <strong>Download playlist:</strong>
+    <a href="{{ url_for('country.playlist', code=country.lower(), postcards='true') }}">With postcards</a>/<a
+    href="{{ url_for('country.playlist', code=country.lower(), postcards='false') }}">Without postcards</a>
+</div>
 
 {#
   Macro: render the two cells (place + pts) for one show category.
@@ -91,15 +96,15 @@
         <tr data-value="{{ loop.index }}"
             class="{{ "placeholder" if song.placeholder else "finalised" }}" data-value="{{ loop.index }}">
             <td class="year"><div class="number">
-                <a href="{{ url_for('year.year', year=song.year) }}">{{ song.year }}</a>
+                <a href="{{ url_for('year.year', year=song.year.id) }}">{{ song.year.id }}</a>
             </div></td>
             <td>{{ song.artist or '' }}</td>
             <td><div class="song-title">
-                <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
+                <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">
                     <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>
                 </a>
                 {% if song.native_title %}
-                <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">
+                <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">
                     <bdi lang="{{song.native_lang.str(None, song.country.cc)}}">{{ song.native_title }}</bdi>
                 </a>
                 {% endif %}
@@ -141,15 +146,15 @@
         <tr data-value="{{ loop.index }}"
             class="{{ "placeholder" if song.placeholder else "finalised" }}">
             <td style="text-align: left">
-                <a href="{{ url_for('year.special', short_name=song.special_short_name) }}">{{ song.special_name }}</a>
+                <a href="{{ url_for('year.special', short_name=song.year.special_short_name) }}">{{ song.year.special_name }}</a>
             </td>
             <td>{{ song.artist or '' }}</td>
             <td><div class="song-title">
-                <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=song.special_short_name, entry_number=song.entry_number) }}">
+                <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=song.year.special_short_name, entry_number=song.entry_number) }}">
                     <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>
                 </a>
                 {% if song.native_title %}
-                <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=song.special_short_name, entry_number=song.entry_number) }}">
+                <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=song.year.special_short_name, entry_number=song.entry_number) }}">
                     <bdi lang="{{song.native_lang.str(None, song.country.cc)}}">{{ song.native_title }}</bdi>
                 </a>
                 {% endif %}

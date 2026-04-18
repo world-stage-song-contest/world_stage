@@ -1,9 +1,9 @@
 from collections import defaultdict
 import urllib.parse
 import unicodedata
-from flask import Blueprint, request
+from flask import Blueprint, Response, request
 
-from ..utils import get_user_songs, get_show_results_for_songs, render_template
+from ..utils import get_user_songs, get_show_results_for_songs, get_user_role_from_session, render_template, write_m3u
 from ..db import fetchone, get_db
 
 bp = Blueprint('user', __name__, url_prefix='/user')
@@ -171,12 +171,51 @@ def submissions(username: str):
     songs = get_user_songs(user_id, select_languages=True)
     results = get_show_results_for_songs([s.id for s in songs])
 
-    regular_songs = [s for s in songs if s.year is None or s.year >= 0]
-    special_songs = [s for s in songs if s.year is not None and s.year < 0]
+    regular_songs = [s for s in songs if s.year.id >= 0]
+    special_songs = [s for s in songs if s.year.id < 0]
 
     return render_template('user/submissions.html',
                            songs=regular_songs, special_songs=special_songs,
                            username=username, results=results)
+
+@bp.get('/<username>/playlist')
+def playlist(username: str):
+    username = urllib.parse.unquote(username)
+    username = unicodedata.normalize('NFKC', username)
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT LOWER(country.id) AS cc, song.video_link
+        FROM song
+        JOIN country ON song.country_id = country.id
+        JOIN year ON year.id = song.year_id
+        JOIN account ON account.id = song.submitter_id
+        WHERE account.username = %s
+          AND year.status IN ('closed', 'ongoing')
+          AND NOT song.is_placeholder
+        ORDER BY song.year_id
+    ''', (username,))
+    entries = [(r['cc'], r['video_link']) for r in cursor.fetchall()]
+    if not entries:
+        return render_template('error.html', error=f"No published entries for {username}"), 404
+
+    postcards = request.args.get('postcards', 'false') == 'true'
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+    value, bad_countries = write_m3u(entries, postcards=postcards)
+    if not permissions.can_view_restricted and bad_countries:
+        bad_countries.sort()
+        return render_template('error.html', error=(
+            "Not all video links are set yet. Ping a moderator. "
+            f"Missing: {', '.join(bad_countries)}."))
+    suffix = '' if postcards else 'x'
+    return Response(
+        value,
+        mimetype='audio/x-mpegurl',
+        headers={'Content-Disposition': f'attachment; filename={username}{suffix}.m3u'}
+    )
+
 
 def get_country_biases(user_id: int):
     db = get_db()

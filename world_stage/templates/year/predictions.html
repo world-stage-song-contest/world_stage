@@ -73,11 +73,7 @@
                     </div>
                 </td>
                 <td>{{ song.artist }}</td>
-                {% if song.year is not none %}
-                <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year) }}">{{ song.title }}</a></td>
-                {% else %}
-                <td>{{ song.title }}</td>
-                {% endif %}
+                <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">{{ song.title }}</a></td>
                 <td class="number" data-value="{{ pred_rank[song.id] }}">{{ pred_rank[song.id] }}</td>
                 <td class="number" data-value="{{ prob }}">
                     <div class="odds-bar-wrap">

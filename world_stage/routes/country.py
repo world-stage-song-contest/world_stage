@@ -1,8 +1,8 @@
 from collections import defaultdict
 import re
-from flask import Blueprint, redirect, request, url_for
+from flask import Blueprint, Response, redirect, request, url_for
 
-from ..utils import get_countries, get_country_name, get_country_songs, get_show_results_for_songs, get_song, get_special_songs_for_country, get_special_song, get_user_id_from_session, get_user_permissions, render_template, get_markdown_parser, resolve_country_code
+from ..utils import get_countries, get_country_name, get_country_songs, get_show_results_for_songs, get_song, get_special_songs_for_country, get_special_song, get_user_id_from_session, get_user_permissions, get_user_role_from_session, render_template, get_markdown_parser, resolve_country_code, write_m3u
 from ..db import get_db
 
 bp = Blueprint('country', __name__, url_prefix='/country')
@@ -16,6 +16,46 @@ def index():
         res[l].append(c)
 
     return render_template('country/index.html', countries=res)
+
+@bp.get('/<code>/playlist')
+def playlist(code: str):
+    canonical = resolve_country_code(code.upper())
+    if not canonical:
+        return render_template('error.html', error=f"Country not found: {code}"), 404
+    if canonical.lower() != code.lower():
+        return redirect(url_for('country.playlist', code=canonical.lower()), 301)
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT LOWER(country.id) AS cc, song.video_link
+        FROM song
+        JOIN country ON song.country_id = country.id
+        JOIN year ON year.id = song.year_id
+        WHERE (country.id = %(cc)s OR country.cc3 = %(cc)s)
+          AND year.status IN ('closed', 'ongoing')
+          AND NOT song.is_placeholder
+        ORDER BY song.year_id
+    ''', {'cc': canonical})
+    entries = [(r['cc'], r['video_link']) for r in cursor.fetchall()]
+    if not entries:
+        return render_template('error.html', error=f"No published entries for {canonical}"), 404
+
+    postcards = request.args.get('postcards', 'false') == 'true'
+    session_id = request.cookies.get('session')
+    permissions = get_user_role_from_session(session_id)
+    value, bad_countries = write_m3u(entries, postcards=postcards)
+    if not permissions.can_view_restricted and bad_countries:
+        bad_countries.sort()
+        return render_template('error.html', error=(
+            "Not all video links are set yet. Ping a moderator. "
+            f"Missing: {', '.join(bad_countries)}."))
+    suffix = '' if postcards else 'x'
+    return Response(
+        value,
+        mimetype='audio/x-mpegurl',
+        headers={'Content-Disposition': f'attachment; filename={canonical}{suffix}.m3u'}
+    )
 
 @bp.get('/<code>/bias')
 def bias(code: str):
@@ -47,8 +87,8 @@ def country(code: str):
         return render_template('error.html', error=f"Songs not found for country {code}")
     name = get_country_name(code.upper())
     results = get_show_results_for_songs([s.id for s in songs])
-    regular_songs = [s for s in songs if s.year is None or s.year >= 0]
-    special_songs = [s for s in songs if s.year is not None and s.year < 0]
+    regular_songs = [s for s in songs if s.year.id >= 0]
+    special_songs = [s for s in songs if s.year.id < 0]
     return render_template('country/country.html', songs=regular_songs, special_songs=special_songs,
                            country=code, country_name=name, results=results)
 
