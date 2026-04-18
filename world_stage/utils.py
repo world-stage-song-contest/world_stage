@@ -228,7 +228,7 @@ class ShowData:
     dtf: int | None
     sc: int | None
     special: int | None
-    access_type: str
+    status: str
 
 class UserPermissions(Enum):
     NONE = 0
@@ -614,7 +614,7 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
             return None
 
     cursor.execute('''
-        SELECT id, point_system_id, show_name, voting_opens, voting_closes, predictions_close, dtf, sc, special, access_type FROM show
+        SELECT id, point_system_id, show_name, voting_opens, voting_closes, predictions_close, dtf, sc, special, status FROM show
         WHERE year_id = %s AND short_name = %s
     ''', (year, short_show_name))
 
@@ -629,7 +629,7 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         dtf = show_row['dtf']
         sc = show_row['sc']
         special = show_row['special']
-        access_type = show_row['access_type']
+        status = show_row['status']
     else:
         return None
 
@@ -648,7 +648,7 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         dtf=dtf,
         sc=sc,
         special=special,
-        access_type=access_type
+        status=status
     )
 
     return ret
@@ -828,6 +828,7 @@ def parse_seconds(td: str | None) -> int | None:
     else:
         raise ValueError("Invalid time format. Use 'M:SS'.")
 
+@lru_cache(maxsize=512)
 def get_language(lang_id: int) -> Language | None:
     db = get_db()
     cursor = db.cursor()
@@ -855,6 +856,29 @@ def get_song_languages(song_id: int) -> list[Language]:
     languages = [Language(**lang) for lang in cursor.fetchall()]
 
     return languages
+
+def get_languages_for_songs(song_ids: list[int]) -> dict[int, list[Language]]:
+    """Batch-load languages for many songs in a single query."""
+    if not song_ids:
+        return {}
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        SELECT song_language.song_id,
+               language.name, language.tag, language.extlang,
+               language.region, language.subvariant, language.suppress_script
+        FROM song_language
+        JOIN language ON song_language.language_id = language.id
+        WHERE song_language.song_id = ANY(%s)
+        ORDER BY song_language.song_id, song_language.priority
+    ''', (song_ids,))
+
+    result: dict[int, list[Language]] = {sid: [] for sid in song_ids}
+    for row in cursor.fetchall():
+        sid = row.pop('song_id')
+        result[sid].append(Language(**row))
+    return result
 
 def get_show_songs(year: int | None, short_name: str, *, select_languages=False, select_votes=False, sort_reveal = False) -> list[Song] | None:
     db = get_db()
@@ -894,8 +918,9 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
         songs.append(s)
 
     if select_languages:
+        languages_by_song = get_languages_for_songs([s.id for s in songs])
         for song in songs:
-            song.languages = get_song_languages(song.id)
+            song.languages = languages_by_song.get(song.id, [])
 
     return songs
 
@@ -915,12 +940,11 @@ def get_year_winner(year: int) -> Song | None:
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT closed FROM year
+        SELECT status FROM year
         WHERE id = %s
         ''', (year,))
 
-    closed = fetchone(cursor)['closed']
-    if not closed:
+    if fetchone(cursor)['status'] != 'closed':
         return None
 
     return get_show_winner(year, 'f')
@@ -947,7 +971,7 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
         LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
         WHERE song.year_id = %s
         ORDER BY
-            CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
+            CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
             country.name
         ''', (year,))
     songs = []
@@ -957,8 +981,9 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
         songs.append(s)
 
     if select_languages:
+        languages_by_song = get_languages_for_songs([s.id for s in songs])
         for song in songs:
-            song.languages = get_song_languages(song.id)
+            song.languages = languages_by_song.get(song.id, [])
 
     return songs
 
@@ -993,7 +1018,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
             LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
             WHERE song.submitter_id = %s AND song.year_id = %s AND song.year_id IS NOT NULL
             ORDER BY song.year_id,
-                     CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
+                     CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
                      country.name
         ''', (user_id, year))
     else:
@@ -1013,7 +1038,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
             LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
             WHERE song.submitter_id = %s AND song.year_id IS NOT NULL
             ORDER BY song.year_id,
-                     CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
+                     CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
                      country.name
         ''', (user_id,))
     songs = []
@@ -1025,8 +1050,9 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
         songs.append(s)
 
     if select_languages:
+        languages_by_song = get_languages_for_songs([s.id for s in songs])
         for song in songs:
-            song.languages = get_song_languages(song.id)
+            song.languages = languages_by_song.get(song.id, [])
     return songs
 
 def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
@@ -1036,7 +1062,7 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
     'f', 'sc', 'sf' (or absent when the entry didn't participate in
     that round).  Each present value is a dict with 'pts', 'place',
     and 'show_name'.  Only rows from fully-published shows
-    (access_type = 'full') are included.
+    (status = 'full') are included.
     """
     if not song_ids:
         return {}
@@ -1054,7 +1080,7 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
         FROM country_show_results csr
         JOIN show ON show.id = csr.show_id
         WHERE csr.song_id = ANY(%s)
-          AND show.access_type = 'full'
+          AND show.status = 'full'
         ORDER BY csr.song_id, csr.year_id, csr.short_name
     ''', (song_ids,))
 
@@ -1088,7 +1114,7 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
         FROM country_year_results cyr
         JOIN year ON year.id = cyr.year_id
         WHERE cyr.song_id = ANY(%s)
-          AND year.closed = 1
+          AND year.status = 'closed'
     ''', (song_ids,))
     for row in cursor.fetchall():
         sid = row['song_id']
@@ -1122,7 +1148,7 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
         LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
         WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id IS NOT NULL
         ORDER BY song.year_id,
-                 CASE WHEN year.closed = 1 THEN cyr.place END NULLS LAST,
+                 CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
                  country.name
     ''', {'cc':code})
     songs = []
@@ -1134,8 +1160,9 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
         songs.append(s)
 
     if select_languages:
+        languages_by_song = get_languages_for_songs([s.id for s in songs])
         for song in songs:
-            song.languages = get_song_languages(song.id)
+            song.languages = languages_by_song.get(song.id, [])
     return songs
 
 def get_song(year: int, code: str, *, select_results=False) -> Song | None:
@@ -1229,14 +1256,14 @@ def get_years() -> list[int]:
 
 def get_years_grouped() -> dict:
     """Return years split into groups for display in submission forms:
-      - open: closed = 0, ascending
-      - closed: closed <> 0, ascending
+      - open: status = 'open', ascending
+      - closed: status <> 'open', ascending
       - specials: negative IDs with their special_name / special_short_name
     """
     db = get_db()
     cursor = db.cursor()
     cursor.execute('''
-        SELECT id, closed, special_name, special_short_name
+        SELECT id, status, special_name, special_short_name
         FROM year
         ORDER BY id
     ''')
@@ -1250,7 +1277,7 @@ def get_years_grouped() -> dict:
                 'special_name': row['special_name'],
                 'special_short_name': row['special_short_name'],
             })
-        elif row['closed'] == 0:
+        elif row['status'] == 'open':
             open_years.append(row['id'])
         else:
             closed_years.append(row['id'])
@@ -1613,7 +1640,7 @@ def get_user_from_api_token(token: str) -> tuple[int, str] | None:
     cursor.execute('''
         SELECT account.id, account.username FROM api_token
         JOIN account ON api_token.user_id = account.id
-        WHERE api_token.token_hash = %s AND account.approved = 1
+        WHERE api_token.token_hash = %s AND account.approved
     ''', (token_hash,))
     row = cursor.fetchone()
     if row:

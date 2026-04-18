@@ -128,7 +128,7 @@ def details(code: str, year: int):
 def _resolve_special(short_name: str) -> dict | None:
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id, closed, special_name, special_short_name FROM year WHERE special_short_name = %s', (short_name,))
+    cursor.execute('SELECT id, status, special_name, special_short_name FROM year WHERE special_short_name = %s', (short_name,))
     return cursor.fetchone()
 
 def _render_song_details(song, name, special_short_name, special_name):

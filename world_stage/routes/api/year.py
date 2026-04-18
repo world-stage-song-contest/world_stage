@@ -7,28 +7,13 @@ from world_stage.utils import ErrorID, err, format_seconds, resp, url_bool
 
 bp = Blueprint('year', __name__, url_prefix='/year')
 
-def map_status(status: int) -> str:
-    match status:
-        case 0:
-            return 'open'
-        case 1:
-            return 'closed'
-        case 2:
-            return 'ongoing'
-        case _:
-            raise ValueError()
-
 @bp.get('/')
 def index():
     kind = request.args.get('type', '')
 
     match kind:
-        case 'open':
-            status = 0
-        case 'closed':
-            status = 1
-        case 'ongoing':
-            status = 2
+        case 'open' | 'closed' | 'ongoing':
+            status = kind
         case _:
             status = None
 
@@ -37,22 +22,22 @@ def index():
 
     if status is not None:
         cursor.execute("""
-SELECT year.id, year.closed, year.host_id, country.name, country.cc3
+SELECT year.id, year.status, year.host_id, country.name, country.cc3
 FROM year
 LEFT OUTER JOIN country ON year.host_id = country.id
-WHERE year.closed = %s
+WHERE year.status = %s
 ORDER BY year.id
 """, (status,))
     else:
         cursor.execute("""
-SELECT year.id, year.closed, year.host_id, country.name, country.cc3
+SELECT year.id, year.status, year.host_id, country.name, country.cc3
 FROM year
 LEFT OUTER JOIN country ON year.host_id = country.id
 ORDER BY year.id
 """)
 
     data = [Year(year=val['id'],
-                 status=map_status(val['closed']),
+                 status=val['status'],
                  host=Country(id=val['host_id'],
                               cc3=val['cc3'],
                               name=val['name']) if val['host_id'] is not None else None).to_json()
@@ -65,7 +50,7 @@ def year(id: int):
     cursor = db.cursor()
 
     cursor.execute("""
-SELECT year.id, year.closed, year.host_id, country.name, country.cc3,
+SELECT year.id, year.status, year.host_id, country.name, country.cc3,
        COUNT(song.is_placeholder) FILTER(WHERE song.is_placeholder = false) AS entries,
        COUNT(song.is_placeholder) FILTER(WHERE song.is_placeholder = true) AS placeholders
 FROM year
@@ -81,7 +66,7 @@ ORDER BY year.id
         return err(ErrorID.NOT_FOUND, f"Country {id} not found")
 
     data = Year(year=val['id'],
-                status=map_status(val['closed']),
+                status=val['status'],
                 entry_count=val['entries'],
                 placeholder_count=val['placeholders'],
                 host=Country(id=val['host_id'],

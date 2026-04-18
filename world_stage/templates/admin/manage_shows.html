@@ -29,12 +29,12 @@
             <th>Show</th>
             <th>Voting</th>
             <th>Predictions</th>
-            <th>Change Access Type</th>
+            <th>Change Status</th>
             <th>Change Date</th>
         </tr>
     </thead>
     <tbody>
-        {% set access_types = ['none', 'draw', 'partial', 'full'] %}
+        {% set show_statuses = ['none', 'draw', 'partial', 'full'] %}
         {% for show in shows %}
         <tr>
             <td>{{ show.show_name }}</td>
@@ -64,16 +64,16 @@
                 </div>
             </td>
             <td>
-                <select id="access_type_{{ show.short_name }}">
-                    {% for access_type in access_types %}
-                    <option value="{{ access_type }}"
-                            {% if show.access_type == access_type %}selected{% endif %}>
-                        {{ access_type }}
+                <select id="show_status_{{ show.short_name }}">
+                    {% for status in show_statuses %}
+                    <option value="{{ status }}"
+                            {% if show.status == status %}selected{% endif %}>
+                        {{ status }}
                     </option>
                     {% endfor %}
                 </select>
-                <button data-select="access_type_{{ show.short_name }}"
-                        onclick="changeAccessType(this, '{{ show.short_name }}')">Change</button>
+                <button data-select="show_status_{{ show.short_name }}"
+                        onclick="changeShowStatus(this, '{{ show.short_name }}')">Change</button>
             </td>
             <td>
                 <input type="date" id="date_{{ show.short_name }}" value="{{ show.date.strftime('%Y-%m-%d') if show.date else '' }}">
@@ -89,10 +89,10 @@
     <div>
         <label for"year_status">Year Status:</label>
         <select name="year_status" id="year_status">
-            {% set status_names = ['Upcoming', 'Finished', 'Ongoing'] %}
-            {% for status in status_names %}
-            <option value="{{ loop.index0 }}" {% if loop.index0 == year.closed %}selected{% endif %}>
-                {{ status }}
+            {% set statuses = [('open', 'Upcoming'), ('closed', 'Finished'), ('ongoing', 'Ongoing')] %}
+            {% for value, label in statuses %}
+            <option value="{{ value }}" {% if value == year.status %}selected{% endif %}>
+                {{ label }}
             </option>
             {% endfor %}
         </select>

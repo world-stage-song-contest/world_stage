@@ -67,7 +67,7 @@ async function openPredictions(showId) {
     }
 }
 
-async function changeAccessType(el, showId) {
+async function changeShowStatus(el, showId) {
     const select = document.getElementById(el.dataset.select);
     if (!select) {
         const msg = `Select element with ID ${selectId} not found.`;
@@ -78,8 +78,8 @@ async function changeAccessType(el, showId) {
 
     const url = window.location.href + `/${showId}`;
     const body = {
-        'action': 'set_access_type',
-        'access_type': select.value
+        'action': 'set_status',
+        'status': select.value
     };
 
     const data = await fetchHelper(url, body);

@@ -26,12 +26,12 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT closed FROM year WHERE id = %s', (year,))
+    cursor.execute('SELECT status FROM year WHERE id = %s', (year,))
     year_result = cursor.fetchone()
     if not year_result:
         return {'own': [], 'placeholder': []}
 
-    closed = year_result['closed']
+    closed = year_result['status'] != 'open'
     is_special = year < 0
     user_limit = 1 if is_special else MAX_USER_SUBMISSIONS
 

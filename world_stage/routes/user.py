@@ -41,7 +41,7 @@ def profile(username: str):
 
     return render_template('user/page.html', username=username)
 
-def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type: str) -> tuple[bool, bool]:
+def redact_song_if_show(song: dict, year: int, show_short_name: str, status: str) -> tuple[bool, bool]:
     db = get_db()
     cursor = db.cursor()
     show_exists = False
@@ -60,7 +60,7 @@ def redact_song_if_show(song: dict, year: int, show_short_name: str, access_type
         if fetchone(cursor)['c'] > 0:
             song_modified = True
             song['class'] = f'qualifier {show_short_name}-qualifier'
-            if access_type == 'partial':
+            if status == 'partial':
                     song['title'] = ''
                     song['artist'] = ''
                     song['country'] = ''
@@ -87,13 +87,13 @@ def votes(username: str):
 
     cursor.execute('''
         SELECT vote_set.id, vote_set.show_id, account.username, nickname, country_id,
-               show.show_name, show.short_name, show.date, show.year_id, show.access_type,
+               show.show_name, show.short_name, show.date, show.year_id, show.status,
                year.special_name, year.special_short_name
         FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         JOIN show ON vote_set.show_id = show.id
         LEFT JOIN year ON show.year_id = year.id
-        WHERE vote_set.voter_id = %s AND (show.access_type = 'full' OR show.access_type = 'partial')
+        WHERE vote_set.voter_id = %s AND (show.status = 'full' OR show.status = 'partial')
         ORDER BY show.date DESC
     ''', (user_id,))
     votes = []
@@ -106,7 +106,7 @@ def votes(username: str):
             'code': row['country_id'],
             'show_name': row['show_name'],
             'short_name': row['short_name'],
-            'access_type': row['access_type'],
+            'status': row['status'],
             'date': row['date'].strftime("%d %b %Y"),
             'year': row['year_id'],
             'special_name': row['special_name'],
@@ -138,9 +138,9 @@ def votes(username: str):
         songs = []
         for val in cursor.fetchall():
             if vote['short_name'] != 'f':
-                redact_song_if_show(val, vote['year'], 'f', vote['access_type'])
+                redact_song_if_show(val, vote['year'], 'f', vote['status'])
                 if vote['short_name'] != 'sc':
-                    redact_song_if_show(val, vote['year'], 'sc', vote['access_type'])
+                    redact_song_if_show(val, vote['year'], 'sc', vote['status'])
             # Only show result placement for non-redacted songs.
             if val.get('code') == 'XX':
                 val['result_place'] = None
@@ -188,7 +188,7 @@ WITH user_shows AS (
     FROM vote_set vs
     JOIN show s ON s.id = vs.show_id
     WHERE vs.voter_id = %(id)s
-      AND s.access_type = 'full'
+      AND s.status = 'full'
       AND s.year_id IS NOT NULL
 ),
 songs_available AS (
@@ -200,7 +200,7 @@ songs_available AS (
     JOIN song s ON s.id = ss.song_id
     JOIN show sh ON sh.id = ss.show_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
       AND sh.year_id IS NOT NULL
     GROUP BY s.country_id
 ),
@@ -214,7 +214,7 @@ all_votes AS (
     JOIN song s ON s.id = v.song_id
     JOIN show sh ON sh.id = vs.show_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
       AND sh.year_id IS NOT NULL
     GROUP BY s.country_id
 ),
@@ -241,7 +241,7 @@ country_shows AS (
     JOIN song s ON s.id = ss.song_id
     JOIN show sh ON sh.id = ss.show_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
       AND sh.year_id IS NOT NULL
 ),
 user_exposure AS (
@@ -263,7 +263,7 @@ user_votes AS (
     JOIN song s ON s.id = v.song_id
     JOIN show sh ON sh.id = vs.show_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
       AND sh.year_id IS NOT NULL
       AND vs.voter_id = %(id)s
     GROUP BY s.country_id
@@ -400,7 +400,7 @@ WITH user_shows AS (
     FROM vote_set vs
     JOIN show s ON s.id = vs.show_id
     WHERE vs.voter_id = %(id)s
-      AND s.access_type = 'full'
+      AND s.status = 'full'
 ),
 songs_available AS (
     SELECT
@@ -411,7 +411,7 @@ songs_available AS (
     JOIN song s ON s.id = ss.song_id
     JOIN show sh ON sh.id = ss.show_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
     GROUP BY s.submitter_id
 ),
 all_votes AS (
@@ -424,7 +424,7 @@ all_votes AS (
     JOIN song s ON s.id = v.song_id
     JOIN show sh ON sh.id = vs.show_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
     GROUP BY s.submitter_id
 ),
 all_totals AS (
@@ -439,7 +439,7 @@ show_user_points AS (
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN show sh ON sh.id = vs.show_id
     WHERE vs.voter_id = %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
       AND vs.show_id IN (SELECT show_id FROM user_shows)
     GROUP BY vs.show_id
 ),
@@ -452,7 +452,7 @@ submitter_shows AS (
     JOIN song s ON s.id = ss.song_id
     JOIN show sh ON sh.id = ss.show_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
 ),
 user_exposure AS (
     SELECT
@@ -473,7 +473,7 @@ user_votes AS (
     JOIN song s ON s.id = v.song_id
     JOIN show sh ON sh.id = vs.show_id
     WHERE s.submitter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
       AND vs.voter_id = %(id)s
     GROUP BY s.submitter_id
 ),
@@ -567,7 +567,7 @@ reciprocal_points AS (
     JOIN show sh ON sh.id = vs.show_id
     WHERE s.submitter_id = %(id)s
       AND vs.voter_id <> %(id)s
-      AND sh.access_type = 'full'
+      AND sh.status = 'full'
     GROUP BY vs.voter_id
 ),
 classified AS (

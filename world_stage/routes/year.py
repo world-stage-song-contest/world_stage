@@ -19,7 +19,7 @@ def get_specials() -> list[dict]:
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, closed, special_name, special_short_name
+        SELECT id, status, special_name, special_short_name
         FROM year
         WHERE id < 0
         ORDER BY id DESC
@@ -35,7 +35,7 @@ def resolve_special(short_name: str) -> dict | None:
     """Look up a special by its short name. Returns the year row or None."""
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id, closed, special_name, special_short_name FROM year WHERE special_short_name = %s', (short_name,))
+    cursor.execute('SELECT id, status, special_name, special_short_name FROM year WHERE special_short_name = %s', (short_name,))
     return cursor.fetchone()
 
 def get_other_shows(year: int, exclude_show: str | None) -> list[str]:
@@ -59,11 +59,11 @@ def index():
     upcoming = []
     ongoing = []
 
-    cursor.execute('SELECT id, closed FROM year WHERE id >= 0 ORDER BY id DESC')
+    cursor.execute('SELECT id, status FROM year WHERE id >= 0 ORDER BY id DESC')
     for data in cursor.fetchall():
-        if data['closed'] == 1:
+        if data['status'] == 'closed':
             years.append(data)
-        elif data['closed'] == 2:
+        elif data['status'] == 'ongoing':
             ongoing.append(data)
         else:
             upcoming.append(data)
@@ -96,7 +96,7 @@ def special(short_name: str):
     shows = [Show(year=_year, short_name=show['short_name'], name=show['show_name'], date=show['date']) for show in cursor.fetchall()]
     shows.sort()
 
-    cl = special_year['closed'] == 1
+    cl = special_year['status'] == 'closed'
     year_placements = get_year_placements(_year) if cl else {}
 
     show_names = {s.short_name for s in shows}
@@ -104,7 +104,7 @@ def special(short_name: str):
     has_sf = any(sn == 'sf' or sn.startswith('sf') for sn in show_names)
     multi_show = has_sc or has_sf
 
-    results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl == 1) else {}
+    results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl) else {}
 
     sf_numbers: dict[int, str] = {}
     if has_sf:
@@ -139,11 +139,11 @@ def special_results(short_name: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type == 'none' and not permissions.can_view_restricted:
+    if show_data.status == 'none' and not permissions.can_view_restricted:
         return render_template('error.html', error="This show has no songs"), 400
 
     reveal = ''
-    access = show_data.access_type
+    access = show_data.status
 
     if permissions.can_view_restricted:
         if access == 'draw':
@@ -222,7 +222,7 @@ def special_detailed_results(short_name: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the detailed results yet"), 400
 
     if (show_data.voting_closes
@@ -284,7 +284,7 @@ def special_scoreboard(short_name: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the scoreboard yet"), 400
 
     if (show_data.voting_closes
@@ -310,7 +310,7 @@ def special_scores(short_name: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return {'error': "You aren't allowed to access the scoreboard"}, 400
 
     if (show_data.voting_closes
@@ -385,7 +385,7 @@ def special_predictions(short_name: str, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the predictions yet"), 400
 
     if (show_data.voting_closes
@@ -475,7 +475,7 @@ def special_predictions(short_name: str, show: str):
         copy_lines.append(f"{i}. {song.country.name}: {decimal_odds:.2f} ({pct:.2f}%)")
     copy_text = '\n'.join(copy_lines)
 
-    show_copy = show_data.access_type != 'full'
+    show_copy = show_data.status != 'full'
 
     return render_template('year/predictions.html',
                            songs=songs, predictors=predictors, odds=odds,
@@ -552,7 +552,7 @@ def special_song_votes(short_name: str, show: str, country_code: str, entry_numb
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type not in ('full', 'partial') and not permissions.can_view_restricted:
+    if show_data.status not in ('full', 'partial') and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the vote breakdown yet"), 400
 
     if (show_data.voting_closes
@@ -579,7 +579,7 @@ def special_song_votes(short_name: str, show: str, country_code: str, entry_numb
     if not song:
         return render_template('error.html', error="Song not found in this show"), 404
 
-    if show_data.access_type == 'partial' and not permissions.can_view_restricted:
+    if show_data.status == 'partial' and not permissions.can_view_restricted:
         qualifier_cutoff = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
         if qualifier_cutoff > 0:
             cursor.execute('''
@@ -697,15 +697,15 @@ def year(year: int):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT closed FROM year WHERE id = %s', (_year,))
-    closed = cursor.fetchone() or {'closed': 0}
-    cl = closed['closed'] == 1
+    cursor.execute('SELECT status FROM year WHERE id = %s', (_year,))
+    year_row = cursor.fetchone() or {'status': 'open'}
+    cl = year_row['status'] == 'closed'
 
     songs = get_year_songs(_year, select_languages=True)
 
     free_countries = []
 
-    if closed['closed'] == 0 and _year >= 0:
+    if year_row['status'] == 'open' and _year >= 0:
         cursor.execute('''
             SELECT id, name FROM country
             WHERE id <> ALL(%(ccs)s)
@@ -734,7 +734,7 @@ def year(year: int):
     results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl == 1) else {}
 
     # SF assignment: which semi-final each song competed in, regardless of
-    # whether the show is published yet (no access_type gate).
+    # whether the show is published yet (no status gate).
     sf_numbers: dict[int, str] = {}
     if has_sf:
         cursor.execute('''
@@ -764,11 +764,11 @@ def results(year: int, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type == 'none' and not permissions.can_view_restricted:
+    if show_data.status == 'none' and not permissions.can_view_restricted:
         return render_template('error.html', error="This show has no songs"), 400
 
     reveal = ''
-    access = show_data.access_type
+    access = show_data.status
 
     if permissions.can_view_restricted:
         if access == 'draw':
@@ -842,7 +842,7 @@ def detailed_results(year: int, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the detailed results yet"), 400
 
     if (show_data.voting_closes
@@ -903,7 +903,7 @@ def song_votes(year: int, show: str, country_code: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type not in ('full', 'partial') and not permissions.can_view_restricted:
+    if show_data.status not in ('full', 'partial') and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the vote breakdown yet"), 400
 
     if (show_data.voting_closes
@@ -930,7 +930,7 @@ def song_votes(year: int, show: str, country_code: str):
         return render_template('error.html', error="Song not found in this show"), 404
 
     # In partial mode, block access to qualifier results
-    if show_data.access_type == 'partial' and not permissions.can_view_restricted:
+    if show_data.status == 'partial' and not permissions.can_view_restricted:
         qualifier_cutoff = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
         if qualifier_cutoff > 0:
             cursor.execute('''
@@ -1020,7 +1020,7 @@ def scoreboard(year: int, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the scoreboard yet"), 400
 
     if (show_data.voting_closes
@@ -1041,7 +1041,7 @@ def scores(year: int, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return {'error': "You aren't allowed to access the scoreboard"}, 400
 
     if (show_data.voting_closes
@@ -1115,7 +1115,7 @@ def qualifiers(year: int, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the qualifiers")
 
     if (show_data.voting_closes
@@ -1139,7 +1139,7 @@ def qualifiers_post(year: int, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return {'error': "You aren't allowed to access the qualifiers"}, 400
 
     final_data = get_show_id('f', _year)
@@ -1220,7 +1220,7 @@ def qualifiers_scores(year: int, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return {'error': "You aren't allowed to access the qualifiers"}, 400
 
     if (show_data.voting_closes
@@ -1377,7 +1377,7 @@ def show_predictions(year: int, show: str):
     session_id = request.cookies.get('session')
     permissions = get_user_role_from_session(session_id)
 
-    if show_data.access_type != 'full' and not permissions.can_view_restricted:
+    if show_data.status != 'full' and not permissions.can_view_restricted:
         return render_template('error.html', error="You aren't allowed to access the predictions yet"), 400
 
     if (show_data.voting_closes
@@ -1478,7 +1478,7 @@ def show_predictions(year: int, show: str):
     copy_text = '\n'.join(copy_lines)
 
     # Copy box is an admin tool — hide it when the page is publicly visible
-    show_copy = show_data.access_type != 'full'
+    show_copy = show_data.status != 'full'
 
     return render_template('year/predictions.html',
                            songs=songs, predictors=predictors, odds=odds,
@@ -1540,7 +1540,7 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
         return v
 
     def show_needs_host(show_data: ShowData) -> bool:
-        if show_data.access_type != 'draw':
+        if show_data.status != 'draw':
             return False
 
         if not show_data.short_name.startswith('sf'):

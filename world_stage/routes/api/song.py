@@ -227,7 +227,7 @@ def _validate_country(country_code: str) -> tuple[str | None, tuple | None]:
 
 def _validate_year(cursor, year: int) -> tuple | None:
     """Return an error response if the year doesn't exist, else None."""
-    cursor.execute('SELECT id, closed FROM year WHERE id = %s', (year,))
+    cursor.execute('SELECT id, status FROM year WHERE id = %s', (year,))
     row = cursor.fetchone()
     if not row:
         return err(ErrorID.NOT_FOUND, f"Year {year} not found")
@@ -754,7 +754,7 @@ def delete_song(id: int):
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT song.id, song.submitter_id, year.closed
+        SELECT song.id, song.submitter_id, year.status
         FROM song
         JOIN year ON song.year_id = year.id
         WHERE song.id = %s
@@ -764,7 +764,7 @@ def delete_song(id: int):
     if not row:
         return '', 204
 
-    if row['closed'] != 0 and not permissions.can_edit:
+    if row['status'] != 'open' and not permissions.can_edit:
         return err(ErrorID.FORBIDDEN, "Cannot delete a song for a current or past year")
 
     if not permissions.can_edit and row['submitter_id'] != user_id:

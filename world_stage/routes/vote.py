@@ -281,9 +281,17 @@ def vote_post(show: str):
         else:
             return render_template('error.html', error=action)
 
+    selected: dict[int, dict[str, Any]] = defaultdict(dict)
+    songs_by_id = {s.id: s for s in songs}
+    for point, song_id in votes.items():
+        selected[point]['sid'] = song_id
+        song = songs_by_id.get(song_id)
+        if song:
+            selected[point]['cc'] = song.country.cc
+
     return render_template('vote/vote.html',
                            songs=songs, points=show_data.points, errors=errors,
-                           selected=votes, invalid=invalid,
+                           selected=selected, invalid=invalid,
                            username=username, nickname=nickname,
                            year=show_data.year, show_name=show_data.name, show=show,
                            selected_country=country_id, countries=get_countries())

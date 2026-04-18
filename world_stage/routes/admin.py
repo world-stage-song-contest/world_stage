@@ -66,7 +66,7 @@ def create_show_post(year: int):
 
     try:
         cur.execute('''
-            INSERT INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, access_type)
+            INSERT INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, status)
             VALUES (%(year)s, 1, %(show_name)s, %(short_name)s, %(dtf)s, %(sc)s, %(date)s, 'none')
         ''', data)
         db.commit()
@@ -389,7 +389,7 @@ def manage_index():
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT id, closed FROM year ORDER BY id')
+    cursor.execute('SELECT id, status FROM year ORDER BY id')
     years = cursor.fetchall()
 
     return render_template('admin/manage_index.html', years=years)
@@ -404,14 +404,14 @@ def manage(year: int):
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT id, closed FROM year WHERE id = %s
+        SELECT id, status FROM year WHERE id = %s
     ''', (year,))
     year_data = cursor.fetchone()
     if not year_data:
         return render_template('error.html', error=f"Year {year} not found"), 404
 
     cursor.execute('''
-        SELECT show_name, short_name, date, access_type, voting_opens, voting_closes, predictions_close FROM show WHERE year_id = %s
+        SELECT show_name, short_name, date, status, voting_opens, voting_closes, predictions_close FROM show WHERE year_id = %s
         ORDER BY id
     ''', (year,))
     shows = cursor.fetchall()
@@ -437,15 +437,15 @@ def manage_post(year: int):
 
     match action:
         case 'change_year_status':
-            closed = body.get('year_status')
-            if closed is None:
-                return render_template('error.html', error="No closed status provided"), 400
+            status = body.get('year_status')
+            if status not in ('open', 'closed', 'ongoing'):
+                return render_template('error.html', error="Invalid year status"), 400
 
             cursor.execute('''
                 UPDATE year
-                SET closed = %s
+                SET status = %s
                 WHERE id = %s
-            ''', (closed, year))
+            ''', (status, year))
         case _:
             return render_template('error.html', error=f"Unknown action '{action}'"), 400
     db.commit()
@@ -494,16 +494,16 @@ def manage_show_post(year: int, show: str):
                 SET predictions_close = NULL
                 WHERE year_id = %s AND short_name = %s
             ''', (year, show))
-        case 'set_access_type':
-            access_type = body.get('access_type')
-            if access_type not in ['none', 'draw', 'partial', 'full']:
-                return render_template('error.html', error="Invalid access type"), 400
+        case 'set_status':
+            status = body.get('status')
+            if status not in ('none', 'draw', 'partial', 'full'):
+                return render_template('error.html', error="Invalid show status"), 400
 
             cursor.execute('''
                 UPDATE show
-                SET access_type = %s
+                SET status = %s
                 WHERE year_id = %s AND short_name = %s
-            ''', (access_type, year, show))
+            ''', (status, year, show))
         case 'change_date':
             date_str = body.get('date')
             if not date_str:
@@ -625,13 +625,13 @@ def users_post():
     if action == 'approve':
         cursor.execute('''
             UPDATE account
-            SET approved = 1
+            SET approved = true
             WHERE id = %s
         ''', (user_id,))
     elif action == 'unapprove':
         cursor.execute('''
             UPDATE account
-            SET approved = 0
+            SET approved = false
             WHERE id = %s
         ''', (user_id,))
     elif action == 'annul_password':
@@ -883,7 +883,7 @@ WITH song_data AS (
     FROM song
     JOIN country ON song.country_id = country.id
     JOIN year ON song.year_id = year.id
-    WHERE country.id = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
+    WHERE country.id = ANY(%s) AND year_id IS NOT NULL AND year.status = 'closed'
     ORDER BY song.year_id
 )
 SELECT show, ro, cc, country,
@@ -909,7 +909,7 @@ WITH song_data AS (
     JOIN country ON song.country_id = country.id
     JOIN year ON song.year_id = year.id
     JOIN account ON song.submitter_id = account.id
-    WHERE song.submitter_id = ANY(%s) AND year_id IS NOT NULL AND year.closed = 1
+    WHERE song.submitter_id = ANY(%s) AND year_id IS NOT NULL AND year.status = 'closed'
     ORDER BY song.year_id, country
 )
 SELECT year, show, ro, cc, country,

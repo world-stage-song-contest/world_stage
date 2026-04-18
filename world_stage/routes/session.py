@@ -185,7 +185,7 @@ def sign_up_post():
     hashed, salt = hash_password(password)
     cursor.execute('''
         INSERT INTO account (username, password, salt, approved)
-        VALUES (%s, %s, %s, 0)
+        VALUES (%s, %s, %s, false)
     ''', (username, hashed, salt))
 
     db.commit()
