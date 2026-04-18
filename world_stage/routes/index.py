@@ -205,7 +205,7 @@ def flag(country: str):
             break
 
     if not file:
-        file = os.path.join(flags_root, 'XXX', f'{type}.svg')
+        file = os.path.join(flags_root, 'XX', f'{type}.svg')
 
     resp = make_response(send_file(file))
     resp.headers['Content-Type'] = 'image/svg+xml'
