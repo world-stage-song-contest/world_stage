@@ -245,6 +245,7 @@ class Country:
     name: str
     is_participating: bool
     cc3: str
+    flag_variant: str | None = None
 
 @total_ordering
 @dataclass
@@ -401,7 +402,8 @@ class Song:
             country=Country(cc=song['country_id'],
                             name=song['name'],
                             is_participating=bool(song['is_participating']),
-                            cc3=song['cc3']),
+                            cc3=song['cc3'],
+                            flag_variant=song.get('flag_variant')),
             placeholder=bool(song['is_placeholder']),
             year=song['year_id'],
             title_lang=song['title_language_id'],
@@ -871,7 +873,8 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
 
     cursor.execute(f'''
         SELECT song.id, song.title, song.artist, song.native_title,
-               song.country_id, country.name, country.is_participating, country.cc3,
+               song.country_id, COALESCE(an.name, country.name) AS name,
+               country.is_participating, country.cc3, an.flag_variant,
                song.year_id, song_show.running_order, song.is_placeholder,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                account.username, song.title_language_id, song.native_language_id,
@@ -883,6 +886,10 @@ def get_show_songs(year: int | None, short_name: str, *, select_languages=False,
         JOIN show ON song_show.show_id = show.id
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
+        LEFT JOIN alternative_name an
+            ON an.country_id = song.country_id
+           AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+           AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
         WHERE show.id = %s
         ORDER BY {additional_sort} song_show.running_order, song_show.id
         ''', (show_id,))
@@ -934,7 +941,8 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-               song.country_id, country.name, country.is_participating, country.cc3,
+               song.country_id, COALESCE(an.name, country.name) AS name,
+               country.is_participating, country.cc3, an.flag_variant,
                song.is_placeholder, account.username, song.year_id, song.poster_link,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
@@ -945,6 +953,10 @@ def get_year_songs(year: int, *, select_languages = False) -> list[Song]:
         LEFT OUTER JOIN account ON song.submitter_id = account.id
         LEFT JOIN year ON year.id = song.year_id
         LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
+        LEFT JOIN alternative_name an
+            ON an.country_id = song.country_id
+           AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+           AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
         WHERE song.year_id = %s
         ORDER BY
             CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
@@ -980,7 +992,8 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
     if year:
         cursor.execute('''
             SELECT song.id, song.title, song.artist, song.native_title,
-                   song.country_id, country.name, country.is_participating, country.cc3,
+                   song.country_id, COALESCE(an.name, country.name) AS name,
+                   country.is_participating, country.cc3, an.flag_variant,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id, song.poster_link,
@@ -992,6 +1005,10 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
             LEFT OUTER JOIN account ON song.submitter_id = account.id
             LEFT JOIN year ON year.id = song.year_id
             LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
+            LEFT JOIN alternative_name an
+                ON an.country_id = song.country_id
+               AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+               AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
             WHERE song.submitter_id = %s AND song.year_id = %s AND song.year_id IS NOT NULL
             ORDER BY song.year_id,
                      CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
@@ -1000,7 +1017,8 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
     else:
         cursor.execute('''
             SELECT song.id, song.title, song.artist, song.native_title,
-                   song.country_id, country.name, country.is_participating, country.cc3,
+                   song.country_id, COALESCE(an.name, country.name) AS name,
+                   country.is_participating, country.cc3, an.flag_variant,
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id, song.poster_link,
@@ -1012,6 +1030,10 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages = 
             LEFT OUTER JOIN account ON song.submitter_id = account.id
             LEFT JOIN year ON year.id = song.year_id
             LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
+            LEFT JOIN alternative_name an
+                ON an.country_id = song.country_id
+               AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+               AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
             WHERE song.submitter_id = %s AND song.year_id IS NOT NULL
             ORDER BY song.year_id,
                      CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
@@ -1110,7 +1132,8 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.is_participating, country.cc3,
+                song.country_id, COALESCE(an.name, country.name) AS name,
+                country.is_participating, country.cc3, an.flag_variant,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id, song.poster_link,
@@ -1122,6 +1145,10 @@ def get_country_songs(code: str, *, select_languages = False) -> list[Song]:
         LEFT OUTER JOIN account ON song.submitter_id = account.id
         LEFT JOIN year ON year.id = song.year_id
         LEFT JOIN country_year_results cyr ON cyr.song_id = song.id
+        LEFT JOIN alternative_name an
+            ON an.country_id = song.country_id
+           AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+           AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
         WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id IS NOT NULL
         ORDER BY song.year_id,
                  CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
@@ -1147,7 +1174,8 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.is_participating, country.cc3,
+                song.country_id, COALESCE(an.name, country.name) AS name,
+                country.is_participating, country.cc3, an.flag_variant,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id, song.poster_link,
@@ -1156,6 +1184,10 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
+        LEFT JOIN alternative_name an
+            ON an.country_id = song.country_id
+           AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+           AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
         WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id = %(year)s
         ORDER BY song.year_id, country.name
     ''', {'cc': code, 'year': year})
@@ -1174,7 +1206,8 @@ def get_special_songs_for_country(year: int, code: str) -> list[Song]:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.is_participating, country.cc3,
+                song.country_id, COALESCE(an.name, country.name) AS name,
+                country.is_participating, country.cc3, an.flag_variant,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id, song.poster_link,
@@ -1183,6 +1216,10 @@ def get_special_songs_for_country(year: int, code: str) -> list[Song]:
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
+        LEFT JOIN alternative_name an
+            ON an.country_id = song.country_id
+           AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+           AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
         WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id = %(year)s
         ORDER BY song.entry_number
     ''', {'cc': code, 'year': year})
@@ -1202,7 +1239,8 @@ def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
 
     cursor.execute('''
         SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.is_participating, country.cc3,
+                song.country_id, COALESCE(an.name, country.name) AS name,
+                country.is_participating, country.cc3, an.flag_variant,
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id, song.poster_link,
@@ -1211,6 +1249,10 @@ def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT OUTER JOIN account ON song.submitter_id = account.id
+        LEFT JOIN alternative_name an
+            ON an.country_id = song.country_id
+           AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+           AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
         WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
           AND song.year_id = %(year)s AND song.entry_number = %(entry)s
     ''', {'cc': code, 'year': year, 'entry': entry_number})

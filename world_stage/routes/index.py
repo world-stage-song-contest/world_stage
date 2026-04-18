@@ -3,6 +3,7 @@ from ..db import get_db
 from ..utils import (create_cookie, parse_cookie, render_template,
                      get_user_id_from_session, generate_api_token)
 import os.path
+import re
 
 # Lazy cache: 2-letter code → 3-letter code (populated on first miss).
 _cc2_to_cc3: dict[str, str] = {}
@@ -183,11 +184,15 @@ def flag(country: str):
     if width <= 40:
         size = 'small'
 
+    variant = request.args.get('v') or None
+    if variant and not re.fullmatch(r'[A-Za-z0-9_-]+', variant):
+        variant = None
+
     root = current_app.root_path
     flags_root = os.path.join(root, 'files', 'flags')
 
     # Try the code as-is first (2-letter), then fall back to the 3-letter
-    # equivalent from the database, then to the XXX placeholder.
+    # equivalent from the database, then to the XX placeholder.
     candidates = [country]
     cc3 = _get_cc3(country)
     if cc3 and cc3 != country:
@@ -195,6 +200,11 @@ def flag(country: str):
 
     file = None
     for candidate in candidates:
+        if variant:
+            path = os.path.join(flags_root, candidate, variant, f'{type}.svg')
+            if os.path.exists(path):
+                file = path
+                break
         path = os.path.join(flags_root, candidate, f'{type}-{size}.svg')
         if os.path.exists(path):
             file = path

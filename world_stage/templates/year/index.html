@@ -50,7 +50,7 @@
             <tr data-value="{{ loop.index }}">
                 <td class="year"><a href="{{ url_for('year.year', year=year.id) }}"><b>{{ year.id }}</b></a></td>
                 <td><a href="{{ url_for('country.country', code=winner.country.cc) }}"><div class="country">
-                    {{ flag(winner.country.cc, 42, winner.country.name) }}
+                    {{ flag(winner.country.cc, 42, winner.country.name, variant=winner.country.flag_variant) }}
                     {{ winner.country.name }}
                 </div></a></td>
                 <td class="artist"><div class="song-artist">{{ winner.artist }}</div></td>
@@ -98,7 +98,7 @@
                 <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.special', short_name=special.special_short_name) }}"><b>{{ special.special_name }}</b></a></td>
                 {% if winner %}
                 <td><a href="{{ url_for('country.country', code=winner.country.cc) }}"><div class="country">
-                    {{ flag(winner.country.cc, 42, winner.country.name) }}
+                    {{ flag(winner.country.cc, 42, winner.country.name, variant=winner.country.flag_variant) }}
                     {{ winner.country.name }}
                 </div></a></td>
                 <td class="artist"><div class="song-artist">{{ winner.artist }}</div></td>

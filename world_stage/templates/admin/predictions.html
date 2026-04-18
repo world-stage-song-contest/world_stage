@@ -33,7 +33,7 @@
             <td>{{ song.title }}</td>
             <td>{{ song.artist }}</td>
             <td>
-                {{ flag(song.country.cc, 24, song.country.name) }}
+                {{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}
                 {{ song.country.name }}
             </td>
             <td>
@@ -67,7 +67,7 @@
         <tr>
             <td>{{ song.title }}</td>
             <td>
-                {{ flag(song.country.cc, 24, song.country.name) }}
+                {{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}
                 {{ song.country.name }}
             </td>
             {% for p in predictions %}
@@ -93,7 +93,7 @@
     <ol class="predictor-ranking">
         {% for song in p.ranked_songs %}
         <li>
-            {{ flag(song.country.cc, 24, song.country.name) }}
+            {{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}
             <span class="song-title">{{ song.title }}</span>
             <span class="song-meta">{{ song.artist }} · {{ song.country.name }}</span>
         </li>

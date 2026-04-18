@@ -1,6 +1,6 @@
-{% macro flag(cc, width, country='', type="rect", class="flag") -%}
+{% macro flag(cc, width, country='', type="rect", class="flag", variant='') -%}
 <img
-    src="{{ url_for('main.flag', country=cc, t=type, w=width) }}"
+    src="{{ url_for('main.flag', country=cc, t=type, w=width, v=variant) }}"
     width="{{ width }}"
     height="{{ (width*2//3)|int }}"
     class="{{ class }}">

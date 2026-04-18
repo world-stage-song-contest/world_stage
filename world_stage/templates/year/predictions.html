@@ -68,7 +68,7 @@
                 <td class="number header-like">{{ song.vote_data.ro if song.vote_data else '—' }}</td>
                 <td class="sticky">
                     <div class="country">
-                        {{ flag(song.country.cc, 24, song.country.name) }}
+                        {{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}
                         {{ song.country.name }}
                     </div>
                 </td>

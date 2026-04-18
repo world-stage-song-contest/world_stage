@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS alternative_name (
     country_id text COLLATE public.nocase REFERENCES country (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     from_year_id bigint,
     to_year_id bigint,
-    name text
+    name text,
+    flag_variant text
 );
 
 CREATE TABLE IF NOT EXISTS language (

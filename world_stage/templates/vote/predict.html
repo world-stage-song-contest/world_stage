@@ -35,7 +35,7 @@
             <span class="position-label">{{ loop.index }}</span>
             <input type="hidden" name="{{ song.id }}" value="{{ loop.index }}" class="position-input">
             <div class="song-details">
-                {{ flag(song.country.cc, 42, song.country.name) }}
+                {{ flag(song.country.cc, 42, song.country.name, variant=song.country.flag_variant) }}
                 <div class="song-text">
                     <span class="song-title">{{ song.title }}</span>
                     <span class="song-meta">{{ song.artist }} · {{ song.country.name }}</span>

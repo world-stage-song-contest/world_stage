@@ -76,7 +76,7 @@
         <tr data-value="{{ loop.index }}" class="{{ "placeholder" if song.placeholder else "" }}">
             <td><a href="{{ url_for('year.year', year=song.year) }}">{{ song.year }}</a></td>
             <td><a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">
-                    {{ flag(song.country.cc, 42, song.country.name) }}
+                    {{ flag(song.country.cc, 42, song.country.name, variant=song.country.flag_variant) }}
                     <span>{{ song.country.name }}</span>
             </div></a></td>
             <td><div class="song-artist">{{ song.artist }}</div></td>
@@ -129,7 +129,7 @@
                 <a href="{{ url_for('year.special', short_name=song.special_short_name) }}">{{ song.special_name }}</a>
             </td>
             <td><a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">
-                    {{ flag(song.country.cc, 42, song.country.name) }}
+                    {{ flag(song.country.cc, 42, song.country.name, variant=song.country.flag_variant) }}
                     <span>{{ song.country.name }}</span>
             </div></a></td>
             <td><div class="song-artist">{{ song.artist }}</div></td>

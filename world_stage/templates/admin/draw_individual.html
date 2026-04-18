@@ -65,7 +65,7 @@
                  data-index="{{ loop.index0 }}"
                  data-submitter="{{ song.submitter_id }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
-                <div class="flag-container">{{ flag(song.country.cc, 24, song.country.name) }}</div>
+                <div class="flag-container">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}</div>
                 <div class="country-name">{{ song.country.name }}</div>
             </div>
         {% endfor %}
