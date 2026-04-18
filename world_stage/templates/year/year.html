@@ -50,7 +50,7 @@
          'second' if place == 2 else
          'third'  if place == 3 else ''
        ) ~ (' last' if is_last else '') %}
-    <td class="number {{ cat_class }} place-cell {{ place_class }}">{{ place }}{% if is_last %}<span class="last-marker" aria-hidden="true">◁</span>{% endif %}</td>
+    <td class="number {{ cat_class }} place-cell {{ place_class }}">{{ place }}</td>
     <td class="number {{ cat_class }} pts-cell   {{ place_class }}">{{ entry.pts }}</td>
   {% else %}
     <td class="number {{ cat_class }} place-cell no-entry"></td>

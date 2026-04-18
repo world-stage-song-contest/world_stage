@@ -108,7 +108,7 @@
                    ) ~ (' last' if is_last else '') %}
                 <tr class="{{ cat_class }}">
                     <th>{{ label }}</th>
-                    <td class="number place-cell {{ cat_class }} {{ place_class }}">{{ place }}{% if is_last %}<span class="last-marker" aria-hidden="true">◁</span>{% endif %}</td>
+                    <td class="number place-cell {{ cat_class }} {{ place_class }}">{{ place }}</td>
                     <td class="number pts-cell  {{ cat_class }} {{ place_class }}">{{ entry.pts }}</td>
                 </tr>
             {% endif %}

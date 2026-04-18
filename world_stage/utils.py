@@ -1074,6 +1074,7 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
                csr.total_points AS pts,
                csr.place,
                csr.total_countries,
+               csr.placement_percentage,
                csr.show_name
         FROM country_show_results csr
         JOIN show ON show.id = csr.show_id
@@ -1102,13 +1103,14 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
                 'pts': row['pts'],
                 'place': row['place'],
                 'total_countries': row['total_countries'],
+                'placement_percentage': row['placement_percentage'],
                 'show_name': row['show_name'],
                 'short_name': row['short_name'],
             }
 
     # Year-level placements (only for closed years)
     cursor.execute('''
-        SELECT cyr.song_id, cyr.place, cyr.total_countries
+        SELECT cyr.song_id, cyr.place, cyr.total_countries, cyr.placement_percentage
         FROM country_year_results cyr
         JOIN year ON year.id = cyr.year_id
         WHERE cyr.song_id = ANY(%s)
@@ -1121,6 +1123,7 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
         results[sid]['year'] = {
             'place': row['place'],
             'total_countries': row['total_countries'],
+            'placement_percentage': row['placement_percentage'],
         }
 
     return results

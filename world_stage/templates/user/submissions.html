@@ -29,9 +29,11 @@
          'second' if place == 2 else
          'third'  if place == 3 else ''
        ) ~ (' last' if is_last else '') %}
-    <td class="number {{ cat_class }} {{ place_class }}">{{ place }}{% if is_last %}<span class="last-marker" aria-hidden="true">◁</span>{% endif %}</td>
+    <td class="number {{ cat_class }} place-cell {{ place_class }}">{{ place }}</td>
+    <td class="number pct-cell {{ place_class }}">{{ "%.2f%%" | format(entry.placement_percentage|float) }}</td>
   {% else %}
-    <td class="number {{ cat_class }} no-entry"></td>
+    <td class="number {{ cat_class }} place-cell no-entry"></td>
+    <td class="number pct-cell no-entry"></td>
   {% endif %}
 {% endmacro %}
 
@@ -45,11 +47,11 @@
          'second' if place == 2 else
          'third'  if place == 3 else ''
        ) ~ (' last' if is_last else '') %}
-    <td class="number {{ cat_class }} place-cell {{ place_class }}">{{ place }}{% if is_last %}<span class="last-marker" aria-hidden="true">◁</span>{% endif %}</td>
-    <td class="number {{ cat_class }} pts-cell   {{ place_class }}">{{ entry.pts }}</td>
+    <td class="number {{ cat_class }} place-cell {{ place_class }}">{{ place }}</td>
+    <td class="number {{ cat_class }} pts-cell {{ place_class }}">{{ entry.pts }}</td>
   {% else %}
     <td class="number {{ cat_class }} place-cell no-entry"></td>
-    <td class="number {{ cat_class }} pts-cell   no-entry"></td>
+    <td class="number {{ cat_class }} pts-cell no-entry"></td>
   {% endif %}
 {% endmacro %}
 
@@ -62,6 +64,7 @@
             <th>Title</th>
             <th>Language</th>
             <th class="year-result">Year</th>
+            <th class="pct-cell">%</th>
             <th class="final">Final</th>
             <th class="final">Points</th>
             <th class="repechage">Repe</th>
@@ -113,6 +116,7 @@
             <th>Title</th>
             <th>Language</th>
             <th class="year-result">Place</th>
+            <th class="pct-cell">%</th>
             <th class="final">Final</th>
             <th class="final">Points</th>
             <th class="repechage">Repe</th>
