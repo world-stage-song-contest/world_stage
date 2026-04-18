@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Received biases: {{ subject_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/bias.css">
+    <script src="/static/js/sort-table.js"></script>
+{% endblock %}
+{% block navigation %}
+    {% if subject_type == 'country' %}
+        <a class="nav-item" href="{{ url_for('country.index') }}">Countries</a>
+        <span class="nav-separator"></span>
+        <a class="nav-item" href="{{ url_for('country.country', code=subject_code.lower()) }}">{{ subject_name }}</a>
+        <span class="nav-separator"></span>
+        <a class="nav-item" href="{{ url_for('country.bias', code=subject_code.lower()) }}">Received biases</a>
+    {% else %}
+        <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
+        <span class="nav-separator"></span>
+        <a class="nav-item" href="{{ url_for('user.profile', username=subject_name) }}">{{ subject_name }}</a>
+        <span class="nav-separator"></span>
+        <a class="nav-item" href="{{ url_for('user.bias', username=subject_name) }}">Bias</a>
+        <a class="nav-item" href="{{ url_for('user.bias_for', username=subject_name) }}">Received biases</a>
+    {% endif %}
+{% endblock %}
+{% block content %}
+<h1>
+    Voters biased toward
+    {% if subject_type == 'country' %}
+        {{ flag(subject_code, 24, subject_name) }} {{ subject_name }}
+    {% else %}
+        {{ subject_name }}
+    {% endif %}
+</h1>
+<label class="bias-filter">
+    <input type="checkbox" onchange="document.querySelector('table.sortable').classList.toggle('hide-inconclusive', this.checked)">
+    Hide inconclusive
+</label>
+<table class="sortable with-sticky">
+    <thead class="sticky">
+        <tr>
+            <th>#</th>
+            <th>Voter</th>
+            <th>Votings</th>
+            <th>Given<br>Points</th>
+            <th>Given<br>Points %</th>
+            <th>Total<br>Points</th>
+            <th>Total<br>Points %</th>
+            <th>Bias</th>
+            {% if subject_type == 'user' %}
+            <th>Received<br>Points</th>
+            <th>Point<br>Deficit</th>
+            {% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for bias in biases %}
+        <tr data-value="{{ loop.index }}">
+            <th>{{ loop.index }}</th>
+            <td><a href="{{ url_for('user.profile', username=bias.voter_name) }}">{{ bias.voter_name }}</a></td>
+            <td class="number">{{ bias.parts }}</td>
+            <td class="number">{{ bias.user_given }}</td>
+            <td class="number">{{ "{:.02f}%".format(bias.user_ratio * 100) }}</td>
+            <td class="number">{{ bias.total_given }}</td>
+            <td class="number">{{ "{:.02f}%".format(bias.total_ratio * 100) }}</td>
+            <td class="number bias-value bias-{{ bias.bias_class }}">{{ "{:.02f}%".format(bias.bias * 100) }}</td>
+            {% if subject_type == 'user' %}
+            <td class="number">{{ bias.submitter_given }}</td>
+            <td class="number">{{ bias.points_deficit }}</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

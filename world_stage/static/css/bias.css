@@ -25,3 +25,7 @@
 .bias-value:not(.bias-inconclusive) {
     color: var(--bias-text);
 }
+
+table.hide-inconclusive tr:has(.bias-inconclusive) {
+    display: none;
+}

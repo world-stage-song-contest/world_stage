@@ -17,6 +17,26 @@ def index():
 
     return render_template('country/index.html', countries=res)
 
+@bp.get('/<code>/bias')
+def bias(code: str):
+    canonical = resolve_country_code(code.upper())
+    if not canonical:
+        return render_template('error.html', error=f"Country not found: {code}"), 404
+    if canonical.lower() != code.lower():
+        return redirect(url_for('country.bias', code=canonical.lower()), 301)
+
+    name = get_country_name(canonical)
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT * FROM country_voter_bias(%s)', (canonical,))
+    biases = [dict(r) for r in cursor.fetchall()]
+
+    return render_template('inbound_bias.html',
+                           subject_type='country',
+                           subject_code=canonical,
+                           subject_name=name,
+                           biases=biases)
+
 @bp.get('/<code>')
 def country(code: str):
     canonical = resolve_country_code(code.upper())

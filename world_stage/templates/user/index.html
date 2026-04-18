@@ -17,6 +17,7 @@
                         <a href="{{ url_for('user.submissions', username=user.username) }}">Submissions</a>
                         <a href="{{ url_for('user.bias', username=user.username, type='country') }}">Country biases</a>
                         <a href="{{ url_for('user.bias', username=user.username, type='user') }}">Submitter biases</a>
+                        <a href="{{ url_for('user.bias_for', username=user.username) }}">Received biases</a>
                     </div>
                 </div>
             {% endfor %}

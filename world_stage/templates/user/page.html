@@ -17,5 +17,10 @@
         <img src="/static/images/hands.png" alt="Bias Icon">
         <p>View the user's bias.</p>
     </a>
+    <a href="{{ url_for('user.bias_for', username=username) }}" class="card">
+        <h3>Received biases</h3>
+        <img src="/static/images/hands.png" alt="Received biases icon">
+        <p>View which voters are biased toward this user.</p>
+    </a>
 </div>
 {% endblock %}

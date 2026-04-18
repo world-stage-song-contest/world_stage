@@ -230,45 +230,14 @@ class ShowData:
     special: int | None
     status: str
 
-class UserPermissions(Enum):
-    NONE = 0
-    USER = 1
-    EDITOR = 2
-    ADMIN = 3
-    OWNER = 4
-
-    @staticmethod
-    def from_str(role: str) -> 'UserPermissions':
-        if role == 'user':
-            return UserPermissions.USER
-        elif role == 'editor':
-            return UserPermissions.EDITOR
-        elif role == 'admin':
-            return UserPermissions.ADMIN
-        elif role == 'owner':
-            return UserPermissions.OWNER
-        else:
-            return UserPermissions.NONE
+@dataclass(frozen=True)
+class UserPermissions:
+    role: str = 'none'
+    can_edit: bool = False
+    can_view_restricted: bool = False
 
     def __str__(self) -> str:
-        if self == UserPermissions.USER:
-            return 'user'
-        elif self == UserPermissions.EDITOR:
-            return 'editor'
-        elif self == UserPermissions.ADMIN:
-            return 'admin'
-        elif self == UserPermissions.OWNER:
-            return 'owner'
-        else:
-            return 'none'
-
-    @property
-    def can_view_restricted(self):
-        return self == UserPermissions.ADMIN or self == UserPermissions.OWNER
-
-    @property
-    def can_edit(self):
-        return self == UserPermissions.EDITOR or self == UserPermissions.ADMIN or self == UserPermissions.OWNER
+        return self.role
 
 @dataclass(kw_only=True)
 class Country:
@@ -706,35 +675,42 @@ def get_user_id_from_session(session_id: str | None) -> tuple[int, str] | None:
 
 def get_user_role_from_session(session_id: str | None) -> UserPermissions:
     if not session_id:
-        return UserPermissions.NONE
+        return UserPermissions()
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT role FROM session
+        SELECT account_role.name, account_role.can_edit, account_role.can_view_restricted
+        FROM session
         JOIN account ON session.user_id = account.id
+        JOIN account_role ON account.role = account_role.name
         WHERE session.session_id = %s AND session.expires_at > CURRENT_TIMESTAMP
     ''', (session_id,))
     row = cursor.fetchone()
     if row:
-        role = row['role']
-        return UserPermissions.from_str(role)
-    return UserPermissions.NONE
+        return UserPermissions(role=row['name'],
+                               can_edit=row['can_edit'],
+                               can_view_restricted=row['can_view_restricted'])
+    return UserPermissions()
 
 def get_user_permissions(user_id: int | None) -> UserPermissions:
     if user_id is None:
-        return UserPermissions.NONE
+        return UserPermissions()
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute('''
-        SELECT role FROM account WHERE id = %s
+        SELECT account_role.name, account_role.can_edit, account_role.can_view_restricted
+        FROM account
+        JOIN account_role ON account.role = account_role.name
+        WHERE account.id = %s
     ''', (user_id,))
     row = cursor.fetchone()
     if row:
-        role = row['role']
-        return UserPermissions.from_str(role)
-    return UserPermissions.NONE
+        return UserPermissions(role=row['name'],
+                               can_edit=row['can_edit'],
+                               can_view_restricted=row['can_view_restricted'])
+    return UserPermissions()
 
 def create_cookie(**kwargs: str) -> str:
     cookie = []

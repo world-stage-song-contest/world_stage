@@ -11,8 +11,14 @@
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('user.bias', username=username, type='country') }}">Countries</a>
     <a class="nav-item" href="{{ url_for('user.bias', username=username, type='user') }}">Users</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.bias_for', username=username) }}">Received biases</a>
 {% endblock %}
 {% block content %}
+<label class="bias-filter">
+    <input type="checkbox" onchange="document.querySelector('table.sortable').classList.toggle('hide-inconclusive', this.checked)">
+    Hide inconclusive
+</label>
 <table class="sortable with-sticky">
     <thead class="sticky">
         <tr>
