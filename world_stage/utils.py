@@ -1274,6 +1274,17 @@ def get_years() -> list[int]:
     ''')
     return list(map(lambda x: x['id'], cursor.fetchall()))
 
+def get_closed_years() -> list[int]:
+    """Return closed positive year ids in ascending order, for range pickers."""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT id FROM year
+        WHERE id > 0 AND status = 'closed'
+        ORDER BY id
+    """)
+    return [row['id'] for row in cursor]
+
 def get_years_grouped() -> dict:
     """Return years split into groups for display in submission forms:
       - open: status = 'open', ascending

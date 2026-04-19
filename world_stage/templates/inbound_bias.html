@@ -29,6 +29,32 @@
         {{ subject_name }}
     {% endif %}
 </h1>
+<form method="get" class="bias-filters">
+    <input type="hidden" name="_submitted" value="1">
+    <label>From
+        <select name="from">
+            <option value="">—</option>
+            {% for y in closed_years %}
+            <option value="{{ y }}" {% if year_from == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>To
+        <select name="to">
+            <option value="">—</option>
+            {% for y in closed_years %}
+            <option value="{{ y }}" {% if year_to == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% if subject_type == 'user' %}
+    <label>
+        <input type="checkbox" name="include_specials" value="true" {% if include_specials %}checked{% endif %}>
+        Include specials
+    </label>
+    {% endif %}
+    <button type="submit">Apply</button>
+</form>
 <label class="bias-filter">
     <input type="checkbox" onchange="document.querySelector('table.sortable').classList.toggle('hide-inconclusive', this.checked)">
     Hide inconclusive

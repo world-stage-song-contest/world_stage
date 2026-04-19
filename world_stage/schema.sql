@@ -860,7 +860,11 @@ $$;
 --     work.
 --   * combined is a 3-way FULL OUTER JOIN instead of 4-way.
 
-CREATE OR REPLACE FUNCTION user_country_bias(p_user_id bigint)
+CREATE OR REPLACE FUNCTION user_country_bias(
+    p_user_id bigint,
+    p_year_from bigint DEFAULT NULL,
+    p_year_to bigint DEFAULT NULL
+)
 RETURNS TABLE (
     country_id text,
     country_name text,
@@ -882,6 +886,8 @@ WITH user_shows AS (
     WHERE vs.voter_id = p_user_id
       AND s.status = 'full'
       AND s.year_id > 0
+      AND (p_year_from IS NULL OR s.year_id >= p_year_from)
+      AND (p_year_to IS NULL OR s.year_id <= p_year_to)
     GROUP BY s.id
 ),
 songs_available AS (
@@ -995,7 +1001,12 @@ ORDER BY fb.bias DESC, fb.songs_available, fb.p_c
 $$;
 
 
-CREATE OR REPLACE FUNCTION user_submitter_bias(p_user_id bigint)
+CREATE OR REPLACE FUNCTION user_submitter_bias(
+    p_user_id bigint,
+    p_year_from bigint DEFAULT NULL,
+    p_year_to bigint DEFAULT NULL,
+    p_include_specials boolean DEFAULT true
+)
 RETURNS TABLE (
     submitter_id bigint,
     submitter_name text,
@@ -1020,6 +1031,12 @@ WITH user_shows AS (
     JOIN show s ON s.id = vs.show_id
     WHERE vs.voter_id = p_user_id
       AND s.status = 'full'
+      AND (
+          (s.year_id > 0
+           AND (p_year_from IS NULL OR s.year_id >= p_year_from)
+           AND (p_year_to IS NULL OR s.year_id <= p_year_to))
+          OR (p_include_specials AND s.year_id < 0)
+      )
     GROUP BY s.id
 ),
 songs_available AS (
@@ -1077,6 +1094,12 @@ reciprocal_points AS (
     WHERE s.submitter_id = p_user_id
       AND vs.voter_id <> p_user_id
       AND sh.status = 'full'
+      AND (
+          (sh.year_id > 0
+           AND (p_year_from IS NULL OR sh.year_id >= p_year_from)
+           AND (p_year_to IS NULL OR sh.year_id <= p_year_to))
+          OR (p_include_specials AND sh.year_id < 0)
+      )
     GROUP BY vs.voter_id
 ),
 combined AS (
@@ -1171,7 +1194,11 @@ $$;
 -- p_c (population's allocation to the target in v's shows) and q_c
 -- (v's allocation to the target), then the smoothed bias.
 
-CREATE OR REPLACE FUNCTION country_voter_bias(p_country_id text)
+CREATE OR REPLACE FUNCTION country_voter_bias(
+    p_country_id text,
+    p_year_from bigint DEFAULT NULL,
+    p_year_to bigint DEFAULT NULL
+)
 RETURNS TABLE (
     voter_id bigint,
     voter_name text,
@@ -1192,6 +1219,8 @@ WITH voter_shows AS (
     JOIN show sh ON sh.id = vs.show_id
     WHERE sh.status = 'full'
       AND sh.year_id > 0
+      AND (p_year_from IS NULL OR sh.year_id >= p_year_from)
+      AND (p_year_to IS NULL OR sh.year_id <= p_year_to)
 ),
 songs_available AS (
     SELECT vss.voter_id, COUNT(*) AS songs_available
@@ -1304,7 +1333,12 @@ ORDER BY fb.bias DESC, fb.songs_available, fb.p_c
 $$;
 
 
-CREATE OR REPLACE FUNCTION submitter_voter_bias(p_submitter_id bigint)
+CREATE OR REPLACE FUNCTION submitter_voter_bias(
+    p_submitter_id bigint,
+    p_year_from bigint DEFAULT NULL,
+    p_year_to bigint DEFAULT NULL,
+    p_include_specials boolean DEFAULT true
+)
 RETURNS TABLE (
     voter_id bigint,
     voter_name text,
@@ -1328,6 +1362,12 @@ WITH voter_shows AS (
     FROM vote_set vs
     JOIN show sh ON sh.id = vs.show_id
     WHERE sh.status = 'full'
+      AND (
+          (sh.year_id > 0
+           AND (p_year_from IS NULL OR sh.year_id >= p_year_from)
+           AND (p_year_to IS NULL OR sh.year_id <= p_year_to))
+          OR (p_include_specials AND sh.year_id < 0)
+      )
 ),
 songs_available AS (
     SELECT vss.voter_id, COUNT(DISTINCT s.id) AS songs_available
@@ -1389,6 +1429,12 @@ reciprocal_from_target AS (
     WHERE vs.voter_id = p_submitter_id
       AND s.submitter_id <> p_submitter_id
       AND sh.status = 'full'
+      AND (
+          (sh.year_id > 0
+           AND (p_year_from IS NULL OR sh.year_id >= p_year_from)
+           AND (p_year_to IS NULL OR sh.year_id <= p_year_to))
+          OR (p_include_specials AND sh.year_id < 0)
+      )
     GROUP BY s.submitter_id
 ),
 combined AS (

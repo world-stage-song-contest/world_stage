@@ -3,7 +3,7 @@ import urllib.parse
 import unicodedata
 from flask import Blueprint, Response, request
 
-from ..utils import get_user_songs, get_show_results_for_songs, get_user_role_from_session, render_template, write_m3u
+from ..utils import get_closed_years, get_user_songs, get_show_results_for_songs, get_user_role_from_session, render_template, write_m3u
 from ..db import fetchone, get_db
 
 bp = Blueprint('user', __name__, url_prefix='/user')
@@ -217,19 +217,40 @@ def playlist(username: str):
     )
 
 
-def get_country_biases(user_id: int):
+def _parse_bias_filters(with_specials: bool):
+    """Read ?from, ?to, and (for submitter variants) ?include_specials.
+
+    The form carries a hidden `_submitted` sentinel so we can tell an
+    unchecked checkbox (absent from args) apart from a fresh visit with
+    no filters set. Fresh visit → default True; form submitted without
+    the box → False.
+    """
+    year_from = request.args.get('from', type=int)
+    year_to = request.args.get('to', type=int)
+    if request.args.get('_submitted'):
+        include_specials = 'include_specials' in request.args
+    else:
+        include_specials = True
+    if with_specials:
+        return year_from, year_to, include_specials
+    return year_from, year_to
+
+
+def get_country_biases(user_id: int, year_from: int | None, year_to: int | None):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT * FROM user_country_bias(%s)', (user_id,))
-    for r in cursor.fetchall():
+    cursor.execute('SELECT * FROM user_country_bias(%s, %s, %s)',
+                   (user_id, year_from, year_to))
+    for r in cursor:
         yield dict(r)
 
 
-def get_submitter_biases(user_id: int):
+def get_submitter_biases(user_id: int, year_from: int | None, year_to: int | None, include_specials: bool):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT * FROM user_submitter_bias(%s)', (user_id,))
-    for r in cursor.fetchall():
+    cursor.execute('SELECT * FROM user_submitter_bias(%s, %s, %s, %s)',
+                   (user_id, year_from, year_to, include_specials))
+    for r in cursor:
         yield dict(r)
 
 
@@ -252,13 +273,20 @@ def bias(username: str):
     user_id = user_id_g['id']
 
     if bias_type == 'user':
-        biases = get_submitter_biases(user_id)
+        year_from, year_to, include_specials = _parse_bias_filters(with_specials=True)
+        biases = get_submitter_biases(user_id, year_from, year_to, include_specials)
     elif bias_type == 'country':
-        biases = get_country_biases(user_id)
+        year_from, year_to = _parse_bias_filters(with_specials=False)
+        include_specials = True  # N/A; template reads it for checkbox state only
+        biases = get_country_biases(user_id, year_from, year_to)
     else:
         return render_template('error.html', error=f"Invalid bias type specified: {bias_type}."), 400
 
-    return render_template('user/bias.html', username=username, bias_type=bias_type, biases=biases)
+    return render_template('user/bias.html',
+                           username=username, bias_type=bias_type, biases=biases,
+                           closed_years=get_closed_years(),
+                           year_from=year_from, year_to=year_to,
+                           include_specials=include_specials)
 
 @bp.get('/<username>/bias/for')
 def bias_for(username: str):
@@ -272,10 +300,15 @@ def bias_for(username: str):
     if not row:
         return render_template('error.html', error="User not found"), 404
 
-    cursor.execute('SELECT * FROM submitter_voter_bias(%s)', (row['id'],))
-    biases = [dict(r) for r in cursor.fetchall()]
+    year_from, year_to, include_specials = _parse_bias_filters(with_specials=True)
+    cursor.execute('SELECT * FROM submitter_voter_bias(%s, %s, %s, %s)',
+                   (row['id'], year_from, year_to, include_specials))
+    biases = [dict(r) for r in cursor]
 
     return render_template('inbound_bias.html',
                            subject_type='user',
                            subject_name=username,
-                           biases=biases)
+                           biases=biases,
+                           closed_years=get_closed_years(),
+                           year_from=year_from, year_to=year_to,
+                           include_specials=include_specials)

@@ -78,14 +78,20 @@
                 <th class="number">{{ ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
                 <td>{{ song.artist }}</td>
-                {% if not song.hidden and access in ('partial', 'full') %}
+                {% if song.hidden %}
+                <td>{{ song.title }}</td>
+                {% elif access in ('partial', 'full') %}
                 {% if special %}
                 <td><a href="{{ url_for('year.special_song_votes', short_name=special, show=show, country_code=song.country.cc.lower(), entry_number=song.entry_number) }}">{{ song.title }}</a></td>
                 {% else %}
                 <td><a href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower()) }}">{{ song.title }}</a></td>
                 {% endif %}
                 {% else %}
-                <td>{{ song.title }}</td>
+                {% if special %}
+                <td><a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special, entry_number=song.entry_number) }}">{{ song.title }}</a></td>
+                {% else %}
+                <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=year) }}">{{ song.title }}</a></td>
+                {% endif %}
                 {% endif %}
             {% if access != 'draw' %}
                 <td class="number extra-visible">{{ place }}</td>

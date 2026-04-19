@@ -2,7 +2,7 @@ from collections import defaultdict
 import re
 from flask import Blueprint, Response, redirect, request, url_for
 
-from ..utils import get_countries, get_country_name, get_country_songs, get_show_results_for_songs, get_song, get_special_songs_for_country, get_special_song, get_user_id_from_session, get_user_permissions, get_user_role_from_session, render_template, get_markdown_parser, resolve_country_code, write_m3u
+from ..utils import get_closed_years, get_countries, get_country_name, get_country_songs, get_show_results_for_songs, get_song, get_special_songs_for_country, get_special_song, get_user_id_from_session, get_user_permissions, get_user_role_from_session, render_template, get_markdown_parser, resolve_country_code, write_m3u
 from ..db import get_db
 
 bp = Blueprint('country', __name__, url_prefix='/country')
@@ -66,16 +66,23 @@ def bias(code: str):
         return redirect(url_for('country.bias', code=canonical.lower()), 301)
 
     name = get_country_name(canonical)
+    year_from = request.args.get('from', type=int)
+    year_to = request.args.get('to', type=int)
+
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT * FROM country_voter_bias(%s)', (canonical,))
-    biases = [dict(r) for r in cursor.fetchall()]
+    cursor.execute('SELECT * FROM country_voter_bias(%s, %s, %s)',
+                   (canonical, year_from, year_to))
+    biases = [dict(r) for r in cursor]
 
     return render_template('inbound_bias.html',
                            subject_type='country',
                            subject_code=canonical,
                            subject_name=name,
-                           biases=biases)
+                           biases=biases,
+                           closed_years=get_closed_years(),
+                           year_from=year_from, year_to=year_to,
+                           include_specials=True)
 
 @bp.get('/<code>')
 def country(code: str):
