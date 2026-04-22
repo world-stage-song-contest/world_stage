@@ -1,12 +1,13 @@
 import sys
-from typing import Any
 import typing
-import psycopg
-import click
-from flask import current_app, g
 from pathlib import Path
+from typing import Any
 
+import click
+import psycopg
+from flask import current_app, g
 from psycopg_pool import ConnectionPool
+
 
 def fetchone(cursor: psycopg.Cursor[dict[str, Any]]) -> dict[str, Any]:
     """Fetch one row, raising if the query returned no rows.
@@ -25,17 +26,20 @@ def get_db() -> psycopg.Connection[dict[str, Any]]:
 
     return typing.cast(psycopg.Connection[dict[str, Any]], g.db)
 
+
 def close_db(e=None) -> None:
-    db = g.pop('db', None)
+    db = g.pop("db", None)
     if db is not None:
         pool: ConnectionPool = current_app.config["DB_POOL"]
         db.rollback()
         pool.putconn(db)
 
+
 def init_db():
     db = get_db()
-    with current_app.open_resource('schema.sql', "r") as f:
+    with current_app.open_resource("schema.sql", "r") as f:
         db.execute(f.read())
+
 
 def migrate_db() -> list[str]:
     applied_migrations = []
@@ -44,51 +48,52 @@ def migrate_db() -> list[str]:
     # (excluded from git, e.g. show/song/vote imports). Files from both
     # directories are merged and run in filename (timestamp) order.
     migration_dirs = [
-        Path(current_app.root_path) / 'migrations',
-        Path(current_app.instance_path) / 'migrations',
+        Path(current_app.root_path) / "migrations",
+        Path(current_app.instance_path) / "migrations",
     ]
 
     candidates = []
     for d in migration_dirs:
         if d.is_dir():
             for f in d.iterdir():
-                if f.is_file() and f.suffix == '.sql':
+                if f.is_file() and f.suffix == ".sql":
                     candidates.append(f)
     candidates.sort(key=lambda p: p.name)
 
-    with current_app.config["DB_POOL"] as pool:
-        with pool.getconn() as db:
-            with db.cursor() as cur:
-                for f in candidates:
-                    name = f.stem
-                    cur.execute('SELECT * FROM migration WHERE name = %s', (name,))
-                    if cur.fetchone():
-                        continue
-                    with f.open() as file:
-                        sql = file.read()
-                        db.execute(typing.cast(typing.LiteralString, sql))
-                    cur.execute('INSERT INTO migration (name) VALUES (%s)', (name,))
-                    db.commit()
-                    applied_migrations.append(name)
+    with current_app.config["DB_POOL"] as pool, pool.getconn() as db, db.cursor() as cur:
+        for f in candidates:
+            name = f.stem
+            cur.execute("SELECT * FROM migration WHERE name = %s", (name,))
+            if cur.fetchone():
+                continue
+            with f.open() as file:
+                sql = file.read()
+                db.execute(typing.cast(typing.LiteralString, sql))
+            cur.execute("INSERT INTO migration (name) VALUES (%s)", (name,))
+            db.commit()
+            applied_migrations.append(name)
 
     return applied_migrations
 
-@click.command('init-db')
+
+@click.command("init-db")
 def init_db_command():
     """Clear the existing data and create new tables."""
     init_db()
-    click.echo('Initialized the database.')
+    click.echo("Initialized the database.")
 
-@click.command('migrate-db')
+
+@click.command("migrate-db")
 def migrate_db_command():
     """Run the database migrations."""
     applied = migrate_db()
     if applied:
-        click.echo('Applied migrations: ' + ', '.join(applied))
+        click.echo("Applied migrations: " + ", ".join(applied))
         sys.exit(0)
     else:
-        click.echo('No migrations to apply.')
+        click.echo("No migrations to apply.")
         sys.exit(1)
+
 
 def init_app(app):
     app.teardown_appcontext(close_db)

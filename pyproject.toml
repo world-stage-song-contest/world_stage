@@ -1,6 +1,6 @@
 [project]
 name = "world-stage"
-version = "3.6.11"
+version = "3.7.0"
 description = "Voting website for World Stage."
 requires-python = ">= 3.12"
 dependencies = [
@@ -13,3 +13,26 @@ dependencies = [
 requires = ["flit_core<4", "brotli"]
 build-backend = "build_backend"
 backend-path = ["."]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[tool.pyright]
+include = ["world_stage"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

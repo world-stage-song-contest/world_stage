@@ -1,11 +1,10 @@
 """Tests for the /api/song endpoints."""
 
-import json
 
-import pytest
 
 
 # ── helpers ─────────────────────────────────────────────────────────
+
 
 def _create_song(client, headers, **overrides):
     """POST a minimal valid song and return the response."""
@@ -32,6 +31,7 @@ def _error(resp):
 
 
 # ── GET /api/song/<id> ──────────────────────────────────────────────
+
 
 class TestGetSongById:
     def test_returns_song(self, client, alice_headers):
@@ -65,6 +65,7 @@ class TestGetSongById:
 
 # ── GET /api/song/<cc>/<year> ───────────────────────────────────────
 
+
 class TestGetSongByCountryYear:
     def test_returns_song_by_cc2(self, client, alice_headers):
         _create_song(client, alice_headers, country="US", year=2025)
@@ -95,6 +96,7 @@ class TestGetSongByCountryYear:
 
 # ── POST /api/song ──────────────────────────────────────────────────
 
+
 class TestCreateSong:
     def test_creates_song(self, client, bob_headers):
         resp = _create_song(client, bob_headers)
@@ -111,10 +113,17 @@ class TestCreateSong:
         assert f"/api/song/{song_id}" in resp.headers["Location"]
 
     def test_requires_auth(self, client):
-        resp = client.post("/api/song", json={
-            "year": 2025, "country": "US", "title": "X",
-            "artist": "Y", "sources": "Z", "languages": [20],
-        })
+        resp = client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "US",
+                "title": "X",
+                "artist": "Y",
+                "sources": "Z",
+                "languages": [20],
+            },
+        )
         assert resp.status_code == 401
 
     def test_rejects_duplicate(self, client, bob_headers):
@@ -169,17 +178,21 @@ class TestCreateSong:
         assert resp.status_code == 201
 
     def test_form_encoded(self, client, bob_headers):
-        resp = client.post("/api/song", data={
-            "year": "2025",
-            "country": "US",
-            "title": "Form Song",
-            "artist": "Form Artist",
-            "sources": "http://example.com",
-            "language": ["20", "30"],
-        }, headers={
-            "Authorization": "Bearer token-bob",
-            "Content-Type": "application/x-www-form-urlencoded",
-        })
+        resp = client.post(
+            "/api/song",
+            data={
+                "year": "2025",
+                "country": "US",
+                "title": "Form Song",
+                "artist": "Form Artist",
+                "sources": "http://example.com",
+                "language": ["20", "30"],
+            },
+            headers={
+                "Authorization": "Bearer token-bob",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
         assert resp.status_code == 201
         data = _result(resp)
         assert data["title"] == "Form Song"
@@ -194,35 +207,39 @@ class TestCreateSong:
         assert resp.status_code == 404
 
     def test_snippet_duration_limit(self, client, bob_headers):
-        resp = _create_song(client, bob_headers,
-                            snippet_start="0:00", snippet_end="0:30")
+        resp = _create_song(client, bob_headers, snippet_start="0:00", snippet_end="0:30")
         assert resp.status_code == 400
 
     def test_valid_snippet(self, client, bob_headers):
-        resp = _create_song(client, bob_headers,
-                            snippet_start="1:00", snippet_end="1:15")
+        resp = _create_song(client, bob_headers, snippet_start="1:00", snippet_end="1:15")
         assert resp.status_code == 201
 
 
 # ── PATCH /api/song/<id> ────────────────────────────────────────────
 
+
 class TestUpdateSong:
     def test_updates_title(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"title": "New Title"}, headers=bob_headers)
+        resp = client.patch(
+            f"/api/song/{song_id}", json={"title": "New Title"}, headers=bob_headers
+        )
         assert resp.status_code == 200
         assert _result(resp)["title"] == "New Title"
 
     def test_updates_multiple_fields(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}", json={
-            "title": "Updated",
-            "artist": "New Artist",
-            "notes": "Some notes",
-        }, headers=bob_headers)
+        resp = client.patch(
+            f"/api/song/{song_id}",
+            json={
+                "title": "Updated",
+                "artist": "New Artist",
+                "notes": "Some notes",
+            },
+            headers=bob_headers,
+        )
         assert resp.status_code == 200
         data = _result(resp)
         assert data["title"] == "Updated"
@@ -232,11 +249,12 @@ class TestUpdateSong:
     def test_updates_languages(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers, languages=[20]))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"languages": [30, 40]}, headers=bob_headers)
+        resp = client.patch(
+            f"/api/song/{song_id}", json={"languages": [30, 40]}, headers=bob_headers
+        )
         assert resp.status_code == 200
         langs = _result(resp)["languages"]
-        assert [l["id"] for l in langs] == [30, 40]
+        assert [lang["id"] for lang in langs] == [30, 40]
 
     def test_requires_auth(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
@@ -247,72 +265,67 @@ class TestUpdateSong:
     def test_owner_can_edit_own(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"title": "Updated"}, headers=bob_headers)
+        resp = client.patch(f"/api/song/{song_id}", json={"title": "Updated"}, headers=bob_headers)
         assert resp.status_code == 200
 
     def test_non_owner_cannot_edit(self, client, bob_headers, carol_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"title": "Hijack"}, headers=carol_headers)
+        resp = client.patch(f"/api/song/{song_id}", json={"title": "Hijack"}, headers=carol_headers)
         assert resp.status_code == 403
 
     def test_admin_can_edit_any(self, client, bob_headers, alice_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"title": "Admin Edit"}, headers=alice_headers)
+        resp = client.patch(
+            f"/api/song/{song_id}", json={"title": "Admin Edit"}, headers=alice_headers
+        )
         assert resp.status_code == 200
         assert _result(resp)["title"] == "Admin Edit"
 
     def test_not_found(self, client, alice_headers):
-        resp = client.patch("/api/song/999999",
-                            json={"title": "X"}, headers=alice_headers)
+        resp = client.patch("/api/song/999999", json={"title": "X"}, headers=alice_headers)
         assert resp.status_code == 404
 
     def test_empty_body_rejected(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={}, headers=bob_headers)
+        resp = client.patch(f"/api/song/{song_id}", json={}, headers=bob_headers)
         assert resp.status_code == 400
 
     def test_admin_approved_only_by_admin(self, client, bob_headers, alice_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
         # bob can't set admin_approved
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"admin_approved": True, "title": "T"},
-                            headers=bob_headers)
+        resp = client.patch(
+            f"/api/song/{song_id}", json={"admin_approved": True, "title": "T"}, headers=bob_headers
+        )
         assert resp.status_code == 200
         assert _result(resp)["admin_approved"] is False
 
         # alice can
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"admin_approved": True},
-                            headers=alice_headers)
+        resp = client.patch(
+            f"/api/song/{song_id}", json={"admin_approved": True}, headers=alice_headers
+        )
         assert resp.status_code == 200
         assert _result(resp)["admin_approved"] is True
 
     def test_clears_nullable_field(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers,
-                                       video_link="http://example.com"))["id"]
+        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com"))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"video_link": ""}, headers=bob_headers)
+        resp = client.patch(f"/api/song/{song_id}", json={"video_link": ""}, headers=bob_headers)
         assert resp.status_code == 200
         assert _result(resp)["video_link"] is None
 
     def test_non_admin_cannot_clear_required(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = client.patch(f"/api/song/{song_id}",
-                            json={"title": ""}, headers=bob_headers)
+        resp = client.patch(f"/api/song/{song_id}", json={"title": ""}, headers=bob_headers)
         assert resp.status_code == 400
 
 
 # ── PUT /api/song/<id> ──────────────────────────────────────────────
+
 
 def _put_song(client, headers, song_id, **overrides):
     """PUT a full song replacement."""
@@ -330,12 +343,19 @@ def _put_song(client, headers, song_id, **overrides):
 
 class TestReplaceSong:
     def test_replaces_all_fields(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers,
-                                       notes="old notes", video_link="http://old.com"))["id"]
+        song_id = _result(
+            _create_song(client, bob_headers, notes="old notes", video_link="http://old.com")
+        )["id"]
 
-        resp = _put_song(client, bob_headers, song_id,
-                         title="New Title", artist="New Artist",
-                         sources="http://new.com", languages=[30])
+        resp = _put_song(
+            client,
+            bob_headers,
+            song_id,
+            title="New Title",
+            artist="New Artist",
+            sources="http://new.com",
+            languages=[30],
+        )
         assert resp.status_code == 200
         data = _result(resp)
         assert data["title"] == "New Title"
@@ -349,9 +369,15 @@ class TestReplaceSong:
     def test_requires_auth(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = client.put(f"/api/song/{song_id}", json={
-            "title": "X", "artist": "Y", "sources": "Z", "languages": [20],
-        })
+        resp = client.put(
+            f"/api/song/{song_id}",
+            json={
+                "title": "X",
+                "artist": "Y",
+                "sources": "Z",
+                "languages": [20],
+            },
+        )
         assert resp.status_code == 401
 
     def test_not_found(self, client, alice_headers):
@@ -392,8 +418,7 @@ class TestReplaceSong:
     def test_admin_can_clear_required(self, client, alice_headers):
         song_id = _result(_create_song(client, alice_headers))["id"]
 
-        resp = _put_song(client, alice_headers, song_id,
-                         title="", artist="", sources="")
+        resp = _put_song(client, alice_headers, song_id, title="", artist="", sources="")
         assert resp.status_code == 200
 
     def test_replaces_languages(self, client, bob_headers):
@@ -435,12 +460,12 @@ class TestReplaceSong:
     def test_snippet_duration_limit(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        resp = _put_song(client, bob_headers, song_id,
-                         snippet_start="0:00", snippet_end="0:30")
+        resp = _put_song(client, bob_headers, song_id, snippet_start="0:00", snippet_end="0:30")
         assert resp.status_code == 400
 
 
 # ── DELETE /api/song/<id> ───────────────────────────────────────────
+
 
 class TestDeleteSong:
     def test_deletes_song(self, client, bob_headers):

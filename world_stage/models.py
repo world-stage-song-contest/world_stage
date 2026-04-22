@@ -1,6 +1,6 @@
-from abc import ABC
 from dataclasses import asdict, dataclass
 from typing import Any, Self
+
 
 @dataclass(kw_only=True)
 class Model:
@@ -11,11 +11,13 @@ class Model:
     def by(cls, **kwargs) -> list[Self]:
         raise NotImplementedError
 
+
 @dataclass(kw_only=True)
 class Country(Model):
     id: str
     cc3: str
     name: str
+
 
 @dataclass(kw_only=True)
 class Year(Model):
@@ -24,6 +26,7 @@ class Year(Model):
     host: Country | None
     entry_count: int | None = None
     placeholder_count: int | None = None
+
 
 @dataclass(kw_only=True)
 class Language(Model):
@@ -34,12 +37,14 @@ class Language(Model):
     subvariant: str | None = None
     suppress_script: str | None = None
 
+
 @dataclass(kw_only=True)
 class User(Model):
     id: int
     username: str
     approved: bool
     role: str
+
 
 @dataclass(kw_only=True)
 class Song(Model):

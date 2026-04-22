@@ -1,6 +1,5 @@
 """Tests for the /api/country endpoints."""
 
-import pytest
 
 
 def _result(resp):
@@ -85,11 +84,18 @@ class TestCountryById:
 class TestCountrySongs:
     def test_returns_songs_for_country(self, client, alice_headers):
         # Create a song via the song API
-        client.post("/api/song", json={
-            "year": 2025, "country": "US",
-            "title": "Test Song", "artist": "Test Artist",
-            "sources": "http://example.com", "languages": [20],
-        }, headers=alice_headers)
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "US",
+                "title": "Test Song",
+                "artist": "Test Artist",
+                "sources": "http://example.com",
+                "languages": [20],
+            },
+            headers=alice_headers,
+        )
 
         resp = client.get("/api/country/US/songs")
         assert resp.status_code == 200
@@ -111,11 +117,18 @@ class TestCountrySongs:
         assert "/api/country/ES/songs" in resp.headers["Location"]
 
     def test_song_json_shape(self, client, alice_headers):
-        client.post("/api/song", json={
-            "year": 2025, "country": "ES",
-            "title": "Cancion", "artist": "Artista",
-            "sources": "http://example.com", "languages": [30],
-        }, headers=alice_headers)
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "ES",
+                "title": "Cancion",
+                "artist": "Artista",
+                "sources": "http://example.com",
+                "languages": [30],
+            },
+            headers=alice_headers,
+        )
 
         resp = client.get("/api/country/ES/songs")
         data = _result(resp)

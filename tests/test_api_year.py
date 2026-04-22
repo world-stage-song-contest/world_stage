@@ -1,6 +1,5 @@
 """Tests for the /api/year endpoints."""
 
-import pytest
 
 
 def _result(resp):
@@ -48,11 +47,18 @@ class TestYearIndex:
 class TestYearById:
     def test_returns_year_with_counts(self, client, alice_headers):
         # Create a song so the year has entries
-        client.post("/api/song", json={
-            "year": 2025, "country": "US",
-            "title": "Test", "artist": "Artist",
-            "sources": "http://example.com", "languages": [20],
-        }, headers=alice_headers)
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "US",
+                "title": "Test",
+                "artist": "Artist",
+                "sources": "http://example.com",
+                "languages": [20],
+            },
+            headers=alice_headers,
+        )
 
         resp = client.get("/api/year/2025")
         assert resp.status_code == 200
@@ -68,11 +74,18 @@ class TestYearById:
 
     def test_host_included(self, client, alice_headers):
         # Ensure there's a song so year returns data
-        client.post("/api/song", json={
-            "year": 2025, "country": "US",
-            "title": "Test", "artist": "Artist",
-            "sources": "http://example.com", "languages": [20],
-        }, headers=alice_headers)
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "US",
+                "title": "Test",
+                "artist": "Artist",
+                "sources": "http://example.com",
+                "languages": [20],
+            },
+            headers=alice_headers,
+        )
 
         resp = client.get("/api/year/2025")
         data = _result(resp)
@@ -84,16 +97,30 @@ class TestYearById:
 
 class TestYearSongs:
     def test_returns_songs_for_year(self, client, alice_headers):
-        client.post("/api/song", json={
-            "year": 2025, "country": "US",
-            "title": "Song A", "artist": "Artist A",
-            "sources": "http://example.com", "languages": [20],
-        }, headers=alice_headers)
-        client.post("/api/song", json={
-            "year": 2025, "country": "ES",
-            "title": "Song B", "artist": "Artist B",
-            "sources": "http://example.com", "languages": [30],
-        }, headers=alice_headers)
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "US",
+                "title": "Song A",
+                "artist": "Artist A",
+                "sources": "http://example.com",
+                "languages": [20],
+            },
+            headers=alice_headers,
+        )
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "ES",
+                "title": "Song B",
+                "artist": "Artist B",
+                "sources": "http://example.com",
+                "languages": [30],
+            },
+            headers=alice_headers,
+        )
 
         resp = client.get("/api/year/2025/songs")
         assert resp.status_code == 200
@@ -110,11 +137,18 @@ class TestYearSongs:
         assert _result(resp) == []
 
     def test_song_json_shape(self, client, alice_headers):
-        client.post("/api/song", json={
-            "year": 2025, "country": "FR",
-            "title": "Chanson", "artist": "Chanteur",
-            "sources": "http://example.com", "languages": [40],
-        }, headers=alice_headers)
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "FR",
+                "title": "Chanson",
+                "artist": "Chanteur",
+                "sources": "http://example.com",
+                "languages": [40],
+            },
+            headers=alice_headers,
+        )
 
         resp = client.get("/api/year/2025/songs")
         data = _result(resp)
@@ -128,16 +162,30 @@ class TestYearSongs:
         assert "submitter" in song
 
     def test_songs_ordered_by_country(self, client, alice_headers):
-        client.post("/api/song", json={
-            "year": 2025, "country": "US",
-            "title": "US Song", "artist": "A",
-            "sources": "http://example.com", "languages": [20],
-        }, headers=alice_headers)
-        client.post("/api/song", json={
-            "year": 2025, "country": "FR",
-            "title": "FR Song", "artist": "B",
-            "sources": "http://example.com", "languages": [40],
-        }, headers=alice_headers)
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "US",
+                "title": "US Song",
+                "artist": "A",
+                "sources": "http://example.com",
+                "languages": [20],
+            },
+            headers=alice_headers,
+        )
+        client.post(
+            "/api/song",
+            json={
+                "year": 2025,
+                "country": "FR",
+                "title": "FR Song",
+                "artist": "B",
+                "sources": "http://example.com",
+                "languages": [40],
+            },
+            headers=alice_headers,
+        )
 
         resp = client.get("/api/year/2025/songs")
         data = _result(resp)

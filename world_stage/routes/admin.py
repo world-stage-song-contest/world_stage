@@ -1,60 +1,72 @@
-from collections import defaultdict
-from dataclasses import dataclass
-from enum import Enum
+import contextlib
+import csv
+import datetime
+import io
 import json
-from pathlib import Path
+import math
+import os
 import subprocess
-from typing import LiteralString, Sequence, Callable, Any
+from collections import defaultdict
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, LiteralString
+
 import psycopg
 from flask import Blueprint, Response, current_app, redirect, request, url_for
-import math
-import datetime
-import csv, io
 
 from ..db import fetchone, get_db
-from ..utils import LCG, get_show_id, get_show_songs, get_user_role_from_session, get_year_countries, get_year_shows, get_years, render_template
-import shutil
-import os
+from ..utils import (
+    get_show_id,
+    get_show_songs,
+    get_user_role_from_session,
+    get_year_countries,
+    get_year_shows,
+    get_years,
+    render_template,
+)
 
-bp = Blueprint('admin', __name__, url_prefix='/admin')
+bp = Blueprint("admin", __name__, url_prefix="/admin")
+
 
 def verify_user():
-    session_id = request.cookies.get('session')
+    session_id = request.cookies.get("session")
     if not session_id:
-        return redirect('/')
+        return redirect("/")
     permissions = get_user_role_from_session(session_id)
     if not permissions.can_view_restricted:
-        return redirect('/')
+        return redirect("/")
     return None
 
-@bp.get('/')
+
+@bp.get("/")
 def index():
     resp = verify_user()
     if resp:
         return resp
-    return render_template('admin/index.html')
+    return render_template("admin/index.html")
 
-@bp.get('/manage/<int:year>/createshow')
+
+@bp.get("/manage/<int:year>/createshow")
 def create_show(year: int):
     resp = verify_user()
     if resp:
         return resp
-    return render_template('admin/create_show.html', years=get_years(), year=year)
+    return render_template("admin/create_show.html", years=get_years(), year=year)
 
-@bp.post('/manage/<int:year>/createshow')
+
+@bp.post("/manage/<int:year>/createshow")
 def create_show_post(year: int):
     resp = verify_user()
     if resp:
         return resp
 
-    data: dict[str, int | str | None] = {'year': year}
+    data: dict[str, int | str | None] = {"year": year}
     value: int | str | None
     for key, value_ in request.form.items():
         value = value_
-        try:
+        with contextlib.suppress(ValueError):
             value = int(value)
-        except ValueError:
-            pass
 
         if not value:
             value = None
@@ -65,17 +77,21 @@ def create_show_post(year: int):
     cur = db.cursor()
 
     try:
-        cur.execute('''
-            INSERT INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, status)
-            VALUES (%(year)s, 1, %(show_name)s, %(short_name)s, %(dtf)s, %(sc)s, %(date)s, 'none')
-        ''', data)
+        cur.execute(
+        """
+        INSERT INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, status)
+        VALUES (%(year)s, 1, %(show_name)s, %(short_name)s, %(dtf)s, %(sc)s, %(date)s, 'none')
+        """,
+            data,
+        )
         db.commit()
     except psycopg.Error as e:
-        return render_template('admin/create_show.html', error=str(e))
+        return render_template("admin/create_show.html", error=str(e))
 
-    return redirect(url_for('admin.create_show', year=year))
+    return redirect(url_for("admin.create_show", year=year))
 
-@bp.get('/draw/<int:year>')
+
+@bp.get("/draw/<int:year>")
 def draw(year: int):
     resp = verify_user()
     if resp:
@@ -84,7 +100,7 @@ def draw(year: int):
     countries = get_year_countries(year)
     pots_raw: dict[int, list[dict]] = defaultdict(list)
     for country in countries:
-        pot: int | None = country.get('pot', None)
+        pot: int | None = country.get("pot", None)
         if pot is not None:
             pots_raw[pot].append(country)
 
@@ -94,30 +110,32 @@ def draw(year: int):
         pots[k] = pots_raw[k]
         semifinalists += len(pots[k])
 
-    shows = get_year_shows(year, pattern='sf')
+    shows = get_year_shows(year, pattern="sf")
     count = len(shows)
     if count == 0:
-        return render_template('error.html', error=f"No semifinal shows found for {year}"), 404
+        return render_template("error.html", error=f"No semifinal shows found for {year}"), 404
     per = semifinalists // count
     songs = [per] * count
     deficit = semifinalists - per * count
-    lcg = LCG(year)
     for i in range(deficit):
         songs[i] += 1
 
     limits = list(map(lambda n: math.ceil(n / 2), songs))
 
-    return render_template('admin/draw.html', pots=pots, shows=shows, songs=songs, limits=limits, year=year)
+    return render_template(
+        "admin/draw.html", pots=pots, shows=shows, songs=songs, limits=limits, year=year
+    )
 
-@bp.post('/draw/<int:year>')
+
+@bp.post("/draw/<int:year>")
 def draw_post(year: int):
     resp = verify_user()
     if resp:
-        return {'error': "Not an admin"}, 401
+        return {"error": "Not an admin"}, 401
 
     data: dict[str, list[str]] | None = request.json
     if not data:
-        return {'error': "Empty request"}, 400
+        return {"error": "Empty request"}, 400
 
     db = get_db()
     cursor = db.cursor()
@@ -126,29 +144,36 @@ def draw_post(year: int):
         for show, ro in data.items():
             show_data = get_show_id(show, year)
             if not show_data:
-                return {'error': f"Invalid show {show} for {year}"}, 400
+                return {"error": f"Invalid show {show} for {year}"}, 400
 
             for i, cc in enumerate(ro):
-                cursor.execute('''
+                cursor.execute(
+                    """
                     SELECT id FROM song
                     WHERE year_id = %s AND country_id = %s
-                ''', (year, cc))
+                """,
+                    (year, cc),
+                )
                 song_id = cursor.fetchone()
                 if not song_id:
-                    return {'error': f'No song for country {cc} in year {year}'}
-                song_id = song_id['id']
+                    return {"error": f"No song for country {cc} in year {year}"}
+                song_id = song_id["id"]
 
-                cursor.execute('''
+                cursor.execute(
+                    """
                     INSERT INTO song_show (song_id, show_id, running_order)
                     VALUES (%s, %s, %s)
-                ''', (song_id, show_data.id, i+1))
+                """,
+                    (song_id, show_data.id, i + 1),
+                )
     except psycopg.IntegrityError:
-        return {'error': "Duplicate data"}, 400
+        return {"error": "Duplicate data"}, 400
 
     db.commit()
     return {}, 204
 
-@bp.get('/draw/<int:year>/<show>')
+
+@bp.get("/draw/<int:year>/<show>")
 def draw_final(year: int, show: str):
     resp = verify_user()
     if resp:
@@ -156,61 +181,83 @@ def draw_final(year: int, show: str):
 
     show_data = get_show_id(show, year)
     if not show_data:
-        return render_template('error.html', error=f"Invalid show '{show}' for {year}"), 404
+        return render_template("error.html", error=f"Invalid show '{show}' for {year}"), 404
 
     songs = get_show_songs(year, show, sort_reveal=True)
 
     if not songs:
-        return render_template('error.html', error="No show '{show}' found for {year}"), 404
+        return render_template("error.html", error="No show '{show}' found for {year}"), 404
 
-    return render_template('admin/draw_individual.html', songs=songs, show=show, show_name=show_data.name, year=year, num=len(songs), lim=math.ceil((len(songs) / 2) or 1))
+    return render_template(
+        "admin/draw_individual.html",
+        songs=songs,
+        show=show,
+        show_name=show_data.name,
+        year=year,
+        num=len(songs),
+        lim=math.ceil((len(songs) / 2) or 1),
+    )
 
-@bp.post('/draw/<int:year>/<show>')
+
+@bp.post("/draw/<int:year>/<show>")
 def draw_final_post(year: int, show: str):
     resp = verify_user()
     if resp:
-        return {'error': "Not an admin"}, 401
+        return {"error": "Not an admin"}, 401
 
     data: dict[str, list[str]] | None = request.json
     if not data:
-        return {'error': "Empty request"}, 400
+        return {"error": "Empty request"}, 400
 
     db = get_db()
     cursor = db.cursor()
 
     show_data = get_show_id(show, year)
     if not show_data:
-        return {'error': f"Invalid show '{show}' for {year}"}, 400
+        return {"error": f"Invalid show '{show}' for {year}"}, 400
 
     ro = data.get(show)
     if ro is None:
-        return {'error': "No running order provided"}, 400
+        return {"error": "No running order provided"}, 400
 
     for i, cc in enumerate(ro):
-        cursor.execute('''
+        cursor.execute(
+            """
             SELECT id FROM song
             WHERE year_id = %s AND country_id = %s
-        ''', (year, cc))
+        """,
+            (year, cc),
+        )
         song_id = cursor.fetchone()
         if not song_id:
-            return {'error': f'No song for country {cc} in year {year}'}
-        song_id = song_id['id']
+            return {"error": f"No song for country {cc} in year {year}"}
+        song_id = song_id["id"]
 
-        cursor.execute('''
+        cursor.execute(
+            """
             UPDATE song_show
             SET running_order = %s
             WHERE song_id = %s AND show_id = %s
-        ''', (i+1, song_id, show_data.id))
+        """,
+            (i + 1, song_id, show_data.id),
+        )
 
     db.commit()
     return {}, 204
 
+
 ALL_EVENT_TYPES = [
-    'create', 'delete', 'song_replacement', 'song_modification',
-    'placeholder_on', 'placeholder_off', 'ownership_change',
+    "create",
+    "delete",
+    "song_replacement",
+    "song_modification",
+    "placeholder_on",
+    "placeholder_off",
+    "ownership_change",
 ]
 
-@bp.get('/changes')
+
+@bp.get("/changes")
 def changes():
     resp = verify_user()
     if resp:
@@ -222,7 +269,7 @@ def changes():
     per_page = 250
 
     # Event type filtering
-    selected_events = request.args.getlist('events')
+    selected_events = request.args.getlist("events")
     if not selected_events:
         selected_events = list(ALL_EVENT_TYPES)
     # Ensure only valid event types
@@ -232,17 +279,17 @@ def changes():
 
     # Count total matching entries
     cursor.execute(
-        'SELECT COUNT(*) AS cnt FROM song_audit_log WHERE event_type = ANY(%s)',
-        (selected_events,)
+        "SELECT COUNT(*) AS cnt FROM song_audit_log WHERE event_type = ANY(%s)", (selected_events,)
     )
-    total = fetchone(cursor)['cnt']
+    total = fetchone(cursor)["cnt"]
     total_pages = max(1, math.ceil(total / per_page))
 
-    page = request.args.get('page', 1, type=int)
+    page = request.args.get("page", 1, type=int)
     page = max(1, min(page, total_pages))
     offset = (page - 1) * per_page
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT
             sal.id,
             sal.event_type,
@@ -261,36 +308,43 @@ def changes():
         WHERE sal.event_type = ANY(%s)
         ORDER BY sal.changed_at DESC
         LIMIT %s OFFSET %s
-    ''', (selected_events, per_page, offset))
+    """,
+        (selected_events, per_page, offset),
+    )
     changes = cursor.fetchall()
 
     # Resolve submitter IDs to usernames for ownership_change entries.
     submitter_ids: set[int] = set()
     for entry in changes:
-        if entry['event_type'] == 'ownership_change' and entry['changed_fields']:
-            cf = entry['changed_fields']
-            if 'submitter_id' in cf:
-                for key in ('old', 'new'):
-                    val = cf['submitter_id'].get(key)
+        if entry["event_type"] == "ownership_change" and entry["changed_fields"]:
+            cf = entry["changed_fields"]
+            if "submitter_id" in cf:
+                for key in ("old", "new"):
+                    val = cf["submitter_id"].get(key)
                     if val is not None:
                         submitter_ids.add(int(val))
     username_map: dict = {}
     if submitter_ids:
-        cursor.execute('SELECT id, username FROM account WHERE id = ANY(%s)', (list(submitter_ids),))
+        cursor.execute(
+            "SELECT id, username FROM account WHERE id = ANY(%s)", (list(submitter_ids),)
+        )
         for row in cursor.fetchall():
-            username_map[row['id']] = row['username']
-            username_map[str(row['id'])] = row['username']
+            username_map[row["id"]] = row["username"]
+            username_map[str(row["id"])] = row["username"]
 
-    return render_template('admin/changes.html',
-                           changes=changes,
-                           username_map=username_map,
-                           page=page,
-                           total_pages=total_pages,
-                           total=total,
-                           all_event_types=ALL_EVENT_TYPES,
-                           selected_events=selected_events)
+    return render_template(
+        "admin/changes.html",
+        changes=changes,
+        username_map=username_map,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        all_event_types=ALL_EVENT_TYPES,
+        selected_events=selected_events,
+    )
 
-@bp.get('/move')
+
+@bp.get("/move")
 def move():
     resp = verify_user()
     if resp:
@@ -299,88 +353,124 @@ def move():
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute("""
         SELECT id FROM year ORDER BY id
-    ''')
+    """)
     years = cursor.fetchall()
 
-    cursor.execute('''
+    cursor.execute("""
         SELECT id, name FROM country WHERE is_participating ORDER BY name
-    ''')
+    """)
     countries = cursor.fetchall()
 
-    return render_template('admin/move.html', years=years, countries=countries)
+    return render_template("admin/move.html", years=years, countries=countries)
 
-@bp.post('/move')
+
+@bp.post("/move")
 def move_post():
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute("""
         SELECT id FROM year ORDER BY id
-    ''')
+    """)
     years = cursor.fetchall()
 
-    cursor.execute('''
+    cursor.execute("""
         SELECT id, name FROM country WHERE is_participating ORDER BY name
-    ''')
+    """)
     countries = cursor.fetchall()
 
-    from_year_txt = request.form.get('from_year')
-    to_year_txt = request.form.get('to_year')
+    from_year_txt = request.form.get("from_year")
+    to_year_txt = request.form.get("to_year")
 
-    from_cc = request.form.get('from_cc')
-    to_cc = request.form.get('to_cc')
+    from_cc = request.form.get("from_cc")
+    to_cc = request.form.get("to_cc")
 
     if not from_year_txt or not from_cc:
-        return render_template('admin/move.html', error="From year and from country must be specificed",
-                               from_year=from_year_txt, to_year=to_year_txt,
-                               from_cc=from_cc, to_cc=to_cc,
-                               years=years, countries=countries), 400
+        return render_template(
+            "admin/move.html",
+            error="From year and from country must be specificed",
+            from_year=from_year_txt,
+            to_year=to_year_txt,
+            from_cc=from_cc,
+            to_cc=to_cc,
+            years=years,
+            countries=countries,
+        ), 400
 
     if not to_year_txt and not to_cc:
-        return render_template('admin/move.html', error="At least one of to year and to country must be specificed",
-                               from_year=from_year_txt, to_year=to_year_txt,
-                               from_cc=from_cc, to_cc=to_cc,
-                               years=years, countries=countries), 400
+        return render_template(
+            "admin/move.html",
+            error="At least one of to year and to country must be specificed",
+            from_year=from_year_txt,
+            to_year=to_year_txt,
+            from_cc=from_cc,
+            to_cc=to_cc,
+            years=years,
+            countries=countries,
+        ), 400
 
     try:
         from_year = int(from_year_txt)
     except ValueError:
-        return render_template('admin/move.html', error="Invalid from year",
-                               from_year=from_year_txt, to_year=to_year_txt,
-                               from_cc=from_cc, to_cc=to_cc,
-                               years=years, countries=countries), 400
+        return render_template(
+            "admin/move.html",
+            error="Invalid from year",
+            from_year=from_year_txt,
+            to_year=to_year_txt,
+            from_cc=from_cc,
+            to_cc=to_cc,
+            years=years,
+            countries=countries,
+        ), 400
 
     try:
         to_year = int(to_year_txt) if to_year_txt else None
     except ValueError:
-        return render_template('admin/move.html', error="Invalid to year",
-                               from_year=from_year_txt, to_year=to_year_txt,
-                               from_cc=from_cc, to_cc=to_cc,
-                               years=years, countries=countries), 400
+        return render_template(
+            "admin/move.html",
+            error="Invalid to year",
+            from_year=from_year_txt,
+            to_year=to_year_txt,
+            from_cc=from_cc,
+            to_cc=to_cc,
+            years=years,
+            countries=countries,
+        ), 400
 
     try:
-        cursor.execute('''
+        cursor.execute(
+            """
             UPDATE song
             SET year_id = COALESCE(%s, year_id),
                 country_id = COALESCE(%s, country_id)
             WHERE year_id = %s AND country_id = %s
-        ''', (to_year, to_cc, from_year, from_cc))
+        """,
+            (to_year, to_cc, from_year, from_cc),
+        )
     except psycopg.Error as e:
-        return render_template('admin/move.html', error=f"Database error: {str(e)}",
-                               from_year=from_year_txt, to_year=to_year_txt,
-                               from_cc=from_cc, to_cc=to_cc,
-                               years=years, countries=countries), 400
+        return render_template(
+            "admin/move.html",
+            error=f"Database error: {str(e)}",
+            from_year=from_year_txt,
+            to_year=to_year_txt,
+            from_cc=from_cc,
+            to_cc=to_cc,
+            years=years,
+            countries=countries,
+        ), 400
     db.commit()
-    return render_template('admin/move.html', message="Songs moved successfully.",
-                           years=years, countries=countries)
+    return render_template(
+        "admin/move.html", message="Songs moved successfully.", years=years, countries=countries
+    )
 
-@bp.get('/manage')
+
+@bp.get("/manage")
 def manage_index():
     resp = verify_user()
     if resp:
@@ -389,12 +479,13 @@ def manage_index():
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('SELECT id, status FROM year ORDER BY id')
+    cursor.execute("SELECT id, status FROM year ORDER BY id")
     years = cursor.fetchall()
 
-    return render_template('admin/manage_index.html', years=years)
+    return render_template("admin/manage_index.html", years=years)
 
-@bp.get('/manage/<int:year>')
+
+@bp.get("/manage/<int:year>")
 def manage(year: int):
     resp = verify_user()
     if resp:
@@ -403,172 +494,207 @@ def manage(year: int):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT id, status FROM year WHERE id = %s
-    ''', (year,))
+    """,
+        (year,),
+    )
     year_data = cursor.fetchone()
     if not year_data:
-        return render_template('error.html', error=f"Year {year} not found"), 404
+        return render_template("error.html", error=f"Year {year} not found"), 404
 
-    cursor.execute('''
-        SELECT show_name, short_name, date, status, voting_opens, voting_closes, predictions_close FROM show WHERE year_id = %s
+    cursor.execute(
+        """
+        SELECT show_name, short_name, date, status, voting_opens, voting_closes, predictions_close
+        FROM show WHERE year_id = %s
         ORDER BY id
-    ''', (year,))
+    """,
+        (year,),
+    )
     shows = cursor.fetchall()
 
-    return render_template('admin/manage_shows.html', year=year_data, shows=shows)
+    return render_template("admin/manage_shows.html", year=year_data, shows=shows)
 
-@bp.post('/manage/<int:year>')
+
+@bp.post("/manage/<int:year>")
 def manage_post(year: int):
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
     body = request.get_json()
     if not body:
-        return render_template('error.html', error="Empty request body"), 400
+        return render_template("error.html", error="Empty request body"), 400
 
     db = get_db()
     cursor = db.cursor()
 
-    action = body.get('action')
+    action = body.get("action")
     if not action:
-        return render_template('error.html', error="No action specified"), 400
+        return render_template("error.html", error="No action specified"), 400
 
     match action:
-        case 'change_year_status':
-            status = body.get('year_status')
-            if status not in ('open', 'closed', 'ongoing'):
-                return render_template('error.html', error="Invalid year status"), 400
+        case "change_year_status":
+            status = body.get("year_status")
+            if status not in ("open", "closed", "ongoing"):
+                return render_template("error.html", error="Invalid year status"), 400
 
-            cursor.execute('''
+            cursor.execute(
+                """
                 UPDATE year
                 SET status = %s
                 WHERE id = %s
-            ''', (status, year))
+            """,
+                (status, year),
+            )
         case _:
-            return render_template('error.html', error=f"Unknown action '{action}'"), 400
+            return render_template("error.html", error=f"Unknown action '{action}'"), 400
     db.commit()
-    return {'status': 'success'}, 200
+    return {"status": "success"}, 200
 
-@bp.post('/manage/<int:year>/<show>')
+
+@bp.post("/manage/<int:year>/<show>")
 def manage_show_post(year: int, show: str):
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
     body = request.get_json()
     if not body:
-        return render_template('error.html', error="Empty request body"), 400
+        return render_template("error.html", error="Empty request body"), 400
 
     db = get_db()
     cursor = db.cursor()
 
-    action = body.get('action')
+    action = body.get("action")
     if not action:
-        return render_template('error.html', error="No action specified"), 400
+        return render_template("error.html", error="No action specified"), 400
 
     match action:
-        case 'open_voting':
-            cursor.execute('''
+        case "open_voting":
+            cursor.execute(
+                """
                 UPDATE show
                 SET voting_opens = COALESCE(voting_opens, CURRENT_TIMESTAMP)
                   , voting_closes = NULL
                 WHERE year_id = %s AND short_name = %s
-            ''', (year, show))
-        case 'close_voting':
-            cursor.execute('''
+            """,
+                (year, show),
+            )
+        case "close_voting":
+            cursor.execute(
+                """
                 UPDATE show
                 SET voting_closes = CURRENT_TIMESTAMP
                 WHERE year_id = %s AND short_name = %s
-            ''', (year, show))
-        case 'close_predictions':
-            cursor.execute('''
+            """,
+                (year, show),
+            )
+        case "close_predictions":
+            cursor.execute(
+                """
                 UPDATE show
                 SET predictions_close = CURRENT_TIMESTAMP
                 WHERE year_id = %s AND short_name = %s
-            ''', (year, show))
-        case 'open_predictions':
-            cursor.execute('''
+            """,
+                (year, show),
+            )
+        case "open_predictions":
+            cursor.execute(
+                """
                 UPDATE show
                 SET predictions_close = NULL
                 WHERE year_id = %s AND short_name = %s
-            ''', (year, show))
-        case 'set_status':
-            status = body.get('status')
-            if status not in ('none', 'draw', 'partial', 'full'):
-                return render_template('error.html', error="Invalid show status"), 400
+            """,
+                (year, show),
+            )
+        case "set_status":
+            status = body.get("status")
+            if status not in ("none", "draw", "partial", "full"):
+                return render_template("error.html", error="Invalid show status"), 400
 
-            cursor.execute('''
+            cursor.execute(
+                """
                 UPDATE show
                 SET status = %s
                 WHERE year_id = %s AND short_name = %s
-            ''', (status, year, show))
-        case 'change_date':
-            date_str = body.get('date')
+            """,
+                (status, year, show),
+            )
+        case "change_date":
+            date_str = body.get("date")
             if not date_str:
-                return render_template('error.html', error="No date provided"), 400
+                return render_template("error.html", error="No date provided"), 400
             try:
                 date = datetime.date.fromisoformat(date_str)
             except ValueError:
-                return render_template('error.html', error="Invalid date format"), 400
+                return render_template("error.html", error="Invalid date format"), 400
             if not date:
-                return render_template('error.html', error="Invalid date format"), 400
+                return render_template("error.html", error="Invalid date format"), 400
 
-            cursor.execute('''
+            cursor.execute(
+                """
                 UPDATE show
                 SET date = %s
                 WHERE year_id = %s AND short_name = %s
-            ''', (date, year, show))
+            """,
+                (date, year, show),
+            )
         case _:
-            return render_template('error.html', error=f"Unknown action '{action}'"), 400
+            return render_template("error.html", error=f"Unknown action '{action}'"), 400
 
     db.commit()
 
-    return {'status': 'success'}, 200
+    return {"status": "success"}, 200
 
-@bp.get('/fuckupdb')
+
+@bp.get("/fuckupdb")
 def fuckup_db():
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
-    return render_template('admin/fuckupdb.html')
+    return render_template("admin/fuckupdb.html")
 
-@bp.post('/fuckupdb')
+
+@bp.post("/fuckupdb")
 def fuckup_db_post():
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
     db = get_db()
     cursor = db.cursor()
 
-    query = request.form.get('query')
+    query = request.form.get("query")
     if not query:
-        return render_template('admin/fuckupdb.html', error="No query provided"), 400
+        return render_template("admin/fuckupdb.html", error="No query provided"), 400
 
-    subprocess.run(current_app.config.get('BACKUP_SCRIPT', os.environ.get('DATABASE_URI', '')))
+    subprocess.run(current_app.config.get("BACKUP_SCRIPT", os.environ.get("DATABASE_URI", "")))
 
     try:
         cursor.execute("SET ROLE dml_only_role")
-        cursor.execute(query) # type: ignore
+        cursor.execute(query)  # type: ignore
         db.commit()
 
         rows = []
         headers = []
         if cursor.description is not None:
             rows = cursor.fetchall()
-            headers = [description[0] for description in cursor.description] if cursor.description else []
+            headers = (
+                [description[0] for description in cursor.description] if cursor.description else []
+            )
 
         cursor.execute("RESET ROLE")
     except psycopg.Error as e:
-
         db.rollback()
-        return render_template('admin/fuckupdb.html', error=f"Query failed: {str(e)}", query=query), 400
+        return render_template(
+            "admin/fuckupdb.html", error=f"Query failed: {str(e)}", query=query
+        ), 400
 
-    kind = request.form.get('kind')
-    if kind == 'csv':
+    kind = request.form.get("kind")
+    if kind == "csv":
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=headers)
         writer.writeheader()
@@ -578,16 +704,17 @@ def fuckup_db_post():
 
         response = Response(
             output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={filename}'}
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
         return response
-    elif kind == 'html':
-        return render_template('admin/fuckupdb.html', rows=rows, headers=headers, query=query)
+    elif kind == "html":
+        return render_template("admin/fuckupdb.html", rows=rows, headers=headers, query=query)
     else:
-        return render_template('admin/fuckupdb.html', error=f"Unknown filetype: {kind}"), 400
+        return render_template("admin/fuckupdb.html", error=f"Unknown filetype: {kind}"), 400
 
-@bp.get('/users')
+
+@bp.get("/users")
 def users():
     resp = verify_user()
     if resp:
@@ -596,58 +723,69 @@ def users():
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute("""
         SELECT id, username, approved, role FROM account
-    ''')
+    """)
     users = cursor.fetchall()
 
-    return render_template('admin/users.html', users=users)
+    return render_template("admin/users.html", users=users)
 
-@bp.post('/users')
+
+@bp.post("/users")
 def users_post():
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
     body = request.get_json()
     if not body:
-        return render_template('error.html', error="Empty request body"), 400
+        return render_template("error.html", error="Empty request body"), 400
 
     db = get_db()
     cursor = db.cursor()
 
-    user_id = body.get('user_id')
-    action = body.get('action')
+    user_id = body.get("user_id")
+    action = body.get("action")
 
     if not user_id or not action:
-        return render_template('error.html', error="User ID and action must be provided"), 400
+        return render_template("error.html", error="User ID and action must be provided"), 400
 
-    if action == 'approve':
-        cursor.execute('''
+    if action == "approve":
+        cursor.execute(
+            """
             UPDATE account
             SET approved = true
             WHERE id = %s
-        ''', (user_id,))
-    elif action == 'unapprove':
-        cursor.execute('''
+        """,
+            (user_id,),
+        )
+    elif action == "unapprove":
+        cursor.execute(
+            """
             UPDATE account
             SET approved = false
             WHERE id = %s
-        ''', (user_id,))
-    elif action == 'annul_password':
-        cursor.execute('''
+        """,
+            (user_id,),
+        )
+    elif action == "annul_password":
+        cursor.execute(
+            """
             UPDATE account
             SET password = NULL, salt = NULL
             WHERE id = %s
-        ''', (user_id,))
+        """,
+            (user_id,),
+        )
     else:
-        return render_template('error.html', error=f"Unknown action '{action}'"), 400
+        return render_template("error.html", error=f"Unknown action '{action}'"), 400
 
     db.commit()
 
-    return {'status': 'success'}, 200
+    return {"status": "success"}, 200
 
-@bp.get('/manage/<int:year>/setpots')
+
+@bp.get("/manage/<int:year>/setpots")
 def set_pots(year: int):
     resp = verify_user()
     if resp:
@@ -656,27 +794,31 @@ def set_pots(year: int):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT country.id, name, pot FROM song
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id
         WHERE year_id = %s AND year.host_id IS DISTINCT FROM country.id
         ORDER BY pot, name
-    ''', (year,))
+    """,
+        (year,),
+    )
     countries = cursor.fetchall()
 
-    return render_template('admin/set_pots.html', countries=countries, year=year)
+    return render_template("admin/set_pots.html", countries=countries, year=year)
 
-@bp.post('/manage/<int:year>/setpots')
+
+@bp.post("/manage/<int:year>/setpots")
 def set_pots_post(year: int):
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('UPDATE country SET pot = NULL')
+    cursor.execute("UPDATE country SET pot = NULL")
 
     for country_id, pot_str in request.form.items():
         try:
@@ -684,42 +826,58 @@ def set_pots_post(year: int):
             if pot == 0:
                 pot = None
         except ValueError:
-            return render_template('error.html', error=f"Invalid priority value for country {country_id}"), 400
+            return render_template(
+                "error.html", error=f"Invalid priority value for country {country_id}"
+            ), 400
 
-        cursor.execute('''
+        cursor.execute(
+            """
             UPDATE country
             SET pot = %s
             WHERE id = %s
-        ''', (pot, country_id))
+        """,
+            (pot, country_id),
+        )
 
     db.commit()
-    return redirect(url_for('admin.set_pots', year=year))
+    return redirect(url_for("admin.set_pots", year=year))
 
-@bp.get('/upload')
+
+@bp.get("/upload")
 def upload():
     resp = verify_user()
     if resp:
         return resp
 
-    return render_template('admin/upload.html')
+    return render_template("admin/upload.html")
 
-@bp.post('/upload')
+
+@bp.post("/upload")
 def upload_post():
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
-    file = request.files.get('file')
+    file = request.files.get("file")
     if not file:
-        return render_template('error.html', error="No file uploaded"), 400
+        return render_template("error.html", error="No file uploaded"), 400
 
-    file_path = Path(current_app.instance_path, 'uploads', file.filename or datetime.datetime.now().strftime('%Y%m%d_%H%M%S') + '.dat')
+    file_path = Path(
+        current_app.instance_path,
+        "uploads",
+        file.filename or datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".dat",
+    )
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file.save(file_path)
 
-    return render_template('admin/upload.html', message=f"File '{file.filename}' uploaded successfully.", file_path=str(file_path))
+    return render_template(
+        "admin/upload.html",
+        message=f"File '{file.filename}' uploaded successfully.",
+        file_path=str(file_path),
+    )
 
-@bp.get('/predictions')
+
+@bp.get("/predictions")
 def predictions_index():
     resp = verify_user()
     if resp:
@@ -728,51 +886,59 @@ def predictions_index():
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute("""
         SELECT show.id, show.show_name, show.short_name, show.year_id AS year,
                COUNT(prediction_set.id) AS prediction_count
         FROM show
         LEFT JOIN prediction_set ON prediction_set.show_id = show.id
         GROUP BY show.id, show.show_name, show.short_name, show.year_id
         ORDER BY show.id
-    ''')
+    """)
     shows = cursor.fetchall()
 
-    return render_template('admin/predictions_index.html', shows=shows)
+    return render_template("admin/predictions_index.html", shows=shows)
 
 
-@bp.get('/recapdata')
+@bp.get("/recapdata")
 def recap_data():
     resp = verify_user()
     if resp:
         return resp
 
-    return render_template('admin/recap_data.html')
+    return render_template("admin/recap_data.html")
 
-class BadRecapRequest(ValueError):
+
+class BadRecapRequestError(ValueError):
     pass
+
 
 def _require(condition: bool, msg: str) -> None:
     if not condition:
-        raise BadRecapRequest(msg)
+        raise BadRecapRequestError(msg)
+
 
 def _parse_year(s: str) -> int:
-    _require(len(s) == 4 and s.isdigit(), f"Year '{s}' is invalid. It needs to have exactly four digits.")
+    _require(
+        len(s) == 4 and s.isdigit(), f"Year '{s}' is invalid. It needs to have exactly four digits."
+    )
     return int(s)
+
 
 def _parse_cc2(s: str) -> str:
     _require(len(s) == 2, f"Code '{s}' is invalid. It needs to have exactly two characters.")
     return s
 
+
 def _parse_show_key(s: str) -> tuple[int, str]:
     try:
         year_s, short_name = s.split("-", 1)
-    except ValueError:
-        raise BadRecapRequest(f"Invalid number of dashes in the value '{s}'")
+    except ValueError as err:
+        raise BadRecapRequestError(f"Invalid number of dashes in the value '{s}'") from err
 
     year = _parse_year(year_s)
     _require(bool(short_name), f"Invalid show name '{short_name}' in show '{s}'")
     return year, short_name
+
 
 def _lookup_many(
     cursor,
@@ -786,14 +952,16 @@ def _lookup_many(
         cursor.execute(sql, params)
         row = cursor.fetchone()
         if not row:
-            raise BadRecapRequest(not_found_msg(params))
+            raise BadRecapRequestError(not_found_msg(params))
         out.append(row["id"])
     return out
 
+
 @dataclass(frozen=True)
 class Spec:
-    parse: Callable[[list[str], Any], Any]   # (form_data, cursor) -> param
+    parse: Callable[[list[str], Any], Any]  # (form_data, cursor) -> param
     sql: LiteralString
+
 
 def _parse_show_ids(form_data: list[str], cursor) -> list[int]:
     keys = [_parse_show_key(s) for s in form_data]
@@ -804,11 +972,14 @@ def _parse_show_ids(form_data: list[str], cursor) -> list[int]:
         not_found_msg=lambda p: f"Show '{p[0]}-{p[1]}' not found",
     )
 
+
 def _parse_years(form_data: list[str], cursor) -> list[int]:
     return [_parse_year(s) for s in form_data]
 
+
 def _parse_countries(form_data: list[str], cursor) -> list[str]:
     return [_parse_cc2(s) for s in form_data]
+
 
 def _parse_submitter_ids(form_data: list[str], cursor) -> list[int]:
     params_list = [(u,) for u in form_data]
@@ -818,6 +989,7 @@ def _parse_submitter_ids(form_data: list[str], cursor) -> list[int]:
         params_list,
         not_found_msg=lambda p: f"User '{p[0]}' is unknown",
     )
+
 
 _SQL_SHOW = """
 WITH song_data AS (
@@ -926,6 +1098,7 @@ _SPECS: dict[str, Spec] = {
     "submitter": Spec(parse=_parse_submitter_ids, sql=_SQL_SUBMITTER),
 }
 
+
 def get_recap_data(mode: str, form_data: list[str]) -> list[dict] | None:
     db = get_db()
     cursor = db.cursor()
@@ -938,8 +1111,9 @@ def get_recap_data(mode: str, form_data: list[str]) -> list[dict] | None:
         param = spec.parse(form_data, cursor)
         cursor.execute(spec.sql, (param,))
         return cursor.fetchall()
-    except BadRecapRequest:
+    except BadRecapRequestError:
         return None
+
 
 def drop_none(obj):
     if isinstance(obj, dict):
@@ -948,37 +1122,35 @@ def drop_none(obj):
         return [drop_none(v) for v in obj]
     return obj
 
-@bp.post('/recapdata')
+
+@bp.post("/recapdata")
 def recap_data_post() -> Response | tuple[Response, int]:
     resp = verify_user()
     if resp:
-        return render_template('error.html', error="Not an admin"), 401
+        return render_template("error.html", error="Not an admin"), 401
 
-    form_data = request.form.getlist('show')
-    type = request.form.get('type', '')
-    action = request.form.get('action', 'render')
-    pretty = request.form.get('pretty', 'off') == 'on'
-    if pretty:
-        indent = 2
-    else:
-        indent = None
+    form_data = request.form.getlist("show")
+    type = request.form.get("type", "")
+    action = request.form.get("action", "render")
+    pretty = request.form.get("pretty", "off") == "on"
+    indent = 2 if pretty else None
 
     data = get_recap_data(type, form_data)
     if data is None:
-        return render_template('error.html', error="An error has occured")
+        return render_template("error.html", error="An error has occured")
 
     json_data = json.dumps(drop_none(data), ensure_ascii=False, indent=indent)
 
-    if action == 'render':
-        return render_template('admin/recap_data.html', data=json_data)
-    elif action == 'download':
+    if action == "render":
+        return render_template("admin/recap_data.html", data=json_data)
+    elif action == "download":
         response = Response(
             json_data,
-            mimetype='application/json; charset=utf-8',
+            mimetype="application/json; charset=utf-8",
             headers={
-                'Content-Disposition': f'attachment; filename={'+'.join(form_data)}.json',
-            }
+                "Content-Disposition": f"attachment; filename={'+'.join(form_data)}.json",
+            },
         )
         return response
     else:
-        return render_template('error.html', error=f"Unknown action: {action}")
+        return render_template("error.html", error=f"Unknown action: {action}")

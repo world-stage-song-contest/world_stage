@@ -25,6 +25,7 @@ _MAINTENANCE_DSN = os.environ.get("TEST_MAINTENANCE_DSN", "dbname=postgres")
 
 # ── session-scoped: create & destroy the test database ──────────────
 
+
 @pytest.fixture(scope="session")
 def _test_db():
     """Create the test database from a schema-only dump of the source DB."""
@@ -35,11 +36,16 @@ def _test_db():
 
     dump = subprocess.run(
         ["pg_dump", "--schema-only", SOURCE_DB],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     subprocess.run(
         ["psql", "-q", TEST_DB],
-        input=dump.stdout, capture_output=True, text=True, check=True,
+        input=dump.stdout,
+        capture_output=True,
+        text=True,
+        check=True,
     )
 
     # Copy migration entries from source so migrate_db() only runs new ones.
@@ -60,6 +66,7 @@ def _test_db():
     app = create_app({"TESTING": True, "DATABASE_URI": f"dbname={TEST_DB}"})
     with app.app_context():
         from world_stage.db import migrate_db
+
         migrate_db()
 
     yield f"dbname={TEST_DB}"
@@ -76,6 +83,7 @@ def _test_db():
 
 
 # ── session-scoped: seed minimal reference rows ─────────────────────
+
 
 @pytest.fixture(scope="session")
 def _seeded_db(_test_db):
@@ -128,7 +136,8 @@ def _seeded_db(_test_db):
         for uid, token in [(1, "token-alice"), (2, "token-bob"), (3, "token-carol")]:
             h = hashlib.sha256(token.encode()).digest()
             cur.execute(
-                "INSERT INTO api_token (user_id, token_hash, label) VALUES (%s, %s, 'test') ON CONFLICT DO NOTHING",
+                "INSERT INTO api_token (user_id, token_hash, label) VALUES (%s, %s, 'test')" \
+                "ON CONFLICT DO NOTHING",
                 (uid, h),
             )
 
@@ -138,6 +147,7 @@ def _seeded_db(_test_db):
 
 
 # ── function-scoped: Flask app & test client ────────────────────────
+
 
 @pytest.fixture()
 def app(_seeded_db):
@@ -152,6 +162,7 @@ def client(app):
 
 # ── convenience: DB connection for direct queries in tests ──────────
 
+
 @pytest.fixture()
 def db(_seeded_db):
     conn = psycopg.connect(_seeded_db, row_factory=dict_row)
@@ -161,6 +172,7 @@ def db(_seeded_db):
 
 
 # ── auth helpers ────────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def alice_headers():
@@ -181,6 +193,7 @@ def carol_headers():
 
 
 # ── cleanup: remove songs between tests ─────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def _clean_songs(_seeded_db):

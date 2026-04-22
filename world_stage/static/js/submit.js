@@ -73,11 +73,12 @@ function collectFormData() {
     };
 
     // Admin fields
+    // 'none' means "no override" — let the server apply its default
+    // (the requester's own account for new songs, the existing submitter
+    // for edits) rather than forcing submitter_id to null.
     const forceSubmitter = document.getElementById('force_submitter');
     if (forceSubmitter && forceSubmitter.value !== 'none') {
         data.submitter_id = parseInt(forceSubmitter.value, 10);
-    } else if (forceSubmitter && forceSubmitter.value === 'none') {
-        data.submitter_id = null;
     }
 
     const adminApproved = document.getElementById('admin_approved');

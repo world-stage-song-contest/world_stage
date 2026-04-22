@@ -1,13 +1,14 @@
+import contextlib
 import os
 import re
-from flask import Flask
-from psycopg_pool import ConnectionPool
-from psycopg.rows import dict_row
-from werkzeug.middleware.proxy_fix import ProxyFix
 import urllib.parse
-
 from urllib.parse import unquote
+
+from flask import Flask
 from markupsafe import Markup, escape
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 URL_RE = re.compile(r"https?://[^\s<>'\"]+", re.I)
 
@@ -18,6 +19,7 @@ BRACKET_PAIRS = {
     "]": "[",
     "}": "{",
 }
+
 
 def _trim_trailing(url: str) -> str:
     url = url.rstrip(TRAILING_PUNCT)
@@ -33,6 +35,7 @@ def _trim_trailing(url: str) -> str:
                 changed = True
     return url
 
+
 def urlize_decoded(value):
     if not value:
         return ""
@@ -45,7 +48,7 @@ def urlize_decoded(value):
         raw = m.group(0)
         url = _trim_trailing(raw)
 
-        trimmed_tail = raw[len(url):]
+        trimmed_tail = raw[len(url) :]
 
         parts.append(escape(value[last:start]))
         parts.append(
@@ -62,22 +65,23 @@ def urlize_decoded(value):
     parts.append(escape(value[last:]))
     return Markup("").join(parts)
 
+
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
-        SECRET_KEY='dev',
-        DATABASE=os.path.join(app.instance_path, 'songs.db'),
+        SECRET_KEY="dev",
+        DATABASE=os.path.join(app.instance_path, "songs.db"),
     )
 
     if config is not None:
         app.config.update(config)
 
-    app.config.from_envvar('WORLD_STAGE_CONFIG', silent=True)
+    app.config.from_envvar("WORLD_STAGE_CONFIG", silent=True)
 
-    app.config.from_pyfile('config.py', silent=True)
+    app.config.from_pyfile("config.py", silent=True)
 
     app.config["DB_POOL"] = ConnectionPool(
-        conninfo=app.config.get("DATABASE_URI", os.environ.get('DATABASE_URI', '')),
+        conninfo=app.config.get("DATABASE_URI", os.environ.get("DATABASE_URI", "")),
         min_size=1,
         max_size=10,
         timeout=10.0,
@@ -85,7 +89,7 @@ def create_app(config: dict | None = None) -> Flask:
     )
 
     app.url_map.strict_slashes = False
-    app.wsgi_app = ProxyFix( # type: ignore[method-assign]
+    app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
         app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
     )
 
@@ -101,27 +105,17 @@ def create_app(config: dict | None = None) -> Flask:
         from flask import redirect, request
 
         rp = request.path
-        if rp != '/' and rp.endswith('/'):
+        if rp != "/" and rp.endswith("/"):
             return redirect(rp[:-1])
 
-    try:
+    with contextlib.suppress(OSError):
         os.makedirs(app.instance_path)
-    except OSError:
-        pass
 
     from . import db
+
     db.init_app(app)
 
-    from .routes import index
-    from .routes import vote
-    from .routes import results
-    from .routes import session
-    from .routes import member
-    from .routes import year
-    from .routes import user
-    from .routes import admin
-    from .routes import country
-    from .routes import api
+    from .routes import admin, api, country, index, member, results, session, user, vote, year
 
     app.register_blueprint(index.bp)
     app.register_blueprint(vote.bp)

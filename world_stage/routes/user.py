@@ -1,91 +1,109 @@
-from collections import defaultdict
-import urllib.parse
 import unicodedata
+import urllib.parse
+from collections import defaultdict
+from typing import Literal, overload
+
 from flask import Blueprint, Response, request
 
-from ..utils import get_closed_years, get_user_songs, get_show_results_for_songs, get_user_role_from_session, render_template, write_m3u
 from ..db import fetchone, get_db
+from ..utils import (
+    get_closed_years,
+    get_show_results_for_songs,
+    get_user_role_from_session,
+    get_user_songs,
+    render_template,
+    write_m3u,
+)
 
-bp = Blueprint('user', __name__, url_prefix='/user')
+bp = Blueprint("user", __name__, url_prefix="/user")
 
-@bp.get('/')
+
+@bp.get("/")
 def index():
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute("""
         SELECT id, username, role FROM account
         ORDER BY username
-    ''')
-    users = defaultdict(list)
-    users['Admin'] = []
+    """)
+    users: defaultdict[str, list[dict]] = defaultdict(list)
+    users["Admin"] = []
     for row in cursor.fetchall():
-        if row['role'] == 'admin' or row['role'] == 'owner':
-            users['Admin'].append({
-                'id': row['id'],
-                'username': row['username']
-            })
-        first_letter = row['username'][0].upper()
-        val = {
-            'id': row['id'],
-            'username': row['username']
-        }
+        if row["role"] == "admin" or row["role"] == "owner":
+            users["Admin"].append({"id": row["id"], "username": row["username"]})
+        first_letter = row["username"][0].upper()
+        val = {"id": row["id"], "username": row["username"]}
         users[first_letter].append(val)
 
-    return render_template('user/index.html', users=users)
+    return render_template("user/index.html", users=users)
 
-@bp.get('/<username>')
+
+@bp.get("/<username>")
 def profile(username: str):
     username = urllib.parse.unquote(username)
-    username = unicodedata.normalize('NFKC', username)
+    username = unicodedata.normalize("NFKC", username)
 
-    return render_template('user/page.html', username=username)
+    return render_template("user/page.html", username=username)
 
-def redact_song_if_show(song: dict, year: int, show_short_name: str, status: str) -> tuple[bool, bool]:
+
+def redact_song_if_show(
+    song: dict, year: int, show_short_name: str, status: str
+) -> tuple[bool, bool]:
     db = get_db()
     cursor = db.cursor()
     show_exists = False
     song_modified = False
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT id FROM show WHERE year_id = %s AND short_name = %s
-    ''', (year, show_short_name))
+    """,
+        (year, show_short_name),
+    )
     show = cursor.fetchone()
     if show:
         show_exists = True
-        cursor.execute('''
+        cursor.execute(
+            """
             SELECT COUNT(*) AS c FROM song_show
             WHERE show_id = %s AND song_id = %s
-        ''', (show['id'], song['id']))
-        if fetchone(cursor)['c'] > 0:
+        """,
+            (show["id"], song["id"]),
+        )
+        if fetchone(cursor)["c"] > 0:
             song_modified = True
-            song['class'] = f'qualifier {show_short_name}-qualifier'
-            if status == 'partial':
-                    song['title'] = ''
-                    song['artist'] = ''
-                    song['country'] = ''
-                    song['code'] = 'XX'
+            song["class"] = f"qualifier {show_short_name}-qualifier"
+            if status == "partial":
+                song["title"] = ""
+                song["artist"] = ""
+                song["country"] = ""
+                song["code"] = "XX"
 
     return (show_exists, song_modified)
 
 
-@bp.get('/<username>/votes')
+@bp.get("/<username>/votes")
 def votes(username: str):
     username = urllib.parse.unquote(username)
-    username = unicodedata.normalize('NFKC', username)
+    username = unicodedata.normalize("NFKC", username)
 
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT id FROM account WHERE username = %s
-    ''', (username,))
+    """,
+        (username,),
+    )
     user_id = cursor.fetchone()
     if not user_id:
-        return render_template('error.html', error="User not found"), 404
-    user_id = user_id['id']
+        return render_template("error.html", error="User not found"), 404
+    user_id = user_id["id"]
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT vote_set.id, vote_set.show_id, account.username, nickname, country_id,
                show.show_name, show.short_name, show.date, show.year_id, show.status,
                year.special_name, year.special_short_name
@@ -95,78 +113,92 @@ def votes(username: str):
         LEFT JOIN year ON show.year_id = year.id
         WHERE vote_set.voter_id = %s AND (show.status = 'full' OR show.status = 'partial')
         ORDER BY show.date DESC
-    ''', (user_id,))
+    """,
+        (user_id,),
+    )
     votes = []
     for row in cursor.fetchall():
         val = {
-            'id': row['id'],
-            'show_id': row['show_id'],
-            'username': row['username'],
-            'nickname': row['nickname'] or username,
-            'code': row['country_id'],
-            'show_name': row['show_name'],
-            'short_name': row['short_name'],
-            'status': row['status'],
-            'date': row['date'].strftime("%d %b %Y"),
-            'year': row['year_id'],
-            'special_name': row['special_name'],
-            'special_short_name': row['special_short_name'],
+            "id": row["id"],
+            "show_id": row["show_id"],
+            "username": row["username"],
+            "nickname": row["nickname"] or username,
+            "code": row["country_id"],
+            "show_name": row["show_name"],
+            "short_name": row["short_name"],
+            "status": row["status"],
+            "date": row["date"].strftime("%d %b %Y"),
+            "year": row["year_id"],
+            "special_name": row["special_name"],
+            "special_short_name": row["special_short_name"],
         }
         votes.append(val)
 
     # Batch-fetch show results for all shows this user voted in,
     # keyed by (show_id, song_id) → place.
-    show_ids = list({v['show_id'] for v in votes})
+    show_ids = list({v["show_id"] for v in votes})
     show_results: dict[tuple[int, int], int] = {}
     if show_ids:
-        cursor.execute('''
+        cursor.execute(
+            """
             SELECT show_id, song_id, place
             FROM country_show_results
             WHERE show_id = ANY(%s)
-        ''', (show_ids,))
+        """,
+            (show_ids,),
+        )
         for row in cursor.fetchall():
-            show_results[(row['show_id'], row['song_id'])] = row['place']
+            show_results[(row["show_id"], row["song_id"])] = row["place"]
 
     for vote in votes:
-        cursor.execute('''
-            SELECT score AS pts, song.title, song.artist, song.country_id AS code, country.name, song.id FROM vote
+        cursor.execute(
+            """
+            SELECT score AS pts, song.title, song.artist,
+                   song.country_id AS code, country.name, song.id
+            FROM vote
             JOIN song ON vote.song_id = song.id
             JOIN country ON song.country_id = country.id
             WHERE vote.vote_set_id = %s
             ORDER BY score DESC
-        ''', (vote['id'],))
+        """,
+            (vote["id"],),
+        )
         songs = []
         for val in cursor.fetchall():
-            if vote['short_name'] != 'f':
-                redact_song_if_show(val, vote['year'], 'f', vote['status'])
-                if vote['short_name'] != 'sc':
-                    redact_song_if_show(val, vote['year'], 'sc', vote['status'])
+            if vote["short_name"] != "f":
+                redact_song_if_show(val, vote["year"], "f", vote["status"])
+                if vote["short_name"] != "sc":
+                    redact_song_if_show(val, vote["year"], "sc", vote["status"])
             # Only show result placement for non-redacted songs.
-            if val.get('code') == 'XX':
-                val['result_place'] = None
+            if val.get("code") == "XX":
+                val["result_place"] = None
             else:
-                val['result_place'] = show_results.get((vote['show_id'], val['id']))
+                val["result_place"] = show_results.get((vote["show_id"], val["id"]))
             songs.append(val)
 
-        vote['points'] = songs
+        vote["points"] = songs
 
-    return render_template('user/votes.html', votes=votes, username=username)
+    return render_template("user/votes.html", votes=votes, username=username)
 
-@bp.get('/<username>/submissions')
+
+@bp.get("/<username>/submissions")
 def submissions(username: str):
     username = urllib.parse.unquote(username)
-    username = unicodedata.normalize('NFKC', username)
+    username = unicodedata.normalize("NFKC", username)
 
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT id FROM account WHERE username = %s
-    ''', (username,))
+    """,
+        (username,),
+    )
     user_id_g = cursor.fetchone()
     if not user_id_g:
-        return render_template('error.html', error="User not found"), 404
-    user_id = user_id_g['id']
+        return render_template("error.html", error="User not found"), 404
+    user_id = user_id_g["id"]
 
     songs = get_user_songs(user_id, select_languages=True)
     results = get_show_results_for_songs([s.id for s in songs])
@@ -174,18 +206,24 @@ def submissions(username: str):
     regular_songs = [s for s in songs if s.year.id >= 0]
     special_songs = [s for s in songs if s.year.id < 0]
 
-    return render_template('user/submissions.html',
-                           songs=regular_songs, special_songs=special_songs,
-                           username=username, results=results)
+    return render_template(
+        "user/submissions.html",
+        songs=regular_songs,
+        special_songs=special_songs,
+        username=username,
+        results=results,
+    )
 
-@bp.get('/<username>/playlist')
+
+@bp.get("/<username>/playlist")
 def playlist(username: str):
     username = urllib.parse.unquote(username)
-    username = unicodedata.normalize('NFKC', username)
+    username = unicodedata.normalize("NFKC", username)
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT LOWER(country.id) AS cc, song.video_link
         FROM song
         JOIN country ON song.country_id = country.id
@@ -195,28 +233,38 @@ def playlist(username: str):
           AND year.status IN ('closed', 'ongoing')
           AND NOT song.is_placeholder
         ORDER BY song.year_id
-    ''', (username,))
-    entries = [(r['cc'], r['video_link']) for r in cursor.fetchall()]
+    """,
+        (username,),
+    )
+    entries = [(r["cc"], r["video_link"]) for r in cursor.fetchall()]
     if not entries:
-        return render_template('error.html', error=f"No published entries for {username}"), 404
+        return render_template("error.html", error=f"No published entries for {username}"), 404
 
-    postcards = request.args.get('postcards', 'false') == 'true'
-    session_id = request.cookies.get('session')
+    postcards = request.args.get("postcards", "false") == "true"
+    session_id = request.cookies.get("session")
     permissions = get_user_role_from_session(session_id)
     value, bad_countries = write_m3u(entries, postcards=postcards)
     if not permissions.can_view_restricted and bad_countries:
         bad_countries.sort()
-        return render_template('error.html', error=(
-            "Not all video links are set yet. Ping a moderator. "
-            f"Missing: {', '.join(bad_countries)}."))
-    suffix = '' if postcards else 'x'
+        return render_template(
+            "error.html",
+            error=(
+                "Not all video links are set yet. Ping a moderator. "
+                f"Missing: {', '.join(bad_countries)}."
+            ),
+        )
+    suffix = "" if postcards else "x"
     return Response(
         value,
-        mimetype='audio/x-mpegurl',
-        headers={'Content-Disposition': f'attachment; filename={username}{suffix}.m3u'}
+        mimetype="audio/x-mpegurl",
+        headers={"Content-Disposition": f"attachment; filename={username}{suffix}.m3u"},
     )
 
 
+@overload
+def _parse_bias_filters(with_specials: Literal[True]) -> tuple[int | None, int | None, bool]: ...
+@overload
+def _parse_bias_filters(with_specials: Literal[False]) -> tuple[int | None, int | None]: ...
 def _parse_bias_filters(with_specials: bool):
     """Read ?from, ?to, and (for submitter variants) ?include_specials.
 
@@ -225,10 +273,10 @@ def _parse_bias_filters(with_specials: bool):
     no filters set. Fresh visit → default True; form submitted without
     the box → False.
     """
-    year_from = request.args.get('from', type=int)
-    year_to = request.args.get('to', type=int)
-    if request.args.get('_submitted'):
-        include_specials = 'include_specials' in request.args
+    year_from = request.args.get("from", type=int)
+    year_to = request.args.get("to", type=int)
+    if request.args.get("_submitted"):
+        include_specials = "include_specials" in request.args
     else:
         include_specials = True
     if with_specials:
@@ -239,76 +287,95 @@ def _parse_bias_filters(with_specials: bool):
 def get_country_biases(user_id: int, year_from: int | None, year_to: int | None):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT * FROM user_country_bias(%s, %s, %s)',
-                   (user_id, year_from, year_to))
+    cursor.execute("SELECT * FROM user_country_bias(%s, %s, %s)", (user_id, year_from, year_to))
     for r in cursor:
         yield dict(r)
 
 
-def get_submitter_biases(user_id: int, year_from: int | None, year_to: int | None, include_specials: bool):
+def get_submitter_biases(
+    user_id: int, year_from: int | None, year_to: int | None, include_specials: bool
+):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT * FROM user_submitter_bias(%s, %s, %s, %s)',
-                   (user_id, year_from, year_to, include_specials))
+    cursor.execute(
+        "SELECT * FROM user_submitter_bias(%s, %s, %s, %s)",
+        (user_id, year_from, year_to, include_specials),
+    )
     for r in cursor:
         yield dict(r)
 
 
-@bp.get('/<username>/bias')
+@bp.get("/<username>/bias")
 def bias(username: str):
     username = urllib.parse.unquote(username)
-    username = unicodedata.normalize('NFKC', username)
+    username = unicodedata.normalize("NFKC", username)
 
-    bias_type = request.args.get('type', 'country')
+    bias_type = request.args.get("type", "country")
 
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute('''
+    cursor.execute(
+        """
         SELECT id FROM account WHERE username = %s
-    ''', (username,))
+    """,
+        (username,),
+    )
     user_id_g = cursor.fetchone()
     if not user_id_g:
-        return {'error': 'User not found'}, 404
-    user_id = user_id_g['id']
+        return {"error": "User not found"}, 404
+    user_id = user_id_g["id"]
 
-    if bias_type == 'user':
+    if bias_type == "user":
         year_from, year_to, include_specials = _parse_bias_filters(with_specials=True)
         biases = get_submitter_biases(user_id, year_from, year_to, include_specials)
-    elif bias_type == 'country':
+    elif bias_type == "country":
         year_from, year_to = _parse_bias_filters(with_specials=False)
         include_specials = True  # N/A; template reads it for checkbox state only
         biases = get_country_biases(user_id, year_from, year_to)
     else:
-        return render_template('error.html', error=f"Invalid bias type specified: {bias_type}."), 400
+        return render_template(
+            "error.html", error=f"Invalid bias type specified: {bias_type}."
+        ), 400
 
-    return render_template('user/bias.html',
-                           username=username, bias_type=bias_type, biases=biases,
-                           closed_years=get_closed_years(),
-                           year_from=year_from, year_to=year_to,
-                           include_specials=include_specials)
+    return render_template(
+        "user/bias.html",
+        username=username,
+        bias_type=bias_type,
+        biases=biases,
+        closed_years=get_closed_years(),
+        year_from=year_from,
+        year_to=year_to,
+        include_specials=include_specials,
+    )
 
-@bp.get('/<username>/bias/for')
+
+@bp.get("/<username>/bias/for")
 def bias_for(username: str):
     username = urllib.parse.unquote(username)
-    username = unicodedata.normalize('NFKC', username)
+    username = unicodedata.normalize("NFKC", username)
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute('SELECT id FROM account WHERE username = %s', (username,))
+    cursor.execute("SELECT id FROM account WHERE username = %s", (username,))
     row = cursor.fetchone()
     if not row:
-        return render_template('error.html', error="User not found"), 404
+        return render_template("error.html", error="User not found"), 404
 
     year_from, year_to, include_specials = _parse_bias_filters(with_specials=True)
-    cursor.execute('SELECT * FROM submitter_voter_bias(%s, %s, %s, %s)',
-                   (row['id'], year_from, year_to, include_specials))
+    cursor.execute(
+        "SELECT * FROM submitter_voter_bias(%s, %s, %s, %s)",
+        (row["id"], year_from, year_to, include_specials),
+    )
     biases = [dict(r) for r in cursor]
 
-    return render_template('inbound_bias.html',
-                           subject_type='user',
-                           subject_name=username,
-                           biases=biases,
-                           closed_years=get_closed_years(),
-                           year_from=year_from, year_to=year_to,
-                           include_specials=include_specials)
+    return render_template(
+        "inbound_bias.html",
+        subject_type="user",
+        subject_name=username,
+        biases=biases,
+        closed_years=get_closed_years(),
+        year_from=year_from,
+        year_to=year_to,
+        include_specials=include_specials,
+    )
