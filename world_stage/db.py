@@ -89,10 +89,10 @@ def migrate_db_command():
     applied = migrate_db()
     if applied:
         click.echo("Applied migrations: " + ", ".join(applied))
-        sys.exit(0)
     else:
         click.echo("No migrations to apply.")
-        sys.exit(1)
+
+    sys.exit(0)
 
 
 def init_app(app):

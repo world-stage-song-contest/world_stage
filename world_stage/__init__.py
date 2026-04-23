@@ -10,6 +10,8 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from .logging_setup import configure_logging
+
 URL_RE = re.compile(r"https?://[^\s<>'\"]+", re.I)
 
 TRAILING_PUNCT = ".,;:!?"
@@ -67,6 +69,7 @@ def urlize_decoded(value):
 
 
 def create_app(config: dict | None = None) -> Flask:
+    configure_logging()
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY="dev",
