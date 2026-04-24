@@ -432,7 +432,7 @@ def create_song():
     # Regular years enforce one entry per country.
     if _is_special_year(year):
         cursor.execute(
-            "SELECT COALESCE(MAX(entry_number), 0) + 1 AS next FROM song"
+            "SELECT COALESCE(MAX(entry_number), 0) + 1 AS next FROM song "
             "WHERE year_id = %s AND country_id = %s",
             (year, cc),
         )
@@ -453,18 +453,18 @@ def create_song():
     if not permissions.can_edit:
         if _is_special_year(year):
             cursor.execute(
-                "SELECT COUNT(*) AS c FROM song"
+                "SELECT COUNT(*) AS c FROM song "
                 "WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder",
                 (user_id, year),
             )
             if fetchone(cursor)["c"] >= MAX_USER_SUBMISSIONS_SPECIAL:
                 return err(
                     ErrorID.FORBIDDEN,
-                    f"You may submit at most {MAX_USER_SUBMISSIONS_SPECIAL}song per special",
+                    f"You may submit at most {MAX_USER_SUBMISSIONS_SPECIAL} song per special",
                 )
         else:
             cursor.execute(
-                "SELECT COUNT(*) AS c FROM song"
+                "SELECT COUNT(*) AS c FROM song "
                 "WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder",
                 (user_id, year),
             )
@@ -475,13 +475,13 @@ def create_song():
                 )
 
             cursor.execute(
-                "SELECT COUNT(*) AS c FROM songWHERE year_id = %s AND NOT is_placeholder",
+                "SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder",
                 (year,),
             )
             if fetchone(cursor)["c"] >= MAX_YEAR_SUBMISSIONS:
                 return err(
                     ErrorID.FORBIDDEN,
-                    f"This year already has the maximum number of entries({MAX_YEAR_SUBMISSIONS})",
+                    f"This year already has the maximum number of entries ({MAX_YEAR_SUBMISSIONS})",
                 )
 
     # ── Parse body ───────────────────────────────────────────────
