@@ -1658,6 +1658,94 @@ def _compute_qualification_odds(
     return odds
 
 
+def _smooth_low_odds(
+    odds: dict[int, float],
+    threshold: float,
+    floor: float,
+) -> dict[int, float]:
+    """Smooth the low-probability tail.
+
+    Songs at or above ``threshold`` keep their raw values (rescaled
+    proportionally so the total still sums to 1.0). Songs below
+    ``threshold`` are remapped log-uniformly into ``[floor, threshold]``
+    in their original order — preserving relative log-distances within
+    the tail while preventing a long flat run pinned at exactly ``floor``.
+
+    The result: every song's odds end up at least ``floor``, the very
+    bottom songs sit just above the floor with visibly different values
+    (e.g. 0.10%, 0.12%, 0.15%, …) instead of all collapsing to the same
+    "1000.00" decimal odds.
+    """
+    n = len(odds)
+    if n == 0:
+        return {}
+    if n * floor >= 1.0:
+        # Floor higher than 1/n — degenerate; fall back to uniform.
+        return {sid: 1.0 / n for sid in odds}
+
+    above = {sid: v for sid, v in odds.items() if v >= threshold}
+    below = sorted(
+        ((sid, v) for sid, v in odds.items() if v < threshold),
+        key=lambda x: x[1],
+    )
+
+    if not below:
+        return dict(odds)
+
+    # Pad the lower edge of the target range so the dead-last doesn't
+    # always land on exactly ``floor`` — a constant pad would also look
+    # suspiciously identical across shows. The pad blends two
+    # data-driven signals so different finals get visibly different
+    # floors:
+    #   - the favourite's strength (``max_raw``): a strong consensus
+    #     leader implies even outsiders shouldn't be quite at the floor.
+    #   - the below-threshold tail's geometric mean: when the tail dives
+    #     deep (lots of essentially-dead entries) we lift the floor more,
+    #     when it sits just under threshold we lift less.
+    max_raw = max(odds.values()) if odds else 0.0
+    below_log_mean = sum(math.log(max(v, 1e-15)) for _, v in below) / len(below)
+    below_geom_mean = math.exp(below_log_mean)
+    tail_ratio = min(1.0, below_geom_mean / threshold)
+    pad_factor = 1.1 + 0.7 * max_raw + 0.3 * (1.0 - tail_ratio)
+    pad_factor = max(1.1, min(1.8, pad_factor))
+
+    log_floor_target = math.log(floor * pad_factor)
+    log_threshold = math.log(threshold)
+    if len(below) == 1:
+        spread = {below[0][0]: math.sqrt(floor * pad_factor * threshold)}
+    else:
+        # Map each below-threshold song's log(raw) linearly onto
+        # [log(floor*1.1), log(threshold)] so within-tail log-distances
+        # are preserved (just compressed into the visible band).
+        b_min = max(below[0][1], 1e-15)
+        b_max = max(below[-1][1], b_min * 1.0001)
+        log_b_min = math.log(b_min)
+        log_b_max = math.log(b_max)
+        log_range = log_b_max - log_b_min
+        target_range = log_threshold - log_floor_target
+
+        spread = {}
+        for sid, v in below:
+            v_clamped = max(v, b_min)
+            t = (math.log(v_clamped) - log_b_min) / log_range
+            spread[sid] = math.exp(log_floor_target + t * target_range)
+
+    above_sum_orig = sum(above.values())
+    spread_sum = sum(spread.values())
+    above_sum_target = max(0.0, 1.0 - spread_sum)
+
+    if above_sum_orig <= 0:
+        # No songs above threshold — normalize the spread to sum to 1.
+        if spread_sum <= 0:
+            return {sid: 1.0 / n for sid in odds}
+        return {sid: v / spread_sum for sid, v in spread.items()}
+
+    above_scale = above_sum_target / above_sum_orig
+    result = {sid: v * above_scale for sid, v in above.items()}
+    result.update(spread)
+    return result
+
+
 def _compute_winning_odds(
     songs: list,
     pred_by_set: dict,
@@ -1666,30 +1754,44 @@ def _compute_winning_odds(
     """
     Compute winning probability for each song in a final.
 
-    Plackett–Luce / softmax model: for each predictor we convert their
-    full ranking into a per-song winning probability via
-        score(s) = exp(-k * (rank(s) - 1))
-        P_i(s wins) = score(s) / sum_j score(j)
-    Then we average those distributions across all predictors.
+    Blends two complementary signals so the odds track predictor
+    consensus directly without being washed out by the size of the field
+    (a plain Plackett–Luce normalization shrinks the rank-1 share roughly
+    like 1 / sum_r exp(-k(r-1)), which over 25+ songs makes even a clear
+    favourite look weak):
 
-    Properties:
-    - Probabilities for all songs sum to exactly 1.0 (it's a true win
-      probability distribution).
-    - A song unanimously ranked 1st gets ≈1.0, with the rest sharing tiny
-      shares from the exponential tail.
-    - k controls how peaked the per-predictor distribution is. k≈0.55 puts
-      the 2nd-place share at ~58% of the 1st-place share, which feels
-      realistic for a strong-but-beatable favourite.
-    - High disagreement spreads the mass across multiple songs naturally.
+    1. ``top1`` — fraction of predictors who put the song at rank 1.
+       Maps consensus on the favourite directly to a win probability,
+       independent of how many also-rans are in the field.
+    2. ``pl`` — Plackett–Luce per-predictor softmax. Differentiates a
+       song that's always 2nd/3rd from one nobody considers competitive,
+       and gives some residual mass to the long tail.
+
+    Both signals are proper distributions (sum to 1 across songs), so
+    the alpha-blend is too. Tuning:
+    - ``alpha`` controls how strongly consensus #1 picks dominate.
+      0.7 means a unanimous favourite reaches ≈0.7 from top1 alone, with
+      the PL term adding the remainder.
+    - ``k`` controls the PL decay; moderate (0.4) so 2nd/3rd finishes
+      still earn meaningful weight without flattening the tail to noise.
     """
     n_songs = len(songs)
     if n_predictors == 0 or n_songs == 0:
         return {song.id: 0.0 for song in songs}
 
-    k = 0.55  # decay rate per rank
-    accumulator: dict[int, float] = {song.id: 0.0 for song in songs}
+    alpha = 0.7
+    k = 0.4
+
+    top1: dict[int, int] = {song.id: 0 for song in songs}
+    pl_acc: dict[int, float] = {song.id: 0.0 for song in songs}
 
     for set_preds in pred_by_set.values():
+        # Rank-1 tally
+        for song in songs:
+            if set_preds.get(song.id) == 1:
+                top1[song.id] += 1
+
+        # Plackett–Luce per-predictor softmax
         scores: dict[int, float] = {}
         for song in songs:
             rank = set_preds.get(song.id, n_songs)
@@ -1698,9 +1800,23 @@ def _compute_winning_odds(
         if total <= 0:
             continue
         for sid, score in scores.items():
-            accumulator[sid] += score / total
+            pl_acc[sid] += score / total
 
-    return {sid: v / n_predictors for sid, v in accumulator.items()}
+    raw = {
+        song.id: (
+            alpha * (top1[song.id] / n_predictors)
+            + (1 - alpha) * (pl_acc[song.id] / n_predictors)
+        )
+        for song in songs
+    }
+
+    # Keep every song's odds above 1/1000 — the bare PL tail otherwise
+    # produces ugly numbers like 1/11000 for the dead-last entry — but
+    # spread the low end log-uniformly into a small band [floor, 2×floor]
+    # so the bottom rows show distinct values rather than a long row of
+    # "0.10%". Only songs already below 0.2% get touched, so ranks above
+    # the tail are essentially unchanged.
+    return _smooth_low_odds(raw, threshold=0.002, floor=0.001)
 
 
 @bp.get("/<int:year>/<show>/predictions")
