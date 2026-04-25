@@ -9,10 +9,6 @@
     flex-wrap: wrap;
 }
 
-#pots.single {
-    margin-top: 0;
-}
-
 .pot, .show {
     border: 1px solid var(--foreground1);
 }
@@ -33,15 +29,24 @@
     text-align: center;
 }
 
-.pot-container {
-    display: flex;
-    flex-direction: column;
+/* Stacked pots (regular draw): tiles auto-size to the widest content in
+   the pot, so long country names like "Bosnia and Herzegovina" fit on
+   one line without forcing every other pot to be that wide. */
+.pot:not(.pot-big) > .pot-container {
+    display: grid;
+    grid-template-columns: minmax(200px, max-content);
     gap: 0.1em;
 }
 
+/* Absolute-positioned grids (show slots, and the .pot-big participants
+   list) share a single column-width custom property so the pitch and the
+   slot width stay in sync. Bumped from the old 228px default to comfortably
+   fit the longest standard country names. */
 .show-countries, .pot-big .pot-container {
+    --draw-tile-width: 260px;
+    --draw-tile-gap: 4px;
     position: relative;
-    width: 460px;
+    width: calc(var(--columns) * (var(--draw-tile-width) + var(--draw-tile-gap)));
     height: calc(var(--rows) * 36px);
 }
 
@@ -57,16 +62,25 @@
 }
 
 .pot-item {
-    width: 200px;
     transition: background-color 0.1s;
+}
+
+.pot:not(.pot-big) .pot-item {
+    /* Fill the (auto-sized) grid column. */
+    width: auto;
 }
 
 .show-country, .pot-big .pot-item {
     position: absolute;
-    width: 228px;
+    width: var(--draw-tile-width);
     top: calc(var(--row) * 36px);
-    left: calc(var(--column) * 232px);
+    left: calc(var(--column) * (var(--draw-tile-width) + var(--draw-tile-gap)));
     transition: top 2s, left 2s, background-color 0.1s;
+}
+
+/* Names should never wrap inside a tile. */
+.country-name {
+    white-space: nowrap;
 }
 
 .pot-item:last-child {
@@ -82,15 +96,65 @@
 }
 
 .running-order {
+    /* Lock the width so a long song title can't make flexbox shrink this
+       column and visually shift the right-aligned number to the left. */
+    flex: 0 0 20px;
     text-align: right;
-    width: 20px;
     font-weight: bold;
+}
+
+.flag-container {
+    /* Same reason: keep the flag column at its natural size regardless of
+       how much the title next to it claims. */
+    flex: 0 0 auto;
 }
 
 .value {
     transition: opacity 1s;
 }
 
-.transparent > .flag-container, .transparent > .country-name {
+.transparent > .flag-container, .transparent > .country-name, .transparent > .song-title {
     opacity: 0;
+}
+
+/* ── Single-pot / specials draw layout ───────────────────────────────── */
+/* Specials show one flag + one song title per tile, on a single line —
+   no country name. Tiles stay the same height as regular draws but get a
+   wider column to fit longer song titles. */
+
+.with-titles .show-countries,
+.with-titles .pot-big .pot-container {
+    --draw-tile-width: 296px;
+    --draw-tile-gap: 8px;
+}
+
+.with-titles .country-name {
+    display: none;
+}
+
+#pots.with-titles .pot-wide {
+    flex: 1 1 100%;
+    /* Cap so the combined pot doesn't stretch across an ultra-wide
+       viewport — the responsive grid below still wraps into multiple
+       rows within this width. */
+    max-width: 1200px;
+}
+
+#pots.with-titles .pot-wide > .pot-container {
+    /* Many entries — wrap into a responsive multi-column grid. */
+    grid-template-columns: repeat(auto-fill, minmax(296px, 1fr));
+    gap: 0.25em;
+}
+
+#pots.with-titles .pot-wide .pot-item {
+    width: auto;
+}
+
+.song-title {
+    /* Single-line display next to the flag. */
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

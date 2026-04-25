@@ -17,7 +17,7 @@
 
 <p class="error hidden"></p>
 
-<div id="shows">
+<div id="shows"{% if single_pot %} class="with-titles"{% endif %}>
 {% for show, num, lim in zip(shows, songs, limits) %}
     <div class="show {% if loop.index == 1 %}active1{% endif %}"
          data-name="{{ show.short_name }}"
@@ -29,12 +29,16 @@
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
         {% for _ in range(num) %}
             <div class="show-country item transparent"
+                 data-id=""
                  data-code="XX"
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
                 <div class="flag-container value">{{ flag("XX", 24, "Unknown") }}</div>
                 <div class="country-name value"></div>
+                {% if single_pot %}
+                <div class="song-title value"></div>
+                {% endif %}
             </div>
         {% endfor %}
         </div>
@@ -42,18 +46,22 @@
 {% endfor %}
 </div>
 
-<div id="pots">
-{% for pot, countries in pots.items() %}
+<div id="pots"{% if single_pot %} class="single with-titles"{% endif %}>
+{% for pot, entries in pots.items() %}
     <div data-index="{{ loop.index }}"
-         class="pot {% if loop.index == 1 %}active1{% endif %}">
-        <h2>Pot {{loop.index}}</h2>
+         class="pot {% if single_pot %}pot-wide {% endif %}{% if loop.index == 1 %}active1{% endif %}">
+        <h2>{% if single_pot %}Songs{% else %}Pot {{ loop.index }}{% endif %}</h2>
         <div class="pot-container">
-        {% for country in countries %}
+        {% for entry in entries %}
             <div class="pot-item item"
-                 data-code="{{ country.cc }}"
-                 data-submitter="{{ country.submitter }}">
-                <div class="flag-container">{{ flag(country.cc, 24, country.name) }}</div>
-                <div class="country-name">{{ country.name }}</div>
+                 data-id="{{ entry.song_id }}"
+                 data-code="{{ entry.cc }}"
+                 data-submitter="{{ entry.submitter }}">
+                <div class="flag-container">{{ flag(entry.cc, 24, entry.name) }}</div>
+                <div class="country-name">{{ entry.name }}</div>
+                {% if single_pot %}
+                <div class="song-title">{{ entry.title }}</div>
+                {% endif %}
             </div>
         {% endfor %}
         </div>

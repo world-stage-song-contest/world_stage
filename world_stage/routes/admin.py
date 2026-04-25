@@ -39,6 +39,24 @@ def verify_user():
     return None
 
 
+def _resolve_special(short_name: str) -> dict | None:
+    """Look up a special year by its short name. Returns the year row or None.
+
+    Mirrors world_stage.routes.year.resolve_special, duplicated locally to
+    avoid importing across blueprint modules.
+    """
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT id, status, special_name, special_short_name
+        FROM year
+        WHERE special_short_name = %s
+        """,
+        (short_name,),
+    )
+    return cursor.fetchone()
+
+
 @bp.get("/")
 def index():
     resp = verify_user()
@@ -91,29 +109,49 @@ def create_show_post(year: int):
     return redirect(url_for("admin.create_show", year=year))
 
 
-@bp.get("/draw/<int:year>")
-def draw(year: int):
-    resp = verify_user()
-    if resp:
-        return resp
+def _render_draw(year_id: int, label: str):
+    """Render the multi-show (semifinal) draw page for a given year. ``label``
+    is shown in error messages and used as the JS RNG seed; for regular years
+    that's just the numeric year, for specials it's the negative year id.
 
-    countries = get_year_countries(year)
-    pots_raw: dict[int, list[dict]] = defaultdict(list)
-    for country in countries:
-        pot: int | None = country.get("pot", None)
-        if pot is not None:
-            pots_raw[pot].append(country)
+    Regular years group entries by ``country.pot`` (entries without a pot
+    are excluded — same as the original behavior). Specials collapse every
+    entry into a single combined pot.
+    """
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT song.id AS song_id, song.title, song.entry_number,
+               song.submitter_id AS submitter,
+               country.id AS cc, country.name, country.pot
+        FROM song
+        JOIN country ON song.country_id = country.id
+        WHERE song.year_id = %s AND NOT song.is_placeholder
+        ORDER BY country.name, song.entry_number
+        """,
+        (year_id,),
+    )
+    entries = cursor.fetchall()
 
-    pots: dict[int, list[dict]] = {}
-    semifinalists = 0
-    for k in sorted(pots_raw.keys()):
-        pots[k] = pots_raw[k]
-        semifinalists += len(pots[k])
+    single_pot = year_id < 0
+    if single_pot:
+        pots: dict[int, list[dict]] = {1: list(entries)}
+    else:
+        pots_raw: dict[int, list[dict]] = defaultdict(list)
+        for entry in entries:
+            pot = entry.get("pot")
+            if pot is not None:
+                pots_raw[pot].append(entry)
+        pots = {k: pots_raw[k] for k in sorted(pots_raw.keys())}
 
-    shows = get_year_shows(year, pattern="sf")
+    semifinalists = sum(len(p) for p in pots.values())
+
+    shows = get_year_shows(year_id, pattern="sf")
     count = len(shows)
     if count == 0:
-        return render_template("error.html", error=f"No semifinal shows found for {year}"), 404
+        return render_template(
+            "error.html", error=f"No semifinal shows found for {label}"
+        ), 404
     per = semifinalists // count
     songs = [per] * count
     deficit = semifinalists - per * count
@@ -123,8 +161,35 @@ def draw(year: int):
     limits = list(map(lambda n: math.ceil(n / 2), songs))
 
     return render_template(
-        "admin/draw.html", pots=pots, shows=shows, songs=songs, limits=limits, year=year
+        "admin/draw.html",
+        pots=pots,
+        shows=shows,
+        songs=songs,
+        limits=limits,
+        year=year_id,
+        single_pot=single_pot,
     )
+
+
+@bp.get("/draw/<int:year>")
+def draw(year: int):
+    resp = verify_user()
+    if resp:
+        return resp
+    return _render_draw(year, str(year))
+
+
+@bp.get("/draw/special/<short_name>")
+def draw_special(short_name: str):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    special = _resolve_special(short_name)
+    if not special:
+        return render_template("error.html", error=f"Special '{short_name}' not found"), 404
+
+    return _render_draw(special["id"], special["special_name"] or short_name)
 
 
 @bp.post("/draw/<int:year>")
@@ -133,7 +198,8 @@ def draw_post(year: int):
     if resp:
         return {"error": "Not an admin"}, 401
 
-    data: dict[str, list[str]] | None = request.json
+    # Each value is a list of song IDs in running order.
+    data: dict[str, list[int]] | None = request.json
     if not data:
         return {"error": "Empty request"}, 400
 
@@ -146,18 +212,15 @@ def draw_post(year: int):
             if not show_data:
                 return {"error": f"Invalid show {show} for {year}"}, 400
 
-            for i, cc in enumerate(ro):
+            for i, song_id in enumerate(ro):
+                # Verify the song actually belongs to this year before
+                # attaching it to a show — guards against bad client input.
                 cursor.execute(
-                    """
-                    SELECT id FROM song
-                    WHERE year_id = %s AND country_id = %s
-                """,
-                    (year, cc),
+                    "SELECT id FROM song WHERE id = %s AND year_id = %s",
+                    (song_id, year),
                 )
-                song_id = cursor.fetchone()
-                if not song_id:
-                    return {"error": f"No song for country {cc} in year {year}"}
-                song_id = song_id["id"]
+                if not cursor.fetchone():
+                    return {"error": f"Song {song_id} not found in year {year}"}, 400
 
                 cursor.execute(
                     """
@@ -171,6 +234,35 @@ def draw_post(year: int):
 
     db.commit()
     return {}, 204
+
+
+@bp.post("/draw/special/<short_name>")
+def draw_special_post(short_name: str):
+    special = _resolve_special(short_name)
+    if not special:
+        return {"error": f"Special '{short_name}' not found"}, 404
+    return draw_post(special["id"])
+
+
+@bp.get("/draw/special/<short_name>/<show>")
+def draw_special_final(short_name: str, show: str):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    special = _resolve_special(short_name)
+    if not special:
+        return render_template("error.html", error=f"Special '{short_name}' not found"), 404
+
+    return draw_final(special["id"], show)
+
+
+@bp.post("/draw/special/<short_name>/<show>")
+def draw_special_final_post(short_name: str, show: str):
+    special = _resolve_special(short_name)
+    if not special:
+        return {"error": f"Special '{short_name}' not found"}, 404
+    return draw_final_post(special["id"], show)
 
 
 @bp.get("/draw/<int:year>/<show>")
@@ -205,7 +297,8 @@ def draw_final_post(year: int, show: str):
     if resp:
         return {"error": "Not an admin"}, 401
 
-    data: dict[str, list[str]] | None = request.json
+    # The client now sends a list of song IDs (in running order).
+    data: dict[str, list[int]] | None = request.json
     if not data:
         return {"error": "Empty request"}, 400
 
@@ -220,18 +313,13 @@ def draw_final_post(year: int, show: str):
     if ro is None:
         return {"error": "No running order provided"}, 400
 
-    for i, cc in enumerate(ro):
+    for i, song_id in enumerate(ro):
         cursor.execute(
-            """
-            SELECT id FROM song
-            WHERE year_id = %s AND country_id = %s
-        """,
-            (year, cc),
+            "SELECT id FROM song WHERE id = %s AND year_id = %s",
+            (song_id, year),
         )
-        song_id = cursor.fetchone()
-        if not song_id:
-            return {"error": f"No song for country {cc} in year {year}"}
-        song_id = song_id["id"]
+        if not cursor.fetchone():
+            return {"error": f"Song {song_id} not found in year {year}"}, 400
 
         cursor.execute(
             """
@@ -479,10 +567,34 @@ def manage_index():
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("SELECT id, status FROM year ORDER BY id")
-    years = cursor.fetchall()
+    cursor.execute(
+        """
+        SELECT id, status, special_name, special_short_name
+        FROM year ORDER BY id
+        """
+    )
+    rows = cursor.fetchall()
+    regular_years = [r for r in rows if r["id"] >= 0]
+    specials = [r for r in rows if r["id"] < 0]
 
-    return render_template("admin/manage_index.html", years=years)
+    return render_template(
+        "admin/manage_index.html", years=regular_years, specials=specials
+    )
+
+
+def _render_manage(year_id: int, year_data: dict):
+    """Render the show-management page for a given year row."""
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT show_name, short_name, date, status, voting_opens, voting_closes, predictions_close
+        FROM show WHERE year_id = %s
+        ORDER BY id
+    """,
+        (year_id,),
+    )
+    shows = cursor.fetchall()
+    return render_template("admin/manage_shows.html", year=year_data, shows=shows)
 
 
 @bp.get("/manage/<int:year>")
@@ -491,30 +603,29 @@ def manage(year: int):
     if resp:
         return resp
 
-    db = get_db()
-    cursor = db.cursor()
-
+    cursor = get_db().cursor()
     cursor.execute(
-        """
-        SELECT id, status FROM year WHERE id = %s
-    """,
+        "SELECT id, status FROM year WHERE id = %s AND id >= 0",
         (year,),
     )
     year_data = cursor.fetchone()
     if not year_data:
         return render_template("error.html", error=f"Year {year} not found"), 404
 
-    cursor.execute(
-        """
-        SELECT show_name, short_name, date, status, voting_opens, voting_closes, predictions_close
-        FROM show WHERE year_id = %s
-        ORDER BY id
-    """,
-        (year,),
-    )
-    shows = cursor.fetchall()
+    return _render_manage(year, year_data)
 
-    return render_template("admin/manage_shows.html", year=year_data, shows=shows)
+
+@bp.get("/manage/special/<short_name>")
+def manage_special(short_name: str):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    year_data = _resolve_special(short_name)
+    if not year_data:
+        return render_template("error.html", error=f"Special '{short_name}' not found"), 404
+
+    return _render_manage(year_data["id"], year_data)
 
 
 @bp.post("/manage/<int:year>")
@@ -552,6 +663,22 @@ def manage_post(year: int):
             return render_template("error.html", error=f"Unknown action '{action}'"), 400
     db.commit()
     return {"status": "success"}, 200
+
+
+@bp.post("/manage/special/<short_name>")
+def manage_special_post(short_name: str):
+    year = _resolve_special(short_name)
+    if not year:
+        return {"error": f"Special '{short_name}' not found"}, 404
+    return manage_post(year["id"])
+
+
+@bp.post("/manage/special/<short_name>/<show>")
+def manage_show_special_post(short_name: str, show: str):
+    year = _resolve_special(short_name)
+    if not year:
+        return {"error": f"Special '{short_name}' not found"}, 404
+    return manage_show_post(year["id"], show)
 
 
 @bp.post("/manage/<int:year>/<show>")

@@ -116,11 +116,14 @@ async function save() {
     const data = {};
     for (const show of document.querySelectorAll('.show')) {
         const ro = [];
-        for (const country of show.querySelectorAll(".show-country")) {
-            ro.push({ cc: country.dataset.code, ro: country.dataset.index });
+        for (const slot of show.querySelectorAll(".show-country")) {
+            // Skip empty slots (e.g. an aborted draw); only assigned slots
+            // carry a song id.
+            if (!slot.dataset.id) continue;
+            ro.push({ id: parseInt(slot.dataset.id, 10), ro: parseInt(slot.dataset.index, 10) });
         }
         ro.sort((a, b) => a.ro - b.ro);
-        data[show.dataset.name] = ro.map(e => e.cc);
+        data[show.dataset.name] = ro.map(e => e.id);
     }
     const res = await fetch(window.location.pathname, {
         method: "POST",
@@ -142,6 +145,8 @@ async function save() {
 
 class Entry {
     /** @type {string} */
+    id;
+    /** @type {string} */
     code;
     /** @type {number} */
     submitter;
@@ -155,6 +160,7 @@ class Entry {
      * @param {number} i
      */
     constructor(element, i) {
+        this.id = element.dataset.id;
         this.code = element.dataset.code;
         this.submitter = parseInt(element.dataset.submitter);
         this.pot = i;
@@ -207,14 +213,19 @@ function assignPotToShows(pot, liveShows, rng) {
     const showCount = liveShows.length;
     const entryCount = pot.length;
 
-    // Build adjacency lists (show -> compatible entries)
+    // Build adjacency lists (show -> compatible entries). For specials,
+    // the same country can submit multiple entries; spread them across
+    // shows by also excluding entries whose country is already in the
+    // show. The leftovers phase relaxes this constraint, so a country
+    // with more entries than shows still gets placed — just balanced.
     const adjacency = Array.from({ length: showCount }, () => []);
     for (let showIndex = 0; showIndex < showCount; ++showIndex) {
         const show = liveShows[showIndex];
         for (let entryIndex = 0; entryIndex < entryCount; ++entryIndex) {
-            if (!show.submitters.has(pot[entryIndex].submitter)) {
-                adjacency[showIndex].push(entryIndex);
-            }
+            const entry = pot[entryIndex];
+            if (show.submitters.has(entry.submitter)) continue;
+            if (show.codes && show.codes.has(entry.code)) continue;
+            adjacency[showIndex].push(entryIndex);
         }
     }
 
@@ -255,6 +266,7 @@ function assignPotToShows(pot, liveShows, rng) {
             const entry = pot[entryIndex];
             show.entries.push(entry);
             show.submitters.add(entry.submitter);
+            if (show.codes) show.codes.add(entry.code);
             assignedIndices.push(entryIndex);
         }
     }
@@ -334,6 +346,7 @@ function assignLeftovers(leftovers, showStates, rng) {
             const entry = leftovers[entryIndex];
             show.entries.push(entry);
             show.submitters.add(entry.submitter);
+            if (show.codes) show.codes.add(entry.code);
         }
     }
 }
@@ -359,6 +372,9 @@ function drawIntoShows(pots, shows, rng) {
         limit: shows[name].limit,
         entries: shows[name].entries,
         submitters: new Set(shows[name].entries.map(e => e.submitter)),
+        // For balanced country distribution (relevant when a single country
+        // has multiple entries — i.e. specials).
+        codes: new Set(shows[name].entries.map(e => e.code)),
     }));
 
     // Shuffle each pot for randomization
@@ -375,11 +391,20 @@ function drawIntoShows(pots, shows, rng) {
         // Randomize show order for fairness
         rng.shuffle(liveShows);
 
+        // Track whether any pot shrank — if the country/submitter
+        // constraints make no further matches possible (e.g. every
+        // remaining entry conflicts with every live show because of the
+        // country-spread rule), bail out and let the leftovers phase
+        // handle them with the relaxed constraint.
+        let progress = false;
         for (const pot of pots) {
+            const before = pot.length;
             if (!assignPotToShows(pot, liveShows, rng)) {
                 throw new Error('Pot assignment failed: conflicting submitter constraints');
             }
+            if (pot.length < before) progress = true;
         }
+        if (!progress) break;
     }
 
     // Phase 2: Handle remaining entries
@@ -397,6 +422,63 @@ function drawIntoShows(pots, shows, rng) {
 }
 
 /**
+ * Order entries into running-order positions such that any country with
+ * multiple entries in the same show is spaced apart. Single-occurrence
+ * countries fill the remaining slots in random order, so a regular year
+ * (one entry per country) gets the same uniformly-random ordering as
+ * before.
+ *
+ * @param {Entry[]} entries
+ * @param {Xoshiro256StarStar} rng
+ * @returns {Entry[]} entries placed at indices 0..N-1
+ */
+function spreadEntries(entries, rng) {
+    const N = entries.length;
+    if (N === 0) return [];
+
+    // Group by country code.
+    const byCountry = new Map();
+    for (const entry of entries) {
+        if (!byCountry.has(entry.code)) byCountry.set(entry.code, []);
+        byCountry.get(entry.code).push(entry);
+    }
+    // Randomize which sibling lands in which target slot.
+    for (const group of byCountry.values()) rng.shuffle(group);
+
+    const multi = [...byCountry.values()].filter(g => g.length > 1);
+    const single = [...byCountry.values()].filter(g => g.length === 1).map(g => g[0]);
+    rng.shuffle(single);
+    // Place larger groups first — they need the most spread.
+    multi.sort((a, b) => b.length - a.length);
+
+    const result = new Array(N).fill(null);
+
+    for (const group of multi) {
+        const k = group.length;
+        const stride = N / k;
+        // Random base offset (within one stride window) so the spread
+        // doesn't always start at slot 0.
+        const span = Math.max(1, Math.floor(stride));
+        const base = rng.next(span);
+        for (let i = 0; i < k; i++) {
+            let pos = Math.floor(base + i * stride) % N;
+            // Skip slots already taken by an earlier (larger) group.
+            while (result[pos] !== null) pos = (pos + 1) % N;
+            result[pos] = group[i];
+        }
+    }
+
+    // Fill remaining slots in shuffled order.
+    let cursor = 0;
+    for (const entry of single) {
+        while (result[cursor] !== null) cursor++;
+        result[cursor] = entry;
+    }
+
+    return result;
+}
+
+/**
  * Updates show UI with assigned entries
  * @param {string} showName - Name of the show
  * @param {Entry[]} showEntries - Entries assigned to this show
@@ -405,16 +487,28 @@ function drawIntoShows(pots, shows, rng) {
 function setShowDraw(showName, showEntries, rng) {
     console.log(showEntries);
     const elements = [...document.querySelectorAll(`.show[data-name='${showName}'] .show-country`)];
-    const entries = showEntries.slice();
+    // Slots are pre-rendered with data-index = 0..N-1 (the running order
+    // position). Sort so result[i] lands at slot i.
+    elements.sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index));
 
-    while (entries.length > 0) {
-        const el = rng.pop(elements);
-        const en = rng.pop(entries);
+    const ordered = spreadEntries(showEntries.slice(), rng);
 
+    for (let i = 0; i < ordered.length; i++) {
+        const el = elements[i];
+        const en = ordered[i];
+
+        el.dataset.id = en.id;
         el.dataset.code = en.code;
         el.dataset.pot = en.pot;
         el.querySelector('.flag').src = en.element.querySelector('.flag').src;
         el.querySelector('.country-name').textContent = en.element.querySelector('.country-name').textContent;
+        // Specials carry a song-title element on both pot tiles and show
+        // slots; copy the text across when present.
+        const titleSrc = en.element.querySelector('.song-title');
+        const titleDst = el.querySelector('.song-title');
+        if (titleSrc && titleDst) {
+            titleDst.textContent = titleSrc.textContent;
+        }
         en.element.dataset.show = showName;
     }
 }
@@ -584,6 +678,11 @@ async function animateElementSelect(element, elements, equal) {
  * @returns {boolean}
  */
 function cmpItems(a, b) {
+    // Prefer song id when available — for specials a country can have
+    // multiple entries, so data-code isn't unique.
+    if (a.dataset.id && b.dataset.id) {
+        return a.dataset.id === b.dataset.id;
+    }
     return a.dataset.code === b.dataset.code;
 }
 
@@ -605,7 +704,11 @@ async function selectCountryFromPot(allCountries, eligibleCountries) {
  */
 async function getShowSlot(selected, currentShow) {
     const allSlots = [...currentShow.querySelectorAll(".show-country.transparent")];
-    const suitableSlot = currentShow.querySelector(`.show-country[data-code=${selected.dataset.code}]`);
+    // Match by song id when present (handles specials with duplicate
+    // country codes), falling back to country code for legacy callers.
+    const suitableSlot = selected.dataset.id
+        ? currentShow.querySelector(`.show-country[data-id="${selected.dataset.id}"]`)
+        : currentShow.querySelector(`.show-country[data-code="${selected.dataset.code}"]`);
     await animateElementSelect(suitableSlot, allSlots, cmpItems);
     return suitableSlot;
 }

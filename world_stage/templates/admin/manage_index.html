@@ -17,4 +17,17 @@
     {% endfor %}
 </div>
 
+{% if specials %}
+<h2>Specials</h2>
+<div class="year-container">
+    {% for special in specials %}
+        <div class="upcoming-year">
+            <a href="{{ url_for('admin.manage_special', short_name=special.special_short_name) }}">
+                <div class="year-number">{{ special.special_name }}</div>
+            </a>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% endblock %}

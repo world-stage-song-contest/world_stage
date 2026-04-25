@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Manage shows: {{year.id}}{% endblock %}
+{% block title %}Manage shows: {{ year.special_name or year.id }}{% endblock %}
 {% block headercontents %}
     <script src="/static/js/manage.js"></script>
 {% endblock %}
@@ -19,8 +19,18 @@
 <div>
     <h2>Other links</h2>
     <ul>
+        {# create_show and set_pots take <int:year> and don't yet support
+           special years, so suppress those links for specials. #}
+        {% if not year.special_short_name %}
         <li><a href="{{ url_for('admin.create_show', year=year.id) }}">Create Show</a></li>
         <li><a href="{{ url_for('admin.set_pots', year=year.id) }}">Set Pots</a></li>
+        {% endif %}
+        {% if year.special_short_name %}
+        <li><a href="{{ url_for('admin.draw_special', short_name=year.special_short_name) }}">Draw</a></li>
+        {% else %}
+        <li><a href="{{ url_for('admin.draw', year=year.id) }}">Draw</a></li>
+        {% endif %}
+    </ul>
 </div>
 
 <table>

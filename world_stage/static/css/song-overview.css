@@ -42,8 +42,14 @@ div.source-links {
     display: none;
     z-index: 100;
     padding: 0.25rem;
-    min-width: 40vw;
-    max-width: 60vw;
+    width: max-content;
+    min-width: 20rem;
+    max-width: min(60vw, 40rem);
+    /* Override the surrounding `.lyrics-item { white-space: pre }`, which
+       otherwise keeps the tooltip on one long unwrappable line. */
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: anywhere;
     transition: display 0.5s ease-in-out;
 }
 
