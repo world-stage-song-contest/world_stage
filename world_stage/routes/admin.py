@@ -20,7 +20,6 @@ from ..utils import (
     get_show_id,
     get_show_songs,
     get_user_role_from_session,
-    get_year_countries,
     get_year_shows,
     get_years,
     render_template,
@@ -798,7 +797,7 @@ def fuckup_db_post():
     if not query:
         return render_template("admin/fuckupdb.html", error="No query provided"), 400
 
-    subprocess.run(current_app.config.get("BACKUP_SCRIPT", os.environ.get("DATABASE_URI", "")))
+    subprocess.run(current_app.config.get("BACKUP_SCRIPT", os.environ.get("BACKUP_SCRIPT", "")))
 
     try:
         cursor.execute("SET ROLE dml_only_role")
