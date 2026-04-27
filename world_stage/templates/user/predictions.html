@@ -12,6 +12,8 @@
     <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.votes', username=username) }}">Vote history</a>
 {% endblock %}
 {% block content %}
 {% if predictions %}

@@ -579,7 +579,18 @@ def special_predictions(short_name: str, show: str):
     ):
         pred_rank[song.id] = rank
 
-    songs.sort(key=lambda s: odds[s.id], reverse=True)
+    real_positions: dict[int, int] = {}
+    if show_data.status == "full":
+        cursor.execute(
+            "SELECT song_id, place FROM country_show_results WHERE show_id = %s",
+            (show_data.id,),
+        )
+        real_positions = {row["song_id"]: row["place"] for row in cursor.fetchall()}
+
+    if real_positions:
+        songs.sort(key=lambda s: (real_positions.get(s.id) is None, real_positions.get(s.id, 0)))
+    else:
+        songs.sort(key=lambda s: odds[s.id], reverse=True)
 
     predicted_class: dict[int, str] = {}
     n_total = len(songs)
@@ -614,10 +625,9 @@ def special_predictions(short_name: str, show: str):
     predictor_scores: dict[str, int] = {}
     predictor_breakdown: dict[str, list[dict]] = {}
     predictor_penalty: dict[str, dict[int, int]] = {}
-    real_positions: dict[int, int] = {}
-    if show_data.status == "full":
-        predictor_scores, predictor_breakdown, predictor_penalty, real_positions = (
-            _compute_prediction_scores(cursor, show_data.id, songs, predictors)
+    if real_positions:
+        predictor_scores, predictor_breakdown, predictor_penalty = (
+            _compute_prediction_scores(real_positions, songs, predictors)
         )
 
     return render_template(
@@ -1833,22 +1843,17 @@ def _compute_winning_odds(
 
 
 def _compute_prediction_scores(
-    cursor, show_id: int, songs: list, predictors: dict[str, dict[int, int]]
-) -> tuple[dict[str, int], dict[str, list[dict]], dict[str, dict[int, int]], dict[int, int]]:
+    real_positions: dict[int, int],
+    songs: list,
+    predictors: dict[str, dict[int, int]],
+) -> tuple[dict[str, int], dict[str, list[dict]], dict[str, dict[int, int]]]:
     """Score each predictor by sum of (real_pos - predicted_pos)^2 across songs.
 
-    Returns (scores, breakdown, penalty_by_song, real_positions):
+    Returns (scores, breakdown, penalty_by_song):
       - scores[username] = total score
       - breakdown[username] = per-song rows ordered by penalty descending
       - penalty_by_song[username][song_id] = penalty for that song
-      - real_positions[song_id] = actual finishing place
     """
-    cursor.execute(
-        "SELECT song_id, place FROM country_show_results WHERE show_id = %s",
-        (show_id,),
-    )
-    real_positions = {row["song_id"]: row["place"] for row in cursor.fetchall()}
-
     songs_by_id = {song.id: song for song in songs}
 
     scores: dict[str, int] = {}
@@ -1876,7 +1881,7 @@ def _compute_prediction_scores(
         scores[username] = total
         breakdown[username] = rows
         penalty_by_song[username] = per_song
-    return scores, breakdown, penalty_by_song, real_positions
+    return scores, breakdown, penalty_by_song
 
 
 @bp.get("/<int:year>/<show>/predictions")
@@ -1967,8 +1972,19 @@ def show_predictions(year: int, show: str):
     ):
         pred_rank[song.id] = rank
 
-    # Sort songs by qualifying probability descending (mirrors detailed sort by total points)
-    songs.sort(key=lambda s: odds[s.id], reverse=True)
+    real_positions: dict[int, int] = {}
+    if show_data.status == "full":
+        cursor.execute(
+            "SELECT song_id, place FROM country_show_results WHERE show_id = %s",
+            (show_data.id,),
+        )
+        real_positions = {row["song_id"]: row["place"] for row in cursor.fetchall()}
+
+    # Sort by real finishing place when results are public; otherwise by qualifying odds.
+    if real_positions:
+        songs.sort(key=lambda s: (real_positions.get(s.id) is None, real_positions.get(s.id, 0)))
+    else:
+        songs.sort(key=lambda s: odds[s.id], reverse=True)
 
     # Assign predicted-position colour classes (used as a left strip on each row).
     predicted_class: dict[int, str] = {}
@@ -2006,10 +2022,9 @@ def show_predictions(year: int, show: str):
     predictor_scores: dict[str, int] = {}
     predictor_breakdown: dict[str, list[dict]] = {}
     predictor_penalty: dict[str, dict[int, int]] = {}
-    real_positions: dict[int, int] = {}
-    if show_data.status == "full":
-        predictor_scores, predictor_breakdown, predictor_penalty, real_positions = (
-            _compute_prediction_scores(cursor, show_data.id, songs, predictors)
+    if real_positions:
+        predictor_scores, predictor_breakdown, predictor_penalty = (
+            _compute_prediction_scores(real_positions, songs, predictors)
         )
 
     return render_template(

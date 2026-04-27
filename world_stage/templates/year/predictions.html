@@ -171,7 +171,7 @@
             {# bar width: probability as % of the maximum possible value (1.0 for a single qualifier) #}
             {% set bar_pct = [prob * 100, 100] | min %}
             {% set pclass = predicted_class.get(song.id) %}
-            <tr class="predicted-row{% if pclass %} predicted-{{ pclass }}{% endif %}">
+            <tr class="predicted-row{% if pclass %} predicted-{{ pclass }}{% endif %}" data-song-id="{{ song.id }}">
                 <td class="number header-like">{{ song.vote_data.ro if song.vote_data else '—' }}</td>
                 <td class="sticky">
                     <div class="country">
@@ -206,7 +206,7 @@
 
     {% if predictor_penalty %}
     <h3 class="penalties-heading">Penalties per predictor</h3>
-    <table id="penalties-table" class="compact with-sticky">
+    <table id="penalties-table" class="sortable compact with-sticky">
         <thead>
             <tr>
                 <th>RO</th>
@@ -229,7 +229,7 @@
         {% for song in songs %}
             {% set prob = odds[song.id] %}
             {% set bar_pct = [prob * 100, 100] | min %}
-            <tr class="predicted-row">
+            <tr class="predicted-row" data-song-id="{{ song.id }}">
                 <td class="number header-like">{{ song.vote_data.ro if song.vote_data else '—' }}</td>
                 <td class="sticky">
                     <div class="country">
@@ -276,6 +276,40 @@
 </div>
 
 <script>
+(function () {
+    // Mirror tbody row order between the two tables when one is sorted.
+    var first = document.getElementById('predictions-table');
+    var second = document.getElementById('penalties-table');
+    if (!first || !second) return;
+    var firstBody = first.tBodies[0];
+    var secondBody = second.tBodies[0];
+    if (!firstBody || !secondBody) return;
+
+    var syncing = false;
+    function copyOrder(srcBody, dstBody) {
+        var dstByKey = {};
+        Array.from(dstBody.rows).forEach(function (r) {
+            dstByKey[r.dataset.songId] = r;
+        });
+        Array.from(srcBody.rows).forEach(function (r) {
+            var match = dstByKey[r.dataset.songId];
+            if (match) dstBody.appendChild(match);
+        });
+    }
+    function makeObserver(src, dst) {
+        var obs = new MutationObserver(function () {
+            if (syncing) return;
+            syncing = true;
+            copyOrder(src, dst);
+            // Release on next tick so the dst observer can ignore its own mutations.
+            setTimeout(function () { syncing = false; }, 0);
+        });
+        obs.observe(src, { childList: true });
+    }
+    makeObserver(firstBody, secondBody);
+    makeObserver(secondBody, firstBody);
+})();
+
 (function () {
     var checkbox = document.getElementById('toggle-odds');
     var container = document.getElementById('scroll-container');
@@ -331,7 +365,8 @@
 (function () {
     var cells = document.querySelectorAll('#penalties-table tbody td.pos-cell');
     if (!cells.length) return;
-    // Lowest penalty → white (255,255,255). Highest → mid-saturation blue.
+    // Tint cells with a blue overlay; alpha proportional to penalty so the
+    // smallest value uses the cell's natural background (theme-adaptive).
     var TARGET = [70, 130, 200];
     var values = [];
     var min = Infinity, max = -Infinity;
@@ -351,10 +386,8 @@
         var v = values[i];
         if (v === null) return;
         var t = (v - min) / range;
-        var r = Math.round(255 + (TARGET[0] - 255) * t);
-        var g = Math.round(255 + (TARGET[1] - 255) * t);
-        var b = Math.round(255 + (TARGET[2] - 255) * t);
-        c.style.backgroundColor = 'rgb(' + r + ',' + g + ',' + b + ')';
+        c.style.backgroundColor =
+            'rgba(' + TARGET[0] + ',' + TARGET[1] + ',' + TARGET[2] + ',' + t + ')';
     });
 })();
 </script>

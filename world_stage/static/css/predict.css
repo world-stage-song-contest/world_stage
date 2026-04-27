@@ -271,7 +271,7 @@
 td.pos-cell { cursor: pointer; }
 
 td.pos-cell.cell-highlight {
-    box-shadow: inset 0 0 0 2px var(--accent);
+    box-shadow: inset 0 0 0 2px #2ecc71;
     position: relative;
     z-index: 1;
 }
