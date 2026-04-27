@@ -121,12 +121,15 @@ def index():
     cursor = db.cursor()
 
     cursor.execute("""
-        SELECT id, show_name AS name, short_name, year_id AS year,
-               voting_opens, voting_closes, predictions_close
+        SELECT show.id, show.show_name AS name, show.short_name,
+               show.year_id AS year, show.voting_opens, show.voting_closes,
+               show.predictions_close,
+               year.special_name, year.special_short_name
         FROM show
+        LEFT JOIN year ON year.id = show.year_id
         WHERE voting_opens <= CURRENT_TIMESTAMP
           AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
-        ORDER BY id
+        ORDER BY show.id
     """)
 
     for row in cursor.fetchall():
@@ -135,13 +138,20 @@ def index():
             left = row["voting_closes"] - dt_now()
         pred_deadline = row["predictions_close"] or row["voting_closes"]
         predictions_open = not pred_deadline or pred_deadline >= dt_now()
+        if row["special_short_name"]:
+            display_name = f"{row['special_name']} {row['name']}"
+            url_short = f"{row['special_short_name']}-{row['short_name']}"
+        elif row["year"]:
+            display_name = f"{row['year']} {row['name']}"
+            url_short = f"{row['year']}-{row['short_name']}"
+        else:
+            display_name = row["name"]
+            url_short = row["short_name"]
         open_votings.append(
             {
                 "id": row["id"],
-                "name": f"{row['year']} {row['name']}" if row["year"] else row["name"],
-                "short_name": f"{row['year']}-{row['short_name']}"
-                if row["year"]
-                else row["short_name"],
+                "name": display_name,
+                "short_name": url_short,
                 "voting_opens": row["voting_opens"],
                 "voting_closes": row["voting_closes"],
                 "predictions_open": predictions_open,
