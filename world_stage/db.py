@@ -60,7 +60,11 @@ def migrate_db() -> list[str]:
                     candidates.append(f)
     candidates.sort(key=lambda p: p.name)
 
+    def _on_notice(diag):
+        click.echo(f"[{diag.severity}] {diag.message_primary}", err=True)
+
     with current_app.config["DB_POOL"] as pool, pool.getconn() as db, db.cursor() as cur:
+        db.add_notice_handler(_on_notice)
         for f in candidates:
             name = f.stem
             cur.execute("SELECT * FROM migration WHERE name = %s", (name,))
