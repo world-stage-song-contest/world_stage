@@ -534,7 +534,7 @@ def special_predictions(short_name: str, show: str):
         FROM prediction_set
         JOIN account ON prediction_set.user_id = account.id
         WHERE prediction_set.show_id = %s
-        ORDER BY prediction_set.created_at
+        ORDER BY COALESCE(prediction_set.updated_at, prediction_set.created_at)
     """,
         (show_data.id,),
     )
@@ -611,6 +611,15 @@ def special_predictions(short_name: str, show: str):
 
     show_copy = show_data.status != "full"
 
+    predictor_scores: dict[str, int] = {}
+    predictor_breakdown: dict[str, list[dict]] = {}
+    predictor_penalty: dict[str, dict[int, int]] = {}
+    real_positions: dict[int, int] = {}
+    if show_data.status == "full":
+        predictor_scores, predictor_breakdown, predictor_penalty, real_positions = (
+            _compute_prediction_scores(cursor, show_data.id, songs, predictors)
+        )
+
     return render_template(
         "year/predictions.html",
         songs=songs,
@@ -629,6 +638,10 @@ def special_predictions(short_name: str, show: str):
         other_shows=get_other_shows(_year, show),
         special=short_name,
         special_name=special_year["special_name"],
+        predictor_scores=predictor_scores,
+        predictor_breakdown=predictor_breakdown,
+        predictor_penalty=predictor_penalty,
+        real_positions=real_positions,
     )
 
 
@@ -1819,6 +1832,53 @@ def _compute_winning_odds(
     return _smooth_low_odds(raw, threshold=0.002, floor=0.001)
 
 
+def _compute_prediction_scores(
+    cursor, show_id: int, songs: list, predictors: dict[str, dict[int, int]]
+) -> tuple[dict[str, int], dict[str, list[dict]], dict[str, dict[int, int]], dict[int, int]]:
+    """Score each predictor by sum of (real_pos - predicted_pos)^2 across songs.
+
+    Returns (scores, breakdown, penalty_by_song, real_positions):
+      - scores[username] = total score
+      - breakdown[username] = per-song rows ordered by penalty descending
+      - penalty_by_song[username][song_id] = penalty for that song
+      - real_positions[song_id] = actual finishing place
+    """
+    cursor.execute(
+        "SELECT song_id, place FROM country_show_results WHERE show_id = %s",
+        (show_id,),
+    )
+    real_positions = {row["song_id"]: row["place"] for row in cursor.fetchall()}
+
+    songs_by_id = {song.id: song for song in songs}
+
+    scores: dict[str, int] = {}
+    breakdown: dict[str, list[dict]] = {}
+    penalty_by_song: dict[str, dict[int, int]] = {}
+    for username, preds in predictors.items():
+        total = 0
+        rows: list[dict] = []
+        per_song: dict[int, int] = {}
+        for sid, predicted in preds.items():
+            real = real_positions.get(sid)
+            song = songs_by_id.get(sid)
+            if real is None or song is None:
+                continue
+            penalty = (real - predicted) ** 2
+            total += penalty
+            per_song[sid] = penalty
+            rows.append({
+                "song": song,
+                "predicted": predicted,
+                "real": real,
+                "penalty": penalty,
+            })
+        rows.sort(key=lambda r: r["penalty"], reverse=True)
+        scores[username] = total
+        breakdown[username] = rows
+        penalty_by_song[username] = per_song
+    return scores, breakdown, penalty_by_song, real_positions
+
+
 @bp.get("/<int:year>/<show>/predictions")
 def show_predictions(year: int, show: str):
     _year = year
@@ -1856,7 +1916,7 @@ def show_predictions(year: int, show: str):
         FROM prediction_set
         JOIN account ON prediction_set.user_id = account.id
         WHERE prediction_set.show_id = %s
-        ORDER BY prediction_set.created_at
+        ORDER BY COALESCE(prediction_set.updated_at, prediction_set.created_at)
     """,
         (show_data.id,),
     )
@@ -1943,6 +2003,15 @@ def show_predictions(year: int, show: str):
     # Copy box is an admin tool — hide it when the page is publicly visible
     show_copy = show_data.status != "full"
 
+    predictor_scores: dict[str, int] = {}
+    predictor_breakdown: dict[str, list[dict]] = {}
+    predictor_penalty: dict[str, dict[int, int]] = {}
+    real_positions: dict[int, int] = {}
+    if show_data.status == "full":
+        predictor_scores, predictor_breakdown, predictor_penalty, real_positions = (
+            _compute_prediction_scores(cursor, show_data.id, songs, predictors)
+        )
+
     return render_template(
         "year/predictions.html",
         songs=songs,
@@ -1959,6 +2028,10 @@ def show_predictions(year: int, show: str):
         show_name=show_data.name,
         year=year,
         other_shows=get_other_shows(_year, show),
+        predictor_scores=predictor_scores,
+        predictor_breakdown=predictor_breakdown,
+        predictor_penalty=predictor_penalty,
+        real_positions=real_positions,
     )
 
 

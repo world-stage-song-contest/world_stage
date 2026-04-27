@@ -195,6 +195,7 @@ CREATE TABLE IF NOT EXISTS prediction_set (
     user_id integer NOT NULL REFERENCES account (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     show_id integer NOT NULL REFERENCES show (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamptz,
     UNIQUE(user_id, show_id)
 );
 

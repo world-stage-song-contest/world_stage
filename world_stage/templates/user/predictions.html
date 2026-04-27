@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Predictions History: {{ username }}{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="/static/css/user-votes.css">
+<style>
+.user-predictions td:nth-child(2) { border-right: 1px solid var(--foreground1) !important; }
+.user-predictions td:nth-child(3) { border-left: 1px solid var(--foreground1) !important; border-right: none !important; }
+.user-predictions td:nth-child(4) { border-left: none !important; }
+</style>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
+{% endblock %}
+{% block content %}
+{% if predictions %}
+<div class="vote-card-container">
+{% for ps in predictions %}
+<div class="vote-card">
+    <h3 class="card-show-name">
+    {% if ps.special_short_name %}
+        <a href="{{ url_for('year.special_predictions', short_name=ps.special_short_name, show=ps.short_name) }}">{{ ps.special_name }} {{ ps.show_name }}</a>
+    {% else %}
+        <a href="{{ url_for('year.show_predictions', year=ps.year, show=ps.short_name) }}">{{ ps.year }} {{ ps.show_name }}</a>
+    {% endif %}
+    </h3>
+    <p class="vote-date">{{ ps.date }}</p>
+    <p class="voter-name">
+        Score: {{ ps.score }}
+        {% if ps.rank %} &middot; Rank: {{ ps.rank }} / {{ ps.total_predictors }}{% endif %}
+    </p>
+    <table class="user-votes user-predictions">
+        <tbody>
+        {% for v in ps.points %}
+            <tr>
+                <td class="points-data">{% if v.result_place %}{{ v.result_place }}{% endif %}</td>
+                <td class="points-data">{{ v.pos }}</td>
+                <td><div class="song-container">{{ flag(v.code, 36) }} <div class="song-title">{{ v.title }}</div></div></td>
+                <td class="result-data">{% if v.penalty is not none %}{{ v.penalty }}{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<p>No predictions submitted.</p>
+{% endif %}
+{% endblock %}

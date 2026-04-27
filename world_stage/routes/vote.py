@@ -535,7 +535,7 @@ def predict_post(show: str):
         """
         INSERT INTO prediction_set (user_id, show_id)
         VALUES (%s, %s)
-        ON CONFLICT (user_id, show_id) DO UPDATE SET user_id = EXCLUDED.user_id
+        ON CONFLICT (user_id, show_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
         RETURNING id
     """,
         (user_id, show_data.id),

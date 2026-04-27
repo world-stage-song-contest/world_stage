@@ -265,3 +265,136 @@
     color: var(--muted);
     font-size: 0.9rem;
 }
+
+/* ── Cell pair highlight ─────────────────────────────────────────── */
+
+td.pos-cell { cursor: pointer; }
+
+td.pos-cell.cell-highlight {
+    box-shadow: inset 0 0 0 2px var(--accent);
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Odds column toggle ──────────────────────────────────────────── */
+
+.predictions-controls {
+    margin: 8px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#scroll-container.hide-odds .odds-col {
+    display: none;
+}
+
+/* ── Predictor name columns: widen to 5 chars ────────────────────── */
+
+#predictions-table .user-vote-container,
+#penalties-table .user-vote-container {
+    max-width: 5ch;
+}
+
+#predictions-table .voter-name,
+#penalties-table .voter-name {
+    width: 5ch;
+}
+
+/* ── Penalties table heading ─────────────────────────────────────── */
+
+.penalties-heading {
+    margin: 24px 0 8px;
+    position: sticky;
+    left: 0;
+}
+
+/* ── Prediction scoring (public results) ─────────────────────────── */
+
+.prediction-scoring {
+    margin-bottom: 24px;
+}
+
+.prediction-scoring-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.prediction-ranking-table {
+    border-collapse: collapse;
+}
+
+.prediction-ranking-table th,
+.prediction-ranking-table td {
+    padding: 4px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-ui);
+}
+
+.prediction-ranking-table .number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.breakdown-btn {
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 10px;
+}
+
+.breakdown-panel {
+    border: 1px solid var(--border-ui);
+    border-radius: 6px;
+    padding: 8px 12px 4px;
+    background: var(--surface);
+    min-width: 280px;
+    position: sticky;
+    top: 16px;
+}
+
+.breakdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-ui);
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+}
+
+.breakdown-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+#breakdown-close {
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    line-height: 1;
+    padding: 0 4px;
+    color: inherit;
+}
+
+.breakdown-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.breakdown-table th,
+.breakdown-table td {
+    padding: 3px 8px;
+    border-bottom: 1px solid var(--border-ui);
+}
+
+.breakdown-table .number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.breakdown-total {
+    font-weight: 600;
+}

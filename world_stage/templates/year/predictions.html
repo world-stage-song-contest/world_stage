@@ -36,17 +36,124 @@
 <p>No predictions have been submitted for this show yet.</p>
 {% else %}
 
+{% if predictor_scores %}
+{# ── Prediction ranking (only when results are public) ────────────── #}
+<section class="prediction-scoring">
+    <h2>Prediction ranking</h2>
+    <p class="muted">Score = sum of (real position − predicted position)². Lower is better.</p>
+    <div class="prediction-scoring-layout">
+        <table class="prediction-ranking-table">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Predictor</th>
+                    <th class="number">Score</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for username, score in predictor_scores | dictsort(false, 'value') %}
+                <tr>
+                    <td class="number">{{ loop.index }}</td>
+                    <td>{{ username }}</td>
+                    <td class="number">{{ score }}</td>
+                    <td>
+                        <button type="button" class="breakdown-btn" data-user="{{ username }}">Breakdown</button>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <aside id="breakdown-panel" class="breakdown-panel" hidden>
+            <div class="breakdown-header">
+                <h3 id="breakdown-title"></h3>
+                <button type="button" id="breakdown-close" aria-label="Close">×</button>
+            </div>
+            {% for username, rows in predictor_breakdown.items() %}
+            <table class="breakdown-table" data-user="{{ username }}" hidden>
+                <thead>
+                    <tr>
+                        <th>Country</th>
+                        <th class="number">Pred.</th>
+                        <th class="number">Real</th>
+                        <th class="number">Penalty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td>
+                            <div class="country">
+                                {{ flag(row.song.country.cc, 18, row.song.country.name, variant=row.song.country.flag_variant) }}
+                                {{ row.song.country.name }}
+                            </div>
+                        </td>
+                        <td class="number">{{ row.predicted }}</td>
+                        <td class="number">{{ row.real }}</td>
+                        <td class="number">{{ row.penalty }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="breakdown-total">
+                        <th colspan="3">Total</th>
+                        <th class="number">{{ predictor_scores[username] }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+            {% endfor %}
+        </aside>
+    </div>
+</section>
+
+<script>
+(function () {
+    var panel = document.getElementById('breakdown-panel');
+    var title = document.getElementById('breakdown-title');
+    var tables = panel.querySelectorAll('.breakdown-table');
+    var current = null;
+
+    function show(user) {
+        title.textContent = user;
+        tables.forEach(function (t) { t.hidden = (t.dataset.user !== user); });
+        panel.hidden = false;
+        current = user;
+    }
+    function hide() {
+        panel.hidden = true;
+        current = null;
+    }
+    function toggle(user) {
+        if (current === user && !panel.hidden) {
+            hide();
+        } else {
+            show(user);
+        }
+    }
+
+    document.querySelectorAll('.breakdown-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () { toggle(btn.dataset.user); });
+    });
+    document.getElementById('breakdown-close').addEventListener('click', hide);
+})();
+</script>
+{% endif %}
+
 {# ── Main table ───────────────────────────────────────────────────── #}
-<div id="scroll-container">
-    <table class="sortable compact with-sticky">
+<div class="predictions-controls">
+    <label><input type="checkbox" id="toggle-odds"{% if show_copy %} checked{% endif %}> Show {% if n_qualifiers > 0 %}qualify{% else %}win{% endif %} odds</label>
+</div>
+<div id="scroll-container" class="hide-odds">
+    <table id="predictions-table" class="sortable compact with-sticky">
         <thead>
             <tr>
                 <th>RO</th>
                 <th class="sticky">Country</th>
                 <th>Artist</th>
                 <th>Title</th>
-                <th title="Predicted finishing position (weighted prediction points)">Place</th>
-                <th title="Probability of qualifying based on predictions">
+                <th title="Actual finishing place">Place</th>
+                <th title="Predicted finishing position (weighted prediction points)">Pred</th>
+                <th class="odds-col" title="Probability of qualifying based on predictions">
                     {% if n_qualifiers > 0 %}Qualify odds{% else %}Win odds{% endif %}
                 </th>
             {% for username in predictors.keys() %}
@@ -74,8 +181,10 @@
                 </td>
                 <td>{{ song.artist }}</td>
                 <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">{{ song.title }}</a></td>
+                {% set real = real_positions.get(song.id) %}
+                <td class="number" data-value="{{ real if real is not none else '' }}">{{ real if real is not none else '' }}</td>
                 <td class="number" data-value="{{ pred_rank[song.id] }}">{{ pred_rank[song.id] }}</td>
-                <td class="number" data-value="{{ prob }}">
+                <td class="number odds-col" data-value="{{ prob }}">
                     <div class="odds-bar-wrap">
                         <div class="odds-bar-track">
                             <div class="odds-bar" style="width: {{ bar_pct }}%"></div>
@@ -85,7 +194,8 @@
                 </td>
             {% for username, preds in predictors.items() %}
             {% set pos = preds.get(song.id) %}
-                <td class="number pos-cell {% if pos == 1 %}first{% elif pos and pos == songs | length %}last{% endif %}">
+                <td class="number pos-cell {% if pos == 1 %}first{% elif pos and pos == songs | length %}last{% endif %}"
+                    data-song-id="{{ song.id }}" data-user="{{ username }}">
                     {{ pos if pos is not none else '' }}
                 </td>
             {% endfor %}
@@ -93,7 +203,161 @@
         {% endfor %}
         </tbody>
     </table>
+
+    {% if predictor_penalty %}
+    <h3 class="penalties-heading">Penalties per predictor</h3>
+    <table id="penalties-table" class="compact with-sticky">
+        <thead>
+            <tr>
+                <th>RO</th>
+                <th class="sticky">Country</th>
+                <th>Artist</th>
+                <th>Title</th>
+                <th>Place</th>
+                <th>Pred</th>
+                <th class="odds-col">{% if n_qualifiers > 0 %}Qualify odds{% else %}Win odds{% endif %}</th>
+            {% for username in predictors.keys() %}
+                <th class="user-vote">
+                    <div class="user-vote-container" title="{{ username }}">
+                        <div class="voter-name">{{ username }}</div>
+                    </div>
+                </th>
+            {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for song in songs %}
+            {% set prob = odds[song.id] %}
+            {% set bar_pct = [prob * 100, 100] | min %}
+            <tr class="predicted-row">
+                <td class="number header-like">{{ song.vote_data.ro if song.vote_data else '—' }}</td>
+                <td class="sticky">
+                    <div class="country">
+                        {{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}
+                        {{ song.country.name }}
+                    </div>
+                </td>
+                <td>{{ song.artist }}</td>
+                <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">{{ song.title }}</a></td>
+                {% set real = real_positions.get(song.id) %}
+                <td class="number">{{ real if real is not none else '' }}</td>
+                <td class="number">{{ pred_rank[song.id] }}</td>
+                <td class="number odds-col">
+                    <div class="odds-bar-wrap">
+                        <div class="odds-bar-track">
+                            <div class="odds-bar" style="width: {{ bar_pct }}%"></div>
+                        </div>
+                        <span class="odds-label">{{ "%.2f"|format(prob * 100) }}%</span>
+                    </div>
+                </td>
+            {% for username in predictors.keys() %}
+                {% set pen = predictor_penalty.get(username, {}).get(song.id) %}
+                <td class="number pos-cell" data-song-id="{{ song.id }}" data-user="{{ username }}">{{ pen if pen is not none else '' }}</td>
+            {% endfor %}
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="penalty-total">
+                <th class="number">—</th>
+                <th class="sticky">Total</th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th class="odds-col"></th>
+            {% for username in predictors.keys() %}
+                <th class="number">{{ predictor_scores.get(username, '') }}</th>
+            {% endfor %}
+            </tr>
+        </tfoot>
+    </table>
+    {% endif %}
 </div>
+
+<script>
+(function () {
+    var checkbox = document.getElementById('toggle-odds');
+    var container = document.getElementById('scroll-container');
+    if (!checkbox || !container) return;
+    function apply() {
+        container.classList.toggle('hide-odds', !checkbox.checked);
+    }
+    checkbox.addEventListener('change', apply);
+    apply();
+})();
+
+(function () {
+    // Cell pair highlight: click a per-predictor cell to highlight the matching
+    // (song, user) cell in the other table. Click again to clear.
+    var tables = ['#predictions-table', '#penalties-table'];
+    var current = null;
+
+    function findCells(songId, user) {
+        var sel = 'td.pos-cell[data-song-id="' + songId + '"][data-user="' +
+            (window.CSS && CSS.escape ? CSS.escape(user) : user) + '"]';
+        var out = [];
+        tables.forEach(function (t) {
+            var els = document.querySelectorAll(t + ' ' + sel);
+            els.forEach(function (e) { out.push(e); });
+        });
+        return out;
+    }
+    function clear() {
+        if (!current) return;
+        current.forEach(function (c) { c.classList.remove('cell-highlight'); });
+        current = null;
+    }
+    function selectCell(cell) {
+        var songId = cell.getAttribute('data-song-id');
+        var user = cell.getAttribute('data-user');
+        if (!songId || !user) return;
+        var match = findCells(songId, user);
+        if (current && current[0] === match[0]) {
+            clear();
+            return;
+        }
+        clear();
+        match.forEach(function (c) { c.classList.add('cell-highlight'); });
+        current = match;
+    }
+    document.querySelectorAll(
+        '#predictions-table td.pos-cell, #penalties-table td.pos-cell'
+    ).forEach(function (cell) {
+        cell.addEventListener('click', function () { selectCell(cell); });
+    });
+})();
+
+(function () {
+    var cells = document.querySelectorAll('#penalties-table tbody td.pos-cell');
+    if (!cells.length) return;
+    // Lowest penalty → white (255,255,255). Highest → mid-saturation blue.
+    var TARGET = [70, 130, 200];
+    var values = [];
+    var min = Infinity, max = -Infinity;
+    cells.forEach(function (c) {
+        var v = parseFloat(c.textContent);
+        if (isNaN(v)) {
+            values.push(null);
+        } else {
+            values.push(v);
+            if (v < min) min = v;
+            if (v > max) max = v;
+        }
+    });
+    var range = max - min;
+    if (!isFinite(range) || range <= 0) return;
+    cells.forEach(function (c, i) {
+        var v = values[i];
+        if (v === null) return;
+        var t = (v - min) / range;
+        var r = Math.round(255 + (TARGET[0] - 255) * t);
+        var g = Math.round(255 + (TARGET[1] - 255) * t);
+        var b = Math.round(255 + (TARGET[2] - 255) * t);
+        c.style.backgroundColor = 'rgb(' + r + ',' + g + ',' + b + ')';
+    });
+})();
+</script>
 
 {% if show_copy %}
 {# ── Copy box (admin-only, hidden when show is publicly visible) ───── #}

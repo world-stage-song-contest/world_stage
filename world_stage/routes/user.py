@@ -181,6 +181,137 @@ def votes(username: str):
     return render_template("user/votes.html", votes=votes, username=username)
 
 
+@bp.get("/<username>/predictions")
+def predictions(username: str):
+    username = urllib.parse.unquote(username)
+    username = unicodedata.normalize("NFKC", username)
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute(
+        """
+        SELECT id FROM account WHERE username = %s
+    """,
+        (username,),
+    )
+    user_id = cursor.fetchone()
+    if not user_id:
+        return render_template("error.html", error="User not found"), 404
+    user_id = user_id["id"]
+
+    cursor.execute(
+        """
+        SELECT prediction_set.id, prediction_set.show_id, prediction_set.created_at,
+               show.show_name, show.short_name, show.date, show.year_id, show.status,
+               year.special_name, year.special_short_name
+        FROM prediction_set
+        JOIN show ON prediction_set.show_id = show.id
+        LEFT JOIN year ON show.year_id = year.id
+        WHERE prediction_set.user_id = %s AND show.status = 'full'
+        ORDER BY show.date DESC
+    """,
+        (user_id,),
+    )
+    predictions = []
+    for row in cursor.fetchall():
+        predictions.append({
+            "id": row["id"],
+            "show_id": row["show_id"],
+            "show_name": row["show_name"],
+            "short_name": row["short_name"],
+            "status": row["status"],
+            "date": row["date"].strftime("%d %b %Y"),
+            "year": row["year_id"],
+            "special_name": row["special_name"],
+            "special_short_name": row["special_short_name"],
+        })
+
+    show_ids = list({p["show_id"] for p in predictions})
+    show_results: dict[tuple[int, int], int] = {}
+    set_rank: dict[int, tuple[int, int]] = {}  # set_id -> (rank, total predictors)
+    if show_ids:
+        cursor.execute(
+            """
+            SELECT show_id, song_id, place
+            FROM country_show_results
+            WHERE show_id = ANY(%s)
+        """,
+            (show_ids,),
+        )
+        for row in cursor.fetchall():
+            show_results[(row["show_id"], row["song_id"])] = row["place"]
+
+        # Per-set total score, computed in SQL across every predictor for these shows.
+        # Ties broken by last-submission time — updated_at if present, else created_at.
+        cursor.execute(
+            """
+            SELECT prediction_set.id AS set_id,
+                   prediction_set.show_id,
+                   COALESCE(prediction_set.updated_at, prediction_set.created_at)
+                       AS submitted_at,
+                   COALESCE(SUM(POWER(csr.place - prediction.position, 2)), 0)::int
+                       AS score
+            FROM prediction_set
+            JOIN prediction ON prediction.set_id = prediction_set.id
+            LEFT JOIN country_show_results csr
+              ON csr.show_id = prediction_set.show_id
+             AND csr.song_id = prediction.song_id
+            WHERE prediction_set.show_id = ANY(%s)
+            GROUP BY prediction_set.id, prediction_set.show_id
+        """,
+            (show_ids,),
+        )
+        scores_by_show: defaultdict[int, list[tuple]] = defaultdict(list)
+        for row in cursor.fetchall():
+            scores_by_show[row["show_id"]].append(
+                (row["set_id"], row["score"], row["submitted_at"])
+            )
+        for sid, rows in scores_by_show.items():
+            rows.sort(key=lambda r: (r[1], r[2]))
+            total = len(rows)
+            for i, (set_id, _score, _ts) in enumerate(rows, start=1):
+                set_rank[set_id] = (i, total)
+
+    for ps in predictions:
+        cursor.execute(
+            """
+            SELECT prediction.position AS pos, song.title, song.artist,
+                   song.country_id AS code, country.name, song.id
+            FROM prediction
+            JOIN song ON prediction.song_id = song.id
+            JOIN country ON song.country_id = country.id
+            WHERE prediction.set_id = %s
+            ORDER BY prediction.position
+        """,
+            (ps["id"],),
+        )
+        items = []
+        score = 0
+        for val in cursor.fetchall():
+            real = show_results.get((ps["show_id"], val["id"]))
+            val["result_place"] = real
+            if real is not None:
+                val["penalty"] = (real - val["pos"]) ** 2
+                score += val["penalty"]
+            else:
+                val["penalty"] = None
+            items.append(val)
+        items.sort(key=lambda x: (x["result_place"] is None, x["result_place"]))
+        ps["points"] = items
+        ps["score"] = score
+        rank_info = set_rank.get(ps["id"])
+        if rank_info:
+            ps["rank"], ps["total_predictors"] = rank_info
+        else:
+            ps["rank"] = None
+            ps["total_predictors"] = None
+
+    return render_template(
+        "user/predictions.html", predictions=predictions, username=username
+    )
+
+
 @bp.get("/<username>/submissions")
 def submissions(username: str):
     username = urllib.parse.unquote(username)

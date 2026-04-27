@@ -12,6 +12,11 @@
         <img src="/static/images/history.png" alt="History Icon">
         <p>View the user's vote history.</p>
     </a>
+    <a href="{{ url_for('user.predictions', username=username) }}" class="card">
+        <h3>Predictions</h3>
+        <img src="/static/images/history.png" alt="Predictions Icon">
+        <p>View the user's prediction history.</p>
+    </a>
     <a href="{{ url_for('user.bias', username=username) }}" class="card">
         <h3>Bias</h3>
         <img src="/static/images/hands.png" alt="Bias Icon">
