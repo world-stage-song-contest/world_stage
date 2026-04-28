@@ -352,6 +352,102 @@ function assignLeftovers(leftovers, showStates, rng) {
 }
 
 /**
+ * Single-pot (specials) allocation.
+ *
+ * Bipartite matching gives up on the country-spread constraint as soon
+ * as a single pass fails, which lets a country with many entries pile
+ * into the same semifinal. For specials we want a stronger guarantee:
+ * place the duplicate-country entries first, round-robin across shows,
+ * before any singletons fight for the remaining slots.
+ *
+ * Algorithm:
+ *   1. Group entries by country code.
+ *   2. Process duplicate-country groups, largest first. For each group,
+ *      shuffle the entries, then deal them out to shows one-by-one in a
+ *      randomly-rotated round-robin order — skipping any show that's
+ *      full or already has this submitter. The result is the maximum
+ *      possible spread (for K entries across N shows: ⌈K/N⌉ in some
+ *      shows, ⌊K/N⌋ in the rest).
+ *   3. Fill the remaining slots with singletons, picking the show with
+ *      the most remaining capacity (and no submitter conflict) so the
+ *      shows finish at their target limits.
+ *
+ * @param {Entry[]} entries
+ * @param {Array<{name: string, limit: number, entries: Entry[], submitters: Set<number>}>} showStates
+ * @param {Xoshiro256StarStar} rng
+ */
+function drawSinglePotBalanced(entries, showStates, rng) {
+    const byCountry = new Map();
+    for (const entry of entries) {
+        if (!byCountry.has(entry.code)) byCountry.set(entry.code, []);
+        byCountry.get(entry.code).push(entry);
+    }
+
+    const dupGroups = [];
+    const singletons = [];
+    for (const group of byCountry.values()) {
+        if (group.length > 1) dupGroups.push(group);
+        else singletons.push(group[0]);
+    }
+    dupGroups.sort((a, b) => b.length - a.length);
+    for (const g of dupGroups) rng.shuffle(g);
+    rng.shuffle(singletons);
+
+    function place(entry, target) {
+        target.entries.push(entry);
+        target.submitters.add(entry.submitter);
+    }
+
+    function pickWithMostCapacity(entry) {
+        const candidates = showStates.filter(
+            s => s.entries.length < s.limit && !s.submitters.has(entry.submitter),
+        );
+        if (!candidates.length) {
+            throw new Error(
+                `Cannot place entry from ${entry.code}/${entry.submitter}: every show is full or already has this submitter`,
+            );
+        }
+        candidates.sort(
+            (a, b) => (b.limit - b.entries.length) - (a.limit - a.entries.length),
+        );
+        return candidates[0];
+    }
+
+    // Round-robin each duplicate group across shows.
+    for (const group of dupGroups) {
+        // Random rotation of show order so the same country doesn't
+        // always start with the same semifinal across redraws.
+        const rotation = [...showStates];
+        rng.shuffle(rotation);
+        let cursor = 0;
+        for (const entry of group) {
+            // Walk forward until we hit a show with capacity AND no
+            // submitter conflict.
+            let placed = false;
+            for (let attempt = 0; attempt < rotation.length; attempt++) {
+                const target = rotation[(cursor + attempt) % rotation.length];
+                if (target.entries.length < target.limit && !target.submitters.has(entry.submitter)) {
+                    place(entry, target);
+                    cursor = (cursor + attempt + 1) % rotation.length;
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) {
+                // Round-robin couldn't place it — fall back to the most-capacity
+                // show that doesn't conflict on submitter.
+                place(entry, pickWithMostCapacity(entry));
+            }
+        }
+    }
+
+    // Fill remaining slots with singletons.
+    for (const entry of singletons) {
+        place(entry, pickWithMostCapacity(entry));
+    }
+}
+
+/**
  * Main allocation algorithm - distributes entries from pots into shows
  * @param {Entry[][]} pots - Array of pots containing entries
  * @param {Object<string, {limit: number, entries: Entry[]}>} shows - Show configurations
@@ -376,6 +472,15 @@ function drawIntoShows(pots, shows, rng) {
         // has multiple entries — i.e. specials).
         codes: new Set(shows[name].entries.map(e => e.code)),
     }));
+
+    // Specials use a single combined pot with potentially many entries
+    // per country. Use a dedicated balancer that guarantees maximum
+    // country spread instead of bipartite-with-fallback.
+    if (pots.length === 1) {
+        drawSinglePotBalanced(pots[0], showStates, rng);
+        pots[0].length = 0;
+        return;
+    }
 
     // Shuffle each pot for randomization
     pots.forEach(rng.shuffle);
