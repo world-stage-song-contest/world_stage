@@ -9,6 +9,14 @@
     flex-wrap: wrap;
 }
 
+#shows {
+    /* Many semifinals (or wide tiles in single-pot mode) can run past the
+       viewport edge — let the container scroll horizontally and animate
+       smoothly when JS scrolls the next active show into view. */
+    overflow-x: auto;
+    scroll-behavior: smooth;
+}
+
 .pot, .show {
     border: 1px solid var(--foreground1);
 }
@@ -19,6 +27,9 @@
 
 .show {
     padding: 4px;
+    /* Keep each show at its natural width — don't let flexbox shrink them
+       just because the container is overflowing. */
+    flex-shrink: 0;
 }
 
 .pot {

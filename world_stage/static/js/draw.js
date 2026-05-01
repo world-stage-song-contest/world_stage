@@ -148,6 +148,10 @@ class Entry {
     id;
     /** @type {string} */
     code;
+    /** @type {string} */
+    genre;
+    /** @type {string} */
+    language;
     /** @type {number} */
     submitter;
     /** @type {number} */
@@ -162,11 +166,20 @@ class Entry {
     constructor(element, i) {
         this.id = element.dataset.id;
         this.code = element.dataset.code;
+        // Empty string means "untagged" — entries without a genre or
+        // language don't contribute to that balance dimension.
+        this.genre = element.dataset.genre || '';
+        this.language = element.dataset.language || '';
         this.submitter = parseInt(element.dataset.submitter);
         this.pot = i;
         this.element = element;
     }
 }
+
+// Soft-balance keys: each is a per-entry tag that the show-distribution
+// balancer caps at ⌈total / N⌉ per show, and that the running-order
+// spreader uses to detect adjacency conflicts.
+const BALANCE_KEYS = ['genre', 'language'];
 
 /**
  * Validates that the allocation problem has a feasible solution
@@ -209,9 +222,37 @@ function validateAllocation(pots, shows) {
  * @param {Xoshiro256StarStar} rng - Random number generator
  * @returns {boolean} True if assignment succeeded
  */
-function assignPotToShows(pot, liveShows, rng) {
+/**
+ * Per-key ceiling: ⌈entries-of-key / nShows⌉. Used to enforce balanced
+ * spread of countries / genres across shows during bipartite matching.
+ */
+function ceilingByKey(pot, key, nShows) {
+    const counts = new Map();
+    for (const e of pot) {
+        const v = e[key];
+        if (!v) continue;
+        counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    const ceil = new Map();
+    for (const [k, c] of counts) ceil.set(k, Math.ceil(c / nShows));
+    return ceil;
+}
+
+function assignPotToShows(pot, liveShows, rng, balanceCeils = null) {
     const showCount = liveShows.length;
     const entryCount = pot.length;
+
+    // Per-key ceiling caps each show to ⌈total_of_this_value / N⌉
+    // entries for each balance dimension (genre, language). Computed
+    // once globally across all pots + leftovers so phase 1 and phase 2
+    // share targets — falls back to per-pot computation if the caller
+    // didn't supply one.
+    if (balanceCeils === null) {
+        balanceCeils = {};
+        for (const key of BALANCE_KEYS) {
+            balanceCeils[key] = ceilingByKey(pot, key, showCount);
+        }
+    }
 
     // Build adjacency lists (show -> compatible entries). For specials,
     // the same country can submit multiple entries; spread them across
@@ -225,6 +266,18 @@ function assignPotToShows(pot, liveShows, rng) {
             const entry = pot[entryIndex];
             if (show.submitters.has(entry.submitter)) continue;
             if (show.codes && show.codes.has(entry.code)) continue;
+            let blocked = false;
+            for (const key of BALANCE_KEYS) {
+                const v = entry[key];
+                if (!v) continue;
+                const cap = balanceCeils[key]?.get(v);
+                if (cap !== undefined
+                    && (show.balanceCounts[key].get(v) || 0) >= cap) {
+                    blocked = true;
+                    break;
+                }
+            }
+            if (blocked) continue;
             adjacency[showIndex].push(entryIndex);
         }
     }
@@ -267,6 +320,16 @@ function assignPotToShows(pot, liveShows, rng) {
             show.entries.push(entry);
             show.submitters.add(entry.submitter);
             if (show.codes) show.codes.add(entry.code);
+            if (show.balanceCounts) {
+                for (const key of BALANCE_KEYS) {
+                    const v = entry[key];
+                    if (!v) continue;
+                    show.balanceCounts[key].set(
+                        v,
+                        (show.balanceCounts[key].get(v) || 0) + 1,
+                    );
+                }
+            }
             assignedIndices.push(entryIndex);
         }
     }
@@ -285,7 +348,7 @@ function assignPotToShows(pot, liveShows, rng) {
  * @param {Array<{name: string, limit: number, entries: Entry[], submitters: Set<number>}>} showStates - All shows
  * @param {Xoshiro256StarStar} rng - Random number generator
  */
-function assignLeftovers(leftovers, showStates, rng) {
+function assignLeftovers(leftovers, showStates, rng, balanceCeils = null) {
     // Build list of available slots with show references
     const availableSlots = [];
     for (const show of showStates) {
@@ -312,13 +375,31 @@ function assignLeftovers(leftovers, showStates, rng) {
      * @returns {boolean}
      */
     function findAugmentingPath(entryIndex) {
-        const submitter = leftovers[entryIndex].submitter;
+        const entry = leftovers[entryIndex];
+        const submitter = entry.submitter;
 
         for (let slotIndex = 0; slotIndex < slotCount; ++slotIndex) {
             if (seen[slotIndex]) continue;
 
             const show = availableSlots[slotIndex];
             if (show.submitters.has(submitter)) continue;
+            // Honour the global balance ceilings here too — without
+            // them, phase 1 leftovers (entries that couldn't fit under
+            // their genre/language cap) would all land in the same show.
+            if (balanceCeils && show.balanceCounts) {
+                let blocked = false;
+                for (const key of BALANCE_KEYS) {
+                    const v = entry[key];
+                    if (!v) continue;
+                    const cap = balanceCeils[key]?.get(v);
+                    if (cap !== undefined
+                        && (show.balanceCounts[key].get(v) || 0) >= cap) {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if (blocked) continue;
+            }
 
             seen[slotIndex] = true;
 
@@ -347,6 +428,16 @@ function assignLeftovers(leftovers, showStates, rng) {
             show.entries.push(entry);
             show.submitters.add(entry.submitter);
             if (show.codes) show.codes.add(entry.code);
+            if (show.balanceCounts) {
+                for (const key of BALANCE_KEYS) {
+                    const v = entry[key];
+                    if (!v) continue;
+                    show.balanceCounts[key].set(
+                        v,
+                        (show.balanceCounts[key].get(v) || 0) + 1,
+                    );
+                }
+            }
         }
     }
 }
@@ -377,6 +468,25 @@ function assignLeftovers(leftovers, showStates, rng) {
  * @param {Xoshiro256StarStar} rng
  */
 function drawSinglePotBalanced(entries, showStates, rng) {
+    // Track per-show counts of country codes and each balance key.
+    // Initialized from any pre-existing entries so re-runs over
+    // partially-filled shows still balance correctly.
+    for (const s of showStates) {
+        s.codeCounts = new Map();
+        if (!s.balanceCounts) {
+            s.balanceCounts = {};
+            for (const key of BALANCE_KEYS) s.balanceCounts[key] = new Map();
+        }
+        for (const e of s.entries) {
+            s.codeCounts.set(e.code, (s.codeCounts.get(e.code) || 0) + 1);
+            for (const key of BALANCE_KEYS) {
+                const v = e[key];
+                if (!v) continue;
+                s.balanceCounts[key].set(v, (s.balanceCounts[key].get(v) || 0) + 1);
+            }
+        }
+    }
+
     const byCountry = new Map();
     for (const entry of entries) {
         if (!byCountry.has(entry.code)) byCountry.set(entry.code, []);
@@ -396,9 +506,47 @@ function drawSinglePotBalanced(entries, showStates, rng) {
     function place(entry, target) {
         target.entries.push(entry);
         target.submitters.add(entry.submitter);
+        target.codeCounts.set(entry.code, (target.codeCounts.get(entry.code) || 0) + 1);
+        for (const key of BALANCE_KEYS) {
+            const v = entry[key];
+            if (!v) continue;
+            target.balanceCounts[key].set(
+                v,
+                (target.balanceCounts[key].get(v) || 0) + 1,
+            );
+        }
     }
 
-    function pickWithMostCapacity(entry) {
+    /**
+     * Lower score = better target. Composite key gives strict priority:
+     *   1. fewest entries from this country (the user-asked-for hard
+     *      country round-robin).
+     *   2. summed balance-key counts (genre + language): secondary
+     *      balance across the soft-balance dimensions.
+     *   3. most remaining capacity (so the shows finish at their
+     *      target sizes).
+     *   4. small random jitter to break otherwise-perfect ties so
+     *      redraws aren't identical.
+     */
+    function score(show, entry) {
+        const codeCount = show.codeCounts.get(entry.code) || 0;
+        let balanceCount = 0;
+        for (const key of BALANCE_KEYS) {
+            const v = entry[key];
+            if (!v) continue;
+            balanceCount += show.balanceCounts[key].get(v) || 0;
+        }
+        const fill = show.entries.length;
+        const remaining = show.limit - fill;
+        return (
+            codeCount * 1_000_000
+            + balanceCount * 1_000
+            - remaining * 10
+            + rng.nextFloat()
+        );
+    }
+
+    function pickBest(entry) {
         const candidates = showStates.filter(
             s => s.entries.length < s.limit && !s.submitters.has(entry.submitter),
         );
@@ -407,43 +555,24 @@ function drawSinglePotBalanced(entries, showStates, rng) {
                 `Cannot place entry from ${entry.code}/${entry.submitter}: every show is full or already has this submitter`,
             );
         }
-        candidates.sort(
-            (a, b) => (b.limit - b.entries.length) - (a.limit - a.entries.length),
-        );
+        candidates.sort((a, b) => score(a, entry) - score(b, entry));
         return candidates[0];
     }
 
-    // Round-robin each duplicate group across shows.
+    // Round-robin each duplicate-country group across shows. Country
+    // count is the dominant term in `score`, so the show with the
+    // fewest of this country always wins — the genre/fill terms only
+    // resolve ties between equally-balanced shows.
     for (const group of dupGroups) {
-        // Random rotation of show order so the same country doesn't
-        // always start with the same semifinal across redraws.
-        const rotation = [...showStates];
-        rng.shuffle(rotation);
-        let cursor = 0;
         for (const entry of group) {
-            // Walk forward until we hit a show with capacity AND no
-            // submitter conflict.
-            let placed = false;
-            for (let attempt = 0; attempt < rotation.length; attempt++) {
-                const target = rotation[(cursor + attempt) % rotation.length];
-                if (target.entries.length < target.limit && !target.submitters.has(entry.submitter)) {
-                    place(entry, target);
-                    cursor = (cursor + attempt + 1) % rotation.length;
-                    placed = true;
-                    break;
-                }
-            }
-            if (!placed) {
-                // Round-robin couldn't place it — fall back to the most-capacity
-                // show that doesn't conflict on submitter.
-                place(entry, pickWithMostCapacity(entry));
-            }
+            place(entry, pickBest(entry));
         }
     }
 
-    // Fill remaining slots with singletons.
+    // Fill remaining slots with singletons. Each singleton's country is
+    // unique here (count 0 in every show), so genre/capacity decide.
     for (const entry of singletons) {
-        place(entry, pickWithMostCapacity(entry));
+        place(entry, pickBest(entry));
     }
 }
 
@@ -463,15 +592,29 @@ function drawIntoShows(pots, shows, rng) {
 
     // Prepare show states with tracking
     const showNames = Object.keys(shows);
-    const showStates = showNames.map(name => ({
-        name,
-        limit: shows[name].limit,
-        entries: shows[name].entries,
-        submitters: new Set(shows[name].entries.map(e => e.submitter)),
-        // For balanced country distribution (relevant when a single country
-        // has multiple entries — i.e. specials).
-        codes: new Set(shows[name].entries.map(e => e.code)),
-    }));
+    const showStates = showNames.map(name => {
+        const initialEntries = shows[name].entries;
+        const balanceCounts = {};
+        for (const key of BALANCE_KEYS) {
+            balanceCounts[key] = new Map();
+            for (const e of initialEntries) {
+                const v = e[key];
+                if (!v) continue;
+                balanceCounts[key].set(v, (balanceCounts[key].get(v) || 0) + 1);
+            }
+        }
+        return {
+            name,
+            limit: shows[name].limit,
+            entries: initialEntries,
+            submitters: new Set(initialEntries.map(e => e.submitter)),
+            // For balanced country distribution (relevant when a single
+            // country has multiple entries — i.e. specials).
+            codes: new Set(initialEntries.map(e => e.code)),
+            // For balanced soft-balance distribution across shows.
+            balanceCounts,
+        };
+    });
 
     // Specials use a single combined pot with potentially many entries
     // per country. Use a dedicated balancer that guarantees maximum
@@ -485,6 +628,16 @@ function drawIntoShows(pots, shows, rng) {
     // Shuffle each pot for randomization
     pots.forEach(rng.shuffle);
 
+    // Compute the per-key ceilings once over the union of all entries
+    // so phase 1 (per-pot matching) and phase 2 (leftovers) share a
+    // single target — otherwise phase 2 would happily pile leftover
+    // entries of a saturated genre or language into one show.
+    const allEntries = pots.flat();
+    const balanceCeils = {};
+    for (const key of BALANCE_KEYS) {
+        balanceCeils[key] = ceilingByKey(allEntries, key, showStates.length);
+    }
+
     // Phase 1: Assign complete pots to shows
     while (true) {
         const liveShows = showStates.filter(s => s.entries.length < s.limit);
@@ -496,15 +649,15 @@ function drawIntoShows(pots, shows, rng) {
         // Randomize show order for fairness
         rng.shuffle(liveShows);
 
-        // Track whether any pot shrank — if the country/submitter
+        // Track whether any pot shrank — if the country/submitter/genre
         // constraints make no further matches possible (e.g. every
         // remaining entry conflicts with every live show because of the
-        // country-spread rule), bail out and let the leftovers phase
-        // handle them with the relaxed constraint.
+        // country-spread or genre-cap rule), bail out and let the
+        // leftovers phase handle them with the relaxed constraint.
         let progress = false;
         for (const pot of pots) {
             const before = pot.length;
-            if (!assignPotToShows(pot, liveShows, rng)) {
+            if (!assignPotToShows(pot, liveShows, rng, balanceCeils)) {
                 throw new Error('Pot assignment failed: conflicting submitter constraints');
             }
             if (pot.length < before) progress = true;
@@ -515,7 +668,15 @@ function drawIntoShows(pots, shows, rng) {
     // Phase 2: Handle remaining entries
     const leftovers = rng.shuffle(pots.flat());
     if (leftovers.length > 0) {
-        assignLeftovers(leftovers, showStates, rng);
+        try {
+            assignLeftovers(leftovers, showStates, rng, balanceCeils);
+        } catch {
+            // A balance cap may make a feasible placement impossible
+            // when submitter constraints chain in unfortunate ways.
+            // assignLeftovers throws *before* modifying state, so it's
+            // safe to retry without the caps.
+            assignLeftovers(leftovers, showStates, rng, null);
+        }
     }
 
     // Verify final state
@@ -528,10 +689,10 @@ function drawIntoShows(pots, shows, rng) {
 
 /**
  * Order entries into running-order positions such that any country with
- * multiple entries in the same show is spaced apart. Single-occurrence
- * countries fill the remaining slots in random order, so a regular year
- * (one entry per country) gets the same uniformly-random ordering as
- * before.
+ * multiple entries in the same show is spaced apart, and entries
+ * sharing a genre tag aren't bunched up next to each other in the
+ * running order. Single-occurrence countries fill the remaining slots
+ * in random order, then a swap pass de-clumps adjacent same-genre tiles.
  *
  * @param {Entry[]} entries
  * @param {Xoshiro256StarStar} rng
@@ -580,6 +741,52 @@ function spreadEntries(entries, rng) {
         result[cursor] = entry;
     }
 
+    // Adjacency de-clumping pass: walk the running order and, whenever
+    // two neighbours share any of {country, genre, language, submitter},
+    // look further ahead for an entry that can swap in without
+    // creating a fresh adjacency conflict. Bounded loop to guarantee
+    // termination on pathological inputs (e.g. when most entries share
+    // a genre).
+    const ADJACENCY_KEYS = ['code', 'genre', 'language', 'submitter'];
+    function conflictsWith(entry, neighbour) {
+        if (!neighbour || !entry) return false;
+        for (const key of ADJACENCY_KEYS) {
+            const v = entry[key];
+            if (v !== undefined && v !== null && v !== '' && neighbour[key] === v) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    for (let pass = 0; pass < 6; pass++) {
+        let swapped = false;
+        for (let i = 0; i < N - 1; i++) {
+            const a = result[i];
+            const b = result[i + 1];
+            if (!a || !b || !conflictsWith(a, b)) continue;
+            // b clashes with a — try to swap b for some later entry c.
+            for (let j = i + 2; j < N; j++) {
+                const c = result[j];
+                if (!c) continue;
+                if (conflictsWith(a, c)) continue;
+                // After swap, b lands at j and c at i+1. Check both
+                // sides for fresh conflicts.
+                const right_i = result[i + 2] ?? null;
+                const left_j = result[j - 1];
+                const right_j = result[j + 1] ?? null;
+                if (conflictsWith(c, right_i === b ? null : right_i)) continue;
+                if (conflictsWith(b, left_j === b ? null : left_j)) continue;
+                if (conflictsWith(b, right_j === b ? null : right_j)) continue;
+                result[i + 1] = c;
+                result[j] = b;
+                swapped = true;
+                break;
+            }
+        }
+        if (!swapped) break;
+    }
+
     return result;
 }
 
@@ -604,6 +811,8 @@ function setShowDraw(showName, showEntries, rng) {
 
         el.dataset.id = en.id;
         el.dataset.code = en.code;
+        el.dataset.genre = en.genre || "";
+        el.dataset.language = en.language || "";
         el.dataset.pot = en.pot;
         el.querySelector('.flag').src = en.element.querySelector('.flag').src;
         el.querySelector('.country-name').textContent = en.element.querySelector('.country-name').textContent;
@@ -853,6 +1062,10 @@ async function next() {
     const [nextShow, looped] = nextSibling(currentShowElement);
     currentShowElement.classList.remove("active1");
     nextShow.classList.add("active1");
+    // Bring the new active show into view if the #shows container has
+    // overflowed off-screen — uses the container's `scroll-behavior:
+    // smooth` so the scroll animates rather than jumping.
+    nextShow.scrollIntoView({ block: "nearest", inline: "center" });
 
     if (looped) {
         const [nextPot,] = nextSibling(currentPotElement);

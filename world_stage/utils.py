@@ -1526,6 +1526,7 @@ def get_year_shows(year: int, pattern: str = "") -> list[dict]:
         """
         SELECT show_name, short_name FROM show
         WHERE year_id = %s AND short_name LIKE %s COLLATE "C"
+        ORDER BY short_name COLLATE "C"
     """,
         (year, pattern + "%"),
     )

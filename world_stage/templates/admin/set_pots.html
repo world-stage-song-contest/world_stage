@@ -7,23 +7,61 @@
 {% block content %}
 
 <div>
-    <p>Set the pots of the countries.
-    <p>Set the pot to 0 to remove the country from the draw.
+    <p>Set the pot and genre of each country.
+    <p>Set the pot to 0 to remove the country from the draw. Set the
+    genre to 0 to leave it untagged.
 </div>
 
 <div class="error" id="error">
 </div>
 
+<style>
+    /* Three-column row: country name | pot | genre. */
+    #set-pots .grid {
+        grid-template-columns: 1fr auto auto;
+        align-items: center;
+        column-gap: 0.75em;
+    }
+    #set-pots .grid .col-header {
+        font-weight: bold;
+        text-align: center;
+    }
+    #set-pots input[type="number"] {
+        width: 5em;
+    }
+</style>
+
 <form id="set-pots" method="POST">
     <fieldset class="grid">
+        <span></span>
+        <span class="col-header">Pot</span>
+        <span class="col-header">Genre</span>
     {% for country in countries %}
-        <label for="{{country.id}}">{{country.name}}</label>
-        <input type="number" name="{{country.id}}" id="{{country.id}}"
+        <label for="pot_{{country.id}}">{{country.name}}</label>
+        <input type="number" name="pot_{{country.id}}" id="pot_{{country.id}}"
                 value="{{ country.pot if country.pot is not none else 0 }}" min="0">
+        <input type="number" name="genre_{{country.id}}" id="genre_{{country.id}}"
+                value="{{ country.genre if country.genre is not none else 0 }}" min="0">
     {% endfor %}
     </fieldset>
     <div>
-        <button type="submit">Set Pots</button>
+        <button type="submit">Save</button>
+    </div>
+</form>
+
+<hr>
+
+<form id="set-pots-json" method="POST"
+      action="{{ url_for('admin.set_pots_json', year=year) }}">
+    <h2>Bulk update via JSON</h2>
+    <p>Paste a JSON object of the form
+    <code>{"US": {"pot": 1, "genre": 1}, "RU": {"pot": 2, "genre": 3}, ...}</code>
+    to update every country at once. Countries omitted from the payload
+    will have their pot and genre cleared.</p>
+    <textarea name="payload" rows="12" cols="80"
+              placeholder='{"US": {"pot": 1, "genre": 1}, "RU": {"pot": 2, "genre": 3}}'></textarea>
+    <div>
+        <button type="submit">Apply JSON</button>
     </div>
 </form>
 

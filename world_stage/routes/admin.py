@@ -122,9 +122,12 @@ def _render_draw(year_id: int, label: str):
         """
         SELECT song.id AS song_id, song.title, song.entry_number,
                song.submitter_id AS submitter,
-               country.id AS cc, country.name, country.pot
+               country.id AS cc, country.name, country.pot, country.genre,
+               sl.language_id AS language
         FROM song
         JOIN country ON song.country_id = country.id
+        LEFT JOIN song_language sl
+               ON sl.song_id = song.id AND sl.priority = 0
         WHERE song.year_id = %s AND NOT song.is_placeholder
         ORDER BY country.name, song.entry_number
         """,
@@ -228,7 +231,8 @@ def draw_post(year: int):
                 """,
                     (song_id, show_data.id, i + 1),
                 )
-    except psycopg.IntegrityError:
+    except psycopg.IntegrityError as e:
+        print(e)
         return {"error": "Duplicate data"}, 400
 
     db.commit()
@@ -279,9 +283,31 @@ def draw_final(year: int, show: str):
     if not songs:
         return render_template("error.html", error="No show '{show}' found for {year}"), 404
 
+    # Genre is set per-country (not per-song) and isn't on the Country
+    # dataclass, so look it up separately and pass it as a {cc → genre}
+    # mapping to the template. Same idea for the per-song primary
+    # language ({song_id → language_id}).
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT id, genre FROM country WHERE id = ANY(%s)",
+        ([s.country.cc for s in songs],),
+    )
+    genre_by_cc = {row["id"]: row["genre"] for row in cursor.fetchall()}
+
+    cursor.execute(
+        """
+        SELECT song_id, language_id FROM song_language
+        WHERE song_id = ANY(%s) AND priority = 0
+        """,
+        ([s.id for s in songs],),
+    )
+    language_by_song = {row["song_id"]: row["language_id"] for row in cursor.fetchall()}
+
     return render_template(
         "admin/draw_individual.html",
         songs=songs,
+        genre_by_cc=genre_by_cc,
+        language_by_song=language_by_song,
         show=show,
         show_name=show_data.name,
         year=year,
@@ -922,7 +948,7 @@ def set_pots(year: int):
 
     cursor.execute(
         """
-        SELECT country.id, name, pot FROM song
+        SELECT country.id, name, pot, genre FROM song
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id
         WHERE year_id = %s AND year.host_id IS DISTINCT FROM country.id
@@ -944,25 +970,112 @@ def set_pots_post(year: int):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("UPDATE country SET pot = NULL")
-
-    for country_id, pot_str in request.form.items():
+    # Form fields are name-prefixed: ``pot_<country_id>`` and
+    # ``genre_<country_id>``. Both follow the same "0 → NULL" convention.
+    updates: dict[str, dict[str, int | None]] = {}
+    for key, value in request.form.items():
+        if key.startswith("pot_"):
+            field, country_id = "pot", key[len("pot_"):]
+        elif key.startswith("genre_"):
+            field, country_id = "genre", key[len("genre_"):]
+        else:
+            continue
         try:
-            pot: int | None = int(pot_str)
-            if pot == 0:
-                pot = None
+            parsed: int | None = int(value)
+            if parsed == 0:
+                parsed = None
         except ValueError:
             return render_template(
-                "error.html", error=f"Invalid priority value for country {country_id}"
+                "error.html",
+                error=f"Invalid {field} value for country {country_id}",
             ), 400
+        updates.setdefault(country_id, {})[field] = parsed
 
+    # Clear all pots/genres first so countries no longer in the form
+    # (e.g. removed from this year) are reset.
+    cursor.execute("UPDATE country SET pot = NULL, genre = NULL")
+
+    for country_id, fields in updates.items():
         cursor.execute(
             """
             UPDATE country
-            SET pot = %s
+            SET pot = %s, genre = %s
             WHERE id = %s
         """,
-            (pot, country_id),
+            (fields.get("pot"), fields.get("genre"), country_id),
+        )
+
+    db.commit()
+    return redirect(url_for("admin.set_pots", year=year))
+
+
+@bp.post("/manage/<int:year>/setpots/json")
+def set_pots_json(year: int):
+    """Bulk-update pots/genres from a single JSON payload of the form
+    ``{"US": {"pot": 1, "genre": 1}, "RU": {"pot": 2, "genre": 3}, ...}``.
+
+    Same conventions as the form-encoded endpoint: a value of 0 (or a
+    missing key) maps to NULL, and any country not listed in the payload
+    has its pot and genre cleared.
+    """
+    resp = verify_user()
+    if resp:
+        return render_template("error.html", error="Not an admin"), 401
+
+    # The payload may arrive as raw JSON in the request body or as a
+    # ``payload`` form field (used by the textarea on the page).
+    raw_payload: dict | None = None
+    if request.is_json:
+        raw_payload = request.get_json(silent=True)
+    else:
+        text = request.form.get("payload", "").strip()
+        if text:
+            try:
+                raw_payload = json.loads(text)
+            except json.JSONDecodeError as e:
+                return render_template("error.html", error=f"Invalid JSON: {e}"), 400
+
+    if raw_payload is None:
+        return render_template("error.html", error="No JSON payload provided"), 400
+    if not isinstance(raw_payload, dict):
+        return render_template(
+            "error.html", error="Top-level JSON value must be an object"
+        ), 400
+
+    def _coerce(label: str, country_id: str, value):
+        """Apply the same '0 / null → NULL' convention as the form path."""
+        if value is None:
+            return None
+        try:
+            n = int(value)
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid {label} for country {country_id}: {value!r}")
+        return None if n == 0 else n
+
+    # Validate everything before touching the database so a bad payload
+    # doesn't half-apply.
+    parsed: dict[str, tuple[int | None, int | None]] = {}
+    for country_id, fields in raw_payload.items():
+        if not isinstance(fields, dict):
+            return render_template(
+                "error.html",
+                error=f"Expected object for country {country_id}",
+            ), 400
+        try:
+            pot = _coerce("pot", country_id, fields.get("pot"))
+            genre = _coerce("genre", country_id, fields.get("genre"))
+        except ValueError as e:
+            return render_template("error.html", error=str(e)), 400
+        parsed[country_id] = (pot, genre)
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("UPDATE country SET pot = NULL, genre = NULL")
+    for country_id, (pot, genre) in parsed.items():
+        cursor.execute(
+            "UPDATE country SET pot = %s, genre = %s WHERE id = %s",
+            (pot, genre, country_id),
         )
 
     db.commit()

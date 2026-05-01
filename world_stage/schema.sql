@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS country (
     name text UNIQUE COLLATE public.nocase,
     is_participating boolean,
     pot smallint,
+    genre smallint,
     available_from smallint DEFAULT 0,
     available_until smallint DEFAULT 9999,
     priority integer,

@@ -31,6 +31,8 @@
             <div class="show-country item transparent"
                  data-id=""
                  data-code="XX"
+                 data-genre=""
+                 data-language=""
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
@@ -56,6 +58,8 @@
             <div class="pot-item item"
                  data-id="{{ entry.song_id }}"
                  data-code="{{ entry.cc }}"
+                 data-genre="{{ entry.genre if entry.genre is not none else '' }}"
+                 data-language="{{ entry.language if entry.language is not none else '' }}"
                  data-submitter="{{ entry.submitter }}">
                 <div class="flag-container">{{ flag(entry.cc, 24, entry.name) }}</div>
                 <div class="country-name">{{ entry.name }}</div>

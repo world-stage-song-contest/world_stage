@@ -24,3 +24,5 @@ import_data/
 *.br
 *.gzip
 *.zstd
+
+uv.lock

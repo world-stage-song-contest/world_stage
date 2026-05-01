@@ -42,6 +42,8 @@
             <div class="show-country item transparent"
                  data-id=""
                  data-code="XX"
+                 data-genre=""
+                 data-language=""
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
@@ -65,6 +67,8 @@
             <div class="pot-item item"
                  data-id="{{ song.id }}"
                  data-code="{{ song.country.cc }}"
+                 data-genre="{{ genre_by_cc.get(song.country.cc) if genre_by_cc.get(song.country.cc) is not none else '' }}"
+                 data-language="{{ language_by_song.get(song.id) if language_by_song.get(song.id) is not none else '' }}"
                  data-index="{{ loop.index0 }}"
                  data-submitter="{{ song.submitter_id }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
