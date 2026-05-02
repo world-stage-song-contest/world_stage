@@ -571,6 +571,14 @@ h1 {
     padding: 0.5em;
 }
 
+/* Soft salmon highlight for the Vote tile when the signed-in user still
+   has an open voting they haven't cast a ballot in yet. Keeps the
+   default border and text colour so it doesn't look out of place. */
+.card.card.card-pending-vote {
+    background-color: #f5a99c;
+    color: #1a1a1a;
+}
+
 .card img {
     display: block;
     flex-shrink: 1;

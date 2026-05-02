@@ -40,7 +40,32 @@ bp = Blueprint("main", __name__, url_prefix="/")
 
 @bp.get("/")
 def home():
-    return render_template("index.html", message="Welcome to the index page!")
+    # Highlight the Vote tile when the signed-in user has at least one
+    # open voting they haven't cast a ballot in yet — a nudge to
+    # finish what they started. Anonymous visitors don't get the nudge
+    # because there's no per-user vote history to check against.
+    has_pending_vote = False
+    session_id = request.cookies.get("session")
+    user = get_user_id_from_session(session_id) if session_id else None
+    if user:
+        user_id = user[0]
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            SELECT 1 FROM show
+            WHERE voting_opens <= CURRENT_TIMESTAMP
+              AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
+              AND id NOT IN (
+                  SELECT show_id FROM vote_set WHERE voter_id = %s
+              )
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        has_pending_vote = cursor.fetchone() is not None
+
+    return render_template("index.html", has_pending_vote=has_pending_vote)
 
 
 @bp.get("/favicon.ico")
