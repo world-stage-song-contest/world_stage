@@ -2,10 +2,17 @@ let nTop = 0;
 let nSecondChance = 0;
 let nSpecial = 0;
 
+// Each entry is uniquely keyed by ``<cc>-<entry_number>`` — country code
+// alone isn't unique on specials, where the same country can submit
+// several entries.
+function entryKey(country) {
+    return `${country.cc}-${country.entry_number ?? 1}`;
+}
+
 let revealOrder = {
-    /** @type {Array<string>} */
+    /** @type {Array<[object, boolean]>} */
     dtf: [],
-    /** @type {Array<string>} */
+    /** @type {Array<[object, boolean]>} */
     sc: [],
 
     data: function() {
@@ -13,9 +20,10 @@ let revealOrder = {
     },
 
     type: function(country) {
-        if (this.dtf.some(v => v[0].cc == country.cc)) {
+        const key = entryKey(country);
+        if (this.dtf.some(v => entryKey(v[0]) === key)) {
             return "direct-to-final";
-        } else if (this.sc.some(v => v[0].cc == country.cc)) {
+        } else if (this.sc.some(v => entryKey(v[0]) === key)) {
             return "second-chance";
         } else {
             return "non-qualifier";
@@ -39,8 +47,8 @@ function swapReveal(type, a, b) {
     }
 
     const arr = revealOrder[type];
-    const indexA = arr.findIndex(v => v[0].cc == a);
-    const indexB = arr.findIndex(v => v[0].cc == b);
+    const indexA = arr.findIndex(v => entryKey(v[0]) === a);
+    const indexB = arr.findIndex(v => entryKey(v[0]) === b);
     console.log(`Swapping ${a} (${indexA}) with ${b} (${indexB})`);
     if (indexA === -1 || indexB === -1) return;
     const vA = arr[indexA];
@@ -211,7 +219,8 @@ async function putInPlace(envelope) {
 }
 
 function createEnvelope(n, country, isSecondChance) {
-    const name = country.country;
+    const title = country.title;
+    const countryName = country.country;
     const code = country.cc;
     const id = country.id;
 
@@ -230,19 +239,26 @@ function createEnvelope(n, country, isSecondChance) {
         const flag = document.createElement("img");
         flag.src = `/flag/${code}.svg?t=rect&s=54`;
         flag.classList.add("card-flag");
+        flag.title = countryName;
         front.appendChild(flag);
 
-        const country = document.createElement("h2");
-        country.textContent = name;
-        country.classList.add("card-country");
-        front.appendChild(country);
+        // Card displays the song title rather than the country name —
+        // the flag carries the country identity.
+        const titleEl = document.createElement("h2");
+        titleEl.textContent = title;
+        titleEl.title = title;
+        titleEl.classList.add("card-title");
+        front.appendChild(titleEl);
 
         return card;
     }
 
     const envelope = document.createElement("div");
     envelope.classList.add("envelope", isSecondChance ? "second-chance" : "direct-to-final");
-    envelope.dataset.id = code;
+    // Composite key — uniquely identifies the entry on specials where a
+    // country can have multiple submissions.
+    envelope.dataset.id = entryKey(country);
+    envelope.dataset.cc = code;
     envelope.dataset.song = id;
 
     envelope.onclick = async () => {
@@ -284,16 +300,21 @@ function createEnvelope(n, country, isSecondChance) {
 function createCountry(country, countryClass) {
     const countryEl = document.createElement("div");
     countryEl.classList.add("country", countryClass);
-    countryEl.dataset.id = country.cc;
+    countryEl.dataset.id = entryKey(country);
+    countryEl.dataset.cc = country.cc;
 
     const flag = document.createElement("img");
     flag.classList.add("reveal-flag");
     flag.src = `/flag/${country.cc}.svg?t=square&s=24`;
+    flag.title = country.country;
     countryEl.appendChild(flag);
 
+    // Show the song title; the flag identifies the country. ``title``
+    // attribute exposes the full text on hover when truncated.
     const heading = document.createElement("h2");
-    heading.classList.add("reveal-country");
-    heading.textContent = country.country;
+    heading.classList.add("reveal-title");
+    heading.textContent = country.title;
+    heading.title = country.title;
     countryEl.appendChild(heading);
 
     /*

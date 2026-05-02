@@ -79,6 +79,27 @@
     margin: 0;
 }
 
+/* Song title on the front of the envelope card. The card itself is
+   180px wide (and grows 2× during the reveal animation, so visually up
+   to ~360px), but a long title still needs to be clamped — wrap to two
+   lines and ellipsize anything past that. */
+.card-title {
+    margin: 0;
+    padding: 0 4px;
+    box-sizing: border-box;
+    width: 100%;
+    text-align: center;
+    font-size: 0.85em;
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+}
+
 .card-front, .card-back {
     width: 100%;
     height: 100%;

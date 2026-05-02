@@ -96,6 +96,19 @@
     flex: 1;
 }
 
+/* Song title in the reveal row — the row is fixed-width (300px) so a
+   long title needs to truncate cleanly. */
+.country .reveal-title {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+    font-size: 0.95em;
+}
+
 .country .reveal-ro {
     width: 4ch;
     text-align: right;
