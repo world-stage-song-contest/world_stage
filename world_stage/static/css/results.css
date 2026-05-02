@@ -83,3 +83,15 @@ td, th {
 td.extra-visible {
     opacity: 1;
 }
+
+/* Cap artist/title cells so a runaway-long song title or artist name
+   doesn't blow out the table width — overflow turns into an ellipsis
+   and the full text is exposed via the title attribute on hover. */
+.col-truncate {
+    display: inline-block;
+    max-width: 45ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}

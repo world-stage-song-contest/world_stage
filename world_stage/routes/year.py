@@ -272,6 +272,7 @@ def special_results(short_name: str, show: str):
         short_name=show_data.short_name,
         show_id=show_data.id,
         year=short_name,
+        year_id=_year,
         participants=participants,
         voters=voter_count,
         special=short_name,
@@ -1095,6 +1096,7 @@ def results(year: int, show: str):
         short_name=show_data.short_name,
         show_id=show_data.id,
         year=year,
+        year_id=_year,
         participants=participants,
         voters=voter_count,
     )

@@ -358,7 +358,7 @@ wheels = [
 
 [[package]]
 name = "world-stage"
-version = "3.7.4"
+version = "3.7.10"
 source = { editable = "." }
 dependencies = [
     { name = "flask" },

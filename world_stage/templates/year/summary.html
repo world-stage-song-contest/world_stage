@@ -79,20 +79,20 @@
                 class="{{ class }} {{ qclass }} {{ 'unrevealed' if song.hidden else '' }}">
                 <th class="number">{{ ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
-                <td>{{ song.artist }}</td>
+                <td><span class="col-truncate" title="{{ song.artist }}">{{ song.artist }}</span></td>
                 {% if song.hidden %}
-                <td>{{ song.title }}</td>
+                <td><span class="col-truncate" title="{{ song.title }}">{{ song.title }}</span></td>
                 {% elif access in ('partial', 'full') %}
                 {% if special %}
-                <td><a href="{{ url_for('year.special_song_votes', short_name=special, show=show, country_code=song.country.cc.lower(), entry_number=song.entry_number) }}">{{ song.title }}</a></td>
+                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('year.special_song_votes', short_name=special, show=show, country_code=song.country.cc.lower(), entry_number=song.entry_number) }}">{{ song.title }}</a></td>
                 {% else %}
-                <td><a href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower()) }}">{{ song.title }}</a></td>
+                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower()) }}">{{ song.title }}</a></td>
                 {% endif %}
                 {% else %}
                 {% if special %}
-                <td><a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special, entry_number=song.entry_number) }}">{{ song.title }}</a></td>
+                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special, entry_number=song.entry_number) }}">{{ song.title }}</a></td>
                 {% else %}
-                <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=year) }}">{{ song.title }}</a></td>
+                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('country.details', code=song.country.cc.lower(), year=year) }}">{{ song.title }}</a></td>
                 {% endif %}
                 {% endif %}
             {% if access != 'draw' %}
@@ -113,7 +113,7 @@
 </div>
 <fieldset class="grid">
     <legend>Recap</legend>
-    {% set url = "https://media.world-stage.org/recaps/" ~ year ~ short_name ~ ".mov" %}
+    {% set url = "https://media.world-stage.org/recaps/%04d%s.mov" | format(year_id|abs, short_name) %}
     <video width="560" height="315" controls><source src="{{ url }}" type="video/mp4">Your browser does not support the video tag.</video>
 </fieldset>
 {% endif %}
