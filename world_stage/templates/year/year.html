@@ -19,6 +19,14 @@
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show.short_name)}}"> {{ show.short_name|upper }}</a>
     {% endif %}
     {% endfor %}
+    {% if can_view_voters %}
+    <span class="nav-separator"></span>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_year_voters', short_name=special) }}">Voters</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.year_voters', year=year) }}">Voters</a>
+    {% endif %}
+    {% endif %}
 {% endblock %}
 {% block content %}
 {% if not is_closed %}

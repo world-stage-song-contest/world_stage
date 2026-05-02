@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Voter participation: {{ special_name or year }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
+    <script src="/static/js/sort-table.js"></script>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('year.index') }}">Years</a>
+    <span class="nav-separator"></span>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">Overview</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">Overview</a>
+    {% endif %}
+{% endblock %}
+{% block content %}
+<style>
+    .voter-table {
+        border-collapse: collapse;
+    }
+    .voter-table th, .voter-table td {
+        padding: 0.25em 0.6em;
+        border: 1px solid var(--foreground1);
+        text-align: center;
+    }
+    .voter-table th:first-child, .voter-table td:first-child {
+        text-align: left;
+    }
+    /* Cell-state classes — applied to both the voter-table cells and
+       the legend swatches. */
+    .voted { color: var(--success, #2a8a3a); font-weight: bold; }
+    .voted-entry {
+        color: var(--success, #2a8a3a);
+        font-weight: bold;
+        background: color-mix(in srgb, var(--success, #2a8a3a) 18%, transparent);
+    }
+    .missed {
+        color: var(--error, #b03030);
+        font-weight: bold;
+        background: color-mix(in srgb, var(--error, #b03030) 12%, transparent);
+    }
+    .voter-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1em;
+        margin: 0.5em 0 1em;
+        font-size: 0.9em;
+    }
+    .voter-legend .swatch {
+        display: inline-block;
+        width: 1.2em;
+        text-align: center;
+        font-weight: bold;
+        margin-right: 0.3em;
+    }
+</style>
+
+<h1>Voter participation: {{ special_name or year }}</h1>
+
+{% if voter_rows %}
+<div class="voter-legend">
+    <span><span class="swatch voted-entry">&check;</span>Voted (had a song in the show)</span>
+    <span><span class="swatch voted">&check;</span>Voted (no entry in the show)</span>
+    <span><span class="swatch missed">&times;</span>Had a song but didn't vote</span>
+</div>
+<table class="voter-table sortable">
+    <thead>
+        <tr>
+            <th>Username</th>
+            {% for sn in voter_show_names %}
+            <th>{{ sn|upper }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in voter_rows %}
+        <tr>
+            <td>{{ row.username }}</td>
+            {% for sn in voter_show_names %}
+                {% set state = row.cells[sn] %}
+                {% if state == 'voted-entry' %}
+                <td class="voted-entry" title="Voted; had a song in this show">&check;</td>
+                {% elif state == 'voted' %}
+                <td class="voted" title="Voted; no entry in this show">&check;</td>
+                {% elif state == 'missed' %}
+                <td class="missed" title="Had an entry but didn't vote">&times;</td>
+                {% else %}
+                <td></td>
+                {% endif %}
+            {% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No voter activity recorded yet.</p>
+{% endif %}
+
+{% endblock %}

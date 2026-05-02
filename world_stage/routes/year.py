@@ -63,6 +63,109 @@ def resolve_special(short_name: str) -> dict | None:
     return cursor.fetchone()
 
 
+def get_voter_participation(
+    year_id: int, allowed_shows: list[str] | None = None
+) -> tuple[list[str], list[dict]]:
+    """Cross-show participation table for a year.
+
+    Returns ``(show_short_names, rows)`` where each row is
+    ``{"username": str, "cells": {short_name: state}}`` and ``state`` is
+    one of:
+
+    - ``"voted-entry"`` — voted AND had a song in that show.
+    - ``"voted"`` — voted but had no song in that show.
+    - ``"missed"`` — had a song in that show but didn't vote.
+    - ``"none"`` — neither voted nor had an entry.
+
+    A user is included if they voted in (or had a non-placeholder entry
+    in) any of the included shows. Rows are sorted alphabetically by
+    username (case-insensitive).
+
+    ``allowed_shows`` optionally restricts the table to a specific subset
+    of show short_names — used to hide shows whose results aren't
+    published yet from non-admin viewers. ``None`` means include every
+    show in the year.
+    """
+    db = get_db()
+    cursor = db.cursor()
+
+    if allowed_shows is None:
+        cursor.execute(
+            "SELECT short_name FROM show WHERE year_id = %s ORDER BY date, id",
+            (year_id,),
+        )
+        short_names = [row["short_name"] for row in cursor.fetchall()]
+    else:
+        # Preserve the chronological order returned by the canonical query
+        # while honouring the caller's allow-list.
+        cursor.execute(
+            "SELECT short_name FROM show WHERE year_id = %s ORDER BY date, id",
+            (year_id,),
+        )
+        allowed_set = set(allowed_shows)
+        short_names = [
+            row["short_name"]
+            for row in cursor.fetchall()
+            if row["short_name"] in allowed_set
+        ]
+
+    if not short_names:
+        return [], []
+
+    cursor.execute(
+        """
+        SELECT account.username, show.short_name
+        FROM vote_set
+        JOIN show ON vote_set.show_id = show.id
+        JOIN account ON vote_set.voter_id = account.id
+        WHERE show.year_id = %s AND show.short_name = ANY(%s)
+        """,
+        (year_id, short_names),
+    )
+    voted: set[tuple[str, str]] = {
+        (row["username"], row["short_name"]) for row in cursor.fetchall()
+    }
+
+    cursor.execute(
+        """
+        SELECT DISTINCT account.username, show.short_name
+        FROM song
+        JOIN song_show ON song_show.song_id = song.id
+        JOIN show ON song_show.show_id = show.id
+        JOIN account ON song.submitter_id = account.id
+        WHERE show.year_id = %s AND show.short_name = ANY(%s)
+          AND NOT song.is_placeholder
+        """,
+        (year_id, short_names),
+    )
+    has_entry: set[tuple[str, str]] = {
+        (row["username"], row["short_name"]) for row in cursor.fetchall()
+    }
+
+    usernames = sorted(
+        {u for u, _ in voted} | {u for u, _ in has_entry},
+        key=str.lower,
+    )
+
+    rows: list[dict] = []
+    for username in usernames:
+        cells = {}
+        for sn in short_names:
+            user_voted = (username, sn) in voted
+            user_entry = (username, sn) in has_entry
+            if user_voted and user_entry:
+                cells[sn] = "voted-entry"
+            elif user_voted:
+                cells[sn] = "voted"
+            elif user_entry:
+                cells[sn] = "missed"
+            else:
+                cells[sn] = "none"
+        rows.append({"username": username, "cells": cells})
+
+    return short_names, rows
+
+
 def get_other_shows(year: int, exclude_show: str | None) -> list[str]:
     db = get_db()
     cursor = db.cursor()
@@ -159,6 +262,18 @@ def special(short_name: str):
         )
         sf_numbers = {row["song_id"]: row["short_name"] for row in cursor.fetchall()}
 
+    session_id = request.cookies.get("session")
+    permissions = get_user_role_from_session(session_id)
+    if permissions.can_view_restricted:
+        can_view_voters = True
+    else:
+        cursor.execute(
+            "SELECT 1 FROM show "
+            "WHERE year_id = %s AND status IN ('partial', 'full') LIMIT 1",
+            (_year,),
+        )
+        can_view_voters = cursor.fetchone() is not None
+
     return render_template(
         "year/year.html",
         year=short_name,
@@ -174,8 +289,80 @@ def special(short_name: str):
         has_sc=has_sc,
         has_sf=has_sf,
         sf_numbers=sf_numbers,
+        can_view_voters=can_view_voters,
         special=short_name,
         special_name=special_year["special_name"],
+    )
+
+
+def _render_year_voters(year_id: int, year_label: str, special_short: str | None, special_name: str | None):
+    """Shared body for the regular and special year-voters pages.
+
+    Visibility:
+    - Admins (``can_view_restricted``) always see every show in the year.
+    - Everyone else only sees shows whose results have been published
+      (``status`` is ``partial`` or ``full``). If no show in the year has
+      reached that level yet, the page returns an error rather than a
+      blank table.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT status FROM year WHERE id = %s", (year_id,))
+    year_row = cursor.fetchone()
+    if not year_row:
+        return render_template("error.html", error="Year not found"), 404
+
+    is_closed = year_row["status"] == "closed"
+
+    session_id = request.cookies.get("session")
+    permissions = get_user_role_from_session(session_id)
+
+    allowed_shows: list[str] | None
+    if permissions.can_view_restricted:
+        allowed_shows = None
+    else:
+        cursor.execute(
+            """
+            SELECT short_name FROM show
+            WHERE year_id = %s AND status IN ('partial', 'full')
+            ORDER BY date, id
+            """,
+            (year_id,),
+        )
+        allowed_shows = [row["short_name"] for row in cursor.fetchall()]
+        if not allowed_shows:
+            return render_template(
+                "error.html",
+                error="No shows in this year have published results yet",
+            ), 403
+
+    show_short_names, rows = get_voter_participation(year_id, allowed_shows)
+    return render_template(
+        "year/voters_overview.html",
+        year=year_label,
+        special=special_short,
+        special_name=special_name,
+        is_closed=is_closed,
+        voter_show_names=show_short_names,
+        voter_rows=rows,
+    )
+
+
+@bp.get("/<int:year>/voters")
+def year_voters(year: int):
+    return _render_year_voters(year, str(year), None, None)
+
+
+@bp.get("/special/<short_name>/voters")
+def special_year_voters(short_name: str):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template("error.html", error="Special not found"), 404
+    return _render_year_voters(
+        special_year["id"],
+        short_name,
+        short_name,
+        special_year["special_name"],
     )
 
 
@@ -989,6 +1176,18 @@ def year(year: int):
         )
         sf_numbers = {row["song_id"]: row["short_name"] for row in cursor.fetchall()}
 
+    session_id = request.cookies.get("session")
+    permissions = get_user_role_from_session(session_id)
+    if permissions.can_view_restricted:
+        can_view_voters = True
+    else:
+        cursor.execute(
+            "SELECT 1 FROM show "
+            "WHERE year_id = %s AND status IN ('partial', 'full') LIMIT 1",
+            (_year,),
+        )
+        can_view_voters = cursor.fetchone() is not None
+
     return render_template(
         "year/year.html",
         year=year,
@@ -1004,6 +1203,7 @@ def year(year: int):
         has_sc=has_sc,
         has_sf=has_sf,
         sf_numbers=sf_numbers,
+        can_view_voters=can_view_voters,
     )
 
 
