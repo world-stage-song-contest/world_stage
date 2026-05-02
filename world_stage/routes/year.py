@@ -1632,6 +1632,10 @@ def qualifiers_scores(year: int, show: str):
         "dtf": show_data.dtf,
         "sc": show_data.sc or 0,
         "special": show_data.special or 0,
+        # Specials may have multiple entries per country, so the reveal
+        # uses the song title for disambiguation. Regular years stick with
+        # country names.
+        "is_special": (show_data.year or 0) < 0,
     }
 
 

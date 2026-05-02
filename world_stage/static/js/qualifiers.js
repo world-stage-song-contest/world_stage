@@ -69,6 +69,9 @@ function swapReveal(type, a, b) {
 }
 
 let allCountries = {};
+// Specials show the song title (multiple entries per country), regular
+// years show the country name.
+let isSpecial = false;
 
 let clicked = false;
 
@@ -78,6 +81,7 @@ async function loadVotes(year, show) {
     nTop = json.dtf;
     nSecondChance = json.sc;
     nSpecial = json.special;
+    isSpecial = !!json.is_special;
     allCountries = json.countries;
     for (const country of json.reveal_order.dtf) {
         revealOrder.dtf.push([country, false]);
@@ -85,6 +89,17 @@ async function loadVotes(year, show) {
     for (const country of json.reveal_order.sc) {
         revealOrder.sc.push([country, true]);
     }
+}
+
+/**
+ * Label shown on the envelope card / reveal row. Specials use the song
+ * title (the country can have multiple entries); regular years use the
+ * country name.
+ * @param {object} country
+ * @returns {string}
+ */
+function entryLabel(country) {
+    return isSpecial ? country.title : country.country;
 }
 
 /**
@@ -219,7 +234,7 @@ async function putInPlace(envelope) {
 }
 
 function createEnvelope(n, country, isSecondChance) {
-    const title = country.title;
+    const label = entryLabel(country);
     const countryName = country.country;
     const code = country.cc;
     const id = country.id;
@@ -242,12 +257,14 @@ function createEnvelope(n, country, isSecondChance) {
         flag.title = countryName;
         front.appendChild(flag);
 
-        // Card displays the song title rather than the country name —
-        // the flag carries the country identity.
+        // Specials display the song title (multiple entries per country
+        // would otherwise be indistinguishable); regular years display
+        // the country name. The flag's hover tooltip always carries the
+        // country name.
         const titleEl = document.createElement("h2");
-        titleEl.textContent = title;
-        titleEl.title = title;
-        titleEl.classList.add("card-title");
+        titleEl.textContent = label;
+        titleEl.title = label;
+        titleEl.classList.add(isSpecial ? "card-title" : "card-country");
         front.appendChild(titleEl);
 
         return card;
@@ -309,12 +326,14 @@ function createCountry(country, countryClass) {
     flag.title = country.country;
     countryEl.appendChild(flag);
 
-    // Show the song title; the flag identifies the country. ``title``
-    // attribute exposes the full text on hover when truncated.
+    // Specials use the song title (a single country can have multiple
+    // entries); regular years use the country name. ``title`` attribute
+    // exposes the full text on hover when truncated.
+    const label = entryLabel(country);
     const heading = document.createElement("h2");
-    heading.classList.add("reveal-title");
-    heading.textContent = country.title;
-    heading.title = country.title;
+    heading.classList.add(isSpecial ? "reveal-title" : "reveal-country");
+    heading.textContent = label;
+    heading.title = label;
     countryEl.appendChild(heading);
 
     /*
