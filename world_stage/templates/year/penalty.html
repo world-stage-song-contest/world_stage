@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Penalty: {{ special_name or year }} {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
+{% endblock %}
+{% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results summary</a>
+    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results summary</a>
+    <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
+    {% endif %}
+{% endblock %}
+{% block content %}
+<style>
+    .penalty-table {
+        border-collapse: collapse;
+        margin-top: 1em;
+    }
+    .penalty-table th, .penalty-table td {
+        padding: 0.35em 0.7em;
+        border: 1px solid var(--foreground1);
+        text-align: left;
+    }
+    .penalty-table td.center { text-align: center; }
+    .penalty-actions {
+        display: flex;
+        gap: 0.6em;
+        margin-top: 0.8em;
+        align-items: center;
+    }
+    #penalty-status {
+        font-size: 0.95em;
+        opacity: 0.8;
+    }
+</style>
+
+<h1>Apply penalty: {{ special_name or year }} {{ show_name }}</h1>
+<p>
+    Each checked submitter will have <strong>{{ max_point }}</strong> points
+    deducted from their entry's score in this show. Unchecking a row that
+    was previously penalised clears the penalty.
+</p>
+
+{% if candidates %}
+<form id="penalty-form">
+    <table class="penalty-table">
+        <thead>
+            <tr>
+                <th>Penalise?</th>
+                <th>Country</th>
+                <th>Submitter</th>
+                <th>Artist</th>
+                <th>Title</th>
+                <th>Current penalty</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in candidates %}
+            <tr>
+                <td class="center">
+                    <input type="checkbox" name="song_id" value="{{ row.song_id }}"
+                           {% if row.penalty and row.penalty > 0 %}checked{% endif %}>
+                </td>
+                <td>{{ row.country }}</td>
+                <td>{{ row.submitter }}</td>
+                <td>{{ row.artist or '' }}</td>
+                <td>{{ row.title or '' }}</td>
+                <td class="center">{{ row.penalty or 0 }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div class="penalty-actions">
+        <button type="submit">Apply</button>
+        <span id="penalty-status"></span>
+    </div>
+</form>
+
+<script>
+    document.getElementById('penalty-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const status = document.getElementById('penalty-status');
+        const ids = [...document.querySelectorAll('input[name="song_id"]:checked')]
+            .map(el => parseInt(el.value, 10));
+        status.textContent = 'Saving…';
+        try {
+            const res = await fetch(window.location.pathname, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ song_ids: ids }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                status.textContent = 'Error: ' + (data.error || res.statusText);
+                return;
+            }
+            status.textContent = `Applied to ${data.applied}, cleared ${data.cleared}.`;
+        } catch (err) {
+            status.textContent = 'Network error: ' + err.message;
+        }
+    });
+</script>
+{% else %}
+<p>Every submitter with an entry in this show has voted — there's nobody
+to penalise.</p>
+{% endif %}
+
+{% endblock %}

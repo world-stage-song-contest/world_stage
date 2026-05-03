@@ -95,3 +95,14 @@ td.extra-visible {
     white-space: nowrap;
     vertical-align: middle;
 }
+
+/* Penalty applied to a song's show score — underline so it's visible at
+   a glance, but keep the value itself unobtrusive. The full explanation
+   is in the cell's title tooltip. */
+.has-penalty {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 2px;
+    cursor: help;
+}

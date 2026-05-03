@@ -24,10 +24,22 @@
     <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
     <a class="nav-item" href="{{ url_for('year.special_scoreboard', short_name=special, show=show) }}">Scoreboard</a>
     <a class="nav-item" href="{{ url_for('year.special_predictions', short_name=special, show=show) }}">Predictions</a>
+    {% if can_apply_penalty %}
+    {% if has_qualifiers %}
+    <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifiers</a>
+    {% endif %}
+    <a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>
+    {% endif %}
     {% else %}
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
     <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
     <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=show) }}">Predictions</a>
+    {% if can_apply_penalty %}
+    {% if has_qualifiers %}
+    <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifiers</a>
+    {% endif %}
+    <a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>
+    {% endif %}
     {% endif %}
 {% endblock %}
 {% block content %}
@@ -97,8 +109,11 @@
                 {% endif %}
             {% if access != 'draw' %}
                 <td class="number extra-visible">{{ place }}</td>
-                <td class="number"
+                <td class="number{% if song.vote_data.penalty %} has-penalty{% endif %}"
                 {%if song.hidden %}onclick="revealPoints(event, this)"{% endif %}
+                {% if song.vote_data.penalty %}
+                title="Penalty of {{ song.vote_data.penalty }} points applied"
+                {% endif %}
                 >{{ song.vote_data.sum }}</td>
                 <td class="number percent">{{ song.vote_data.pct() }}</td>
                 <td class="number">{{ song.vote_data.count }}</td>

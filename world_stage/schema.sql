@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS song_show (
     show_id bigint REFERENCES show (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     running_order smallint,
     qualifier_order smallint,
+    penalty integer NOT NULL DEFAULT 0,
     UNIQUE(song_id, show_id)
 );
 
@@ -362,7 +363,11 @@ BEGIN
     si.short_name,
     si.year_id,
     si.dtf, si.sc, si.special,
-    COALESCE(SUM(pc.score * pc.cnt), 0) AS total_points,
+    GREATEST(
+    COALESCE(SUM(pc.score * pc.cnt), 0) - COALESCE(ss.penalty, 0),
+    0
+    ) AS total_points,
+    COALESCE(ss.penalty, 0) AS penalty_points,
     COALESCE(SUM(pc.cnt), 0) AS total_votes_received,
     COALESCE(
     JSONB_OBJECT_AGG(pc.score::text, pc.cnt ORDER BY pc.score DESC)
@@ -401,7 +406,7 @@ BEGIN
     LEFT JOIN voters_by_country vbc ON vbc.country_id = s.country_id
     WHERE c.is_participating
     GROUP BY
-    s.country_id, c.name, si.id, s.id, ss.running_order,
+    s.country_id, c.name, si.id, s.id, ss.running_order, ss.penalty,
     si.show_name, si.short_name, si.year_id,
     si.dtf, si.sc, si.special, vbc.cnt
     ),
@@ -493,6 +498,19 @@ BEGIN
     v_show_id := COALESCE(NEW.show_id, OLD.show_id);
     IF v_show_id IS NOT NULL THEN
     PERFORM refresh_show_results(v_show_id);
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION trigger_refresh_show_results_from_song_show()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_show_id bigint;
+BEGIN
+    v_show_id := COALESCE(NEW.show_id, OLD.show_id);
+    IF v_show_id IS NOT NULL THEN
+        PERFORM refresh_show_results(v_show_id);
     END IF;
     RETURN COALESCE(NEW, OLD);
 END;
@@ -1537,6 +1555,13 @@ CREATE TRIGGER trg_refresh_show_results_on_vote_set
     AFTER INSERT OR UPDATE OR DELETE ON vote_set
     FOR EACH ROW
     EXECUTE FUNCTION trigger_refresh_show_results_from_vote_set();
+
+DROP TRIGGER IF EXISTS song_show_penalty_refresh ON song_show;
+CREATE TRIGGER song_show_penalty_refresh
+    AFTER UPDATE OF penalty ON song_show
+    FOR EACH ROW
+    WHEN (OLD.penalty IS DISTINCT FROM NEW.penalty)
+    EXECUTE FUNCTION trigger_refresh_show_results_from_song_show();
 
 DROP TRIGGER IF EXISTS trg_compute_country_year_results ON year;
 CREATE TRIGGER trg_compute_country_year_results

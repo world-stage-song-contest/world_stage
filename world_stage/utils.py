@@ -273,6 +273,10 @@ class VoteData:
     show_voters: int | None
     sum: int = 0
     count: int = 0
+    # Penalty subtracted from the raw score for this song in this show
+    # (e.g. submitter failed to vote). ``sum`` already reflects the
+    # post-penalty total; this field is just for display.
+    penalty: int = 0
     pts: dict[int, int] = field(default_factory=lambda: defaultdict(int))
 
     def __lt__(self, other: object) -> bool:
@@ -832,10 +836,12 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
 
     cursor.execute(
         """
-        SELECT total_points, total_votes_received, point_distribution,
-               max_pts, total_voters
-        FROM country_show_results
-        WHERE song_id = %s AND show_id = %s
+        SELECT csr.total_points, csr.total_votes_received, csr.point_distribution,
+               csr.max_pts, csr.total_voters,
+               COALESCE(ss.penalty, 0) AS penalty
+        FROM country_show_results csr
+        LEFT JOIN song_show ss ON ss.song_id = csr.song_id AND ss.show_id = csr.show_id
+        WHERE csr.song_id = %s AND csr.show_id = %s
     """,
         (song_id, show_id),
     )
@@ -850,6 +856,7 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         )
         res.sum = row["total_points"]
         res.count = row["total_votes_received"]
+        res.penalty = row["penalty"] or 0
         for pt_str, cnt in (row["point_distribution"] or {}).items():
             res.pts[int(pt_str)] = cnt
         return res

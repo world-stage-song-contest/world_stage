@@ -23,10 +23,22 @@
     <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.special_scoreboard', short_name=special, show=show) }}">Scoreboard</a>
     <a class="nav-item" href="{{ url_for('year.special_predictions', short_name=special, show=show) }}">Predictions</a>
+    {% if can_apply_penalty %}
+    {% if has_qualifiers %}
+    <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifiers</a>
+    {% endif %}
+    <a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>
+    {% endif %}
     {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
     <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=show) }}">Predictions</a>
+    {% if can_apply_penalty %}
+    {% if has_qualifiers %}
+    <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifiers</a>
+    {% endif %}
+    <a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>
+    {% endif %}
     {% endif %}
 {% endblock %}
 {% block content %}
@@ -69,7 +81,12 @@
                 <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower()) }}">{{ song.title }}</a></td>
                 {% endif %}
                 <td class="number">{{ loop.index }}</td>
-                <td class="number" data-value="{{ loop.revindex }}">{{ song.vote_data.sum }}</td>
+                <td class="number{% if song.vote_data.penalty %} has-penalty{% endif %}"
+                    data-value="{{ loop.revindex }}"
+                    {% if song.vote_data.penalty %}
+                    title="Penalty of {{ song.vote_data.penalty }} points applied"
+                    {% endif %}
+                >{{ song.vote_data.sum }}</td>
             {% for voter in results.keys() %}
             {% set pts = results[voter].get(song.id, 0) %}
                 <td class="number">{{ pts if pts != 0 else '' }}</td>
