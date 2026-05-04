@@ -683,6 +683,7 @@ def special_scores(short_name: str, show: str):
         "vote_order": vote_order,
         "associations": voter_assoc,
         "user_songs": user_songs,
+        "penalties": _show_penalties(show_data.id),
     }
 
 
@@ -1650,6 +1651,7 @@ def scores(year: int, show: str):
         "vote_order": vote_order,
         "associations": voter_assoc,
         "user_songs": user_songs,
+        "penalties": _show_penalties(show_data.id),
     }
 
 
@@ -2399,6 +2401,17 @@ def _penalty_candidates(year_id: int, show_id: int) -> list[dict]:
         (show_id, show_id),
     )
     return cursor.fetchall()
+
+
+def _show_penalties(show_id: int) -> dict[int, int]:
+    """Return ``{song_id: penalty}`` for every song in the show that
+    currently has a non-zero penalty applied."""
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT song_id, penalty FROM song_show WHERE show_id = %s AND penalty > 0",
+        (show_id,),
+    )
+    return {row["song_id"]: row["penalty"] for row in cursor.fetchall()}
 
 
 def _show_max_point(show_id: int) -> int:
