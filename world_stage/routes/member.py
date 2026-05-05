@@ -321,6 +321,24 @@ def get_country_data(year: int, country: str):
         for r in cursor.fetchall()
     ]
 
+    cursor.execute(
+        """
+        SELECT start_seconds, numerator, denominator
+        FROM song_time_signature
+        WHERE song_id = %s
+        ORDER BY start_seconds
+    """,
+        (song_id,),
+    )
+    time_signatures = [
+        {
+            "start_seconds": r["start_seconds"],
+            "numerator": r["numerator"],
+            "denominator": r["denominator"],
+        }
+        for r in cursor.fetchall()
+    ]
+
     return {
         "id": song_id,
         "year": year,
@@ -345,4 +363,5 @@ def get_country_data(year: int, country: str):
         "user_id": row["submitter_id"] or 0,
         "languages": languages,
         "key_signatures": key_signatures,
+        "time_signatures": time_signatures,
     }

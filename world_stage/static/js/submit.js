@@ -28,6 +28,21 @@ async function onLoad() {
 
     document.querySelectorAll('.time-input').forEach(attachTimeInputHandler);
 
+    // Seed a default 4/4 row when the user opens the time signatures
+    // section for the first time. We don't do this for the initial
+    // collapsed state so songs with no signatures never accidentally
+    // submit one.
+    const tsDetails = document.getElementById('time-signatures-details');
+    if (tsDetails) {
+        tsDetails.addEventListener('toggle', () => {
+            if (!tsDetails.open) return;
+            const container = document.getElementById('time-signature-rows');
+            if (container && !container.firstElementChild) {
+                addTimeSignatureRow();
+            }
+        });
+    }
+
     // Intercept form submission
     document.getElementById('submit-song').addEventListener('submit', handleSubmit);
 }
@@ -74,6 +89,7 @@ function collectFormData() {
         year: parseInt(form.year.value, 10),
         country: form.country.value,
         key_signatures: collectKeySignatures(),
+        time_signatures: collectTimeSignatures(),
         title: form.title.value || null,
         native_title: form.native_title.value || null,
         artist: form.artist.value || null,
@@ -154,6 +170,11 @@ async function handleSubmit(e) {
     const ksError = validateKeySignatures();
     if (ksError) {
         showValidationError(ksError);
+        return;
+    }
+    const tsError = validateTimeSignatures();
+    if (tsError) {
+        showValidationError(tsError);
         return;
     }
     const body = collectFormData();
@@ -237,6 +258,11 @@ function clearFormFields() {
     // pristine row submits as nothing.
     clearKeySignatureRows();
     ensureKeySignatureRows();
+
+    // Time signatures start with no rows. Opening the section seeds a
+    // default 4/4 row; pristine forms with the section folded won't
+    // submit anything.
+    clearTimeSignatureRows();
 
     // Reset does_match to checked (default)
     const doesMatchCb = document.getElementById('does_match');
@@ -428,6 +454,107 @@ function readOtherOrSelect(row, name) {
     return sel.value;
 }
 
+// ── Time signatures ──────────────────────────────────────────────────
+
+function addTimeSignatureRow(values) {
+    const container = document.getElementById('time-signature-rows');
+    const template = document.getElementById('time-signature-template');
+    const fragment = template.content.cloneNode(true);
+    const row = fragment.querySelector('.time-signature-row');
+
+    const startInput = row.querySelector('[data-ts="start"]');
+    const numInput = row.querySelector('[data-ts="numerator"]');
+    const denomSel = row.querySelector('[data-ts="denominator"]');
+    const mixedCb = row.querySelector('[data-ts="mixed"]');
+
+    attachTimeInputHandler(startInput);
+    mixedCb.addEventListener('change', () => applyMixedMeter(row));
+
+    if (values) {
+        startInput.value = formatTimeStr(values.start_seconds);
+        if (values.numerator == null && values.denominator == null) {
+            mixedCb.checked = true;
+        } else {
+            if (values.numerator != null) numInput.value = values.numerator;
+            if (values.denominator != null) denomSel.value = String(values.denominator);
+        }
+        applyMixedMeter(row);
+    }
+
+    container.appendChild(fragment);
+    document.getElementById('remove-time-signature-button').disabled = false;
+}
+
+function applyMixedMeter(row) {
+    const mixedCb = row.querySelector('[data-ts="mixed"]');
+    if (mixedCb.checked) {
+        row.classList.add('mixed');
+    } else {
+        row.classList.remove('mixed');
+    }
+}
+
+function removeTimeSignatureRow() {
+    const container = document.getElementById('time-signature-rows');
+    const last = container.lastElementChild;
+    if (last) last.remove();
+    if (!container.firstElementChild) {
+        document.getElementById('remove-time-signature-button').disabled = true;
+    }
+}
+
+function clearTimeSignatureRows() {
+    const container = document.getElementById('time-signature-rows');
+    if (container) container.innerHTML = '';
+    const btn = document.getElementById('remove-time-signature-button');
+    if (btn) btn.disabled = true;
+}
+
+function collectTimeSignatures() {
+    const rows = document.querySelectorAll('.time-signature-row');
+    const out = [];
+    for (const row of rows) {
+        const isMixed = row.querySelector('[data-ts="mixed"]').checked;
+        const startSeconds = parseTimeStr(row.querySelector('[data-ts="start"]').value);
+
+        if (isMixed) {
+            out.push({start_seconds: startSeconds, numerator: null, denominator: null});
+            continue;
+        }
+
+        const numStr = (row.querySelector('[data-ts="numerator"]').value || '').trim();
+        const denomStr = row.querySelector('[data-ts="denominator"]').value;
+        if (numStr === '' || !denomStr) continue;  // abandoned partial row
+
+        const numerator = parseInt(numStr, 10);
+        const denominator = parseInt(denomStr, 10);
+        if (!Number.isFinite(numerator) || numerator <= 0) continue;
+
+        out.push({start_seconds: startSeconds, numerator, denominator});
+    }
+    return out;
+}
+
+function validateTimeSignatures() {
+    const rows = document.querySelectorAll('.time-signature-row');
+    const seenStarts = new Set();
+    for (const row of rows) {
+        const isMixed = row.querySelector('[data-ts="mixed"]').checked;
+        const numStr = (row.querySelector('[data-ts="numerator"]').value || '').trim();
+        const denomStr = row.querySelector('[data-ts="denominator"]').value;
+        const startSeconds = parseTimeStr(row.querySelector('[data-ts="start"]').value);
+
+        // Match the skip rule in collectTimeSignatures.
+        if (!isMixed && (numStr === '' || !denomStr)) continue;
+
+        if (seenStarts.has(startSeconds)) {
+            return `Two time signatures share the same start time (${formatTimeStr(startSeconds)}). Each time signature must start at a unique time.`;
+        }
+        seenStarts.add(startSeconds);
+    }
+    return null;
+}
+
 function validateKeySignatures() {
     const rows = document.querySelectorAll('.key-signature-row');
     const seenStarts = new Map();
@@ -590,8 +717,10 @@ async function populateSongData(entryNumberOverride) {
 
     const languages = songData.languages;
     const keySignatures = songData.key_signatures || [];
+    const timeSignatures = songData.time_signatures || [];
     delete songData.languages;
     delete songData.key_signatures;
+    delete songData.time_signatures;
     delete songData.id;
 
     const form = document.forms.submit_song;
@@ -642,6 +771,16 @@ async function populateSongData(entryNumberOverride) {
     ensureKeySignatureRows();
     const details = document.getElementById('key-signatures-details');
     if (details) details.open = false;
+
+    // Populate time signatures. Unlike key signatures, the section
+    // stays empty when there's nothing saved — opening the <details>
+    // seeds a default 4/4 row.
+    clearTimeSignatureRows();
+    for (const ts of timeSignatures) {
+        addTimeSignatureRow(ts);
+    }
+    const tsDetails = document.getElementById('time-signatures-details');
+    if (tsDetails) tsDetails.open = false;
 
     // Update does_match visibility
     const doesMatchCb = document.getElementById('does_match');

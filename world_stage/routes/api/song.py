@@ -169,7 +169,10 @@ def _resolve_language_ids(
 
 
 def _song_row_to_json(
-    row: dict, languages: list[dict], key_signatures: list[dict] | None = None
+    row: dict,
+    languages: list[dict],
+    key_signatures: list[dict] | None = None,
+    time_signatures: list[dict] | None = None,
 ) -> dict:
     """Turn a DB row + language list into the API response body."""
     return {
@@ -197,6 +200,7 @@ def _song_row_to_json(
         "submitter_name": row.get("username"),
         "languages": languages,
         "key_signatures": key_signatures or [],
+        "time_signatures": time_signatures or [],
     }
 
 
@@ -384,6 +388,116 @@ def _replace_song_key_signatures(cursor, song_id: int, rows: list[dict]) -> None
         )
 
 
+# ── Time signatures ──────────────────────────────────────────────────
+
+_ALLOWED_DENOMINATORS = frozenset({1, 2, 4, 8, 16, 32})
+
+
+def _fetch_song_time_signatures(cursor, song_id: int) -> list[dict]:
+    cursor.execute(
+        """
+        SELECT start_seconds, numerator, denominator
+        FROM song_time_signature
+        WHERE song_id = %s
+        ORDER BY start_seconds
+    """,
+        (song_id,),
+    )
+    return [
+        {
+            "start_seconds": r["start_seconds"],
+            "numerator": r["numerator"],
+            "denominator": r["denominator"],
+        }
+        for r in cursor.fetchall()
+    ]
+
+
+def _parse_time_signatures(data: dict) -> tuple[list[dict] | None, list[str]]:
+    """Validate and normalise the ``time_signatures`` field.
+
+    Returns ``(rows, errors)``. ``rows`` is None when the field is
+    absent (caller should leave existing rows untouched). An empty list
+    means the caller asked to clear all time signatures. A row with
+    both numerator and denominator NULL represents a mixed-meter
+    section.
+    """
+    if "time_signatures" not in data:
+        return None, []
+
+    raw = data.get("time_signatures")
+    if raw is None:
+        return [], []
+    if not isinstance(raw, list):
+        return None, ["time_signatures must be a list"]
+
+    rows: list[dict] = []
+    seen_starts: set[int] = set()
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            return None, [f"time_signatures[{i}] must be an object"]
+
+        try:
+            start_seconds = int(item.get("start_seconds") or 0)
+        except (ValueError, TypeError):
+            return None, [f"time_signatures[{i}].start_seconds must be an integer"]
+        if start_seconds < 0:
+            return None, [f"time_signatures[{i}].start_seconds must be >= 0"]
+
+        n_raw = item.get("numerator")
+        d_raw = item.get("denominator")
+
+        if n_raw is None and d_raw is None:
+            numerator = None
+            denominator = None
+        else:
+            try:
+                numerator = int(n_raw) if n_raw is not None else None
+                denominator = int(d_raw) if d_raw is not None else None
+            except (ValueError, TypeError):
+                return None, [f"time_signatures[{i}] numerator and denominator must be integers"]
+            if numerator is None or denominator is None:
+                return None, [
+                    f"time_signatures[{i}] numerator and denominator must both be set or both null"
+                ]
+            if numerator <= 0:
+                return None, [f"time_signatures[{i}].numerator must be > 0"]
+            if denominator not in _ALLOWED_DENOMINATORS:
+                return None, [
+                    f"time_signatures[{i}].denominator must be one of "
+                    f"{sorted(_ALLOWED_DENOMINATORS)}"
+                ]
+
+        if start_seconds in seen_starts:
+            return None, [
+                f"time_signatures must have unique start_seconds (duplicate: {start_seconds})"
+            ]
+        seen_starts.add(start_seconds)
+
+        rows.append(
+            {
+                "start_seconds": start_seconds,
+                "numerator": numerator,
+                "denominator": denominator,
+            }
+        )
+
+    return rows, []
+
+
+def _replace_song_time_signatures(cursor, song_id: int, rows: list[dict]) -> None:
+    cursor.execute("DELETE FROM song_time_signature WHERE song_id = %s", (song_id,))
+    for r in rows:
+        cursor.execute(
+            """
+            INSERT INTO song_time_signature
+                (song_id, start_seconds, numerator, denominator)
+            VALUES (%s, %s, %s, %s)
+        """,
+            (song_id, r["start_seconds"], r["numerator"], r["denominator"]),
+        )
+
+
 def _set_audit_user(cursor, user_id: int | None) -> None:
     cursor.execute(
         "SELECT set_config('app.current_user_id', %s, false)",
@@ -425,7 +539,8 @@ def get_song(id: int):
 
     languages = _fetch_song_languages(cursor, id)
     key_signatures = _fetch_song_key_signatures(cursor, id)
-    return resp(_song_row_to_json(row, languages, key_signatures))
+    time_signatures = _fetch_song_time_signatures(cursor, id)
+    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures))
 
 
 # ── GET /api/song/<cc>/<year> ─────────────────────────────────────────
@@ -493,7 +608,8 @@ def get_song_by_country(cc: str, year: str):
                 )
             languages = _fetch_song_languages(cursor, row["id"])
             key_signatures = _fetch_song_key_signatures(cursor, row["id"])
-            return resp(_song_row_to_json(row, languages, key_signatures))
+            time_signatures = _fetch_song_time_signatures(cursor, row["id"])
+            return resp(_song_row_to_json(row, languages, key_signatures, time_signatures))
 
         _select_song_by_country(cursor, cc.upper(), year_id)
         rows = cursor.fetchall()
@@ -503,7 +619,8 @@ def get_song_by_country(cc: str, year: str):
         for r in rows:
             langs = _fetch_song_languages(cursor, r["id"])
             ks = _fetch_song_key_signatures(cursor, r["id"])
-            results.append(_song_row_to_json(r, langs, ks))
+            ts = _fetch_song_time_signatures(cursor, r["id"])
+            results.append(_song_row_to_json(r, langs, ks, ts))
         return resp(results)
 
     _select_song_by_country(cursor, cc.upper(), year_id)
@@ -513,7 +630,8 @@ def get_song_by_country(cc: str, year: str):
 
     languages = _fetch_song_languages(cursor, row["id"])
     key_signatures = _fetch_song_key_signatures(cursor, row["id"])
-    return resp(_song_row_to_json(row, languages, key_signatures))
+    time_signatures = _fetch_song_time_signatures(cursor, row["id"])
+    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures))
 
 
 @bp.get("/<cc>/<year>/<int:entry_number>")
@@ -542,7 +660,8 @@ def get_song_by_country_entry(cc: str, year: str, entry_number: int):
         return err(ErrorID.NOT_FOUND, f"No song found for {cc} in {year} entry {entry_number}")
     languages = _fetch_song_languages(cursor, row["id"])
     key_signatures = _fetch_song_key_signatures(cursor, row["id"])
-    return resp(_song_row_to_json(row, languages, key_signatures))
+    time_signatures = _fetch_song_time_signatures(cursor, row["id"])
+    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures))
 
 
 # ── POST /api/song ───────────────────────────────────────────────────
@@ -648,6 +767,10 @@ def create_song():
     if ks_errors:
         return err(ErrorID.BAD_REQUEST, "; ".join(ks_errors))
 
+    time_signatures, ts_errors = _parse_time_signatures(data)
+    if ts_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(ts_errors))
+
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
 
     is_placeholder = bool(data.get("is_placeholder", False))
@@ -737,13 +860,17 @@ def create_song():
     if key_signatures:
         _replace_song_key_signatures(cursor, song_id, key_signatures)
 
+    if time_signatures:
+        _replace_song_time_signatures(cursor, song_id, time_signatures)
+
     db.commit()
 
     row = _fetch_song(cursor, song_id)
     assert row is not None  # just inserted
     languages = _fetch_song_languages(cursor, song_id)
     ks = _fetch_song_key_signatures(cursor, song_id)
-    body, code = resp(_song_row_to_json(row, languages, ks), 201)
+    ts = _fetch_song_time_signatures(cursor, song_id)
+    body, code = resp(_song_row_to_json(row, languages, ks, ts), 201)
     response = make_response(body, code)
     response.headers["Location"] = url_for("api.song.get_song", id=song_id)
     return response
@@ -796,6 +923,10 @@ def replace_song(id: int):
     key_signatures, ks_errors = _parse_key_signatures(data)
     if ks_errors:
         return err(ErrorID.BAD_REQUEST, "; ".join(ks_errors))
+
+    time_signatures, ts_errors = _parse_time_signatures(data)
+    if ts_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(ts_errors))
 
     # ── Build full replacement values ────────────────────────────
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
@@ -891,9 +1022,10 @@ def replace_song(id: int):
             (id, lang_id, i),
         )
 
-    # PUT is full replacement: an absent ``key_signatures`` field means
-    # clear them rather than preserve.
+    # PUT is full replacement: absent ``key_signatures`` /
+    # ``time_signatures`` fields mean clear them rather than preserve.
     _replace_song_key_signatures(cursor, id, key_signatures or [])
+    _replace_song_time_signatures(cursor, id, time_signatures or [])
 
     db.commit()
 
@@ -901,7 +1033,8 @@ def replace_song(id: int):
     assert updated is not None  # existence verified at the top of the handler
     langs = _fetch_song_languages(cursor, id)
     ks = _fetch_song_key_signatures(cursor, id)
-    return resp(_song_row_to_json(updated, langs, ks))
+    ts = _fetch_song_time_signatures(cursor, id)
+    return resp(_song_row_to_json(updated, langs, ks, ts))
 
 
 # ── PATCH /api/song/<id> ─────────────────────────────────────────────
@@ -969,6 +1102,11 @@ def update_song(id: int):
     if ks_errors:
         return err(ErrorID.BAD_REQUEST, "; ".join(ks_errors))
 
+    # ── Time signatures ──────────────────────────────────────────
+    time_signatures, ts_errors = _parse_time_signatures(data)
+    if ts_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(ts_errors))
+
     # Recalculate language IDs if languages or relevant flags changed
     if language_ids is not None or "is_translation" in data or "does_match" in data:
         cur_langs = (
@@ -1007,7 +1145,12 @@ def update_song(id: int):
             except (ValueError, TypeError):
                 return err(ErrorID.BAD_REQUEST, "submitter_id must be an integer or null")
 
-    if not sets and language_ids is None and key_signatures is None:
+    if (
+        not sets
+        and language_ids is None
+        and key_signatures is None
+        and time_signatures is None
+    ):
         return err(ErrorID.BAD_REQUEST, "No fields to update")
 
     # ── Validation (non-admins) ──────────────────────────────────
@@ -1056,13 +1199,17 @@ def update_song(id: int):
     if key_signatures is not None:
         _replace_song_key_signatures(cursor, id, key_signatures)
 
+    if time_signatures is not None:
+        _replace_song_time_signatures(cursor, id, time_signatures)
+
     db.commit()
 
     updated = _fetch_song(cursor, id)
     assert updated is not None  # existence verified at the top of the handler
     langs = _fetch_song_languages(cursor, id)
     ks = _fetch_song_key_signatures(cursor, id)
-    return resp(_song_row_to_json(updated, langs, ks))
+    ts = _fetch_song_time_signatures(cursor, id)
+    return resp(_song_row_to_json(updated, langs, ks, ts))
 
 
 # ── DELETE /api/song/<id> ─────────────────────────────────────────────
@@ -1102,6 +1249,7 @@ def delete_song(id: int):
 
     cursor.execute("DELETE FROM song_language WHERE song_id = %s", (id,))
     cursor.execute("DELETE FROM song_key_signature WHERE song_id = %s", (id,))
+    cursor.execute("DELETE FROM song_time_signature WHERE song_id = %s", (id,))
     cursor.execute("DELETE FROM song WHERE id = %s", (id,))
     db.commit()
 

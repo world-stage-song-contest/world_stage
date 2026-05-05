@@ -124,6 +124,48 @@ input:read-only {
     pointer-events: none;
 }
 
+.time-signature-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed var(--border, #ccc);
+}
+
+.time-signature-row:last-child {
+    border-bottom: none;
+}
+
+.time-signature-row > label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9em;
+}
+
+.time-signature-row .ts-meter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.time-signature-row .ts-meter input[type="number"] {
+    width: 4em;
+}
+
+.time-signature-row .ts-mixed-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.time-signature-row.mixed input[type="number"],
+.time-signature-row.mixed select {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
 @media (max-width: 600px) {
     fieldset.grid {
         grid-template-columns: 1fr;

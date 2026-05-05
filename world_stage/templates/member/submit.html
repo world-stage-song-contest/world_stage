@@ -297,6 +297,47 @@
         </details>
     </fieldset>
 
+    <fieldset class="hidable nongrid" id="time-signatures-fieldset">
+        <legend>Time signatures</legend>
+        <details id="time-signatures-details">
+            <summary>Time signatures (optional)</summary>
+            <template id="time-signature-template">
+                <div class="time-signature-row">
+                    <label>Start
+                        <input type="text" class="time-input" data-ts="start"
+                               name="ts_start" placeholder="0:00" maxlength="4" size="4"
+                               pattern="\d:\d{2}">
+                    </label>
+                    <label>Meter
+                        <span class="ts-meter">
+                            <input type="number" data-ts="numerator" name="ts_numerator"
+                                   min="1" max="99" step="1" value="4">
+                            <span class="ts-slash">/</span>
+                            <select data-ts="denominator" name="ts_denominator">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="4" selected>4</option>
+                                <option value="8">8</option>
+                                <option value="16">16</option>
+                                <option value="32">32</option>
+                            </select>
+                        </span>
+                    </label>
+                    <label class="ts-mixed-label">
+                        <input type="checkbox" data-ts="mixed" name="ts_mixed">
+                        Mixed meter
+                    </label>
+                </div>
+            </template>
+            <div id="time-signature-rows"></div>
+            <div class="ts-buttons" style="display: flex; gap: 1rem; justify-content: space-evenly;">
+                <button type="button" onclick="addTimeSignatureRow()">Add time signature</button>
+                <button type="button" id="remove-time-signature-button"
+                        onclick="removeTimeSignatureRow()" disabled>Remove time signature</button>
+            </div>
+        </details>
+    </fieldset>
+
     <fieldset class="hidable nongrid" id="key-signatures-fieldset">
         <legend>Key signatures</legend>
         <details id="key-signatures-details">
