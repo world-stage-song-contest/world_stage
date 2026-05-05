@@ -26,21 +26,39 @@ async function onLoad() {
     }
     toggleTitleLanguageSelect(doesMatchCb);
 
-    document.querySelectorAll('.time-input').forEach(el => {
-        el.addEventListener('input', function (e) {
-            let value = el.value.replace(/\D/g, '');
-
-            if (value.length >= 2) {
-                value = value.slice(0, 3);
-                value = value.slice(0, 1) + ':' + value.slice(1);
-            }
-
-            el.value = value;
-        });
-    });
+    document.querySelectorAll('.time-input').forEach(attachTimeInputHandler);
 
     // Intercept form submission
     document.getElementById('submit-song').addEventListener('submit', handleSubmit);
+}
+
+function attachTimeInputHandler(el) {
+    el.addEventListener('input', function () {
+        let value = el.value.replace(/\D/g, '');
+
+        if (value.length >= 2) {
+            value = value.slice(0, 3);
+            value = value.slice(0, 1) + ':' + value.slice(1);
+        }
+
+        el.value = value;
+    });
+}
+
+function parseTimeStr(str) {
+    if (!str) return 0;
+    const parts = str.split(':');
+    if (parts.length === 2) {
+        const m = parseInt(parts[0], 10) || 0;
+        const s = parseInt(parts[1], 10) || 0;
+        return m * 60 + s;
+    }
+    return parseInt(str, 10) || 0;
+}
+
+function formatTimeStr(seconds) {
+    const s = Math.max(0, parseInt(seconds, 10) || 0);
+    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 }
 
 // ── Form submission via API ──────────────────────────────────────────
@@ -55,6 +73,7 @@ function collectFormData() {
     const data = {
         year: parseInt(form.year.value, 10),
         country: form.country.value,
+        key_signatures: collectKeySignatures(),
         title: form.title.value || null,
         native_title: form.native_title.value || null,
         artist: form.artist.value || null,
@@ -132,6 +151,11 @@ async function handleSubmit(e) {
     }
 
     // Submit (create or update)
+    const ksError = validateKeySignatures();
+    if (ksError) {
+        showValidationError(ksError);
+        return;
+    }
     const body = collectFormData();
 
     try {
@@ -207,6 +231,12 @@ function clearFormFields() {
 
     // Reset to a single language row
     resetLanguageRows();
+
+    // Reset to a single empty key signature row. ``collectKeySignatures``
+    // drops rows whose tonic, mode, and atonal flag are all empty, so a
+    // pristine row submits as nothing.
+    clearKeySignatureRows();
+    ensureKeySignatureRows();
 
     // Reset does_match to checked (default)
     const doesMatchCb = document.getElementById('does_match');
@@ -288,6 +318,178 @@ function addLanguageRow() {
 
     insertBefore.parentNode.insertBefore(newLanguageLabel, insertBefore);
     insertBefore.parentNode.insertBefore(newLanguageSelect, insertBefore);
+}
+
+// ── Key signatures ───────────────────────────────────────────────────
+
+function addKeySignatureRow(values) {
+    const container = document.getElementById('key-signature-rows');
+    const template = document.getElementById('key-signature-template');
+    const fragment = template.content.cloneNode(true);
+    const row = fragment.querySelector('.key-signature-row');
+
+    const tonicSel = row.querySelector('[data-ks="tonic"]');
+    const tonicOther = row.querySelector('[data-ks="tonic-other"]');
+    const modeSel = row.querySelector('[data-ks="mode"]');
+    const modeOther = row.querySelector('[data-ks="mode-other"]');
+    const atonalCb = row.querySelector('[data-ks="atonal"]');
+    const microtonalCb = row.querySelector('[data-ks="microtonal"]');
+    const startInput = row.querySelector('[data-ks="start"]');
+
+    attachTimeInputHandler(startInput);
+    tonicSel.addEventListener('change', () => toggleOther(tonicSel, tonicOther));
+    modeSel.addEventListener('change', () => toggleOther(modeSel, modeOther));
+    atonalCb.addEventListener('change', () => applyAtonal(row));
+
+    if (values) {
+        startInput.value = formatTimeStr(values.start_seconds);
+        applyKeyValue(tonicSel, tonicOther, values.tonic);
+        applyKeyValue(modeSel, modeOther, values.mode);
+        // Atonal is the absence of both tonic and mode.
+        atonalCb.checked = values.tonic == null && values.mode == null;
+        microtonalCb.checked = !!values.microtonal;
+        applyAtonal(row);
+    }
+
+    container.appendChild(fragment);
+    document.getElementById('remove-key-signature-button').disabled = false;
+}
+
+function ensureKeySignatureRows() {
+    const container = document.getElementById('key-signature-rows');
+    if (container && !container.firstElementChild) {
+        addKeySignatureRow();
+    }
+}
+
+function applyKeyValue(select, otherInput, value) {
+    if (value == null || value === '') {
+        select.value = '';
+        otherInput.value = '';
+        otherInput.classList.add('hidden');
+        return;
+    }
+    const match = Array.from(select.options).find(o => o.value === value);
+    if (match) {
+        select.value = value;
+        otherInput.value = '';
+        otherInput.classList.add('hidden');
+    } else {
+        select.value = '__other__';
+        otherInput.value = value;
+        otherInput.classList.remove('hidden');
+    }
+}
+
+function toggleOther(select, otherInput) {
+    if (select.value === '__other__') {
+        otherInput.classList.remove('hidden');
+    } else {
+        otherInput.classList.add('hidden');
+        otherInput.value = '';
+    }
+}
+
+function applyAtonal(row) {
+    const atonalCb = row.querySelector('[data-ks="atonal"]');
+    if (atonalCb.checked) {
+        row.classList.add('atonal');
+    } else {
+        row.classList.remove('atonal');
+    }
+}
+
+function removeKeySignatureRow() {
+    const container = document.getElementById('key-signature-rows');
+    const last = container.lastElementChild;
+    if (last) last.remove();
+    if (!container.firstElementChild) {
+        document.getElementById('remove-key-signature-button').disabled = true;
+    }
+}
+
+function clearKeySignatureRows() {
+    const container = document.getElementById('key-signature-rows');
+    if (container) container.innerHTML = '';
+    const btn = document.getElementById('remove-key-signature-button');
+    if (btn) btn.disabled = true;
+    const details = document.getElementById('key-signatures-details');
+    if (details) details.open = false;
+}
+
+function readOtherOrSelect(row, name) {
+    const sel = row.querySelector(`[data-ks="${name}"]`);
+    if (!sel.value) return null;
+    if (sel.value === '__other__') {
+        const other = row.querySelector(`[data-ks="${name}-other"]`);
+        const v = (other.value || '').trim();
+        return v || null;
+    }
+    return sel.value;
+}
+
+function validateKeySignatures() {
+    const rows = document.querySelectorAll('.key-signature-row');
+    const seenStarts = new Map();
+    for (const row of rows) {
+        const isAtonal = row.querySelector('[data-ks="atonal"]').checked;
+        const isMicrotonal = row.querySelector('[data-ks="microtonal"]').checked;
+        const startSeconds = parseTimeStr(row.querySelector('[data-ks="start"]').value);
+
+        // Match the skip rule in collectKeySignatures: an untouched row
+        // (no tonic, no mode, no atonal, no microtonal) is silently
+        // dropped, so it shouldn't trigger duplicate-start errors.
+        let tonic = null, mode = null;
+        if (!isAtonal) {
+            tonic = readOtherOrSelect(row, 'tonic');
+            mode = readOtherOrSelect(row, 'mode');
+        }
+        if (!isAtonal && !isMicrotonal && tonic === null && mode === null) continue;
+
+        if (isAtonal && isMicrotonal) {
+            return `A key signature at ${formatTimeStr(startSeconds)} cannot be both atonal and microtonal.`;
+        }
+        if (seenStarts.has(startSeconds)) {
+            return `Two key signatures share the same start time (${formatTimeStr(startSeconds)}). Each key signature must start at a unique time.`;
+        }
+        seenStarts.set(startSeconds, true);
+    }
+    return null;
+}
+
+function showValidationError(message) {
+    const successEl = document.getElementById('success-message');
+    successEl.classList.add('hidden');
+    const errorMessage = document.getElementById('error-message');
+    errorMessage.textContent = message;
+    errorMessage.classList.remove('hidden');
+}
+
+function collectKeySignatures() {
+    const rows = document.querySelectorAll('.key-signature-row');
+    const out = [];
+    for (const row of rows) {
+        const isAtonal = row.querySelector('[data-ks="atonal"]').checked;
+        const isMicrotonal = row.querySelector('[data-ks="microtonal"]').checked;
+        const startSeconds = parseTimeStr(row.querySelector('[data-ks="start"]').value);
+        let tonic = null;
+        let mode = null;
+        if (!isAtonal) {
+            tonic = readOtherOrSelect(row, 'tonic');
+            mode = readOtherOrSelect(row, 'mode');
+            // A row with no tonic, mode, atonal, or microtonal flag is
+            // just an abandoned blank — drop it. Atonal rows (both null)
+            // and microtonal annotations are kept.
+            if (tonic === null && mode === null && !isMicrotonal) continue;
+        }
+        out.push({
+            start_seconds: startSeconds,
+            tonic,
+            mode,
+            microtonal: isMicrotonal,
+        });
+    }
+    return out;
 }
 
 function removeLanguageRow() {
@@ -387,7 +589,9 @@ async function populateSongData(entryNumberOverride) {
     currentSongId = songData.id || null;
 
     const languages = songData.languages;
+    const keySignatures = songData.key_signatures || [];
     delete songData.languages;
+    delete songData.key_signatures;
     delete songData.id;
 
     const form = document.forms.submit_song;
@@ -427,6 +631,17 @@ async function populateSongData(entryNumberOverride) {
         const languageSelect = document.querySelector(`#language${i + 1}`);
         languageSelect.value = id;
     }
+
+    // Populate key signatures (if any). Always end with at least one
+    // row visible so the affordance is discoverable; pristine rows are
+    // filtered out at submit time.
+    clearKeySignatureRows();
+    for (const ks of keySignatures) {
+        addKeySignatureRow(ks);
+    }
+    ensureKeySignatureRows();
+    const details = document.getElementById('key-signatures-details');
+    if (details) details.open = false;
 
     // Update does_match visibility
     const doesMatchCb = document.getElementById('does_match');

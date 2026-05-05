@@ -302,6 +302,25 @@ def get_country_data(year: int, country: str):
     )
     languages = [{"id": r["id"], "name": r["name"]} for r in cursor.fetchall()]
 
+    cursor.execute(
+        """
+        SELECT start_seconds, tonic, mode, microtonal
+        FROM song_key_signature
+        WHERE song_id = %s
+        ORDER BY start_seconds
+    """,
+        (song_id,),
+    )
+    key_signatures = [
+        {
+            "start_seconds": r["start_seconds"],
+            "tonic": r["tonic"],
+            "mode": r["mode"],
+            "microtonal": bool(r["microtonal"]),
+        }
+        for r in cursor.fetchall()
+    ]
+
     return {
         "id": song_id,
         "year": year,
@@ -325,4 +344,5 @@ def get_country_data(year: int, country: str):
         "admin_approved": row["admin_approved"],
         "user_id": row["submitter_id"] or 0,
         "languages": languages,
+        "key_signatures": key_signatures,
     }

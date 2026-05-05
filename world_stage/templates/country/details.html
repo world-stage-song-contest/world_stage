@@ -21,6 +21,23 @@
             height: 100%;
             width: 100%;
         }
+
+        /* Key-signature markers laid over the video.js progress bar. */
+        .vjs-progress-holder .ks-marker {
+            position: absolute;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: #ffd400;
+            transform: translateX(-50%);
+            z-index: 2;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        .vjs-progress-holder .ks-marker:hover {
+            background: #fff;
+            width: 5px;
+        }
     </style>
     <script>
         function copyValue(th) {
@@ -65,6 +82,12 @@
             <th>Language</th>
             <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
         </tr>
+        {% if song.key_signatures %}
+        <tr>
+            <th>Key signatures</th>
+            <td>{{ song.key_signatures|join(', ') }}</td>
+        </tr>
+        {% endif %}
         <tr>
             <th>Submitter</th>
             <td>{{ song.submitter }}</td>
@@ -122,6 +145,59 @@
     {{ embed|safe }}
 </div>
 
+{% if song.key_signature_timeline %}
+<details class="key-signature-timeline">
+    <summary>Key signature timeline</summary>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Key</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for k in song.key_signature_timeline %}
+            <tr>
+                <td>
+                    <a href="#" class="ks-timestamp" data-seconds="{{ k.start_seconds }}"
+                       onclick="seekKeySignature({{ k.start_seconds }}); return false;">{{ k.start_label }}</a>
+                </td>
+                <td>{{ k.label }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+<script>
+    function seekKeySignature(seconds) {
+        // Prefer the video.js API: the player wraps the underlying
+        // <video> element and may not respond to direct currentTime
+        // assignment depending on its initialisation state.
+        let player = null;
+        if (typeof videojs === 'function') {
+            try {
+                player = (videojs.getPlayer && videojs.getPlayer('video-player'))
+                      || videojs('video-player');
+            } catch (e) { /* fall through */ }
+        }
+        if (player) {
+            player.currentTime(seconds);
+            const p = player.play();
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+            return;
+        }
+        // Fallback to the bare HTMLMediaElement.
+        const el = document.getElementById('video-player');
+        if (el && 'currentTime' in el) {
+            try {
+                el.currentTime = seconds;
+                if (typeof el.play === 'function') el.play();
+            } catch (e) { /* ignore */ }
+        }
+    }
+</script>
+{% endif %}
+
 <div class="lyrics-wrapper">
 <div class="all-lyrics" style="--rows: {{ rows }}; --columns: {{ columns }};">
     {% set column = 1%}
@@ -170,5 +246,54 @@
 {% endif %}
 
 <script src="https://vjs.zencdn.net/8.23.3/video.min.js"></script>
+
+{% if song.key_signature_timeline %}
+<script>
+    (function () {
+        const timeline = {{ song.key_signature_timeline|tojson }};
+        if (!timeline.length || typeof videojs !== 'function') return;
+
+        function renderMarkers(player) {
+            const duration = player.duration();
+            if (!duration || !isFinite(duration) || duration <= 0) return;
+            const holder = player.el().querySelector('.vjs-progress-holder');
+            if (!holder) return;
+
+            holder.querySelectorAll('.ks-marker').forEach(m => m.remove());
+            for (const k of timeline) {
+                if (k.start_seconds <= 0 || k.start_seconds >= duration) continue;
+                const marker = document.createElement('div');
+                marker.className = 'ks-marker';
+                marker.style.left = ((k.start_seconds / duration) * 100) + '%';
+                marker.title = k.start_label + ' — ' + k.label;
+                marker.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    player.currentTime(k.start_seconds);
+                    const p = player.play();
+                    if (p && typeof p.catch === 'function') p.catch(() => {});
+                });
+                holder.appendChild(marker);
+            }
+        }
+
+        let player;
+        try {
+            player = (videojs.getPlayer && videojs.getPlayer('video-player'))
+                  || videojs('video-player');
+        } catch (e) { return; }
+        if (!player) return;
+
+        player.ready(function () {
+            // Duration may not be known until metadata loads; render
+            // again on durationchange so the markers land in the right
+            // spot for streams that report it lazily.
+            renderMarkers(player);
+            player.on('loadedmetadata', () => renderMarkers(player));
+            player.on('durationchange', () => renderMarkers(player));
+        });
+    })();
+</script>
+{% endif %}
 
 {% endblock %}

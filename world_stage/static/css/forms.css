@@ -87,6 +87,43 @@ input:read-only {
     background-color: var(--input-readonly);
 }
 
+.key-signature-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed var(--border, #ccc);
+}
+
+.key-signature-row:last-child {
+    border-bottom: none;
+}
+
+.key-signature-row > label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9em;
+}
+
+.key-signature-row .ks-atonal-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.key-signature-row .ks-other {
+    margin-top: 0.25rem;
+    width: 8em;
+}
+
+.key-signature-row.atonal select,
+.key-signature-row.atonal input.ks-other {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
 @media (max-width: 600px) {
     fieldset.grid {
         grid-template-columns: 1fr;

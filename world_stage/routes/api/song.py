@@ -168,7 +168,9 @@ def _resolve_language_ids(
     return title_language_id, native_language_id
 
 
-def _song_row_to_json(row: dict, languages: list[dict]) -> dict:
+def _song_row_to_json(
+    row: dict, languages: list[dict], key_signatures: list[dict] | None = None
+) -> dict:
     """Turn a DB row + language list into the API response body."""
     return {
         "id": row["id"],
@@ -194,6 +196,7 @@ def _song_row_to_json(row: dict, languages: list[dict]) -> dict:
         "submitter_id": row["submitter_id"],
         "submitter_name": row.get("username"),
         "languages": languages,
+        "key_signatures": key_signatures or [],
     }
 
 
@@ -232,6 +235,153 @@ def _fetch_song_languages(cursor, song_id: int) -> list[dict]:
         (song_id,),
     )
     return [{"id": r["id"], "name": r["name"]} for r in cursor.fetchall()]
+
+
+def _fetch_song_key_signatures(cursor, song_id: int) -> list[dict]:
+    cursor.execute(
+        """
+        SELECT start_seconds, tonic, mode, microtonal
+        FROM song_key_signature
+        WHERE song_id = %s
+        ORDER BY start_seconds
+    """,
+        (song_id,),
+    )
+    return [
+        {
+            "start_seconds": r["start_seconds"],
+            "tonic": r["tonic"],
+            "mode": r["mode"],
+            "microtonal": bool(r["microtonal"]),
+        }
+        for r in cursor.fetchall()
+    ]
+
+
+# Canonical tonic spellings. Enharmonic pairs collapse to their flat
+# form (Db, Eb, Ab, Bb) except for F#/Gb, which collapses to the sharp
+# form for historical/notation reasons.
+_TONIC_CANONICAL = frozenset(
+    {"C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"}
+)
+_TONIC_ALIASES = {
+    "C#": "Db",
+    "D#": "Eb",
+    "Gb": "F#",
+    "G#": "Ab",
+    "A#": "Bb",
+    "Cb": "B",
+    "Fb": "E",
+    "B#": "C",
+    "E#": "F",
+}
+
+
+def _normalize_mode(value) -> str | None:
+    """Normalise a mode string: lowercase, collapse internal whitespace,
+    and trim. Returns None for empty input. Free-form values (e.g. from
+    the "Other" option) are preserved aside from this whitespace/case
+    cleanup.
+    """
+    if value is None:
+        return None
+    s = unicodedata.normalize("NFKC", str(value)).replace("\r", "")
+    s = " ".join(s.split()).lower()
+    return s or None
+
+
+def _normalize_tonic(value) -> str | None:
+    """Normalise a tonic string into its canonical ASCII form.
+
+    Accepts Unicode accidentals (♯, ♭, ♮) and case variants. Recognised
+    sharp spellings collapse to their flat enharmonic (e.g. ``C#`` →
+    ``Db``) except for ``F#``/``Gb`` which are both retained. Strings
+    that don't match a standard tonic are passed through unchanged so
+    the "Other" escape hatch (microtonality, alternative tunings) is
+    preserved.
+    """
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    candidate = raw.replace("♯", "#").replace("♭", "b").replace("♮", "")
+    if len(candidate) == 1:
+        candidate = candidate.upper()
+    elif len(candidate) == 2:
+        candidate = candidate[0].upper() + candidate[1].lower()
+
+    if candidate in _TONIC_ALIASES:
+        return _TONIC_ALIASES[candidate]
+    if candidate in _TONIC_CANONICAL:
+        return candidate
+    return raw
+
+
+def _parse_key_signatures(data: dict) -> tuple[list[dict] | None, list[str]]:
+    """Validate and normalise the ``key_signatures`` field.
+
+    Returns ``(rows, errors)``. ``rows`` is None when the field is absent
+    (caller should leave existing rows untouched). An empty list means
+    the caller asked to clear all key signatures. A row with both tonic
+    and mode NULL represents an atonal section.
+    """
+    if "key_signatures" not in data:
+        return None, []
+
+    raw = data.get("key_signatures")
+    if raw is None:
+        return [], []
+    if not isinstance(raw, list):
+        return None, ["key_signatures must be a list"]
+
+    rows: list[dict] = []
+    seen_starts: set[int] = set()
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            return None, [f"key_signatures[{i}] must be an object"]
+
+        try:
+            start_seconds = int(item.get("start_seconds") or 0)
+        except (ValueError, TypeError):
+            return None, [f"key_signatures[{i}].start_seconds must be an integer"]
+        if start_seconds < 0:
+            return None, [f"key_signatures[{i}].start_seconds must be >= 0"]
+
+        tonic = _normalize_tonic(item.get("tonic"))
+        mode = _normalize_mode(item.get("mode"))
+        microtonal = bool(item.get("microtonal", False))
+
+        if start_seconds in seen_starts:
+            return None, [
+                f"key_signatures must have unique start_seconds (duplicate: {start_seconds})"
+            ]
+        seen_starts.add(start_seconds)
+
+        rows.append(
+            {
+                "start_seconds": start_seconds,
+                "tonic": tonic,
+                "mode": mode,
+                "microtonal": microtonal,
+            }
+        )
+
+    return rows, []
+
+
+def _replace_song_key_signatures(cursor, song_id: int, rows: list[dict]) -> None:
+    cursor.execute("DELETE FROM song_key_signature WHERE song_id = %s", (song_id,))
+    for r in rows:
+        cursor.execute(
+            """
+            INSERT INTO song_key_signature
+                (song_id, start_seconds, tonic, mode, microtonal)
+            VALUES (%s, %s, %s, %s, %s)
+        """,
+            (song_id, r["start_seconds"], r["tonic"], r["mode"], r["microtonal"]),
+        )
 
 
 def _set_audit_user(cursor, user_id: int | None) -> None:
@@ -274,7 +424,8 @@ def get_song(id: int):
         return err(ErrorID.NOT_FOUND, f"Song {id} not found")
 
     languages = _fetch_song_languages(cursor, id)
-    return resp(_song_row_to_json(row, languages))
+    key_signatures = _fetch_song_key_signatures(cursor, id)
+    return resp(_song_row_to_json(row, languages, key_signatures))
 
 
 # ── GET /api/song/<cc>/<year> ─────────────────────────────────────────
@@ -341,7 +492,8 @@ def get_song_by_country(cc: str, year: str):
                     f"No song found for {cc} in special {year} entry {entry_number}",
                 )
             languages = _fetch_song_languages(cursor, row["id"])
-            return resp(_song_row_to_json(row, languages))
+            key_signatures = _fetch_song_key_signatures(cursor, row["id"])
+            return resp(_song_row_to_json(row, languages, key_signatures))
 
         _select_song_by_country(cursor, cc.upper(), year_id)
         rows = cursor.fetchall()
@@ -350,7 +502,8 @@ def get_song_by_country(cc: str, year: str):
         results = []
         for r in rows:
             langs = _fetch_song_languages(cursor, r["id"])
-            results.append(_song_row_to_json(r, langs))
+            ks = _fetch_song_key_signatures(cursor, r["id"])
+            results.append(_song_row_to_json(r, langs, ks))
         return resp(results)
 
     _select_song_by_country(cursor, cc.upper(), year_id)
@@ -359,7 +512,8 @@ def get_song_by_country(cc: str, year: str):
         return err(ErrorID.NOT_FOUND, f"No song found for {cc} in {year}")
 
     languages = _fetch_song_languages(cursor, row["id"])
-    return resp(_song_row_to_json(row, languages))
+    key_signatures = _fetch_song_key_signatures(cursor, row["id"])
+    return resp(_song_row_to_json(row, languages, key_signatures))
 
 
 @bp.get("/<cc>/<year>/<int:entry_number>")
@@ -387,7 +541,8 @@ def get_song_by_country_entry(cc: str, year: str, entry_number: int):
     if not row:
         return err(ErrorID.NOT_FOUND, f"No song found for {cc} in {year} entry {entry_number}")
     languages = _fetch_song_languages(cursor, row["id"])
-    return resp(_song_row_to_json(row, languages))
+    key_signatures = _fetch_song_key_signatures(cursor, row["id"])
+    return resp(_song_row_to_json(row, languages, key_signatures))
 
 
 # ── POST /api/song ───────────────────────────────────────────────────
@@ -489,6 +644,10 @@ def create_song():
     if lang_errors:
         return err(ErrorID.BAD_REQUEST, "; ".join(lang_errors))
 
+    key_signatures, ks_errors = _parse_key_signatures(data)
+    if ks_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(ks_errors))
+
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
 
     is_placeholder = bool(data.get("is_placeholder", False))
@@ -575,12 +734,16 @@ def create_song():
             (song_id, lang_id, i),
         )
 
+    if key_signatures:
+        _replace_song_key_signatures(cursor, song_id, key_signatures)
+
     db.commit()
 
     row = _fetch_song(cursor, song_id)
     assert row is not None  # just inserted
     languages = _fetch_song_languages(cursor, song_id)
-    body, code = resp(_song_row_to_json(row, languages), 201)
+    ks = _fetch_song_key_signatures(cursor, song_id)
+    body, code = resp(_song_row_to_json(row, languages, ks), 201)
     response = make_response(body, code)
     response.headers["Location"] = url_for("api.song.get_song", id=song_id)
     return response
@@ -629,6 +792,10 @@ def replace_song(id: int):
     language_ids, lang_errors = _parse_languages(data)
     if lang_errors:
         return err(ErrorID.BAD_REQUEST, "; ".join(lang_errors))
+
+    key_signatures, ks_errors = _parse_key_signatures(data)
+    if ks_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(ks_errors))
 
     # ── Build full replacement values ────────────────────────────
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
@@ -724,12 +891,17 @@ def replace_song(id: int):
             (id, lang_id, i),
         )
 
+    # PUT is full replacement: an absent ``key_signatures`` field means
+    # clear them rather than preserve.
+    _replace_song_key_signatures(cursor, id, key_signatures or [])
+
     db.commit()
 
     updated = _fetch_song(cursor, id)
     assert updated is not None  # existence verified at the top of the handler
     langs = _fetch_song_languages(cursor, id)
-    return resp(_song_row_to_json(updated, langs))
+    ks = _fetch_song_key_signatures(cursor, id)
+    return resp(_song_row_to_json(updated, langs, ks))
 
 
 # ── PATCH /api/song/<id> ─────────────────────────────────────────────
@@ -792,6 +964,11 @@ def update_song(id: int):
         if lang_errors:
             return err(ErrorID.BAD_REQUEST, "; ".join(lang_errors))
 
+    # ── Key signatures ───────────────────────────────────────────
+    key_signatures, ks_errors = _parse_key_signatures(data)
+    if ks_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(ks_errors))
+
     # Recalculate language IDs if languages or relevant flags changed
     if language_ids is not None or "is_translation" in data or "does_match" in data:
         cur_langs = (
@@ -830,7 +1007,7 @@ def update_song(id: int):
             except (ValueError, TypeError):
                 return err(ErrorID.BAD_REQUEST, "submitter_id must be an integer or null")
 
-    if not sets and language_ids is None:
+    if not sets and language_ids is None and key_signatures is None:
         return err(ErrorID.BAD_REQUEST, "No fields to update")
 
     # ── Validation (non-admins) ──────────────────────────────────
@@ -876,12 +1053,16 @@ def update_song(id: int):
                 (id, lang_id, i),
             )
 
+    if key_signatures is not None:
+        _replace_song_key_signatures(cursor, id, key_signatures)
+
     db.commit()
 
     updated = _fetch_song(cursor, id)
     assert updated is not None  # existence verified at the top of the handler
     langs = _fetch_song_languages(cursor, id)
-    return resp(_song_row_to_json(updated, langs))
+    ks = _fetch_song_key_signatures(cursor, id)
+    return resp(_song_row_to_json(updated, langs, ks))
 
 
 # ── DELETE /api/song/<id> ─────────────────────────────────────────────
@@ -920,6 +1101,7 @@ def delete_song(id: int):
     _set_audit_user(cursor, user_id)
 
     cursor.execute("DELETE FROM song_language WHERE song_id = %s", (id,))
+    cursor.execute("DELETE FROM song_key_signature WHERE song_id = %s", (id,))
     cursor.execute("DELETE FROM song WHERE id = %s", (id,))
     db.commit()
 

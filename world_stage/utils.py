@@ -497,6 +497,8 @@ class Song:
         self.year = year
         self.entry_number = entry_number
         self.languages = languages
+        self.key_signatures: list[str] = []
+        self.key_signature_timeline: list[dict] = []
         self.placeholder = placeholder
         self.submitter = submitter
         self.submitter_id = submitter_id
@@ -949,6 +951,100 @@ def get_language(lang_id: int) -> Language | None:
     return Language(**lang)
 
 
+_KEY_SIGNATURE_TONIC_ORDER = (
+    "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
+)
+_KEY_SIGNATURE_TONIC_INDEX = {t: i for i, t in enumerate(_KEY_SIGNATURE_TONIC_ORDER)}
+
+
+def _display_tonic(tonic: str | None) -> str:
+    """Render a tonic with proper Unicode accidentals (♭, ♯) when it's
+    one of the canonical 12 spellings. Free-form "Other" tonics are
+    returned unchanged so user-supplied formatting is preserved."""
+    if tonic is None:
+        return ""
+    if tonic in _KEY_SIGNATURE_TONIC_INDEX:
+        return tonic.replace("b", "♭").replace("#", "♯")
+    return tonic
+
+
+def get_song_key_signatures(song_id: int) -> list[str]:
+    """Return human-readable key signature labels for a song.
+
+    Sorted by canonical tonic order (C → B), then alphabetically by
+    mode. Atonal rows (tonic AND mode both NULL) are excluded. Free-form
+    "Other" tonics that don't match the canonical 12-tone set sort after
+    the canonical tonics. Microtonal rows are annotated with a
+    " (microtonal)" suffix; if the same (tonic, mode) is recorded both
+    with and without the flag the annotation wins.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        SELECT tonic, mode, microtonal
+        FROM song_key_signature
+        WHERE song_id = %s
+          AND (tonic IS NOT NULL OR mode IS NOT NULL)
+    """,
+        (song_id,),
+    )
+    seen: dict[tuple[str | None, str | None], bool] = {}
+    for r in cursor.fetchall():
+        key = (r["tonic"], r["mode"])
+        seen[key] = seen.get(key, False) or bool(r["microtonal"])
+
+    def sort_key(item):
+        tonic, mode = item[0]
+        idx = _KEY_SIGNATURE_TONIC_INDEX.get(tonic, len(_KEY_SIGNATURE_TONIC_ORDER))
+        return (idx, (tonic or "").lower(), (mode or "").lower())
+
+    out: list[str] = []
+    for (tonic, mode), microtonal in sorted(seen.items(), key=sort_key):
+        label = " ".join(p for p in (_display_tonic(tonic), mode) if p)
+        if microtonal:
+            label += " (microtonal)"
+        out.append(label)
+    return out
+
+
+def get_song_key_signature_timeline(song_id: int) -> list[dict]:
+    """Return key signatures in chronological order, formatted for the
+    click-to-seek timeline below the video. Atonal sections are
+    included (rendered as ``atonal``) so the timeline reflects the
+    actual structure of the song.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        SELECT start_seconds, tonic, mode, microtonal
+        FROM song_key_signature
+        WHERE song_id = %s
+        ORDER BY start_seconds
+    """,
+        (song_id,),
+    )
+    rows: list[dict] = []
+    for r in cursor.fetchall():
+        tonic, mode = r["tonic"], r["mode"]
+        microtonal = bool(r["microtonal"])
+        if tonic is None and mode is None:
+            label = "atonal"
+        else:
+            label = " ".join(p for p in (_display_tonic(tonic), mode) if p)
+        if microtonal:
+            label += " (microtonal)"
+        rows.append(
+            {
+                "start_seconds": r["start_seconds"],
+                "start_label": format_seconds(r["start_seconds"]) or "0:00",
+                "label": label,
+            }
+        )
+    return rows
+
+
 def get_song_languages(song_id: int) -> list[Language]:
     db = get_db()
     cursor = db.cursor()
@@ -1369,6 +1465,8 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
     ret = Song(RawSongData(song))
 
     ret.languages = get_song_languages(ret.id)
+    ret.key_signatures = get_song_key_signatures(ret.id)
+    ret.key_signature_timeline = get_song_key_signature_timeline(ret.id)
     return ret
 
 
@@ -1442,6 +1540,8 @@ def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
         return None
     s = Song(RawSongData(row))
     s.languages = get_song_languages(s.id)
+    s.key_signatures = get_song_key_signatures(s.id)
+    s.key_signature_timeline = get_song_key_signature_timeline(s.id)
     return s
 
 
