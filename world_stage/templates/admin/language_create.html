@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Add Language{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+<h1>Add language</h1>
+
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+
+<form method="POST" action="{{ url_for('admin.language_create') }}">
+    <div class="banner long-text">
+        <div>
+            Only Name and Language tag are required. The other fields follow
+            BCP-47 conventions and most languages won't need them.
+        </div>
+    </div>
+
+    <fieldset class="grid">
+        <legend>Language</legend>
+
+        <label class="req" for="name">Name</label>
+        <input type="text" id="name" name="name" list="existing-languages"
+               placeholder="e.g. Brazilian Portuguese" required maxlength="100"
+               value="{{ name or '' }}">
+        <datalist id="existing-languages">
+        {% for l in existing_languages %}
+            <option value="{{ l.name }}">
+        {% endfor %}
+        </datalist>
+
+        <label class="req" for="tag">Language tag</label>
+        <input type="text" id="tag" name="tag" placeholder="e.g. pt"
+               required maxlength="20" value="{{ tag or '' }}">
+
+        <label for="extlang">Ext. language</label>
+        <input type="text" id="extlang" name="extlang"
+               placeholder="optional, e.g. cmn"
+               maxlength="20" value="{{ extlang or '' }}">
+
+        <label for="region">Region</label>
+        <input type="text" id="region" name="region" placeholder="optional, e.g. BR"
+               maxlength="10" value="{{ region or '' }}">
+
+        <label for="subvariant">Subvariant</label>
+        <input type="text" id="subvariant" name="subvariant"
+               placeholder="optional, e.g. fonipa"
+               maxlength="20" value="{{ subvariant or '' }}">
+
+        <label for="suppress_script">Suppress script</label>
+        <input type="text" id="suppress_script" name="suppress_script"
+               placeholder="optional, e.g. Latn"
+               maxlength="10" value="{{ suppress_script or '' }}">
+
+        <label for="code3">ISO 639-3</label>
+        <input type="text" id="code3" name="code3"
+               placeholder="optional, e.g. por"
+               maxlength="10" value="{{ code3 or '' }}">
+    </fieldset>
+
+    <div class="buttons">
+        <button type="submit">Save</button>
+    </div>
+</form>
+{% endblock %}

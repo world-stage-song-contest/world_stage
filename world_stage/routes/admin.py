@@ -132,6 +132,77 @@ def genre_delete(genre_id: int):
     return redirect(url_for("admin.genre_index"))
 
 
+@bp.get("/language/create")
+def language_create():
+    resp = verify_user()
+    if resp:
+        return resp
+    cursor = get_db().cursor()
+    cursor.execute("SELECT name FROM language ORDER BY name")
+    return render_template(
+        "admin/language_create.html",
+        existing_languages=cursor.fetchall(),
+    )
+
+
+@bp.post("/language/create")
+def language_create_post():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    def _clean(field: str) -> str | None:
+        raw = (request.form.get(field) or "").strip()
+        return raw or None
+
+    name = (request.form.get("name") or "").strip()
+    tag = (request.form.get("tag") or "").strip()
+    extlang = _clean("extlang")
+    region = _clean("region")
+    subvariant = _clean("subvariant")
+    suppress_script = _clean("suppress_script")
+    code3 = _clean("code3")
+
+    def _render_form(error: str):
+        cursor = get_db().cursor()
+        cursor.execute("SELECT name FROM language ORDER BY name")
+        return render_template(
+            "admin/language_create.html",
+            existing_languages=cursor.fetchall(),
+            error=error,
+            name=name,
+            tag=tag,
+            extlang=extlang,
+            region=region,
+            subvariant=subvariant,
+            suppress_script=suppress_script,
+            code3=code3,
+        )
+
+    if not name:
+        return _render_form("Name is required.")
+    if not tag:
+        return _render_form("Language tag is required.")
+
+    db = get_db()
+    cur = db.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO language
+                (name, tag, extlang, region, subvariant, suppress_script, code3)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (name, tag, extlang, region, subvariant, suppress_script, code3),
+        )
+        db.commit()
+    except psycopg.Error as e:
+        db.rollback()
+        return _render_form(str(e))
+
+    return redirect(url_for("admin.language_create"))
+
+
 @bp.post("/subgenre/<int:subgenre_id>/delete")
 def subgenre_delete(subgenre_id: int):
     resp = verify_user()
