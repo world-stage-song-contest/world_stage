@@ -8,6 +8,7 @@ from ..utils import (
     create_cookie,
     generate_api_token,
     get_user_id_from_session,
+    get_user_role_from_session,
     parse_cookie,
     render_template,
 )
@@ -65,7 +66,12 @@ def home():
         )
         has_pending_vote = cursor.fetchone() is not None
 
-    return render_template("index.html", has_pending_vote=has_pending_vote)
+    permissions = get_user_role_from_session(session_id)
+    is_admin = permissions.can_view_restricted
+
+    return render_template(
+        "index.html", has_pending_vote=has_pending_vote, is_admin=is_admin
+    )
 
 
 @bp.get("/favicon.ico")

@@ -32,5 +32,12 @@
         <img src="/static/images/money.png" alt="Money Bag Icon">
         <p>Support the development of World Stage by buying <del>a coffee</del> a treat (I don't like coffee).</p>
     </a>
+    {% if is_admin %}
+    <a href="{{ url_for('admin.index') }}" class="card">
+        <h3>Admin</h3>
+        <img src="/static/images/administrator.png" alt="Administrator Icon">
+        <p>Administrator utilities.</p>
+    </a>
+    {% endif %}
 </div>
 {% endblock %}
