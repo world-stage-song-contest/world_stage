@@ -198,6 +198,33 @@
         </div>
     </fieldset>
 
+    <fieldset class="hidable nongrid" id="genres-fieldset">
+        <legend>Genres</legend>
+        <details id="genres-details">
+            <summary>Genres (optional)</summary>
+            <template id="genre-template">
+                <div class="genre-row">
+                    <select class="genre-select" name="subgenre">
+                        <option value="">Select a genre</option>
+                        {% for g in genre_options %}
+                        <optgroup label="{{ g.name }}">
+                            {% for s in g.subgenres %}
+                            <option value="{{ s.id }}">{{ s.name }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                    </select>
+                </div>
+            </template>
+            <div id="genre-rows"></div>
+            <div class="genre-buttons" style="display: flex; gap: 1rem; justify-content: space-evenly;">
+                <button type="button" onclick="addGenreRow()">Add genre</button>
+                <button type="button" id="remove-genre-button"
+                        onclick="removeGenreRow()" disabled>Remove genre</button>
+            </div>
+        </details>
+    </fieldset>
+
     <fieldset class="grid hidable">
         <legend>Song video</legend>
         <label for="video">Video URL</label>

@@ -166,6 +166,17 @@ input:read-only {
     pointer-events: none;
 }
 
+.genre-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.genre-row .genre-select {
+    flex-grow: 1;
+}
+
 @media (max-width: 600px) {
     fieldset.grid {
         grid-template-columns: 1fr;

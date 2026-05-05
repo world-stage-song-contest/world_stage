@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Add Genre{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+<h1>Add genre / subgenre</h1>
+
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+
+<form method="POST" action="{{ url_for('admin.genre_create') }}">
+    <div class="banner long-text">
+        <div>
+            If the genre doesn't exist yet, it'll be created and a same-name
+            subgenre will be added automatically. The subgenre field is
+            optional — leave it blank to just create the genre.
+        </div>
+    </div>
+
+    <fieldset class="grid">
+        <legend>Genre / Subgenre</legend>
+
+        <label class="req" for="genre_name">Genre</label>
+        <input type="text" id="genre_name" name="genre_name" list="genre-options"
+               placeholder="e.g. Rock" required maxlength="80"
+               value="{{ genre_name or '' }}">
+        <datalist id="genre-options">
+        {% for g in genres %}
+            <option value="{{ g.name }}">
+        {% endfor %}
+        </datalist>
+
+        <label for="subgenre_name">Subgenre</label>
+        <input type="text" id="subgenre_name" name="subgenre_name"
+               placeholder="e.g. Folk rock (optional)" maxlength="80"
+               value="{{ subgenre_name or '' }}">
+    </fieldset>
+
+    <div class="buttons">
+        <a class="button" href="{{ url_for('admin.genre_index') }}">Back</a>
+        <button type="submit">Save</button>
+    </div>
+</form>
+{% endblock %}

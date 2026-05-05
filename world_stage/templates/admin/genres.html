@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Genres{% endblock %}
+{% block headercontents %}
+<style>
+    .genres-table .subgenre-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<h1>Genres</h1>
+
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+
+<p>
+    <a class="button" href="{{ url_for('admin.genre_create') }}">Add genre / subgenre</a>
+</p>
+
+{% if grouped %}
+<table class="genres-table">
+    <thead>
+        <tr>
+            <th>Genre</th>
+            <th>Subgenre</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for g in grouped %}
+        {% set subs = g.subgenres or [{'name': '', 'id': none}] %}
+        {% for s in subs %}
+        <tr>
+            {% if loop.first %}
+            <th rowspan="{{ subs|length }}">
+                <div>{{ g.name }}</div>
+                {% if not g.subgenres %}
+                <form method="POST" action="{{ url_for('admin.genre_delete', genre_id=g.id) }}"
+                      onsubmit="return confirm('Delete genre &quot;{{ g.name }}&quot;?');"
+                      style="display: inline">
+                    <button type="submit">Delete</button>
+                </form>
+                {% endif %}
+            </th>
+            {% endif %}
+            <td>
+                <div class="subgenre-row">
+                    <span>{{ s.name }}</span>
+                    {% if s.id is not none %}
+                    <form method="POST" action="{{ url_for('admin.subgenre_delete', subgenre_id=s.id) }}"
+                          onsubmit="return confirm('Delete subgenre &quot;{{ s.name }}&quot;?');"
+                          style="display: inline">
+                        <button type="submit">Delete</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No genres yet.</p>
+{% endif %}
+{% endblock %}

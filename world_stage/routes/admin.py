@@ -64,6 +64,179 @@ def index():
     return render_template("admin/index.html")
 
 
+def _render_genre_index(error: str | None = None):
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT genre.id AS genre_id, genre.name AS genre_name,
+               subgenre.id AS subgenre_id, subgenre.name AS subgenre_name
+        FROM genre
+        LEFT JOIN subgenre ON subgenre.genre_id = genre.id
+        ORDER BY genre.name COLLATE "C", subgenre.name COLLATE "C"
+        """
+    )
+    grouped: dict[int, dict[str, Any]] = {}
+    for r in cursor.fetchall():
+        g_id = r["genre_id"]
+        if g_id not in grouped:
+            grouped[g_id] = {"id": g_id, "name": r["genre_name"], "subgenres": []}
+        # Hide the auto-mirror subgenre that shares its name with the
+        # parent genre — it exists for the song-tagging UX, not as a
+        # distinct user-facing entry.
+        if r["subgenre_id"] is not None and r["subgenre_name"] != r["genre_name"]:
+            grouped[g_id]["subgenres"].append(
+                {"id": r["subgenre_id"], "name": r["subgenre_name"]}
+            )
+    return render_template(
+        "admin/genres.html", grouped=list(grouped.values()), error=error
+    )
+
+
+@bp.get("/genre")
+def genre_index():
+    resp = verify_user()
+    if resp:
+        return resp
+    return _render_genre_index()
+
+
+@bp.post("/genre/<int:genre_id>/delete")
+def genre_delete(genre_id: int):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("SELECT name FROM genre WHERE id = %s", (genre_id,))
+    row = cur.fetchone()
+    if not row:
+        return redirect(url_for("admin.genre_index"))
+    genre_name = row["name"]
+
+    # Only allow deletion when the only remaining subgenre is the
+    # auto-mirror (same name as the genre).
+    cur.execute(
+        "SELECT COUNT(*) AS c FROM subgenre WHERE genre_id = %s AND name <> %s",
+        (genre_id, genre_name),
+    )
+    if fetchone(cur)["c"] > 0:
+        return _render_genre_index(
+            error=f"Cannot delete '{genre_name}' while it has subgenres. "
+            "Delete its subgenres first."
+        )
+
+    cur.execute("DELETE FROM subgenre WHERE genre_id = %s", (genre_id,))
+    cur.execute("DELETE FROM genre WHERE id = %s", (genre_id,))
+    db.commit()
+    return redirect(url_for("admin.genre_index"))
+
+
+@bp.post("/subgenre/<int:subgenre_id>/delete")
+def subgenre_delete(subgenre_id: int):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cur = db.cursor()
+    cur.execute(
+        """
+        SELECT subgenre.name AS sname, genre.name AS gname
+        FROM subgenre
+        JOIN genre ON subgenre.genre_id = genre.id
+        WHERE subgenre.id = %s
+        """,
+        (subgenre_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return redirect(url_for("admin.genre_index"))
+    # Refuse to delete the auto-mirror directly; deleting the genre
+    # cleans it up instead.
+    if row["sname"] == row["gname"]:
+        return _render_genre_index(
+            error="Cannot delete the auto-mirror subgenre directly. "
+            "Delete the parent genre instead."
+        )
+
+    cur.execute("DELETE FROM subgenre WHERE id = %s", (subgenre_id,))
+    db.commit()
+    return redirect(url_for("admin.genre_index"))
+
+
+@bp.get("/genre/create")
+def genre_create():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    cursor = get_db().cursor()
+    cursor.execute('SELECT id, name FROM genre ORDER BY name COLLATE "C"')
+    genres = cursor.fetchall()
+    return render_template("admin/genre_create.html", genres=genres)
+
+
+@bp.post("/genre/create")
+def genre_create_post():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    genre_name = (request.form.get("genre_name") or "").strip()
+    subgenre_name = (request.form.get("subgenre_name") or "").strip()
+
+    def _render_form(error: str):
+        cursor = get_db().cursor()
+        cursor.execute('SELECT id, name FROM genre ORDER BY name COLLATE "C"')
+        return render_template(
+            "admin/genre_create.html",
+            genres=cursor.fetchall(),
+            error=error,
+            genre_name=genre_name,
+            subgenre_name=subgenre_name,
+        )
+
+    if not genre_name:
+        return _render_form("Genre name is required.")
+
+    db = get_db()
+    cur = db.cursor()
+    try:
+        cur.execute("SELECT id FROM genre WHERE name = %s", (genre_name,))
+        row = cur.fetchone()
+        if row:
+            genre_id = row["id"]
+        else:
+            cur.execute(
+                "INSERT INTO genre (name) VALUES (%s) RETURNING id", (genre_name,)
+            )
+            genre_id = fetchone(cur)["id"]
+            # Mirror the new genre as a subgenre under itself so songs
+            # tagged only at the broad-category level still pick a row
+            # from the subgenre table.
+            cur.execute(
+                "INSERT INTO subgenre (genre_id, name) VALUES (%s, %s)",
+                (genre_id, genre_name),
+            )
+
+        if subgenre_name and subgenre_name != genre_name:
+            cur.execute(
+                """
+                INSERT INTO subgenre (genre_id, name) VALUES (%s, %s)
+                ON CONFLICT (genre_id, name) DO NOTHING
+                """,
+                (genre_id, subgenre_name),
+            )
+
+        db.commit()
+    except psycopg.Error as e:
+        db.rollback()
+        return _render_form(str(e))
+
+    return redirect(url_for("admin.genre_index"))
+
+
 @bp.get("/manage/<int:year>/createshow")
 def create_show(year: int):
     resp = verify_user()

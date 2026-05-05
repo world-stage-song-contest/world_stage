@@ -173,6 +173,7 @@ def _song_row_to_json(
     languages: list[dict],
     key_signatures: list[dict] | None = None,
     time_signatures: list[dict] | None = None,
+    subgenres: list[dict] | None = None,
 ) -> dict:
     """Turn a DB row + language list into the API response body."""
     return {
@@ -201,6 +202,7 @@ def _song_row_to_json(
         "languages": languages,
         "key_signatures": key_signatures or [],
         "time_signatures": time_signatures or [],
+        "subgenres": subgenres or [],
     }
 
 
@@ -485,6 +487,71 @@ def _parse_time_signatures(data: dict) -> tuple[list[dict] | None, list[str]]:
     return rows, []
 
 
+# ── Subgenres ────────────────────────────────────────────────────────
+
+
+def _fetch_song_subgenres(cursor, song_id: int) -> list[dict]:
+    cursor.execute(
+        """
+        SELECT subgenre.id, subgenre.name AS subgenre_name,
+               genre.id AS genre_id, genre.name AS genre_name
+        FROM song_subgenre
+        JOIN subgenre ON subgenre.id = song_subgenre.subgenre_id
+        JOIN genre ON genre.id = subgenre.genre_id
+        WHERE song_subgenre.song_id = %s
+        ORDER BY song_subgenre.priority
+    """,
+        (song_id,),
+    )
+    return [
+        {
+            "id": r["id"],
+            "name": r["subgenre_name"],
+            "genre_id": r["genre_id"],
+            "genre_name": r["genre_name"],
+        }
+        for r in cursor.fetchall()
+    ]
+
+
+def _parse_subgenres(data: dict) -> tuple[list[int] | None, list[str]]:
+    """Validate the ``subgenres`` field. Returns ``(ids, errors)``.
+
+    ``ids`` is None when the field is absent (caller preserves existing
+    rows). An empty list means clear all subgenres. Duplicates within
+    the submitted list are silently deduped, preserving the first
+    occurrence so the user-chosen ordering is kept.
+    """
+    if "subgenres" not in data:
+        return None, []
+    raw = data.get("subgenres")
+    if raw is None:
+        return [], []
+    if not isinstance(raw, list):
+        return None, ["subgenres must be a list of subgenre IDs"]
+    ids: list[int] = []
+    seen: set[int] = set()
+    for item in raw:
+        try:
+            sid = int(item)
+        except (ValueError, TypeError):
+            return None, ["Each subgenre ID must be an integer"]
+        if sid in seen:
+            continue
+        seen.add(sid)
+        ids.append(sid)
+    return ids, []
+
+
+def _replace_song_subgenres(cursor, song_id: int, ids: list[int]) -> None:
+    cursor.execute("DELETE FROM song_subgenre WHERE song_id = %s", (song_id,))
+    for i, sid in enumerate(ids):
+        cursor.execute(
+            "INSERT INTO song_subgenre (song_id, subgenre_id, priority) VALUES (%s, %s, %s)",
+            (song_id, sid, i),
+        )
+
+
 def _replace_song_time_signatures(cursor, song_id: int, rows: list[dict]) -> None:
     cursor.execute("DELETE FROM song_time_signature WHERE song_id = %s", (song_id,))
     for r in rows:
@@ -540,7 +607,10 @@ def get_song(id: int):
     languages = _fetch_song_languages(cursor, id)
     key_signatures = _fetch_song_key_signatures(cursor, id)
     time_signatures = _fetch_song_time_signatures(cursor, id)
-    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures))
+    subgenres = _fetch_song_subgenres(cursor, id)
+    return resp(
+        _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
+    )
 
 
 # ── GET /api/song/<cc>/<year> ─────────────────────────────────────────
@@ -609,7 +679,10 @@ def get_song_by_country(cc: str, year: str):
             languages = _fetch_song_languages(cursor, row["id"])
             key_signatures = _fetch_song_key_signatures(cursor, row["id"])
             time_signatures = _fetch_song_time_signatures(cursor, row["id"])
-            return resp(_song_row_to_json(row, languages, key_signatures, time_signatures))
+            subgenres = _fetch_song_subgenres(cursor, row["id"])
+            return resp(
+                _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
+            )
 
         _select_song_by_country(cursor, cc.upper(), year_id)
         rows = cursor.fetchall()
@@ -620,7 +693,8 @@ def get_song_by_country(cc: str, year: str):
             langs = _fetch_song_languages(cursor, r["id"])
             ks = _fetch_song_key_signatures(cursor, r["id"])
             ts = _fetch_song_time_signatures(cursor, r["id"])
-            results.append(_song_row_to_json(r, langs, ks, ts))
+            sg = _fetch_song_subgenres(cursor, r["id"])
+            results.append(_song_row_to_json(r, langs, ks, ts, sg))
         return resp(results)
 
     _select_song_by_country(cursor, cc.upper(), year_id)
@@ -631,7 +705,10 @@ def get_song_by_country(cc: str, year: str):
     languages = _fetch_song_languages(cursor, row["id"])
     key_signatures = _fetch_song_key_signatures(cursor, row["id"])
     time_signatures = _fetch_song_time_signatures(cursor, row["id"])
-    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures))
+    subgenres = _fetch_song_subgenres(cursor, row["id"])
+    return resp(
+        _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
+    )
 
 
 @bp.get("/<cc>/<year>/<int:entry_number>")
@@ -661,7 +738,10 @@ def get_song_by_country_entry(cc: str, year: str, entry_number: int):
     languages = _fetch_song_languages(cursor, row["id"])
     key_signatures = _fetch_song_key_signatures(cursor, row["id"])
     time_signatures = _fetch_song_time_signatures(cursor, row["id"])
-    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures))
+    subgenres = _fetch_song_subgenres(cursor, row["id"])
+    return resp(
+        _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
+    )
 
 
 # ── POST /api/song ───────────────────────────────────────────────────
@@ -771,6 +851,10 @@ def create_song():
     if ts_errors:
         return err(ErrorID.BAD_REQUEST, "; ".join(ts_errors))
 
+    subgenre_ids, sg_errors = _parse_subgenres(data)
+    if sg_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(sg_errors))
+
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
 
     is_placeholder = bool(data.get("is_placeholder", False))
@@ -863,6 +947,9 @@ def create_song():
     if time_signatures:
         _replace_song_time_signatures(cursor, song_id, time_signatures)
 
+    if subgenre_ids:
+        _replace_song_subgenres(cursor, song_id, subgenre_ids)
+
     db.commit()
 
     row = _fetch_song(cursor, song_id)
@@ -870,7 +957,8 @@ def create_song():
     languages = _fetch_song_languages(cursor, song_id)
     ks = _fetch_song_key_signatures(cursor, song_id)
     ts = _fetch_song_time_signatures(cursor, song_id)
-    body, code = resp(_song_row_to_json(row, languages, ks, ts), 201)
+    sg = _fetch_song_subgenres(cursor, song_id)
+    body, code = resp(_song_row_to_json(row, languages, ks, ts, sg), 201)
     response = make_response(body, code)
     response.headers["Location"] = url_for("api.song.get_song", id=song_id)
     return response
@@ -927,6 +1015,10 @@ def replace_song(id: int):
     time_signatures, ts_errors = _parse_time_signatures(data)
     if ts_errors:
         return err(ErrorID.BAD_REQUEST, "; ".join(ts_errors))
+
+    subgenre_ids, sg_errors = _parse_subgenres(data)
+    if sg_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(sg_errors))
 
     # ── Build full replacement values ────────────────────────────
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
@@ -1022,10 +1114,11 @@ def replace_song(id: int):
             (id, lang_id, i),
         )
 
-    # PUT is full replacement: absent ``key_signatures`` /
-    # ``time_signatures`` fields mean clear them rather than preserve.
+    # PUT is full replacement: absent collection fields mean clear
+    # them rather than preserve.
     _replace_song_key_signatures(cursor, id, key_signatures or [])
     _replace_song_time_signatures(cursor, id, time_signatures or [])
+    _replace_song_subgenres(cursor, id, subgenre_ids or [])
 
     db.commit()
 
@@ -1034,7 +1127,8 @@ def replace_song(id: int):
     langs = _fetch_song_languages(cursor, id)
     ks = _fetch_song_key_signatures(cursor, id)
     ts = _fetch_song_time_signatures(cursor, id)
-    return resp(_song_row_to_json(updated, langs, ks, ts))
+    sg = _fetch_song_subgenres(cursor, id)
+    return resp(_song_row_to_json(updated, langs, ks, ts, sg))
 
 
 # ── PATCH /api/song/<id> ─────────────────────────────────────────────
@@ -1107,6 +1201,11 @@ def update_song(id: int):
     if ts_errors:
         return err(ErrorID.BAD_REQUEST, "; ".join(ts_errors))
 
+    # ── Subgenres ────────────────────────────────────────────────
+    subgenre_ids, sg_errors = _parse_subgenres(data)
+    if sg_errors:
+        return err(ErrorID.BAD_REQUEST, "; ".join(sg_errors))
+
     # Recalculate language IDs if languages or relevant flags changed
     if language_ids is not None or "is_translation" in data or "does_match" in data:
         cur_langs = (
@@ -1150,6 +1249,7 @@ def update_song(id: int):
         and language_ids is None
         and key_signatures is None
         and time_signatures is None
+        and subgenre_ids is None
     ):
         return err(ErrorID.BAD_REQUEST, "No fields to update")
 
@@ -1202,6 +1302,9 @@ def update_song(id: int):
     if time_signatures is not None:
         _replace_song_time_signatures(cursor, id, time_signatures)
 
+    if subgenre_ids is not None:
+        _replace_song_subgenres(cursor, id, subgenre_ids)
+
     db.commit()
 
     updated = _fetch_song(cursor, id)
@@ -1209,7 +1312,8 @@ def update_song(id: int):
     langs = _fetch_song_languages(cursor, id)
     ks = _fetch_song_key_signatures(cursor, id)
     ts = _fetch_song_time_signatures(cursor, id)
-    return resp(_song_row_to_json(updated, langs, ks, ts))
+    sg = _fetch_song_subgenres(cursor, id)
+    return resp(_song_row_to_json(updated, langs, ks, ts, sg))
 
 
 # ── DELETE /api/song/<id> ─────────────────────────────────────────────
@@ -1250,6 +1354,7 @@ def delete_song(id: int):
     cursor.execute("DELETE FROM song_language WHERE song_id = %s", (id,))
     cursor.execute("DELETE FROM song_key_signature WHERE song_id = %s", (id,))
     cursor.execute("DELETE FROM song_time_signature WHERE song_id = %s", (id,))
+    cursor.execute("DELETE FROM song_subgenre WHERE song_id = %s", (id,))
     cursor.execute("DELETE FROM song WHERE id = %s", (id,))
     db.commit()
 

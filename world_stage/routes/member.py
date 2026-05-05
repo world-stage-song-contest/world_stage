@@ -27,6 +27,40 @@ def get_languages() -> list[dict]:
     return cursor.fetchall()
 
 
+def get_genre_options() -> list[dict]:
+    """Return all subgenres grouped by parent genre, ordered for the
+    submit form's optgroup dropdowns. Within each genre, the auto-mirror
+    subgenre (the one whose name matches the genre) sorts first; the
+    remaining subgenres follow alphabetically.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        SELECT genre.id AS genre_id, genre.name AS genre_name,
+               subgenre.id AS subgenre_id, subgenre.name AS subgenre_name
+        FROM genre
+        JOIN subgenre ON subgenre.genre_id = genre.id
+        ORDER BY genre.name COLLATE "C",
+                 (subgenre.name = genre.name) DESC,
+                 subgenre.name COLLATE "C"
+        """
+    )
+    grouped: dict[int, dict] = {}
+    for r in cursor.fetchall():
+        gid = r["genre_id"]
+        if gid not in grouped:
+            grouped[gid] = {
+                "id": gid,
+                "name": r["genre_name"],
+                "subgenres": [],
+            }
+        grouped[gid]["subgenres"].append(
+            {"id": r["subgenre_id"], "name": r["subgenre_name"]}
+        )
+    return list(grouped.values())
+
+
 def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str, list[dict]]:
     """Get countries available for submission"""
     db = get_db()
@@ -204,6 +238,7 @@ def submit():
         elevated=permissions.can_edit,
         years=get_years_grouped(),
         languages=get_languages(),
+        genre_options=get_genre_options(),
         countries={},
         data={},
         onLoad=True,
@@ -339,6 +374,28 @@ def get_country_data(year: int, country: str):
         for r in cursor.fetchall()
     ]
 
+    cursor.execute(
+        """
+        SELECT subgenre.id, subgenre.name AS subgenre_name,
+               genre.id AS genre_id, genre.name AS genre_name
+        FROM song_subgenre
+        JOIN subgenre ON subgenre.id = song_subgenre.subgenre_id
+        JOIN genre ON genre.id = subgenre.genre_id
+        WHERE song_subgenre.song_id = %s
+        ORDER BY song_subgenre.priority
+    """,
+        (song_id,),
+    )
+    subgenres = [
+        {
+            "id": r["id"],
+            "name": r["subgenre_name"],
+            "genre_id": r["genre_id"],
+            "genre_name": r["genre_name"],
+        }
+        for r in cursor.fetchall()
+    ]
+
     return {
         "id": song_id,
         "year": year,
@@ -364,4 +421,5 @@ def get_country_data(year: int, country: str):
         "languages": languages,
         "key_signatures": key_signatures,
         "time_signatures": time_signatures,
+        "subgenres": subgenres,
     }

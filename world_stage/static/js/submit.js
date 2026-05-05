@@ -43,6 +43,19 @@ async function onLoad() {
         });
     }
 
+    // Same pattern for genres: opening the section adds an empty
+    // select. Abandoned blank rows are dropped at submit time.
+    const genresDetails = document.getElementById('genres-details');
+    if (genresDetails) {
+        genresDetails.addEventListener('toggle', () => {
+            if (!genresDetails.open) return;
+            const container = document.getElementById('genre-rows');
+            if (container && !container.firstElementChild) {
+                addGenreRow();
+            }
+        });
+    }
+
     // Intercept form submission
     document.getElementById('submit-song').addEventListener('submit', handleSubmit);
 }
@@ -90,6 +103,7 @@ function collectFormData() {
         country: form.country.value,
         key_signatures: collectKeySignatures(),
         time_signatures: collectTimeSignatures(),
+        subgenres: collectSubgenres(),
         title: form.title.value || null,
         native_title: form.native_title.value || null,
         artist: form.artist.value || null,
@@ -263,6 +277,10 @@ function clearFormFields() {
     // default 4/4 row; pristine forms with the section folded won't
     // submit anything.
     clearTimeSignatureRows();
+
+    // Genres also start empty. Opening the section seeds a single
+    // empty select; abandoned blank rows are dropped on submit.
+    clearGenreRows();
 
     // Reset does_match to checked (default)
     const doesMatchCb = document.getElementById('does_match');
@@ -452,6 +470,44 @@ function readOtherOrSelect(row, name) {
         return v || null;
     }
     return sel.value;
+}
+
+// ── Genres / subgenres ───────────────────────────────────────────────
+
+function addGenreRow(values) {
+    const container = document.getElementById('genre-rows');
+    const template = document.getElementById('genre-template');
+    const fragment = template.content.cloneNode(true);
+    const select = fragment.querySelector('.genre-select');
+    if (values && values.id != null) {
+        select.value = String(values.id);
+    }
+    container.appendChild(fragment);
+    document.getElementById('remove-genre-button').disabled = false;
+}
+
+function removeGenreRow() {
+    const container = document.getElementById('genre-rows');
+    const last = container.lastElementChild;
+    if (last) last.remove();
+    if (!container.firstElementChild) {
+        document.getElementById('remove-genre-button').disabled = true;
+    }
+}
+
+function clearGenreRows() {
+    const container = document.getElementById('genre-rows');
+    if (container) container.innerHTML = '';
+    const btn = document.getElementById('remove-genre-button');
+    if (btn) btn.disabled = true;
+}
+
+function collectSubgenres() {
+    const ids = [];
+    for (const sel of document.querySelectorAll('.genre-select')) {
+        if (sel.value) ids.push(parseInt(sel.value, 10));
+    }
+    return ids;
 }
 
 // ── Time signatures ──────────────────────────────────────────────────
@@ -718,9 +774,11 @@ async function populateSongData(entryNumberOverride) {
     const languages = songData.languages;
     const keySignatures = songData.key_signatures || [];
     const timeSignatures = songData.time_signatures || [];
+    const subgenres = songData.subgenres || [];
     delete songData.languages;
     delete songData.key_signatures;
     delete songData.time_signatures;
+    delete songData.subgenres;
     delete songData.id;
 
     const form = document.forms.submit_song;
@@ -781,6 +839,14 @@ async function populateSongData(entryNumberOverride) {
     }
     const tsDetails = document.getElementById('time-signatures-details');
     if (tsDetails) tsDetails.open = false;
+
+    // Populate genres.
+    clearGenreRows();
+    for (const sg of subgenres) {
+        addGenreRow(sg);
+    }
+    const genresDetails = document.getElementById('genres-details');
+    if (genresDetails) genresDetails.open = false;
 
     // Update does_match visibility
     const doesMatchCb = document.getElementById('does_match');
