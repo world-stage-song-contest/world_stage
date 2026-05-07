@@ -1008,6 +1008,56 @@ def get_song_key_signatures(song_id: int) -> list[str]:
     return out
 
 
+def get_song_time_signatures(song_id: int) -> list[str]:
+    """Return human-readable time signature labels for a song.
+
+    Deduped by (numerator, denominator) and ordered by first appearance
+    in the song. Numerator and denominator are joined with a fraction
+    slash (U+2044) — e.g. ``4⁄4``. Mixed-meter sections (both NULL)
+    render as ``mixed meter``.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        SELECT numerator, denominator
+        FROM song_time_signature
+        WHERE song_id = %s
+        ORDER BY start_seconds
+    """,
+        (song_id,),
+    )
+    seen: set[tuple[int | None, int | None]] = set()
+    out: list[str] = []
+    for r in cursor.fetchall():
+        key = (r["numerator"], r["denominator"])
+        if key in seen:
+            continue
+        seen.add(key)
+        if key == (None, None):
+            out.append("mixed meter")
+        else:
+            out.append(f"{r['numerator']}⁄{r['denominator']}")
+    return out
+
+
+def get_song_subgenres_display(song_id: int) -> list[str]:
+    """Return subgenre names for a song in user-selected priority order."""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        SELECT subgenre.name
+        FROM song_subgenre
+        JOIN subgenre ON subgenre.id = song_subgenre.subgenre_id
+        WHERE song_subgenre.song_id = %s
+        ORDER BY song_subgenre.priority
+    """,
+        (song_id,),
+    )
+    return [r["name"] for r in cursor.fetchall()]
+
+
 def get_song_key_signature_timeline(song_id: int) -> list[dict]:
     """Return key signatures in chronological order, formatted for the
     click-to-seek timeline below the video. Atonal sections are
@@ -1467,6 +1517,8 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
     ret.languages = get_song_languages(ret.id)
     ret.key_signatures = get_song_key_signatures(ret.id)
     ret.key_signature_timeline = get_song_key_signature_timeline(ret.id)
+    ret.time_signatures = get_song_time_signatures(ret.id)
+    ret.subgenres = get_song_subgenres_display(ret.id)
     return ret
 
 
@@ -1542,6 +1594,8 @@ def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
     s.languages = get_song_languages(s.id)
     s.key_signatures = get_song_key_signatures(s.id)
     s.key_signature_timeline = get_song_key_signature_timeline(s.id)
+    s.time_signatures = get_song_time_signatures(s.id)
+    s.subgenres = get_song_subgenres_display(s.id)
     return s
 
 

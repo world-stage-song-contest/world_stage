@@ -88,6 +88,18 @@
             <td>{{ song.key_signatures|join(', ') }}</td>
         </tr>
         {% endif %}
+        {% if song.time_signatures %}
+        <tr>
+            <th>Time signatures</th>
+            <td>{{ song.time_signatures|join(', ') }}</td>
+        </tr>
+        {% endif %}
+        {% if song.subgenres %}
+        <tr>
+            <th>Genres</th>
+            <td>{{ song.subgenres|join(', ') }}</td>
+        </tr>
+        {% endif %}
         <tr>
             <th>Submitter</th>
             <td>{{ song.submitter }}</td>
