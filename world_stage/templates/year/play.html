@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Play: {{ year }} {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link href="https://cdn.jsdelivr.net/npm/video.js@8.17.4/dist/video-js.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/videojs-playlist-ui@4.1.1/dist/videojs-playlist-ui.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/video.js@8.17.4/dist/video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-playlist@5.1.0/dist/videojs-playlist.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-playlist-ui@4.1.1/dist/videojs-playlist-ui.min.js"></script>
+    <style>
+        #play-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 1rem;
+        }
+        #play-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 1rem;
+            padding: 0 1rem 1rem;
+            align-items: stretch;
+        }
+        @media (max-width: 800px) {
+            #play-layout { grid-template-columns: 1fr; }
+            #playlist-wrap { position: static; height: 50vh; }
+            .vjs-playlist { position: static; }
+        }
+        #player-wrap .video-js {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            height: auto;
+        }
+        #playlist-wrap {
+            position: relative;
+            min-height: 0;
+        }
+        .vjs-playlist {
+            position: absolute;
+            inset: 0;
+            overflow-y: auto;
+            background: #000;
+        }
+    </style>
+{% endblock %}
+{% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    {% for other_show in other_shows %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_show_play', short_name=special, show=other_show) }}"> {{ other_show|upper }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.show_play', year=year, show=other_show) }}"> {{ other_show|upper }}</a>
+    {% endif %}
+    {% endfor %}
+    <span class="nav-separator"></span>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results Summary</a>
+    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.special_scoreboard', short_name=special, show=show) }}">Scoreboard</a>
+    <a class="nav-item" href="{{ url_for('year.special_predictions', short_name=special, show=show) }}">Predictions</a>
+    {% if can_apply_penalty %}
+    {% if has_qualifiers %}
+    <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifiers</a>
+    {% endif %}
+    <a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('year.special_playlist', short_name=special, show=show) }}">Download .m3u</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
+    <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
+    <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=show) }}">Predictions</a>
+    {% if can_apply_penalty %}
+    {% if has_qualifiers %}
+    <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifiers</a>
+    {% endif %}
+    <a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('year.show_playlist', year=year, show=show) }}">Download .m3u</a>
+    {% endif %}
+{% endblock %}
+{% block content %}
+<div id="play-controls">
+    <label style="margin-left: auto;">
+        <input type="checkbox" id="postcards-toggle" {% if postcards %}checked{% endif %}>
+        Include postcards
+    </label>
+</div>
+
+<div id="play-layout">
+    <div id="player-wrap">
+        <video-js id="player-video" class="vjs-default-skin" controls preload="auto" playsinline></video-js>
+    </div>
+    <div id="playlist-wrap">
+        <div class="vjs-playlist"></div>
+    </div>
+</div>
+
+<script>
+    const ENTRIES = {{ entries|tojson }};
+
+    document.getElementById('postcards-toggle').addEventListener('change', (e) => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('postcards', e.target.checked ? 'true' : 'false');
+        window.location.href = url.toString();
+    });
+
+    function entryName(entry) {
+        if (entry.kind === 'postcard') return `Postcard: ${entry.country}`;
+        if (entry.kind === 'recap') return 'Recap';
+        return `${entry.artist} — ${entry.title}`;
+    }
+
+    function entryMime(url) {
+        const u = url.toLowerCase();
+        if (u.endsWith('.webm')) return 'video/webm';
+        if (u.endsWith('.mov')) return 'video/quicktime';
+        return 'video/mp4';
+    }
+
+    function flagUrl(cc) {
+        return cc ? `/flag/${cc.toUpperCase()}.svg?t=rect&w=160` : null;
+    }
+
+    const playlist = ENTRIES.map((entry) => {
+        const item = {
+            name: entryName(entry),
+            description: entry.kind === 'song' ? entry.country : '',
+            sources: [{ src: entry.url, type: entryMime(entry.url) }],
+        };
+        const flag = flagUrl(entry.cc);
+        if (flag) item.thumbnail = flag;
+        if (entry.poster) item.poster = entry.poster;
+        if (entry.vtt) {
+            item.textTracks = [{
+                kind: 'subtitles',
+                src: entry.vtt,
+                srclang: 'en',
+                label: 'Subtitles',
+                default: true,
+            }];
+        }
+        return item;
+    });
+
+    const player = videojs('player-video', {
+        fluid: true,
+        autoplay: true,
+    });
+
+    player.playlist(playlist);
+    player.playlist.autoadvance(0);
+    player.playlistUi({ el: document.querySelector('.vjs-playlist') });
+
+    player.on('playlistitem', () => {
+        const items = player.playlist();
+        const item = items[player.playlist.currentItem()];
+        player.poster(item && item.poster ? item.poster : '');
+    });
+</script>
+{% endblock %}

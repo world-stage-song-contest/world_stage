@@ -407,6 +407,7 @@ class Song:
     lyrics_notes: str | None
     video_link: str | None
     poster_link: str | None
+    vtt_link: str | None
     recap_start: str | None
     recap_end: str | None
     sources: str | None
@@ -433,6 +434,7 @@ class Song:
             artist=song["artist"],
             video_link=song["video_link"],
             poster_link=song["poster_link"],
+            vtt_link=song.get("vtt_link"),
             recap_start=song["snippet_start"],
             recap_end=song["snippet_end"],
             country=Country(
@@ -469,6 +471,7 @@ class Song:
         year: Year,
         entry_number: int,
         poster_link: str | None,
+        vtt_link: str | None,
         placeholder: bool,
         submitter: str | None,
         submitter_id: int | None,
@@ -499,6 +502,8 @@ class Song:
         self.languages = languages
         self.key_signatures: list[str] = []
         self.key_signature_timeline: list[dict] = []
+        self.time_signatures: list[str] = []
+        self.subgenres: list[str] = []
         self.placeholder = placeholder
         self.submitter = submitter
         self.submitter_id = submitter_id
@@ -508,6 +513,7 @@ class Song:
         self.lyrics_notes = lyrics_notes
         self.video_link = video_link
         self.poster_link = poster_link
+        self.vtt_link = vtt_link
         self.sources = sources
         self.recap_start = format_seconds(recap_start) if recap_start is not None else None
         self.recap_end = format_seconds(recap_end) if recap_end is not None else None

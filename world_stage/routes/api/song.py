@@ -45,6 +45,7 @@ MUTABLE_TEXT_FIELDS = (
     "artist",
     "video_link",
     "poster_link",
+    "vtt_link",
     "snippet_start",
     "snippet_end",
     "translated_lyrics",
@@ -189,6 +190,7 @@ def _song_row_to_json(
         "is_placeholder": row["is_placeholder"],
         "video_link": row["video_link"],
         "poster_link": row["poster_link"],
+        "vtt_link": row["vtt_link"],
         "snippet_start": format_seconds(row["snippet_start"]) if row["snippet_start"] else None,
         "snippet_end": format_seconds(row["snippet_end"]) if row["snippet_end"] else None,
         "translated_lyrics": row["translated_lyrics"],
@@ -212,7 +214,7 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
         SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
                song.title, song.native_title, song.artist, song.is_placeholder,
                song.title_language_id, song.native_language_id,
-               song.video_link, song.poster_link,
+               song.video_link, song.poster_link, song.vtt_link,
                song.snippet_start, song.snippet_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
@@ -627,7 +629,7 @@ def _select_song_by_country(cursor, cc: str, year: int, entry_number: int | None
         SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
                song.title, song.native_title, song.artist, song.is_placeholder,
                song.title_language_id, song.native_language_id,
-               song.video_link, song.poster_link,
+               song.video_link, song.poster_link, song.vtt_link,
                song.snippet_start, song.snippet_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
@@ -902,11 +904,11 @@ def create_song():
         """
         INSERT INTO song (
             year_id, country_id, entry_number, title, native_title, artist, is_placeholder,
-            title_language_id, native_language_id, video_link, poster_link,
+            title_language_id, native_language_id, video_link, poster_link, vtt_link,
             snippet_start, snippet_end, translated_lyrics,
             romanized_lyrics, native_lyrics, submitter_id,
             notes, sources, admin_approved, modified_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                    CURRENT_TIMESTAMP)
         RETURNING id
     """,
@@ -922,6 +924,7 @@ def create_song():
             native_language_id,
             text["video_link"],
             text["poster_link"],
+            text["vtt_link"],
             parse_seconds(text["snippet_start"]),
             parse_seconds(text["snippet_end"]),
             text["translated_lyrics"],
@@ -1032,9 +1035,11 @@ def replace_song(id: int):
     if permissions.can_edit:
         admin_approved = bool(data.get("admin_approved", False))
         poster_link = text["poster_link"]
+        vtt_link = text["vtt_link"]
     else:
         admin_approved = row["admin_approved"]
         poster_link = row["poster_link"]
+        vtt_link = row["vtt_link"]
 
     title_language_id, native_language_id = _resolve_language_ids(
         language_ids,
@@ -1077,7 +1082,7 @@ def replace_song(id: int):
         UPDATE song SET
             title = %s, native_title = %s, artist = %s,
             is_placeholder = %s, title_language_id = %s, native_language_id = %s,
-            video_link = %s, poster_link = %s,
+            video_link = %s, poster_link = %s, vtt_link = %s,
             snippet_start = %s, snippet_end = %s,
             translated_lyrics = %s, romanized_lyrics = %s, native_lyrics = %s,
             notes = %s, sources = %s,
@@ -1094,6 +1099,7 @@ def replace_song(id: int):
             native_language_id,
             text["video_link"],
             poster_link,
+            vtt_link,
             parse_seconds(text["snippet_start"]),
             parse_seconds(text["snippet_end"]),
             text["translated_lyrics"],

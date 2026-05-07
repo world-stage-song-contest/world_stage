@@ -281,7 +281,7 @@ def get_country_data(year: int, country: str):
                 """
                 SELECT id, title, native_title, artist, is_placeholder,
                        title_language_id, native_language_id, video_link, poster_link,
-                       snippet_start, snippet_end, translated_lyrics,
+                       vtt_link, snippet_start, snippet_end, translated_lyrics,
                        romanized_lyrics, native_lyrics, notes, submitter_id,
                        sources, admin_approved, entry_number
                 FROM song
@@ -296,7 +296,7 @@ def get_country_data(year: int, country: str):
                 """
                 SELECT id, title, native_title, artist, is_placeholder,
                        title_language_id, native_language_id, video_link, poster_link,
-                       snippet_start, snippet_end, translated_lyrics,
+                       vtt_link, snippet_start, snippet_end, translated_lyrics,
                        romanized_lyrics, native_lyrics, notes, submitter_id,
                        sources, admin_approved, entry_number
                 FROM song
@@ -311,7 +311,7 @@ def get_country_data(year: int, country: str):
             """
             SELECT id, title, native_title, artist, is_placeholder,
                    title_language_id, native_language_id, video_link, poster_link,
-                   snippet_start, snippet_end, translated_lyrics,
+                   vtt_link, snippet_start, snippet_end, translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
                    sources, admin_approved, entry_number
             FROM song
@@ -409,6 +409,7 @@ def get_country_data(year: int, country: str):
         "native_language_id": row["native_language_id"],
         "video_link": row["video_link"],
         "poster_link": row["poster_link"],
+        "vtt_link": row["vtt_link"],
         "snippet_start": format_seconds(row["snippet_start"] or None),
         "snippet_end": format_seconds(row["snippet_end"] or None),
         "translated_lyrics": row["translated_lyrics"],

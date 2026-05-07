@@ -65,6 +65,7 @@ class Song(Model):
     lyrics_notes: str | None
     video_link: str | None
     poster_link: str | None
+    vtt_link: str | None = None
     recap_start: str | None
     recap_end: str | None
     sources: str | None

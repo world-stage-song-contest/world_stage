@@ -7,9 +7,11 @@
     {% if special %}
     <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results summary</a>
     <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.special_show_play', short_name=special, show=show) }}">Play</a>
     {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results summary</a>
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('year.show_play', year=year, show=show) }}">Play</a>
     {% endif %}
 {% endblock %}
 {% block content %}

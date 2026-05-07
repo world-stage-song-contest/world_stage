@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS song (
     sources text,
     admin_approved boolean,
     poster_link text,
+    vtt_link text,
     entry_number integer NOT NULL DEFAULT 1,
     CONSTRAINT song_year_country_entry_key UNIQUE (year_id, country_id, entry_number)
 );
@@ -795,6 +796,11 @@ BEGIN
     IF OLD.poster_link IS DISTINCT FROM NEW.poster_link THEN
     v_changed := v_changed || jsonb_build_object('poster_link',
     jsonb_build_object('old', OLD.poster_link, 'new', NEW.poster_link));
+    END IF;
+
+    IF OLD.vtt_link IS DISTINCT FROM NEW.vtt_link THEN
+    v_changed := v_changed || jsonb_build_object('vtt_link',
+    jsonb_build_object('old', OLD.vtt_link, 'new', NEW.vtt_link));
     END IF;
 
     IF OLD.snippet_start IS DISTINCT FROM NEW.snippet_start THEN

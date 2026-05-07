@@ -23,6 +23,7 @@
     <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.special_scoreboard', short_name=special, show=show) }}">Scoreboard</a>
     <a class="nav-item" href="{{ url_for('year.special_predictions', short_name=special, show=show) }}">Predictions</a>
+    <a class="nav-item" href="{{ url_for('year.special_show_play', short_name=special, show=show) }}">Play</a>
     {% if can_apply_penalty %}
     {% if has_qualifiers %}
     <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifiers</a>
@@ -33,6 +34,7 @@
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
     <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=show) }}">Predictions</a>
+    <a class="nav-item" href="{{ url_for('year.show_play', year=year, show=show) }}">Play</a>
     {% if can_apply_penalty %}
     {% if has_qualifiers %}
     <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifiers</a>
