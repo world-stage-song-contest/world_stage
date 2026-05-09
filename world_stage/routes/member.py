@@ -339,7 +339,7 @@ def get_country_data(year: int, country: str):
 
     cursor.execute(
         """
-        SELECT start_seconds, tonic, mode, microtonal
+        SELECT start_seconds, tonic, mode, microtonal, notes
         FROM song_key_signature
         WHERE song_id = %s
         ORDER BY start_seconds
@@ -352,13 +352,14 @@ def get_country_data(year: int, country: str):
             "tonic": r["tonic"],
             "mode": r["mode"],
             "microtonal": bool(r["microtonal"]),
+            "notes": r["notes"],
         }
         for r in cursor.fetchall()
     ]
 
     cursor.execute(
         """
-        SELECT start_seconds, numerator, denominator
+        SELECT start_seconds, numerator, denominator, notes
         FROM song_time_signature
         WHERE song_id = %s
         ORDER BY start_seconds
@@ -370,6 +371,7 @@ def get_country_data(year: int, country: str):
             "start_seconds": r["start_seconds"],
             "numerator": r["numerator"],
             "denominator": r["denominator"],
+            "notes": r["notes"],
         }
         for r in cursor.fetchall()
     ]

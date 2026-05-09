@@ -38,6 +38,19 @@
             background: #fff;
             width: 5px;
         }
+
+        /* Highlights the recap snippet range on the progress bar. Sits
+           below the key markers (z-index 1 vs 2) and is purely
+           decorative — pointer-events disabled so it doesn't intercept
+           seeks or hover on the bar itself. */
+        .vjs-progress-holder .recap-marker {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background: rgba(33, 102, 255, 0.45);
+            z-index: 1;
+            pointer-events: none;
+        }
     </style>
     <script>
         function copyValue(th) {
@@ -158,6 +171,7 @@
 </div>
 
 {% if song.key_signature_timeline %}
+{% set has_ks_notes = song.key_signature_timeline|selectattr("notes")|list|length > 0 %}
 <details class="key-signature-timeline">
     <summary>Key signature timeline</summary>
     <table>
@@ -165,6 +179,7 @@
             <tr>
                 <th>Time</th>
                 <th>Key</th>
+                {% if has_ks_notes %}<th>Notes</th>{% endif %}
             </tr>
         </thead>
         <tbody>
@@ -174,6 +189,7 @@
                     <a href="#" class="ks-timestamp" data-seconds="{{ k.start_seconds }}">{{ k.start_label }}</a>
                 </td>
                 <td>{{ k.label }}</td>
+                {% if has_ks_notes %}<td>{{ k.notes or '' }}</td>{% endif %}
             </tr>
         {% endfor %}
         </tbody>
@@ -266,13 +282,22 @@
 
 <script src="https://vjs.zencdn.net/8.23.3/video.min.js"></script>
 
-{% if song.key_signature_timeline %}
+{% set has_recap = song.recap_start_seconds is not none
+                  and song.recap_end_seconds is not none
+                  and song.recap_end_seconds > song.recap_start_seconds %}
+{% if song.key_signature_timeline or has_recap %}
 <script type="application/json" id="ks-timeline-data">{{ song.key_signature_timeline|tojson }}</script>
+<script type="application/json" id="recap-data">{{
+    {'start': song.recap_start_seconds, 'end': song.recap_end_seconds}|tojson
+}}</script>
 <script>
     (function () {
+        if (typeof videojs !== 'function') return;
+
         const timelineNode = document.getElementById('ks-timeline-data');
         const timeline = timelineNode ? JSON.parse(timelineNode.textContent) : [];
-        if (!timeline.length || typeof videojs !== 'function') return;
+        const recapNode = document.getElementById('recap-data');
+        const recap = recapNode ? JSON.parse(recapNode.textContent) : null;
 
         function renderMarkers(player) {
             const duration = player.duration();
@@ -280,6 +305,23 @@
             const holder = player.el().querySelector('.vjs-progress-holder');
             if (!holder) return;
 
+            // Recap range — appended first so the key markers (z-index
+            // 2) draw on top of it (z-index 1).
+            holder.querySelectorAll('.recap-marker').forEach(m => m.remove());
+            if (recap && recap.start != null && recap.end != null
+                    && recap.end > recap.start && recap.start < duration) {
+                const safeEnd = Math.min(recap.end, duration);
+                const left = (recap.start / duration) * 100;
+                const width = ((safeEnd - recap.start) / duration) * 100;
+                const r = document.createElement('div');
+                r.className = 'recap-marker';
+                r.style.left = left + '%';
+                r.style.width = width + '%';
+                r.title = 'Recap snippet';
+                holder.appendChild(r);
+            }
+
+            // Key signature markers
             holder.querySelectorAll('.ks-marker').forEach(m => m.remove());
             for (const k of timeline) {
                 if (k.start_seconds <= 0 || k.start_seconds >= duration) continue;

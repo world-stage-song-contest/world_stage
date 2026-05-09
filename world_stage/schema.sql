@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS song_key_signature (
     tonic text,
     mode text,
     microtonal boolean NOT NULL DEFAULT FALSE,
+    notes text,
     UNIQUE (song_id, start_seconds),
     CHECK (start_seconds >= 0)
 );
@@ -145,6 +146,7 @@ CREATE TABLE IF NOT EXISTS song_time_signature (
     start_seconds integer NOT NULL DEFAULT 0,
     numerator smallint,
     denominator smallint,
+    notes text,
     UNIQUE (song_id, start_seconds),
     CHECK (start_seconds >= 0),
     CHECK ((numerator IS NULL) = (denominator IS NULL)),

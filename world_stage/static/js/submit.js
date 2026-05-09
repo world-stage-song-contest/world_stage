@@ -392,6 +392,8 @@ function addKeySignatureRow(values) {
         // Atonal is the absence of both tonic and mode.
         atonalCb.checked = values.tonic == null && values.mode == null;
         microtonalCb.checked = !!values.microtonal;
+        const notesInput = row.querySelector('[data-ks="notes"]');
+        if (notesInput && values.notes != null) notesInput.value = values.notes;
         applyAtonal(row);
     }
 
@@ -534,6 +536,8 @@ function addTimeSignatureRow(values) {
             if (values.numerator != null) numInput.value = values.numerator;
             if (values.denominator != null) denomSel.value = String(values.denominator);
         }
+        const notesInput = row.querySelector('[data-ts="notes"]');
+        if (notesInput && values.notes != null) notesInput.value = values.notes;
         applyMixedMeter(row);
     }
 
@@ -572,21 +576,41 @@ function collectTimeSignatures() {
     for (const row of rows) {
         const isMixed = row.querySelector('[data-ts="mixed"]').checked;
         const startSeconds = parseTimeStr(row.querySelector('[data-ts="start"]').value);
+        const notesRaw = (row.querySelector('[data-ts="notes"]')?.value || '').trim();
+        const notes = notesRaw || null;
 
         if (isMixed) {
-            out.push({start_seconds: startSeconds, numerator: null, denominator: null});
+            out.push({
+                start_seconds: startSeconds,
+                numerator: null,
+                denominator: null,
+                notes,
+            });
             continue;
         }
 
         const numStr = (row.querySelector('[data-ts="numerator"]').value || '').trim();
         const denomStr = row.querySelector('[data-ts="denominator"]').value;
-        if (numStr === '' || !denomStr) continue;  // abandoned partial row
+
+        if (numStr === '' || !denomStr) {
+            // Partial row: keep it only if the user wrote a note, so a
+            // standalone annotation isn't lost.
+            if (notes) {
+                out.push({
+                    start_seconds: startSeconds,
+                    numerator: null,
+                    denominator: null,
+                    notes,
+                });
+            }
+            continue;
+        }
 
         const numerator = parseInt(numStr, 10);
         const denominator = parseInt(denomStr, 10);
         if (!Number.isFinite(numerator) || numerator <= 0) continue;
 
-        out.push({start_seconds: startSeconds, numerator, denominator});
+        out.push({start_seconds: startSeconds, numerator, denominator, notes});
     }
     return out;
 }
@@ -599,9 +623,11 @@ function validateTimeSignatures() {
         const numStr = (row.querySelector('[data-ts="numerator"]').value || '').trim();
         const denomStr = row.querySelector('[data-ts="denominator"]').value;
         const startSeconds = parseTimeStr(row.querySelector('[data-ts="start"]').value);
+        const notes = (row.querySelector('[data-ts="notes"]')?.value || '').trim();
 
-        // Match the skip rule in collectTimeSignatures.
-        if (!isMixed && (numStr === '' || !denomStr)) continue;
+        // Match the skip rule in collectTimeSignatures: a partial row
+        // is dropped unless it carries a standalone note.
+        if (!isMixed && (numStr === '' || !denomStr) && !notes) continue;
 
         if (seenStarts.has(startSeconds)) {
             return `Two time signatures share the same start time (${formatTimeStr(startSeconds)}). Each time signature must start at a unique time.`;
@@ -620,14 +646,16 @@ function validateKeySignatures() {
         const startSeconds = parseTimeStr(row.querySelector('[data-ks="start"]').value);
 
         // Match the skip rule in collectKeySignatures: an untouched row
-        // (no tonic, no mode, no atonal, no microtonal) is silently
-        // dropped, so it shouldn't trigger duplicate-start errors.
+        // (no tonic, no mode, no atonal, no microtonal, no notes) is
+        // silently dropped, so it shouldn't trigger duplicate-start
+        // errors.
         let tonic = null, mode = null;
         if (!isAtonal) {
             tonic = readOtherOrSelect(row, 'tonic');
             mode = readOtherOrSelect(row, 'mode');
         }
-        if (!isAtonal && !isMicrotonal && tonic === null && mode === null) continue;
+        const notes = (row.querySelector('[data-ks="notes"]')?.value || '').trim();
+        if (!isAtonal && !isMicrotonal && tonic === null && mode === null && !notes) continue;
 
         if (isAtonal && isMicrotonal) {
             return `A key signature at ${formatTimeStr(startSeconds)} cannot be both atonal and microtonal.`;
@@ -655,21 +683,25 @@ function collectKeySignatures() {
         const isAtonal = row.querySelector('[data-ks="atonal"]').checked;
         const isMicrotonal = row.querySelector('[data-ks="microtonal"]').checked;
         const startSeconds = parseTimeStr(row.querySelector('[data-ks="start"]').value);
+        const notesRaw = (row.querySelector('[data-ks="notes"]')?.value || '').trim();
+        const notes = notesRaw || null;
         let tonic = null;
         let mode = null;
         if (!isAtonal) {
             tonic = readOtherOrSelect(row, 'tonic');
             mode = readOtherOrSelect(row, 'mode');
-            // A row with no tonic, mode, atonal, or microtonal flag is
-            // just an abandoned blank — drop it. Atonal rows (both null)
-            // and microtonal annotations are kept.
-            if (tonic === null && mode === null && !isMicrotonal) continue;
+            // A row with no tonic, mode, atonal flag, microtonal flag,
+            // or notes is just an abandoned blank — drop it. Atonal
+            // rows (both null), microtonal annotations, and standalone
+            // notes are kept.
+            if (tonic === null && mode === null && !isMicrotonal && notes === null) continue;
         }
         out.push({
             start_seconds: startSeconds,
             tonic,
             mode,
             microtonal: isMicrotonal,
+            notes,
         });
     }
     return out;

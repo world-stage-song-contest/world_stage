@@ -93,7 +93,11 @@ mime_types = {
     "m4a": "audio/mp4",
     "webm": "video/webm",
     "ogg": "video/ogg",
-    "mov": "video/quicktime",
+    # .mov files in this app are usually H.264/AAC inside a QuickTime
+    # container, which browsers play happily when advertised as
+    # video/mp4 — the canonical "video/quicktime" type makes Chrome
+    # and Firefox refuse to attempt playback.
+    "mov": "video/mp4",
 }
 
 
@@ -126,8 +130,8 @@ def generate_iframe(url: str, img_url: str | None):
                     controls
                     {poster}
                     preload="metadata"
-                    data-setup='{{"responsive": true}}'
-                    src="{url}">
+                    data-setup='{{"responsive": true}}'>
+        <source src="{url}" type="{mime_type}">
         This media format isn't supported for direct playback by your browser.
         <a href="{url}" target="_blank">Watch the video here</a>.
         </video>'''

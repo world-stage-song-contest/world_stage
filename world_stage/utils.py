@@ -517,6 +517,10 @@ class Song:
         self.sources = sources
         self.recap_start = format_seconds(recap_start) if recap_start is not None else None
         self.recap_end = format_seconds(recap_end) if recap_end is not None else None
+        # Raw integer seconds for client-side timeline overlays where
+        # an "M:SS" string isn't useful.
+        self.recap_start_seconds = recap_start
+        self.recap_end_seconds = recap_end
         self.title_lang = get_language(title_lang) if title_lang else Language()
         self.native_lang = get_language(native_lang) if native_lang else Language()
         if show_id is not None and ro is not None:
@@ -1074,7 +1078,7 @@ def get_song_key_signature_timeline(song_id: int) -> list[dict]:
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT start_seconds, tonic, mode, microtonal
+        SELECT start_seconds, tonic, mode, microtonal, notes
         FROM song_key_signature
         WHERE song_id = %s
         ORDER BY start_seconds
@@ -1096,6 +1100,7 @@ def get_song_key_signature_timeline(song_id: int) -> list[dict]:
                 "start_seconds": r["start_seconds"],
                 "start_label": format_seconds(r["start_seconds"]) or "0:00",
                 "label": label,
+                "notes": r["notes"],
             }
         )
     return rows

@@ -248,7 +248,7 @@ def _fetch_song_languages(cursor, song_id: int) -> list[dict]:
 def _fetch_song_key_signatures(cursor, song_id: int) -> list[dict]:
     cursor.execute(
         """
-        SELECT start_seconds, tonic, mode, microtonal
+        SELECT start_seconds, tonic, mode, microtonal, notes
         FROM song_key_signature
         WHERE song_id = %s
         ORDER BY start_seconds
@@ -261,6 +261,7 @@ def _fetch_song_key_signatures(cursor, song_id: int) -> list[dict]:
             "tonic": r["tonic"],
             "mode": r["mode"],
             "microtonal": bool(r["microtonal"]),
+            "notes": r["notes"],
         }
         for r in cursor.fetchall()
     ]
@@ -360,6 +361,7 @@ def _parse_key_signatures(data: dict) -> tuple[list[dict] | None, list[str]]:
         tonic = _normalize_tonic(item.get("tonic"))
         mode = _normalize_mode(item.get("mode"))
         microtonal = bool(item.get("microtonal", False))
+        notes = _normalize_text(item.get("notes"))
 
         if start_seconds in seen_starts:
             return None, [
@@ -373,6 +375,7 @@ def _parse_key_signatures(data: dict) -> tuple[list[dict] | None, list[str]]:
                 "tonic": tonic,
                 "mode": mode,
                 "microtonal": microtonal,
+                "notes": notes,
             }
         )
 
@@ -385,10 +388,17 @@ def _replace_song_key_signatures(cursor, song_id: int, rows: list[dict]) -> None
         cursor.execute(
             """
             INSERT INTO song_key_signature
-                (song_id, start_seconds, tonic, mode, microtonal)
-            VALUES (%s, %s, %s, %s, %s)
+                (song_id, start_seconds, tonic, mode, microtonal, notes)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """,
-            (song_id, r["start_seconds"], r["tonic"], r["mode"], r["microtonal"]),
+            (
+                song_id,
+                r["start_seconds"],
+                r["tonic"],
+                r["mode"],
+                r["microtonal"],
+                r.get("notes"),
+            ),
         )
 
 
@@ -400,7 +410,7 @@ _ALLOWED_DENOMINATORS = frozenset({1, 2, 4, 8, 16, 32})
 def _fetch_song_time_signatures(cursor, song_id: int) -> list[dict]:
     cursor.execute(
         """
-        SELECT start_seconds, numerator, denominator
+        SELECT start_seconds, numerator, denominator, notes
         FROM song_time_signature
         WHERE song_id = %s
         ORDER BY start_seconds
@@ -412,6 +422,7 @@ def _fetch_song_time_signatures(cursor, song_id: int) -> list[dict]:
             "start_seconds": r["start_seconds"],
             "numerator": r["numerator"],
             "denominator": r["denominator"],
+            "notes": r["notes"],
         }
         for r in cursor.fetchall()
     ]
@@ -472,6 +483,8 @@ def _parse_time_signatures(data: dict) -> tuple[list[dict] | None, list[str]]:
                     f"{sorted(_ALLOWED_DENOMINATORS)}"
                 ]
 
+        notes = _normalize_text(item.get("notes"))
+
         if start_seconds in seen_starts:
             return None, [
                 f"time_signatures must have unique start_seconds (duplicate: {start_seconds})"
@@ -483,6 +496,7 @@ def _parse_time_signatures(data: dict) -> tuple[list[dict] | None, list[str]]:
                 "start_seconds": start_seconds,
                 "numerator": numerator,
                 "denominator": denominator,
+                "notes": notes,
             }
         )
 
@@ -560,10 +574,16 @@ def _replace_song_time_signatures(cursor, song_id: int, rows: list[dict]) -> Non
         cursor.execute(
             """
             INSERT INTO song_time_signature
-                (song_id, start_seconds, numerator, denominator)
-            VALUES (%s, %s, %s, %s)
+                (song_id, start_seconds, numerator, denominator, notes)
+            VALUES (%s, %s, %s, %s, %s)
         """,
-            (song_id, r["start_seconds"], r["numerator"], r["denominator"]),
+            (
+                song_id,
+                r["start_seconds"],
+                r["numerator"],
+                r["denominator"],
+                r.get("notes"),
+            ),
         )
 
 

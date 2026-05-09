@@ -124,6 +124,16 @@ input:read-only {
     pointer-events: none;
 }
 
+.key-signature-row .ks-notes-label {
+    flex-grow: 1;
+    min-width: 12em;
+}
+
+.key-signature-row .ks-notes-label input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .time-signature-row {
     display: flex;
     flex-wrap: wrap;
@@ -164,6 +174,16 @@ input:read-only {
 .time-signature-row.mixed select {
     opacity: 0.4;
     pointer-events: none;
+}
+
+.time-signature-row .ts-notes-label {
+    flex-grow: 1;
+    min-width: 12em;
+}
+
+.time-signature-row .ts-notes-label input {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .genre-row {
