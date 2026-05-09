@@ -19,7 +19,7 @@
     {% endif %}
 {% endblock %}
 
-{% block onload %}onLoad('{{ year }}', '{{ show }}'){% endblock %}
+{% block onload %}onLoad('{{ year }}', '{{ show }}', {{ 'true' if special else 'false' }}){% endblock %}
 {% block content %}
 {% if secret %}
 <div class="banner">
