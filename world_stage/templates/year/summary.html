@@ -56,12 +56,12 @@
 <div style="margin: 0.5em 0;">
     <strong>Download playlist:</strong>
     {% if special %}
-    <a href="{{ url_for('year.special_playlist', short_name=special, show=show, postcards='true') }}">With postcards</a>/<a
-    href="{{ url_for('year.special_playlist', short_name=special, show=show, postcards='false') }}">Without postcards</a>
+    {% set show_key = special ~ show %}
     {% else %}
-    <a href="{{ url_for('year.show_playlist', year=year, show=show, postcards='true') }}">With postcards</a>/<a
-    href="{{ url_for('year.show_playlist', year=year, show=show, postcards='false') }}">Without postcards</a>
+    {% set show_key = '%04d'|format(year|abs) ~ show %}
     {% endif %}
+    <a href="{{ url_for('playlist.show', key=show_key) }}">With postcards</a>/<a
+    href="{{ url_for('playlist.show', key=show_key ~ '-np') }}">Without postcards</a>
 </div>
 <div id="scroll-container">
 <table class="sortable">

@@ -21,8 +21,8 @@
 
 <div>
     <strong>Download playlist:</strong>
-    <a href="{{ url_for('user.playlist', username=username, postcards='true') }}">With postcards</a>/<a
-    href="{{ url_for('user.playlist', username=username, postcards='false') }}">Without postcards</a>
+    <a href="{{ url_for('playlist.user', key=username) }}">With postcards</a>/<a
+    href="{{ url_for('playlist.user', key=username ~ '-np') }}">Without postcards</a>
 </div>
 
 {% macro year_result_cell(entry, cat_class) %}

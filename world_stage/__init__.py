@@ -118,7 +118,19 @@ def create_app(config: dict | None = None) -> Flask:
 
     db.init_app(app)
 
-    from .routes import admin, api, country, index, member, results, session, user, vote, year
+    from .routes import (
+        admin,
+        api,
+        country,
+        index,
+        member,
+        playlist,
+        results,
+        session,
+        user,
+        vote,
+        year,
+    )
 
     app.register_blueprint(index.bp)
     app.register_blueprint(vote.bp)
@@ -130,5 +142,6 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(admin.bp)
     app.register_blueprint(country.bp)
     app.register_blueprint(api.bp)
+    app.register_blueprint(playlist.bp)
 
     return app

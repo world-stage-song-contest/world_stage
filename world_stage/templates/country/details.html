@@ -171,8 +171,7 @@
         {% for k in song.key_signature_timeline %}
             <tr>
                 <td>
-                    <a href="#" class="ks-timestamp" data-seconds="{{ k.start_seconds }}"
-                       onclick="seekKeySignature({{ k.start_seconds }}); return false;">{{ k.start_label }}</a>
+                    <a href="#" class="ks-timestamp" data-seconds="{{ k.start_seconds }}">{{ k.start_label }}</a>
                 </td>
                 <td>{{ k.label }}</td>
             </tr>
@@ -207,6 +206,14 @@
             } catch (e) { /* ignore */ }
         }
     }
+
+    document.querySelectorAll('a.ks-timestamp').forEach((a) => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const seconds = Number(a.dataset.seconds);
+            if (Number.isFinite(seconds)) seekKeySignature(seconds);
+        });
+    });
 </script>
 {% endif %}
 
@@ -260,9 +267,11 @@
 <script src="https://vjs.zencdn.net/8.23.3/video.min.js"></script>
 
 {% if song.key_signature_timeline %}
+<script type="application/json" id="ks-timeline-data">{{ song.key_signature_timeline|tojson }}</script>
 <script>
     (function () {
-        const timeline = {{ song.key_signature_timeline|tojson }};
+        const timelineNode = document.getElementById('ks-timeline-data');
+        const timeline = timelineNode ? JSON.parse(timelineNode.textContent) : [];
         if (!timeline.length || typeof videojs !== 'function') return;
 
         function renderMarkers(player) {

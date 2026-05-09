@@ -1,7 +1,7 @@
 import re
 from collections import defaultdict
 
-from flask import Blueprint, Response, redirect, request, url_for
+from flask import Blueprint, redirect, request, url_for
 
 from ..db import get_db
 from ..utils import (
@@ -19,7 +19,6 @@ from ..utils import (
     get_user_role_from_session,
     render_template,
     resolve_country_code,
-    write_m3u,
 )
 
 bp = Blueprint("country", __name__, url_prefix="/country")
@@ -34,54 +33,6 @@ def index():
         res[first_letter].append(c)
 
     return render_template("country/index.html", countries=res)
-
-
-@bp.get("/<code>/playlist")
-def playlist(code: str):
-    canonical = resolve_country_code(code.upper())
-    if not canonical:
-        return render_template("error.html", error=f"Country not found: {code}"), 404
-    if canonical.lower() != code.lower():
-        return redirect(url_for("country.playlist", code=canonical.lower()), 301)
-
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute(
-        """
-        SELECT LOWER(country.id) AS cc, song.video_link
-        FROM song
-        JOIN country ON song.country_id = country.id
-        JOIN year ON year.id = song.year_id
-        WHERE (country.id = %(cc)s OR country.cc3 = %(cc)s)
-          AND year.status IN ('closed', 'ongoing')
-          AND NOT song.is_placeholder
-        ORDER BY song.year_id
-    """,
-        {"cc": canonical},
-    )
-    entries = [(r["cc"], r["video_link"]) for r in cursor.fetchall()]
-    if not entries:
-        return render_template("error.html", error=f"No published entries for {canonical}"), 404
-
-    postcards = request.args.get("postcards", "false") == "true"
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
-    value, bad_countries = write_m3u(entries, postcards=postcards)
-    if not permissions.can_view_restricted and bad_countries:
-        bad_countries.sort()
-        return render_template(
-            "error.html",
-            error=(
-                "Not all video links are set yet. Ping a moderator. "
-                f"Missing: {', '.join(bad_countries)}."
-            ),
-        )
-    suffix = "" if postcards else "x"
-    return Response(
-        value,
-        mimetype="audio/x-mpegurl",
-        headers={"Content-Disposition": f"attachment; filename={canonical}{suffix}.m3u"},
-    )
 
 
 @bp.get("/<code>/bias")

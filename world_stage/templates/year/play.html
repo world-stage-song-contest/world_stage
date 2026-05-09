@@ -69,7 +69,7 @@
     <a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>
     {% endif %}
     <span class="nav-separator"></span>
-    <a class="nav-item" href="{{ url_for('year.special_playlist', short_name=special, show=show) }}">Download .m3u</a>
+    <a class="nav-item" href="{{ url_for('playlist.show', key=special ~ show) }}">Download .m3u</a>
     {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
@@ -82,7 +82,7 @@
     <a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>
     {% endif %}
     <span class="nav-separator"></span>
-    <a class="nav-item" href="{{ url_for('year.show_playlist', year=year, show=show) }}">Download .m3u</a>
+    <a class="nav-item" href="{{ url_for('playlist.show', key='%04d'|format(year|abs) ~ show) }}">Download .m3u</a>
     {% endif %}
 {% endblock %}
 {% block content %}

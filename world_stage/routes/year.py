@@ -3,7 +3,7 @@ import math
 import typing
 from collections import defaultdict
 
-from flask import Blueprint, Response, redirect, request, url_for
+from flask import Blueprint, redirect, request, url_for
 
 from ..db import fetchone, get_db
 from ..utils import (
@@ -25,7 +25,6 @@ from ..utils import (
     get_year_winner,
     render_template,
     resolve_country_code,
-    write_m3u,
 )
 
 bp = Blueprint("year", __name__, url_prefix="/year")
@@ -1067,49 +1066,6 @@ def special_song_votes(short_name: str, show: str, country_code: str, entry_numb
         other_shows=get_other_shows(_year, show),
         special=short_name,
         special_name=special_year["special_name"],
-    )
-
-
-@bp.get("/special/<short_name>/<show>/playlist")
-def special_playlist(short_name: str, show: str):
-    special_year = resolve_special(short_name)
-    if not special_year:
-        return render_template("error.html", error="Special not found"), 404
-
-    _year = special_year["id"]
-    show_data = get_show_id(show, _year)
-
-    if not show_data:
-        return render_template("error.html", error="Show not found"), 404
-
-    postcards = request.args.get("postcards", "false") == "true"
-
-    value, bad_countries = generate_playlist(show_data, postcards)
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
-
-    if permissions.can_view_restricted:
-        bad_countries = []
-
-    if bad_countries:
-        bad_countries.sort()
-        return render_template(
-            "error.html",
-            error=(
-                "Not all links for this show have been corrected. "
-                "Please ping one of the admins. "
-                f"Invalid links: {', '.join(bad_countries)}."
-            ),
-        )
-
-    extra = "" if postcards else "x"
-    filename = f"{abs(_year):04d}{show}{extra}.m3u"
-
-    return Response(
-        value,
-        mimetype="audio/x-mpegurl",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
@@ -2555,7 +2511,9 @@ def special_show_penalty_post(short_name: str, show: str):
     return _apply_penalty(show_data)
 
 
-def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[str]]:
+def generate_playlist(
+    show_data: ShowData, postcards: bool, include_host: bool = True
+) -> tuple[str, list[str]]:
     def write(buf: io.StringIO, val: str):
         buf.write(val)
         buf.write("\n")
@@ -2598,7 +2556,7 @@ def generate_playlist(show_data: ShowData, postcards: bool) -> tuple[str, list[s
     insert_after = -1
     host = ""
     host_link = ""
-    if show_needs_host(show_data):
+    if include_host and show_needs_host(show_data):
         cursor.execute(
             """
             SELECT LOWER(country.id) AS cc, video_link FROM year
@@ -2858,113 +2816,3 @@ def special_show_play(short_name: str, show: str):
     )
 
 
-@bp.get("/<int:year>/<show>/playlist")
-def show_playlist(year: int, show: str):
-    _year = year
-    show_data = get_show_id(show, _year)
-
-    if not show_data:
-        return render_template("error.html", error="Show not found"), 404
-
-    postcards = request.args.get("postcards", "false") == "true"
-
-    value, bad_countries = generate_playlist(show_data, postcards)
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
-
-    if permissions.can_view_restricted:
-        bad_countries = []
-
-    if bad_countries:
-        bad_countries.sort()
-        return render_template(
-            "error.html",
-            error=(
-                "Not all links for this show have been corrected. "
-                "Please ping one of the admins. "
-                f"Invalid links: {', '.join(bad_countries)}."
-            ),
-        )
-
-    extra = "" if postcards else "x"
-
-    filename = f"{abs(year):04d}{show}{extra}.m3u"
-
-    response = Response(
-        value,
-        mimetype="audio/x-mpegurl",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
-    return response
-
-
-def _playlist_response(entries, stem: str, postcards: bool):
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
-    value, bad_countries = write_m3u(entries, postcards=postcards)
-    if not permissions.can_view_restricted and bad_countries:
-        bad_countries.sort()
-        return render_template(
-            "error.html",
-            error=(
-                "Not all links for this show have been corrected. "
-                "Please ping one of the admins. "
-                f"Invalid links: {', '.join(bad_countries)}."
-            ),
-        )
-    suffix = "" if postcards else "x"
-    return Response(
-        value,
-        mimetype="audio/x-mpegurl",
-        headers={"Content-Disposition": f"attachment; filename={stem}{suffix}.m3u"},
-    )
-
-
-@bp.get("/<int:year>/playlist")
-def year_playlist(year: int):
-    postcards = request.args.get("postcards", "false") == "true"
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute(
-        """
-        SELECT LOWER(country.id) AS cc, song.video_link
-        FROM song
-        JOIN country ON song.country_id = country.id
-        LEFT JOIN alternative_name an
-            ON an.country_id = song.country_id
-           AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
-           AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
-        WHERE song.year_id = %s AND NOT song.is_placeholder
-        ORDER BY COALESCE(an.name, country.name)
-    """,
-        (year,),
-    )
-    entries = [(r["cc"], r["video_link"]) for r in cursor.fetchall()]
-    if not entries:
-        return render_template("error.html", error=f"No entries for year {year}"), 404
-    return _playlist_response(entries, str(year), postcards)
-
-
-@bp.get("/special/<short_name>/playlist")
-def special_year_playlist(short_name: str):
-    special_year = resolve_special(short_name)
-    if not special_year:
-        return render_template("error.html", error="Special not found"), 404
-    postcards = request.args.get("postcards", "false") == "true"
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute(
-        """
-        SELECT LOWER(country.id) AS cc, song.video_link
-        FROM song
-        JOIN country ON song.country_id = country.id
-        WHERE song.year_id = %s AND NOT song.is_placeholder
-        ORDER BY country.name, song.entry_number
-    """,
-        (special_year["id"],),
-    )
-    entries = [(r["cc"], r["video_link"]) for r in cursor.fetchall()]
-    if not entries:
-        return render_template("error.html", error=f"No entries for {short_name}"), 404
-    return _playlist_response(entries, short_name, postcards)
