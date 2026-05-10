@@ -254,10 +254,27 @@ const duration = 1250;
  * @param {HTMLElement} element
  * @param {number} end
  */
+/**
+ * Bump and return the per-element animation token. Any in-flight rAF
+ * loop or deferred reset captured the previous token, so writing a new
+ * one cancels them on their next tick — protecting us from two
+ * animations racing on the same dataset.value (which used to leave
+ * end-of-show rows stuck on the points-just-received or on 0 when the
+ * deferred refresh(null) timeout fired after setPlace finished).
+ */
+function bumpAnimToken(element) {
+    const next = (element._animToken || 0) + 1;
+    element._animToken = next;
+    return next;
+}
+
 function animatePoints(element, end) {
     end = +end;
     let current = parseInt(element.dataset.value, 10);
     if (Number.isNaN(current)) current = 0;
+    // Bump the token even on the early-return path so any pending
+    // deferred reset on this element is invalidated.
+    const token = bumpAnimToken(element);
     if (current === end) {
         setElementValue(element, end);
         return;
@@ -273,6 +290,9 @@ function animatePoints(element, end) {
 
     function update(now) {
         if (gen !== runGen) return;
+        // A newer animation (or reset) on this element has superseded
+        // us — bail before mutating dataset.value.
+        if (token !== element._animToken) return;
         if (now - lastTime >= stepDuration) {
             lastTime = now;
             current += direction;
@@ -351,7 +371,10 @@ class Country {
             (a, v) => a + v[0] * v[1],
             0
         );
-        return Math.max(0, raw - (this.penalty || 0));
+        // Don't floor at 0 — penalties can push the running total
+        // negative early in the show, and ``setElementValue`` already
+        // renders negative values (red, no minus sign in the LCD digits).
+        return raw - (this.penalty || 0);
     }
 
     /**
@@ -415,8 +438,15 @@ class Country {
     refresh(pt) {
         if (pt == null) {
             const gen = runGen;
+            // Token-protect the deferred reset: if anything else
+            // (e.g. setPlace → animatePoints) targets this element
+            // before the timeout fires, that call bumps the token and
+            // we skip the reset, leaving the newer animation's value
+            // intact.
+            const token = bumpAnimToken(this.currentEl);
             setTimeout(() => {
                 if (gen !== runGen) return;
+                if (token !== this.currentEl._animToken) return;
                 setElementValue(this.currentEl, 0);
             }, 1100);
             this.setInactive();
@@ -596,6 +626,12 @@ async function vote() {
     const pointsImmediate = points.slice(0, points.length - 3);
     const pointsDelayed = points.slice(points.length - 3);
 
+    // Penalties are revealed up front so their effect is baked into the
+    // running totals shown during voting (Country.points already
+    // subtracts ``this.penalty`` from the raw vote total).
+    await applyPenaltyStage();
+    if (stale()) return;
+
     for (const from of voteOrder) {
         juryCount++;
         const vts = votes[from];
@@ -702,9 +738,6 @@ async function vote() {
 
     juryBar.style.width = "100%";
 
-    await applyPenaltyStage();
-    if (stale()) return;
-
     ro[0].setWinner();
     for (const [i, c] of ro.entries()) {
         c.setPlace(i + 1);
@@ -712,8 +745,9 @@ async function vote() {
 }
 
 /**
- * After all votes are revealed, deduct any admin-applied penalties from
- * the affected entries. Skipped entirely if no penalties exist.
+ * Reveal admin-applied penalties up front so they're baked into every
+ * row's running total before voting starts. All affected rows animate
+ * simultaneously. Skipped entirely if no penalties exist.
  */
 async function applyPenaltyStage() {
     const entries = Object.entries(penalties || {});
@@ -721,17 +755,6 @@ async function applyPenaltyStage() {
 
     const gen = runGen;
     const stale = () => gen !== runGen;
-
-    // The main vote loop intentionally skips the per-row reset for the
-    // last voter, so going into the penalty stage every row is still in
-    // its post-vote ".active" state with the last-received points
-    // showing in the current-points cell. Reset everything first so the
-    // penalty animation starts from a clean slate.
-    for (const c of ro) {
-        c.refresh();
-    }
-    await sleep(delay);
-    if (stale()) return;
 
     const fromJury = document.querySelector("#from");
     const card = makeVotingCard("Penalties", "XX", null);
@@ -753,30 +776,27 @@ async function applyPenaltyStage() {
     await sleep(2000);
     if (stale()) return;
 
+    // Fire every row's penalty animation in parallel — they all share
+    // the same animation duration so the visual lands on every row at
+    // about the same moment.
     for (const [songId, amount] of entries) {
         const country = countries[songId];
-        if (!country) continue;
-
-        while (paused) {
-            if (isReset) {
-                isReset = false;
-                return;
-            }
-            await sleep(100);
-            if (stale()) return;
-        }
-
-        country.applyPenalty(+amount);
-        await sortCountries();
-        if (stale()) return;
+        if (country) country.applyPenalty(+amount);
     }
+    // Sort once, after every penalty has been registered. Penalised
+    // rows can now have negative running totals so the order changes;
+    // sortCountries' built-in pre-sort ``sleep(delay * 2.5)`` also
+    // doubles as the wait for the penalty animation to land.
+    await sortCountries();
+    if (stale()) return;
 
     card.classList.add("unloaded2");
     await sleep(delay * 2.5);
     if (stale()) return;
     card.remove();
 
-    // Reset the per-row state so the final-place pass leaves things tidy.
+    // Reset per-row state so the upcoming vote loop starts from a
+    // clean slate (currentEl back to 0, rows inactive).
     for (const c of ro) {
         c.refresh();
     }

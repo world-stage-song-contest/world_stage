@@ -114,12 +114,6 @@
     color: #c75c4f;
 }
 
-/* Row that has just been penalised — subtle red wash so the deduction
-   reads as a deliberate stage rather than a vote tick. */
-.element.penalised .inner-container {
-    box-shadow: inset 0 0 0 2px rgba(199, 92, 79, 0.6);
-}
-
 #points-row {
     display: none;
     gap: 0.5em;
