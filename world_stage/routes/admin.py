@@ -1120,7 +1120,9 @@ def users():
     cursor = db.cursor()
 
     cursor.execute("""
-        SELECT id, username, approved, role FROM account
+        SELECT id, username, approved, role
+        FROM account
+        ORDER BY id
     """)
     users = cursor.fetchall()
 

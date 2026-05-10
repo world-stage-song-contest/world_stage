@@ -138,7 +138,10 @@
 
         --bias-text: oklch(100% 0 none);
 
-        --scoreboard-led-bg:    oklch(17.8% 0 none);
+        /* Pure black so the LCD-style cells stay visibly darker than
+           the surrounding dark theme background instead of blending
+           into it. */
+        --scoreboard-led-bg:    oklch(0% 0 none);
         --scoreboard-led-color: oklch(61.6% 0.226 33.2);
         --scoreboard-led-alt:   oklch(49.3% 0.174 34.6);
         --jury-bar:             oklch(56.3% 0.164 142.5);
@@ -301,7 +304,9 @@
 
     --bias-text: oklch(100% 0 none);
 
-    --scoreboard-led-bg:    oklch(17.8% 0 none);
+    /* Pure black so the LCD-style cells stay visibly darker than the
+       surrounding dark theme background instead of blending into it. */
+    --scoreboard-led-bg:    oklch(0% 0 none);
     --scoreboard-led-color: oklch(61.6% 0.226 33.2);
     --scoreboard-led-alt:   oklch(49.3% 0.174 34.6);
     --jury-bar:             oklch(56.3% 0.164 142.5);

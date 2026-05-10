@@ -2,13 +2,14 @@
 {% block title %}Manage users{% endblock %}
 {% block headercontents %}
     <script src="/static/js/manage.js"></script>
+    <script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block content %}
 
 <div class="error" id="error">
 </div>
 
-<table>
+<table class="sortable">
     <thead>
         <tr>
             <th>User ID</th>
@@ -21,7 +22,7 @@
     </thead>
     <tbody>
         {% for user in users %}
-        <tr>
+        <tr data-value="{{ user.id }}">
             <td>{{ user.id }}</td>
             <td>{{ user.username }}</td>
             <td>{{ user.role }}</td>

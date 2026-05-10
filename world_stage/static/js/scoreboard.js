@@ -53,7 +53,9 @@ async function loadVotes(year, show) {
 function makeRow(country) {
     function makePointDisplay(padding, className) {
         const el = document.createElement("div");
-        el.classList.add(className, "number", "point-display");
+        // Start with .zero so the initial "0" is dimmed like the
+        // original per-digit zero-value treatment.
+        el.classList.add(className, "number", "point-display", "zero");
         el.dataset.pad = String(padding);
         // CSS uses ``data-ghost`` to render the dim "all-segments" LCD
         // backdrop via a ::before pseudo-element. The cell shows the
@@ -172,9 +174,8 @@ function makePointsRow() {
     return row;
 }
 
-function makeVotingCard(from, code, country) {
+function makeVotingCard(from, code, country, username = null) {
     code = code || "XX";
-    country = country || "Somewhere";
 
     const container = document.createElement("div");
     container.classList.add("voting-card", "unloaded");
@@ -194,10 +195,19 @@ function makeVotingCard(from, code, country) {
     nameEl.textContent = from;
     wrapperEl.appendChild(nameEl);
 
-    const countryEl = document.createElement("span");
-    countryEl.classList.add("voting-card-country");
-    countryEl.textContent = `From ${country}`;
-    wrapperEl.appendChild(countryEl);
+    // Subtitle: "[username] from [country]" for real jurors, dropping
+    // the username when it matches the displayed name. Synthetic cards
+    // without a country (e.g. the penalty stage) skip the line entirely.
+    if (country) {
+        const countryEl = document.createElement("span");
+        countryEl.classList.add("voting-card-country");
+        if (username && username !== from) {
+            countryEl.textContent = `${username} from ${country}`;
+        } else {
+            countryEl.textContent = `from ${country}`;
+        }
+        wrapperEl.appendChild(countryEl);
+    }
 
     return container;
 }
@@ -209,7 +219,7 @@ function makeVotingCard(from, code, country) {
  */
 function setElementText(el, value) {
     const pad = +el.dataset.pad || 0;
-    el.classList.remove("negative");
+    el.classList.remove("negative", "zero");
     el.textContent = String(value).padStart(pad, " ");
 }
 
@@ -227,6 +237,9 @@ function setElementValue(el, value) {
     const pad = +el.dataset.pad || 0;
     el.dataset.value = String(value);
     el.classList.toggle("negative", value < 0);
+    // Mark zero values so CSS can dim the cell — matches the original
+    // per-digit zero-value treatment.
+    el.classList.toggle("zero", value === 0);
     el.textContent = String(Math.abs(value)).padStart(pad, " ");
 }
 
@@ -598,7 +611,7 @@ async function vote() {
             code = assoc.code;
         }
 
-        const card = makeVotingCard(nickname, code, country);
+        const card = makeVotingCard(nickname, code, country, from);
         fromJury.appendChild(card);
 
         while (paused) {
@@ -721,7 +734,7 @@ async function applyPenaltyStage() {
     if (stale()) return;
 
     const fromJury = document.querySelector("#from");
-    const card = makeVotingCard("Penalties", "XX", "Did not vote");
+    const card = makeVotingCard("Penalties", "XX", null);
     card.classList.add("penalty-card");
     fromJury.appendChild(card);
 

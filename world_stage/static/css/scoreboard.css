@@ -372,6 +372,14 @@
     animation: winner-negative 0.5s 2 alternate linear;
 }
 
+/* A score of exactly 0 should look "off" — dim the whole cell so the
+   "0" reads like an unlit segment rather than a fully-lit zero. Placed
+   after the .inactive/.active brightness rules so it wins the
+   specificity tie. */
+.point-display.zero {
+    filter: brightness(0.15);
+}
+
 .own-entry .current-points {
     filter: brightness(2);
 }
