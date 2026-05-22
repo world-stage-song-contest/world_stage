@@ -1,11 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Play: {{ year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
-    <link href="https://cdn.jsdelivr.net/npm/video.js@8.17.4/dist/video-js.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/videojs-playlist-ui@4.1.1/dist/videojs-playlist-ui.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/video.js@8.17.4/dist/video.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/videojs-playlist@5.1.0/dist/videojs-playlist.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/videojs-playlist-ui@4.1.1/dist/videojs-playlist-ui.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video-js.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video.min.js"></script>
     <style>
         #play-controls {
             display: flex;
@@ -23,7 +20,7 @@
         @media (max-width: 800px) {
             #play-layout { grid-template-columns: 1fr; }
             #playlist-wrap { position: static; height: 50vh; }
-            .vjs-playlist { position: static; }
+            #custom-playlist { position: static; }
         }
         #player-wrap .video-js {
             width: 100%;
@@ -34,11 +31,53 @@
             position: relative;
             min-height: 0;
         }
-        .vjs-playlist {
+        #custom-playlist {
             position: absolute;
             inset: 0;
             overflow-y: auto;
             background: #000;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        #custom-playlist li {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            color: #fff;
+            cursor: pointer;
+            border-bottom: 1px solid #222;
+            user-select: none;
+        }
+        #custom-playlist li:hover { background: #222; }
+        #custom-playlist li.active { background: #2166ff; }
+        #custom-playlist li.active:hover { background: #2166ff; }
+        #custom-playlist .pl-thumb {
+            width: 48px;
+            height: 32px;
+            object-fit: cover;
+            flex-shrink: 0;
+            background: #111;
+        }
+        #custom-playlist .pl-text {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            flex: 1;
+        }
+        #custom-playlist .pl-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #custom-playlist .pl-desc {
+            font-size: 0.85em;
+            opacity: 0.7;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
     </style>
 {% endblock %}
@@ -95,10 +134,10 @@
 
 <div id="play-layout">
     <div id="player-wrap">
-        <video-js id="player-video" class="vjs-default-skin" controls preload="auto" playsinline></video-js>
+        <video id="player-video" class="video-js vjs-default-skin" controls preload="auto" playsinline muted></video>
     </div>
     <div id="playlist-wrap">
-        <div class="vjs-playlist"></div>
+        <ul id="custom-playlist"></ul>
     </div>
 </div>
 
@@ -120,7 +159,9 @@
     function entryMime(url) {
         const u = url.toLowerCase();
         if (u.endsWith('.webm')) return 'video/webm';
-        if (u.endsWith('.mov')) return 'video/quicktime';
+        // .mov files in this app are usually H.264/AAC or AV1 inside a
+        // QuickTime/ISO base media container. Advertising
+        // video/quicktime makes Chrome refuse playback outright.
         return 'video/mp4';
     }
 
@@ -128,40 +169,125 @@
         return cc ? `/flag/${cc.toUpperCase()}.svg?t=rect&w=160` : null;
     }
 
-    const playlist = ENTRIES.map((entry) => {
-        const item = {
-            name: entryName(entry),
-            description: entry.kind === 'song' ? entry.country : '',
-            sources: [{ src: entry.url, type: entryMime(entry.url) }],
-        };
-        const flag = flagUrl(entry.cc);
-        if (flag) item.thumbnail = flag;
-        if (entry.poster) item.poster = entry.poster;
-        if (entry.vtt) {
-            item.textTracks = [{
-                kind: 'subtitles',
-                src: entry.vtt,
-                srclang: 'en',
-                label: 'Subtitles',
-                default: true,
-            }];
-        }
-        return item;
-    });
-
+    // Chrome rejects sources whose URL ends in .mov when set via
+    // `videoEl.src = '…'` — which is what video.js's `player.src()`
+    // (and the videojs-playlist plugin) does internally. The same
+    // URL works fine when it's a `<source type="video/mp4">` child
+    // of the <video> element, because Chrome trusts the explicit
+    // `type` attribute there. Firefox doesn't care either way, which
+    // is why this only manifested in Chromium browsers.
+    //
+    // So we keep video.js for the player chrome (controls, fullscreen,
+    // poster, sizing) and manage the playlist ourselves: swap the
+    // <source> child on advance and call .load(). This mirrors the
+    // working entry-details page, which also uses a <source> child.
     const player = videojs('player-video', {
         fluid: true,
-        autoplay: true,
     });
 
-    player.playlist(playlist);
-    player.playlist.autoadvance(0);
-    player.playlistUi({ el: document.querySelector('.vjs-playlist') });
+    let currentIndex = -1;
+    const listEl = document.getElementById('custom-playlist');
 
-    player.on('playlistitem', () => {
-        const items = player.playlist();
-        const item = items[player.playlist.currentItem()];
-        player.poster(item && item.poster ? item.poster : '');
+    function videoElement() {
+        // The underlying HTMLVideoElement that video.js wraps.
+        const tech = player.tech ? player.tech({ IWillNotUseThisInPlugins: true }) : null;
+        if (tech && tech.el && tech.el()) return tech.el();
+        // Defensive fallback if the internal API shape changes.
+        return player.el().querySelector('video') || document.getElementById('player-video');
+    }
+
+    function setActive(index) {
+        const items = listEl.querySelectorAll('li');
+        items.forEach((li, i) => li.classList.toggle('active', i === index));
+        const active = items[index];
+        if (active) {
+            active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    function loadEntry(index, { autoplay = true } = {}) {
+        const entry = ENTRIES[index];
+        if (!entry) return;
+        currentIndex = index;
+
+        const videoEl = videoElement();
+        if (!videoEl) return;
+
+        // Tear down any prior sources (both the .src attribute and any
+        // <source> children) so the next .load() picks up our new one.
+        videoEl.removeAttribute('src');
+        Array.from(videoEl.querySelectorAll('source')).forEach(s => s.remove());
+
+        const source = document.createElement('source');
+        source.src = entry.url;
+        source.type = entryMime(entry.url);
+        videoEl.appendChild(source);
+
+        // Update poster via video.js so its overlay stays in sync.
+        player.poster(entry.poster || '');
+
+        videoEl.load();
+        setActive(index);
+
+        if (autoplay) {
+            const p = player.play();
+            // Chrome rejects unmuted autoplay without a user gesture.
+            // The element starts `muted`, so this should normally
+            // resolve; if it doesn't (e.g. user unmuted then we
+            // advanced), fall back to muted+retry.
+            if (p && typeof p.catch === 'function') {
+                p.catch(() => {
+                    player.muted(true);
+                    const r = player.play();
+                    if (r && typeof r.catch === 'function') r.catch(() => {});
+                });
+            }
+        }
+    }
+
+    // Build the playlist sidebar.
+    ENTRIES.forEach((entry, i) => {
+        const li = document.createElement('li');
+
+        const img = document.createElement('img');
+        img.className = 'pl-thumb';
+        const fl = flagUrl(entry.cc);
+        if (fl) {
+            img.src = fl;
+            img.alt = entry.cc ? entry.cc.toUpperCase() : '';
+        } else {
+            img.alt = '';
+        }
+        li.appendChild(img);
+
+        const text = document.createElement('div');
+        text.className = 'pl-text';
+        const name = document.createElement('div');
+        name.className = 'pl-name';
+        name.textContent = entryName(entry);
+        text.appendChild(name);
+        if (entry.kind === 'song' && entry.country) {
+            const desc = document.createElement('div');
+            desc.className = 'pl-desc';
+            desc.textContent = entry.country;
+            text.appendChild(desc);
+        }
+        li.appendChild(text);
+
+        li.addEventListener('click', () => loadEntry(i));
+        listEl.appendChild(li);
     });
+
+    // Auto-advance on end of item.
+    player.on('ended', () => {
+        if (currentIndex + 1 < ENTRIES.length) loadEntry(currentIndex + 1);
+    });
+
+    // Kick off with the first entry.
+    if (ENTRIES.length > 0) {
+        // Defer until the player is ready so the underlying <video>
+        // element exists when we go to attach a <source> child.
+        player.ready(() => loadEntry(0));
+    }
 </script>
 {% endblock %}

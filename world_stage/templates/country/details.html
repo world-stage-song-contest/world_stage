@@ -39,6 +39,24 @@
             width: 5px;
         }
 
+        /* Time-signature markers — same shape as key markers but pink
+           so the two timelines are visually distinct on the bar. */
+        .vjs-progress-holder .ts-marker {
+            position: absolute;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: #ff5fa2;
+            transform: translateX(-50%);
+            z-index: 2;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        .vjs-progress-holder .ts-marker:hover {
+            background: #fff;
+            width: 5px;
+        }
+
         /* Highlights the recap snippet range on the progress bar. Sits
            below the key markers (z-index 1 vs 2) and is purely
            decorative — pointer-events disabled so it doesn't intercept
@@ -121,14 +139,22 @@
             <th>Placeholder</th>
             <td>{{ "Yes" if song.placeholder else "No" }}</td>
         </tr>
+        {% if song.recap_start_seconds is not none %}
         <tr>
             <th>Recap start</th>
-            <td>{{ song.recap_start }}</td>
+            <td>
+                <a href="#" class="recap-timestamp" data-seconds="{{ song.recap_start_seconds }}">{{ song.recap_start }}</a>
+            </td>
         </tr>
+        {% endif %}
+        {% if song.recap_end_seconds is not none %}
         <tr>
             <th>Recap end</th>
-            <td>{{ song.recap_end }}</td>
+            <td>
+                <a href="#" class="recap-timestamp" data-seconds="{{ song.recap_end_seconds }}">{{ song.recap_end }}</a>
+            </td>
         </tr>
+        {% endif %}
     </table>
 </div>
 
@@ -170,31 +196,6 @@
     {{ embed|safe }}
 </div>
 
-{% if song.key_signature_timeline %}
-{% set has_ks_notes = song.key_signature_timeline|selectattr("notes")|list|length > 0 %}
-<details class="key-signature-timeline">
-    <summary>Key signature timeline</summary>
-    <table>
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th>Key</th>
-                {% if has_ks_notes %}<th>Notes</th>{% endif %}
-            </tr>
-        </thead>
-        <tbody>
-        {% for k in song.key_signature_timeline %}
-            <tr>
-                <td>
-                    <a href="#" class="ks-timestamp" data-seconds="{{ k.start_seconds }}">{{ k.start_label }}</a>
-                </td>
-                <td>{{ k.label }}</td>
-                {% if has_ks_notes %}<td>{{ k.notes or '' }}</td>{% endif %}
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-</details>
 <script>
     function seekKeySignature(seconds) {
         // Prefer the video.js API: the player wraps the underlying
@@ -223,7 +224,78 @@
         }
     }
 
+    document.querySelectorAll('a.recap-timestamp').forEach((a) => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const seconds = Number(a.dataset.seconds);
+            if (Number.isFinite(seconds)) seekKeySignature(seconds);
+        });
+    });
+</script>
+
+{% if song.key_signature_timeline %}
+{% set has_ks_notes = song.key_signature_timeline|selectattr("notes")|list|length > 0 %}
+<details class="key-signature-timeline">
+    <summary>Key signature timeline</summary>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Key</th>
+                {% if has_ks_notes %}<th>Notes</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for k in song.key_signature_timeline %}
+            <tr>
+                <td>
+                    <a href="#" class="ks-timestamp" data-seconds="{{ k.start_seconds }}">{{ k.start_label }}</a>
+                </td>
+                <td>{{ k.label }}</td>
+                {% if has_ks_notes %}<td>{{ k.notes or '' }}</td>{% endif %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+<script>
     document.querySelectorAll('a.ks-timestamp').forEach((a) => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const seconds = Number(a.dataset.seconds);
+            if (Number.isFinite(seconds)) seekKeySignature(seconds);
+        });
+    });
+</script>
+{% endif %}
+
+{% if song.time_signature_timeline %}
+{% set has_ts_notes = song.time_signature_timeline|selectattr("notes")|list|length > 0 %}
+<details class="time-signature-timeline">
+    <summary>Time signature timeline</summary>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Meter</th>
+                {% if has_ts_notes %}<th>Notes</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for t in song.time_signature_timeline %}
+            <tr>
+                <td>
+                    <a href="#" class="ts-timestamp" data-seconds="{{ t.start_seconds }}">{{ t.start_label }}</a>
+                </td>
+                <td>{{ t.label }}</td>
+                {% if has_ts_notes %}<td>{{ t.notes or '' }}</td>{% endif %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+<script>
+    document.querySelectorAll('a.ts-timestamp').forEach((a) => {
         a.addEventListener('click', (e) => {
             e.preventDefault();
             const seconds = Number(a.dataset.seconds);
@@ -285,8 +357,9 @@
 {% set has_recap = song.recap_start_seconds is not none
                   and song.recap_end_seconds is not none
                   and song.recap_end_seconds > song.recap_start_seconds %}
-{% if song.key_signature_timeline or has_recap %}
+{% if song.key_signature_timeline or song.time_signature_timeline or has_recap %}
 <script type="application/json" id="ks-timeline-data">{{ song.key_signature_timeline|tojson }}</script>
+<script type="application/json" id="ts-timeline-data">{{ song.time_signature_timeline|tojson }}</script>
 <script type="application/json" id="recap-data">{{
     {'start': song.recap_start_seconds, 'end': song.recap_end_seconds}|tojson
 }}</script>
@@ -296,6 +369,8 @@
 
         const timelineNode = document.getElementById('ks-timeline-data');
         const timeline = timelineNode ? JSON.parse(timelineNode.textContent) : [];
+        const tsTimelineNode = document.getElementById('ts-timeline-data');
+        const tsTimeline = tsTimelineNode ? JSON.parse(tsTimelineNode.textContent) : [];
         const recapNode = document.getElementById('recap-data');
         const recap = recapNode ? JSON.parse(recapNode.textContent) : null;
 
@@ -333,6 +408,26 @@
                     e.stopPropagation();
                     e.preventDefault();
                     player.currentTime(k.start_seconds);
+                    const p = player.play();
+                    if (p && typeof p.catch === 'function') p.catch(() => {});
+                });
+                holder.appendChild(marker);
+            }
+
+            // Time signature markers — same skip-the-opener rule as
+            // key signatures: the first entry sets the meter, not a
+            // change worth flagging on the bar.
+            holder.querySelectorAll('.ts-marker').forEach(m => m.remove());
+            for (const t of tsTimeline) {
+                if (t.start_seconds <= 0 || t.start_seconds >= duration) continue;
+                const marker = document.createElement('div');
+                marker.className = 'ts-marker';
+                marker.style.left = ((t.start_seconds / duration) * 100) + '%';
+                marker.title = t.start_label + ' — ' + t.label;
+                marker.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    player.currentTime(t.start_seconds);
                     const p = player.play();
                     if (p && typeof p.catch === 'function') p.catch(() => {});
                 });

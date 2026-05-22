@@ -503,6 +503,7 @@ class Song:
         self.key_signatures: list[str] = []
         self.key_signature_timeline: list[dict] = []
         self.time_signatures: list[str] = []
+        self.time_signature_timeline: list[dict] = []
         self.subgenres: list[str] = []
         self.placeholder = placeholder
         self.submitter = submitter
@@ -1068,6 +1069,41 @@ def get_song_subgenres_display(song_id: int) -> list[str]:
     return [r["name"] for r in cursor.fetchall()]
 
 
+def get_song_time_signature_timeline(song_id: int) -> list[dict]:
+    """Return time signatures in chronological order, formatted for the
+    click-to-seek timeline below the video. Mixed-meter sections are
+    included (rendered as ``mixed meter``) so the timeline reflects the
+    actual structure of the song.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        SELECT start_seconds, numerator, denominator, notes
+        FROM song_time_signature
+        WHERE song_id = %s
+        ORDER BY start_seconds
+    """,
+        (song_id,),
+    )
+    rows: list[dict] = []
+    for r in cursor.fetchall():
+        num, den = r["numerator"], r["denominator"]
+        if num is None and den is None:
+            label = "mixed meter"
+        else:
+            label = f"{num}⁄{den}"
+        rows.append(
+            {
+                "start_seconds": r["start_seconds"],
+                "start_label": format_seconds(r["start_seconds"]) or "0:00",
+                "label": label,
+                "notes": r["notes"],
+            }
+        )
+    return rows
+
+
 def get_song_key_signature_timeline(song_id: int) -> list[dict]:
     """Return key signatures in chronological order, formatted for the
     click-to-seek timeline below the video. Atonal sections are
@@ -1529,6 +1565,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
     ret.key_signatures = get_song_key_signatures(ret.id)
     ret.key_signature_timeline = get_song_key_signature_timeline(ret.id)
     ret.time_signatures = get_song_time_signatures(ret.id)
+    ret.time_signature_timeline = get_song_time_signature_timeline(ret.id)
     ret.subgenres = get_song_subgenres_display(ret.id)
     return ret
 
@@ -1606,6 +1643,7 @@ def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
     s.key_signatures = get_song_key_signatures(s.id)
     s.key_signature_timeline = get_song_key_signature_timeline(s.id)
     s.time_signatures = get_song_time_signatures(s.id)
+    s.time_signature_timeline = get_song_time_signature_timeline(s.id)
     s.subgenres = get_song_subgenres_display(s.id)
     return s
 
