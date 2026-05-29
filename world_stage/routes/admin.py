@@ -203,6 +203,105 @@ def language_create_post():
     return redirect(url_for("admin.language_create"))
 
 
+def _render_alternative_name_form(error: str | None = None, **values):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT id, name FROM country ORDER BY name")
+    countries = cursor.fetchall()
+    cursor.execute("SELECT id FROM year ORDER BY id")
+    years = cursor.fetchall()
+    cursor.execute(
+        """
+        SELECT an.id, an.name, an.flag_variant, an.from_year_id, an.to_year_id,
+               country.name AS country_name
+        FROM alternative_name an
+        JOIN country ON an.country_id = country.id
+        ORDER BY country.name COLLATE "C", an.from_year_id NULLS FIRST
+        """
+    )
+    existing = cursor.fetchall()
+    return render_template(
+        "admin/alternative_name_create.html",
+        countries=countries,
+        years=years,
+        existing=existing,
+        error=error,
+        **values,
+    )
+
+
+@bp.get("/alternative-name/create")
+def alternative_name_create():
+    resp = verify_user()
+    if resp:
+        return resp
+    return _render_alternative_name_form()
+
+
+@bp.post("/alternative-name/create")
+def alternative_name_create_post():
+    resp = verify_user()
+    if resp:
+        return resp
+
+    def _clean(field: str) -> str | None:
+        raw = (request.form.get(field) or "").strip()
+        return raw or None
+
+    country_id = (request.form.get("country_id") or "").strip()
+    name = _clean("name")
+    flag_variant = _clean("flag_variant")
+    from_year_txt = _clean("from_year")
+    to_year_txt = _clean("to_year")
+
+    values = dict(
+        country_id=country_id,
+        name=name,
+        flag_variant=flag_variant,
+        from_year=from_year_txt,
+        to_year=to_year_txt,
+    )
+
+    if not country_id:
+        return _render_alternative_name_form("Country is required.", **values)
+    if not name and not flag_variant:
+        return _render_alternative_name_form(
+            "At least one of name or flag variant must be provided.", **values
+        )
+
+    try:
+        from_year = int(from_year_txt) if from_year_txt else None
+    except ValueError:
+        return _render_alternative_name_form("Invalid from year.", **values)
+    try:
+        to_year = int(to_year_txt) if to_year_txt else None
+    except ValueError:
+        return _render_alternative_name_form("Invalid to year.", **values)
+
+    if from_year is not None and to_year is not None and from_year > to_year:
+        return _render_alternative_name_form(
+            "From year must not be after to year.", **values
+        )
+
+    db = get_db()
+    cur = db.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO alternative_name
+                (country_id, from_year_id, to_year_id, name, flag_variant)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (country_id, from_year, to_year, name, flag_variant),
+        )
+        db.commit()
+    except psycopg.Error as e:
+        db.rollback()
+        return _render_alternative_name_form(str(e), **values)
+
+    return redirect(url_for("admin.alternative_name_create"))
+
+
 @bp.post("/subgenre/<int:subgenre_id>/delete")
 def subgenre_delete(subgenre_id: int):
     resp = verify_user()
@@ -1294,8 +1393,8 @@ def set_pots_json(year: int):
             return None
         try:
             n = int(value)
-        except (ValueError, TypeError):
-            raise ValueError(f"Invalid {label} for country {country_id}: {value!r}")
+        except (ValueError, TypeError) as err:
+            raise ValueError(f"Invalid {label} for country {country_id}: {value!r}") from err
         return None if n == 0 else n
 
     # Validate everything before touching the database so a bad payload

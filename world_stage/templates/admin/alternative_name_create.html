@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Add Alternative Name{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/forms.css">
+{% endblock %}
+{% block content %}
+<h1>Add alternative name</h1>
+
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+
+<form method="POST" action="{{ url_for('admin.alternative_name_create') }}">
+    <div class="banner long-text">
+        <div>
+            An alternative name overrides a country's displayed name and/or flag
+            for entries within an optional year range. Leave a year blank to leave
+            that end of the range open. At least one of name or flag variant is
+            required.
+        </div>
+    </div>
+
+    <fieldset class="grid">
+        <legend>Alternative name</legend>
+
+        <label class="req" for="country_id">Country</label>
+        <select id="country_id" name="country_id" required>
+            <option value=""></option>
+            {% for country in countries %}
+                <option value="{{ country.id }}" {% if country.id == country_id %}selected{% endif %}>{{ country.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" placeholder="e.g. Yugoslavia"
+               maxlength="100" value="{{ name or '' }}">
+
+        <label for="flag_variant">Flag variant</label>
+        <input type="text" id="flag_variant" name="flag_variant"
+               placeholder="optional flag asset override"
+               maxlength="100" value="{{ flag_variant or '' }}">
+
+        <label for="from_year">From year</label>
+        <select id="from_year" name="from_year">
+            <option value=""></option>
+            {% for year in years %}
+                <option value="{{ year.id }}" {% if from_year and year.id|string == from_year %}selected{% endif %}>{{ year.id }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="to_year">To year</label>
+        <select id="to_year" name="to_year">
+            <option value=""></option>
+            {% for year in years %}
+                <option value="{{ year.id }}" {% if to_year and year.id|string == to_year %}selected{% endif %}>{{ year.id }}</option>
+            {% endfor %}
+        </select>
+    </fieldset>
+
+    <div class="buttons">
+        <button type="submit">Save</button>
+    </div>
+</form>
+
+{% if existing %}
+<h2>Existing alternative names</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Country</th>
+            <th>Name</th>
+            <th>Flag variant</th>
+            <th>From</th>
+            <th>To</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in existing %}
+        <tr>
+            <td>{{ e.country_name }}</td>
+            <td>{{ e.name or '' }}</td>
+            <td>{{ e.flag_variant or '' }}</td>
+            <td>{{ e.from_year_id if e.from_year_id is not none else '—' }}</td>
+            <td>{{ e.to_year_id if e.to_year_id is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

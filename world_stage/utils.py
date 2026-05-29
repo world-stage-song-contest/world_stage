@@ -993,17 +993,19 @@ def get_song_key_signatures(song_id: int) -> list[str]:
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT tonic, mode, microtonal
+        SELECT tonic, mode, microtonal, notes
         FROM song_key_signature
         WHERE song_id = %s
           AND (tonic IS NOT NULL OR mode IS NOT NULL)
     """,
         (song_id,),
     )
-    seen: dict[tuple[str | None, str | None], bool] = {}
+    seen: dict[tuple[str | None, str | None], dict[str, bool]] = {}
     for r in cursor.fetchall():
         key = (r["tonic"], r["mode"])
-        seen[key] = seen.get(key, False) or bool(r["microtonal"])
+        flags = seen.setdefault(key, {"microtonal": False, "has_notes": False})
+        flags["microtonal"] = flags["microtonal"] or bool(r["microtonal"])
+        flags["has_notes"] = flags["has_notes"] or bool(r["notes"])
 
     def sort_key(item):
         tonic, mode = item[0]
@@ -1011,10 +1013,12 @@ def get_song_key_signatures(song_id: int) -> list[str]:
         return (idx, (tonic or "").lower(), (mode or "").lower())
 
     out: list[str] = []
-    for (tonic, mode), microtonal in sorted(seen.items(), key=sort_key):
+    for (tonic, mode), flags in sorted(seen.items(), key=sort_key):
         label = " ".join(p for p in (_display_tonic(tonic), mode) if p)
-        if microtonal:
+        if flags["microtonal"]:
             label += " (microtonal)"
+        if flags["has_notes"]:
+            label += "*"
         out.append(label)
     return out
 
