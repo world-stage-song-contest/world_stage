@@ -434,6 +434,47 @@ def bias(username: str):
     )
 
 
+def get_taste_similarity(
+    user_id: int, year_from: int | None, year_to: int | None, include_specials: bool
+):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT * FROM user_taste_similarity(%s, %s, %s, %s)",
+        (user_id, year_from, year_to, include_specials),
+    )
+    for r in cursor:
+        yield dict(r)
+
+
+@bp.get("/<username>/similar")
+def similar(username: str):
+    username = urllib.parse.unquote(username)
+    username = unicodedata.normalize("NFKC", username)
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("SELECT id FROM account WHERE username = %s", (username,))
+    user_id_g = cursor.fetchone()
+    if not user_id_g:
+        return render_template("error.html", error="User not found"), 404
+    user_id = user_id_g["id"]
+
+    year_from, year_to, include_specials = _parse_bias_filters(with_specials=True)
+    similarities = get_taste_similarity(user_id, year_from, year_to, include_specials)
+
+    return render_template(
+        "user/similar.html",
+        username=username,
+        similarities=similarities,
+        closed_years=get_closed_years(),
+        year_from=year_from,
+        year_to=year_to,
+        include_specials=include_specials,
+    )
+
+
 @bp.get("/<username>/bias/for")
 def bias_for(username: str):
     username = urllib.parse.unquote(username)

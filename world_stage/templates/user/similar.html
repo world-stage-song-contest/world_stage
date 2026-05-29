@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Similar tastes: {{ username }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/bias.css">
+    <script src="/static/js/sort-table.js"></script>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.bias', username=username, type='country') }}">Bias</a>
+{% endblock %}
+{% block content %}
+<form method="get" class="bias-filters">
+    <input type="hidden" name="_submitted" value="1">
+    <label>From
+        <select name="from">
+            <option value="">—</option>
+            {% for y in closed_years %}
+            <option value="{{ y }}" {% if year_from == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>To
+        <select name="to">
+            <option value="">—</option>
+            {% for y in closed_years %}
+            <option value="{{ y }}" {% if year_to == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>
+        <input type="checkbox" name="include_specials" value="true" {% if include_specials %}checked{% endif %}>
+        Include specials
+    </label>
+    <button type="submit">Apply</button>
+</form>
+<label class="bias-filter">
+    <input type="checkbox" checked onchange="document.querySelector('table.sortable').classList.toggle('hide-inconclusive', this.checked)">
+    Hide inconclusive
+</label>
+<table class="sortable with-sticky hide-inconclusive">
+    <thead class="sticky">
+        <tr>
+            <th>#</th>
+            <th>User</th>
+            <th>Shared<br>Shows</th>
+            <th>Co-voted<br>Songs</th>
+            <th>Similarity</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for s in similarities %}
+        <tr data-value="{{ loop.index }}">
+            <th>{{ loop.index }}</th>
+            <td><a href="{{ url_for('user.similar', username=s.other_name) }}">{{ s.other_name }}</a></td>
+            <td class="number">{{ s.shared_shows }}</td>
+            <td class="number">{{ s.co_voted_songs }}</td>
+            <td class="number bias-value bias-{{ s.similarity_class }}">
+                {% if s.similarity is not none %}{{ "{:.02f}%".format(s.similarity * 100) }}{% else %}—{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

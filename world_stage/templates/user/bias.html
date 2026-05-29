@@ -13,6 +13,8 @@
     <a class="nav-item" href="{{ url_for('user.bias', username=username, type='user') }}">Users</a>
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('user.bias_for', username=username) }}">Received biases</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('user.similar', username=username) }}">Similar tastes</a>
 {% endblock %}
 {% block content %}
 <form method="get" class="bias-filters">
