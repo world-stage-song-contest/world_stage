@@ -2,6 +2,7 @@
 {% block title %}Voting History: {{ username }}{% endblock %}
 {% block headercontents %}
 <link rel="stylesheet" href="/static/css/user-votes.css">
+<script src="/static/js/sort-table.js"></script>
 {% endblock %}
 {% block navigation %}
     <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
@@ -11,6 +12,88 @@
     <a class="nav-item" href="{{ url_for('user.predictions', username=username) }}">Predictions history</a>
 {% endblock %}
 {% block content %}
+{% macro entry_table(entries, special, code) %}
+<div id="scroll-container">
+<table class="sortable votes-by-country">
+    <thead>
+        <tr>
+            <th>{{ 'Special' if special else 'Year' }}</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th class="num">Pts %</th>
+            <th class="num">Total Pts</th>
+            <th class="num">Final</th>
+            <th class="num">Repe</th>
+            <th class="num">Semi</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for c in entries %}
+        {% if special %}
+        {% set year_label = c.special_name %}
+        {% set year_url = url_for('year.special', short_name=c.special_short_name) %}
+        {% set entry_url = url_for('country.special_details', code=code.lower(), special_short_name=c.special_short_name, entry_number=c.entry_number) %}
+        {% else %}
+        {% set year_label = c.year_id %}
+        {% set year_url = url_for('year.year', year=c.year_id) %}
+        {% set entry_url = url_for('country.details', code=code.lower(), year=c.year_id) %}
+        {% endif %}
+        <tr data-value="{{ loop.index }}">
+            <td {% if not special %}data-value="{{ c.year_id }}"{% endif %}><a href="{{ year_url }}">{{ year_label }}</a></td>
+            <td>{{ c.artist }}</td>
+            <td><a href="{{ entry_url }}">{{ c.title }}</a></td>
+            <td class="num" data-value="{{ c.pct }}">{{ '%.2f'|format(c.pct) }}%</td>
+            <td class="num">{{ c.total }}</td>
+            <td class="num {{ '' if c.final.part else 'unavailable' }}">{{ c.final.pts if c.final.pts is not none else '' }}</td>
+            <td class="num {{ '' if c.repe.part else 'unavailable' }}">{{ c.repe.pts if c.repe.pts is not none else '' }}</td>
+            <td class="num {{ '' if c.semi.part else 'unavailable' }}">{{ c.semi.pts if c.semi.pts is not none else '' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endmacro %}
+<div class="view-controls">
+    <label class="view-select">
+        <span>View:</span>
+        <select onchange="location.href=this.value">
+            <option value="{{ url_for('user.votes', username=username) }}"
+                {{ 'selected' if view != 'country' else '' }}>Per show</option>
+            <option value="{{ url_for('user.votes', username=username, view='country') }}"
+                {{ 'selected' if view == 'country' else '' }}>Per country</option>
+        </select>
+    </label>
+    {% if view == 'country' %}
+    <label class="view-select">
+        <span>Country:</span>
+        <select onchange="location.href=this.value">
+            <option value="" disabled {{ 'selected' if not selected_country else '' }}>Select a country…</option>
+            {% for c in country_list %}
+            <option value="{{ url_for('user.votes', username=username, view='country', country=c.cc) }}"
+                {{ 'selected' if selected_country and selected_country.cc == c.cc else '' }}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% endif %}
+</div>
+{% if view == 'country' %}
+{% if selected_country %}
+<h3 class="country-heading">{{ flag(selected_country.cc, 36) }} {{ selected_country.name }}</h3>
+{% if regular_entries or special_entries %}
+{% if regular_entries %}
+{{ entry_table(regular_entries, false, selected_country.cc) }}
+{% endif %}
+{% if special_entries %}
+<h2>Specials</h2>
+{{ entry_table(special_entries, true, selected_country.cc) }}
+{% endif %}
+{% else %}
+<p>No votes to show for this country.</p>
+{% endif %}
+{% else %}
+<p>Select a country to see the entries you voted for.</p>
+{% endif %}
+{% else %}
 {% if votes %}
 <div class="vote-card-container">
 {% for vote in votes %}
@@ -38,5 +121,6 @@
 </div>
 {% endfor %}
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

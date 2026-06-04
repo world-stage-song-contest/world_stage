@@ -1,3 +1,52 @@
+.view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+    margin-bottom: 1em;
+    align-items: center;
+}
+
+.view-select {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+}
+
+.view-select select {
+    padding: 0.3em;
+}
+
+.country-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin: 0 0 0.5em;
+}
+
+/* Inherit the site-wide table styling (borders, header colours, sort arrows);
+   only keep cells on one line (with horizontal scroll) and right-align the
+   numeric columns. */
+#scroll-container {
+    overflow-x: auto;
+    width: 100%;
+}
+
+#scroll-container th,
+#scroll-container td {
+    white-space: nowrap;
+}
+
+.votes-by-country th.num,
+.votes-by-country td.num {
+    text-align: right;
+}
+
+/* Shows the entry didn't compete in — greyed so they read as "not applicable"
+   rather than "competed but scored nothing". Matches the submissions table. */
+.votes-by-country td.unavailable {
+    background-color: var(--no-entry-bg);
+}
+
 .vote-card-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -45,15 +94,15 @@ h3 a:visited {
     color: var(--link);
 }
 
-td {
+.user-votes td {
     background-color: var(--background3);
 }
 
-tr.qualifier > td {
+.user-votes tr.qualifier > td {
     background-color: var(--qualifier-color);
 }
 
-tr.sc-qualifier > td {
+.user-votes tr.sc-qualifier > td {
     background-color: var(--sc-qualifier-color);
 }
 
