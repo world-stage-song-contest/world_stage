@@ -95,3 +95,9 @@ div.source-links {
 .song-results {
     margin-top: 1em;
 }
+/* Time signatures are joined with the fraction slash (U+2044), e.g. "4⁄4".
+   Enable the OpenType fractions feature so they stack as proper fractions. */
+.time-signatures {
+    font-variant-numeric: diagonal-fractions;
+    font-feature-settings: "frac" 1;
+}

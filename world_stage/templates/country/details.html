@@ -122,7 +122,7 @@
         {% if song.time_signatures %}
         <tr>
             <th>Time signatures</th>
-            <td>{{ song.time_signatures|join(', ') }}</td>
+            <td class="time-signatures">{{ song.time_signatures|join(', ') }}</td>
         </tr>
         {% endif %}
         {% if song.subgenres %}

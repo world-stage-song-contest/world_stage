@@ -47,6 +47,12 @@
     background-color: var(--no-entry-bg);
 }
 
+.country-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+}
+
 .vote-card-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

@@ -116,6 +116,8 @@ def _aggregate_entries(rows) -> list[dict]:
                 "special_name": row["special_name"],
                 "special_short_name": row["special_short_name"],
                 "entry_number": row["entry_number"],
+                "cc": row["cc"],
+                "country": row["country"],
                 "artist": row["artist"],
                 "title": row["title"],
                 "total": 0,
@@ -149,36 +151,55 @@ def _aggregate_entries(rows) -> list[dict]:
     return entries
 
 
-def _country_entries(cursor, user_id: int, code: str) -> list[dict]:
-    """A user's vote totals for a single country's entries, oldest year first.
+def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val) -> list[dict]:
+    """``voter_id``'s vote totals over the entries selected by ``where_sql``,
+    oldest year first.
 
     Driven off ``song_show`` (every show the entry actually competed in) and
-    left-joined to the user's votes, so the per-show columns can distinguish a
+    left-joined to the voter's votes, so the per-show columns can distinguish a
     show the entry sat out from one it competed in but earned no points. Only
     fully-revealed ('full') shows are counted, so partial-result shows can't
-    leak which entries qualified.
+    leak which entries qualified. ``where_sql`` is a trusted constant (never
+    user input); the matching value is always parameterised.
     """
     cursor.execute(
-        """
+        f"""
         SELECT sh.short_name, sh.year_id,
                year.special_name, year.special_short_name,
                song.id AS song_id, song.title, song.artist, song.entry_number,
+               country.id AS cc, country.name AS country,
                vote_set.id AS vote_set_id, vote.score AS score,
                (SELECT MAX(point.score) FROM point
                 WHERE point.point_system_id = sh.point_system_id) AS show_max
         FROM song
         JOIN song_show ON song_show.song_id = song.id
         JOIN show sh ON song_show.show_id = sh.id AND sh.status = 'full'
+        JOIN country ON song.country_id = country.id
         LEFT JOIN year ON sh.year_id = year.id
         LEFT JOIN vote_set ON vote_set.show_id = sh.id AND vote_set.voter_id = %s
         LEFT JOIN vote ON vote.vote_set_id = vote_set.id AND vote.song_id = song.id
-        WHERE song.country_id = %s
+        WHERE {where_sql}
     """,
-        (user_id, code),
+        (voter_id, where_val),
     )
     entries = _aggregate_entries(cursor.fetchall())
-    entries.sort(key=lambda g: g["year_id"] or 0)
+    entries.sort(key=lambda g: (g["year_id"] or 0, g["country"] or ""))
     return entries
+
+
+def _country_entries(cursor, voter_id: int, code: str) -> list[dict]:
+    """``voter_id``'s vote totals for one country's entries."""
+    return _fetch_entries(cursor, voter_id, "song.country_id = %s", code)
+
+
+def _submitter_entries(cursor, voter_id: int, submitter_id: int) -> list[dict]:
+    """``voter_id``'s vote totals for entries submitted by ``submitter_id``."""
+    return _fetch_entries(cursor, voter_id, "song.submitter_id = %s", submitter_id)
+
+
+def _year_entries(cursor, voter_id: int, year_id: int) -> list[dict]:
+    """``voter_id``'s vote totals for every entry in one year (by country)."""
+    return _fetch_entries(cursor, voter_id, "song.year_id = %s", year_id)
 
 
 def _votes_by_country(cursor, user_id: int, username: str):
@@ -222,6 +243,85 @@ def _votes_by_country(cursor, user_id: int, username: str):
     )
 
 
+def _votes_by_user(cursor, user_id: int, username: str):
+    """Per-submitter view: a dropdown of every submitter; picking one lists the
+    entries they submitted with this user's points. Like the per-country view
+    but spanning countries, so the tables also carry a country column.
+    """
+    cursor.execute(
+        """
+        SELECT DISTINCT account.id, account.username
+        FROM account
+        JOIN song ON song.submitter_id = account.id
+        ORDER BY account.username
+    """
+    )
+    user_list = [dict(r) for r in cursor.fetchall()]
+
+    selected_id = request.args.get("user", type=int)
+    selected_user = None
+    regular_entries: list[dict] = []
+    special_entries: list[dict] = []
+    if selected_id:
+        selected_user = next((u for u in user_list if u["id"] == selected_id), None)
+        if selected_user:
+            entries = _submitter_entries(cursor, user_id, selected_user["id"])
+            # Specials use negative year ids; split them into their own table.
+            regular_entries = [e for e in entries if (e["year_id"] or 0) >= 0]
+            special_entries = [e for e in entries if (e["year_id"] or 0) < 0]
+            special_entries.sort(key=lambda e: (e["special_name"] or "", e["country"] or ""))
+
+    return render_template(
+        "user/votes.html",
+        username=username,
+        view="user",
+        user_list=user_list,
+        selected_user=selected_user,
+        regular_entries=regular_entries,
+        special_entries=special_entries,
+    )
+
+
+def _votes_by_year(cursor, user_id: int, username: str):
+    """Per-year view: a dropdown of every year (and special edition); picking
+    one lists that year's entries with the user's points. The year is fixed, so
+    the table leads with the country instead of a year column.
+    """
+    cursor.execute(
+        """
+        SELECT DISTINCT year.id, year.special_name, year.special_short_name
+        FROM year
+        JOIN song ON song.year_id = year.id
+        WHERE year.status = 'closed'
+        ORDER BY year.id DESC
+    """
+    )
+    rows = [dict(r) for r in cursor.fetchall()]
+    regular_years = [r for r in rows if r["id"] >= 0]
+    special_years = sorted(
+        (r for r in rows if r["id"] < 0), key=lambda r: r["special_name"] or ""
+    )
+
+    selected_id = request.args.get("year", type=int)
+    selected_year = None
+    entries: list[dict] = []
+    if selected_id is not None:
+        selected_year = next((r for r in rows if r["id"] == selected_id), None)
+        if selected_year:
+            entries = _year_entries(cursor, user_id, selected_year["id"])
+
+    return render_template(
+        "user/votes.html",
+        username=username,
+        view="year",
+        regular_years=regular_years,
+        special_years=special_years,
+        selected_year=selected_year,
+        year_is_special=selected_year is not None and selected_year["id"] < 0,
+        entries=entries,
+    )
+
+
 @bp.get("/<username>/votes")
 def votes(username: str):
     username = urllib.parse.unquote(username)
@@ -243,6 +343,10 @@ def votes(username: str):
 
     if request.args.get("view") == "country":
         return _votes_by_country(cursor, user_id, username)
+    if request.args.get("view") == "user":
+        return _votes_by_user(cursor, user_id, username)
+    if request.args.get("view") == "year":
+        return _votes_by_year(cursor, user_id, username)
 
     cursor.execute(
         """

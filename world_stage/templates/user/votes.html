@@ -12,12 +12,13 @@
     <a class="nav-item" href="{{ url_for('user.predictions', username=username) }}">Predictions history</a>
 {% endblock %}
 {% block content %}
-{% macro entry_table(entries, special, code) %}
+{% macro entry_table(entries, special, show_country, show_year=true) %}
 <div id="scroll-container">
 <table class="sortable votes-by-country">
     <thead>
         <tr>
-            <th>{{ 'Special' if special else 'Year' }}</th>
+            {% if show_year %}<th>{{ 'Special' if special else 'Year' }}</th>{% endif %}
+            {% if show_country %}<th>Country</th>{% endif %}
             <th>Artist</th>
             <th>Title</th>
             <th class="num">Pts %</th>
@@ -32,14 +33,15 @@
         {% if special %}
         {% set year_label = c.special_name %}
         {% set year_url = url_for('year.special', short_name=c.special_short_name) %}
-        {% set entry_url = url_for('country.special_details', code=code.lower(), special_short_name=c.special_short_name, entry_number=c.entry_number) %}
+        {% set entry_url = url_for('country.special_details', code=c.cc.lower(), special_short_name=c.special_short_name, entry_number=c.entry_number) %}
         {% else %}
         {% set year_label = c.year_id %}
         {% set year_url = url_for('year.year', year=c.year_id) %}
-        {% set entry_url = url_for('country.details', code=code.lower(), year=c.year_id) %}
+        {% set entry_url = url_for('country.details', code=c.cc.lower(), year=c.year_id) %}
         {% endif %}
         <tr data-value="{{ loop.index }}">
-            <td {% if not special %}data-value="{{ c.year_id }}"{% endif %}><a href="{{ year_url }}">{{ year_label }}</a></td>
+            {% if show_year %}<td {% if not special %}data-value="{{ c.year_id }}"{% endif %}><a href="{{ year_url }}">{{ year_label }}</a></td>{% endif %}
+            {% if show_country %}<td><a class="country-cell" href="{{ url_for('country.country', code=c.cc.lower()) }}">{{ flag(c.cc, 24, c.country) }}{{ c.country }}</a></td>{% endif %}
             <td>{{ c.artist }}</td>
             <td><a href="{{ entry_url }}">{{ c.title }}</a></td>
             <td class="num" data-value="{{ c.pct }}">{{ '%.2f'|format(c.pct) }}%</td>
@@ -58,9 +60,13 @@
         <span>View:</span>
         <select onchange="location.href=this.value">
             <option value="{{ url_for('user.votes', username=username) }}"
-                {{ 'selected' if view != 'country' else '' }}>Per show</option>
+                {{ 'selected' if view not in ('country', 'user', 'year') else '' }}>Per show</option>
             <option value="{{ url_for('user.votes', username=username, view='country') }}"
                 {{ 'selected' if view == 'country' else '' }}>Per country</option>
+            <option value="{{ url_for('user.votes', username=username, view='user') }}"
+                {{ 'selected' if view == 'user' else '' }}>Per user</option>
+            <option value="{{ url_for('user.votes', username=username, view='year') }}"
+                {{ 'selected' if view == 'year' else '' }}>Per year</option>
         </select>
     </label>
     {% if view == 'country' %}
@@ -74,6 +80,38 @@
             {% endfor %}
         </select>
     </label>
+    {% elif view == 'user' %}
+    <label class="view-select">
+        <span>User:</span>
+        <select onchange="location.href=this.value">
+            <option value="" disabled {{ 'selected' if not selected_user else '' }}>Select a user…</option>
+            {% for u in user_list %}
+            <option value="{{ url_for('user.votes', username=username, view='user', user=u.id) }}"
+                {{ 'selected' if selected_user and selected_user.id == u.id else '' }}>{{ u.username }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% elif view == 'year' %}
+    <label class="view-select">
+        <span>Year:</span>
+        <select onchange="location.href=this.value">
+            <option value="" disabled {{ 'selected' if not selected_year else '' }}>Select a year…</option>
+            <optgroup label="Years">
+            {% for y in regular_years %}
+            <option value="{{ url_for('user.votes', username=username, view='year', year=y.id) }}"
+                {{ 'selected' if selected_year and selected_year.id == y.id else '' }}>{{ y.id }}</option>
+            {% endfor %}
+            </optgroup>
+            {% if special_years %}
+            <optgroup label="Specials">
+            {% for y in special_years %}
+            <option value="{{ url_for('user.votes', username=username, view='year', year=y.id) }}"
+                {{ 'selected' if selected_year and selected_year.id == y.id else '' }}>{{ y.special_name }}</option>
+            {% endfor %}
+            </optgroup>
+            {% endif %}
+        </select>
+    </label>
     {% endif %}
 </div>
 {% if view == 'country' %}
@@ -81,17 +119,51 @@
 <h3 class="country-heading">{{ flag(selected_country.cc, 36) }} {{ selected_country.name }}</h3>
 {% if regular_entries or special_entries %}
 {% if regular_entries %}
-{{ entry_table(regular_entries, false, selected_country.cc) }}
+{{ entry_table(regular_entries, false, false) }}
 {% endif %}
 {% if special_entries %}
 <h2>Specials</h2>
-{{ entry_table(special_entries, true, selected_country.cc) }}
+{{ entry_table(special_entries, true, false) }}
 {% endif %}
 {% else %}
 <p>No votes to show for this country.</p>
 {% endif %}
 {% else %}
 <p>Select a country to see the entries you voted for.</p>
+{% endif %}
+{% elif view == 'user' %}
+{% if selected_user %}
+<h3 class="country-heading">Entries submitted by {{ selected_user.username }}</h3>
+{% if regular_entries or special_entries %}
+{% if regular_entries %}
+{{ entry_table(regular_entries, false, true) }}
+{% endif %}
+{% if special_entries %}
+<h2>Specials</h2>
+{{ entry_table(special_entries, true, true) }}
+{% endif %}
+{% else %}
+<p>No votes to show for this user.</p>
+{% endif %}
+{% else %}
+<p>Select a user to see the entries you voted for.</p>
+{% endif %}
+{% elif view == 'year' %}
+{% if selected_year %}
+<h3 class="country-heading">
+    {% if year_is_special %}
+    <a href="{{ url_for('year.special', short_name=selected_year.special_short_name) }}">{{ selected_year.special_name }}</a>
+    {% else %}
+    <a href="{{ url_for('year.year', year=selected_year.id) }}">{{ selected_year.id }}</a>
+    {% endif %}
+</h3>
+{% if entries %}
+{{ entry_table(entries, year_is_special, true, false) }}
+{% else %}
+<p>No votes to show for this year.</p>
+{% endif %}
+{% else %}
+<p>Select a year to see the entries you voted for.</p>
 {% endif %}
 {% else %}
 {% if votes %}
