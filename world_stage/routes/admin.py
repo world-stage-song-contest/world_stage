@@ -221,7 +221,7 @@ def _render_alternative_name_form(error: str | None = None, **values):
     )
     existing = cursor.fetchall()
     return render_template(
-        "admin/alternative_name_create.html",
+        "admin/alternative_name.html",
         countries=countries,
         years=years,
         existing=existing,
@@ -230,15 +230,15 @@ def _render_alternative_name_form(error: str | None = None, **values):
     )
 
 
-@bp.get("/alternative-name/create")
-def alternative_name_create():
+@bp.get("/alternative-name")
+def alternative_name_index():
     resp = verify_user()
     if resp:
         return resp
     return _render_alternative_name_form()
 
 
-@bp.post("/alternative-name/create")
+@bp.post("/alternative-name")
 def alternative_name_create_post():
     resp = verify_user()
     if resp:
@@ -299,7 +299,25 @@ def alternative_name_create_post():
         db.rollback()
         return _render_alternative_name_form(str(e), **values)
 
-    return redirect(url_for("admin.alternative_name_create"))
+    return redirect(url_for("admin.alternative_name_index"))
+
+
+@bp.post("/alternative-name/<int:name_id>/delete")
+def alternative_name_delete(name_id: int):
+    resp = verify_user()
+    if resp:
+        return resp
+
+    db = get_db()
+    cur = db.cursor()
+    try:
+        cur.execute("DELETE FROM alternative_name WHERE id = %s", (name_id,))
+        db.commit()
+    except psycopg.Error as e:
+        db.rollback()
+        return _render_alternative_name_form(str(e))
+
+    return redirect(url_for("admin.alternative_name_index"))
 
 
 @bp.post("/subgenre/<int:subgenre_id>/delete")

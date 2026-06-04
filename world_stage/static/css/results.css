@@ -106,3 +106,7 @@ td.extra-visible {
     text-underline-offset: 2px;
     cursor: help;
 }
+
+.qualifier-reveal {
+    margin: 0.5em 0;
+}

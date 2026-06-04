@@ -15,3 +15,8 @@
     display: flex;
     align-items: center;
 }
+
+/* Qualifier cards on the partial-results page reuse the country-card look,
+   coloured with the DtF/SC result colours. */
+.country-item.qual-dtf { background-color: var(--result-dtf); color: var(--result-text); }
+.country-item.qual-sc  { background-color: var(--result-sc); color: var(--result-text); }

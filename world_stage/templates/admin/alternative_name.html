@@ -10,7 +10,7 @@
 <p class="error">{{ error }}</p>
 {% endif %}
 
-<form method="POST" action="{{ url_for('admin.alternative_name_create') }}">
+<form method="POST" action="{{ url_for('admin.alternative_name_index') }}">
     <div class="banner long-text">
         <div>
             An alternative name overrides a country's displayed name and/or flag
@@ -72,6 +72,7 @@
             <th>Flag variant</th>
             <th>From</th>
             <th>To</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
@@ -82,6 +83,11 @@
             <td>{{ e.flag_variant or '' }}</td>
             <td>{{ e.from_year_id if e.from_year_id is not none else '—' }}</td>
             <td>{{ e.to_year_id if e.to_year_id is not none else '—' }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('admin.alternative_name_delete', name_id=e.id) }}" onsubmit="return confirm('Delete alternative name for {{ e.country_name }}?');">
+                    <button type="submit">Delete</button>
+                </form>
+            </td>
         </tr>
         {% endfor %}
     </tbody>

@@ -413,11 +413,38 @@ def special_results(short_name: str, show: str):
     songs.sort(reverse=True)
 
     off = 0
+    qualifier_reveal = []
+
+    # Build the qualifier banner whenever the partial results are actually
+    # set in the database (``status == "partial"``) — including when an admin
+    # viewing such a show is bumped up to full access. It is NOT shown for a
+    # draw-status show an admin is merely previewing as partial, since those
+    # qualifiers aren't set yet. Computed from the full sorted list before any
+    # slicing/redaction below, and captured as plain values so the later
+    # redaction can't blank a card. The DtF/SC groups are shuffled with the
+    # same seed the qualifiers reveal uses (see ``qualifiers_scores``) so they
+    # appear in reveal order.
+    if show_data.status == "partial":
+        dtf = show_data.dtf or 0
+        sc = show_data.sc or 0
+        lcg = LCG(show_data.id)
+        dtf_quals = songs[:dtf]
+        sc_quals = songs[dtf:dtf + sc]
+        lcg.shuffle(dtf_quals)
+        lcg.shuffle(sc_quals)
+        qualifier_reveal = [
+            {"cc": s.country.cc, "name": s.country.name,
+             "variant": s.country.flag_variant, "cls": cls}
+            for group, cls in ((dtf_quals, "qual-dtf"), (sc_quals, "qual-sc"))
+            for s in group
+        ]
+
     if access == "partial":
         if show_data.dtf:
             off = show_data.dtf - 1
         if show_data.sc:
             off += show_data.sc
+
         songs = songs[off:]
         if reveal:
             for s in songs:
@@ -453,6 +480,7 @@ def special_results(short_name: str, show: str):
         show=show,
         access=access,
         offset=off,
+        qualifier_reveal=qualifier_reveal,
         other_shows=get_other_shows(_year, show),
         show_name=show_data.name,
         short_name=show_data.short_name,
@@ -1212,11 +1240,38 @@ def results(year: int, show: str):
     songs.sort(reverse=True)
 
     off = 0
+    qualifier_reveal = []
+
+    # Build the qualifier banner whenever the partial results are actually
+    # set in the database (``status == "partial"``) — including when an admin
+    # viewing such a show is bumped up to full access. It is NOT shown for a
+    # draw-status show an admin is merely previewing as partial, since those
+    # qualifiers aren't set yet. Computed from the full sorted list before any
+    # slicing/redaction below, and captured as plain values so the later
+    # redaction can't blank a card. The DtF/SC groups are shuffled with the
+    # same seed the qualifiers reveal uses (see ``qualifiers_scores``) so they
+    # appear in reveal order.
+    if show_data.status == "partial":
+        dtf = show_data.dtf or 0
+        sc = show_data.sc or 0
+        lcg = LCG(show_data.id)
+        dtf_quals = songs[:dtf]
+        sc_quals = songs[dtf:dtf + sc]
+        lcg.shuffle(dtf_quals)
+        lcg.shuffle(sc_quals)
+        qualifier_reveal = [
+            {"cc": s.country.cc, "name": s.country.name,
+             "variant": s.country.flag_variant, "cls": cls}
+            for group, cls in ((dtf_quals, "qual-dtf"), (sc_quals, "qual-sc"))
+            for s in group
+        ]
+
     if access == "partial":
         if show_data.dtf:
             off = show_data.dtf - 1
         if show_data.sc:
             off += show_data.sc
+
         songs = songs[off:]
         if reveal:
             for s in songs:
@@ -1252,6 +1307,7 @@ def results(year: int, show: str):
         show=show,
         access=access,
         offset=off,
+        qualifier_reveal=qualifier_reveal,
         other_shows=get_other_shows(_year, show),
         show_name=show_data.name,
         short_name=show_data.short_name,

@@ -2,6 +2,7 @@
 {% block title %}Results: {{ special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
+    <link rel="stylesheet" href="/static/css/country-list.css">
     <script src="/static/js/year.js"></script>
     <script src="/static/js/sort-table.js"></script>
 {% endblock %}
@@ -50,6 +51,19 @@
     <p>The results summary is a secret until the end of the show.</p>
 </div>
 {% else %}
+{% if qualifier_reveal %}
+<div class="qualifier-reveal">
+    <p><strong>These {{ qualifier_reveal|length }} countries qualified (in the order of reveal):</strong></p>
+    <div class="country-list">
+        {% for q in qualifier_reveal %}
+        <div class="country-item {{ q.cls }}">
+            <div class="flag-container">{{ flag(q.cc, 52, q.name, variant=q.variant) }}</div>
+            <div class="country-name">{{ q.name }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 <div>
     <strong><big>Total voters: {{voters}}</big></strong>
 </div>
