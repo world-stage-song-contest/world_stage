@@ -56,8 +56,10 @@
     <h2>Bulk update via JSON</h2>
     <p>Paste a JSON object of the form
     <code>{"US": {"pot": 1, "genre": 1}, "RU": {"pot": 2, "genre": 3}, ...}</code>
-    to update every country at once. Countries omitted from the payload
-    will have their pot and genre cleared.</p>
+    to update every country at once. Keys may be either a country code or
+    a full country name (e.g. <code>"United States"</code>), matched
+    case-insensitively. Countries omitted from the payload will have their
+    pot and genre cleared.</p>
     <textarea name="payload" rows="12" cols="80"
               placeholder='{"US": {"pot": 1, "genre": 1}, "RU": {"pot": 2, "genre": 3}}'></textarea>
     <div>

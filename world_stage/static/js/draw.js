@@ -262,6 +262,10 @@ function assignPotToShows(pot, liveShows, rng, balanceCeils = null) {
     const adjacency = Array.from({ length: showCount }, () => []);
     for (let showIndex = 0; showIndex < showCount; ++showIndex) {
         const show = liveShows[showIndex];
+        // A show can fill up partway through a round (an earlier pot in
+        // this same round may have already taken its last slot). Leaving
+        // its adjacency empty means the matching never assigns to it.
+        if (show.entries.length >= show.limit) continue;
         for (let entryIndex = 0; entryIndex < entryCount; ++entryIndex) {
             const entry = pot[entryIndex];
             if (show.submitters.has(entry.submitter)) continue;
@@ -638,13 +642,16 @@ function drawIntoShows(pots, shows, rng) {
         balanceCeils[key] = ceilingByKey(allEntries, key, showStates.length);
     }
 
-    // Phase 1: Assign complete pots to shows
+    // Phase 1: Deal pots into shows, one entry per pot per show per round.
+    // A pot smaller than the number of live shows is fine — its entries
+    // are steered into the longer semis (see below), so the remaining
+    // semis stay evenly drawn from the full pots.
     while (true) {
         const liveShows = showStates.filter(s => s.entries.length < s.limit);
         if (!liveShows.length) break;
 
-        // Check if we have enough entries in each pot
-        if (!pots.every(pot => pot.length >= liveShows.length)) break;
+        // Keep going while at least one pot still has entries to place.
+        if (!pots.some(pot => pot.length > 0)) break;
 
         // Randomize show order for fairness
         rng.shuffle(liveShows);
@@ -656,8 +663,25 @@ function drawIntoShows(pots, shows, rng) {
         // leftovers phase handle them with the relaxed constraint.
         let progress = false;
         for (const pot of pots) {
+            if (pot.length === 0) continue;
+
+            // When a pot (or the short tail of a larger pot) can't supply
+            // one entry to every live show this round, confine it to the
+            // shows with the most remaining capacity — the longer semis.
+            // Those are exactly the shows whose extra slots must come from
+            // somewhere; filling them from the short pot keeps every other
+            // semi drawn evenly from the full pots. Ties (equal remaining
+            // capacity) keep the shuffled order, so the choice among
+            // equally-long semis stays random.
+            let eligible = liveShows;
+            if (pot.length < eligible.length) {
+                eligible = [...eligible]
+                    .sort((a, b) => (b.limit - b.entries.length) - (a.limit - a.entries.length))
+                    .slice(0, pot.length);
+            }
+
             const before = pot.length;
-            if (!assignPotToShows(pot, liveShows, rng, balanceCeils)) {
+            if (!assignPotToShows(pot, eligible, rng, balanceCeils)) {
                 throw new Error('Pot assignment failed: conflicting submitter constraints');
             }
             if (pot.length < before) progress = true;

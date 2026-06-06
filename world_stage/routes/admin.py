@@ -518,7 +518,15 @@ def _render_draw(year_id: int, label: str):
     per = semifinalists // count
     songs = [per] * count
     deficit = semifinalists - per * count
-    for i in range(deficit):
+    # The `deficit` extra songs make some semis longer than others. Give
+    # the extra to even-numbered semis first (2, 4, ...) so odd-numbered
+    # semis (1, 3, ...) have priority to be the short ones. Shows are
+    # 0-indexed here, so even-numbered semis are the odd indices.
+    long_order = (
+        [i for i in range(count) if i % 2 == 1]
+        + [i for i in range(count) if i % 2 == 0]
+    )
+    for i in long_order[:deficit]:
         songs[i] += 1
 
     limits = list(map(lambda n: math.ceil(n / 2), songs))
@@ -1377,6 +1385,9 @@ def set_pots_json(year: int):
     """Bulk-update pots/genres from a single JSON payload of the form
     ``{"US": {"pot": 1, "genre": 1}, "RU": {"pot": 2, "genre": 3}, ...}``.
 
+    Keys may be either a country code (the ``id``) or a full country
+    name; both are matched case-insensitively.
+
     Same conventions as the form-encoded endpoint: a value of 0 (or a
     missing key) maps to NULL, and any country not listed in the payload
     has its pot and genre cleared.
@@ -1415,24 +1426,43 @@ def set_pots_json(year: int):
             raise ValueError(f"Invalid {label} for country {country_id}: {value!r}") from err
         return None if n == 0 else n
 
+    db = get_db()
+    cursor = db.cursor()
+
+    # Build a case-insensitive lookup so payload keys may be either a
+    # country code (the ``id``) or a full country name.
+    cursor.execute("SELECT id, name FROM country")
+    by_code: dict[str, str] = {}
+    by_name: dict[str, str] = {}
+    for row in cursor.fetchall():
+        by_code[row["id"].casefold()] = row["id"]
+        if row["name"]:
+            by_name[row["name"].casefold()] = row["id"]
+
+    def _resolve(key: str) -> str | None:
+        k = key.strip().casefold()
+        return by_code.get(k) or by_name.get(k)
+
     # Validate everything before touching the database so a bad payload
     # doesn't half-apply.
     parsed: dict[str, tuple[int | None, int | None]] = {}
-    for country_id, fields in raw_payload.items():
+    for key, fields in raw_payload.items():
+        country_id = _resolve(key)
+        if country_id is None:
+            return render_template(
+                "error.html", error=f"Unknown country: {key!r}"
+            ), 400
         if not isinstance(fields, dict):
             return render_template(
                 "error.html",
-                error=f"Expected object for country {country_id}",
+                error=f"Expected object for country {key}",
             ), 400
         try:
-            pot = _coerce("pot", country_id, fields.get("pot"))
-            genre = _coerce("genre", country_id, fields.get("genre"))
+            pot = _coerce("pot", key, fields.get("pot"))
+            genre = _coerce("genre", key, fields.get("genre"))
         except ValueError as e:
             return render_template("error.html", error=str(e)), 400
         parsed[country_id] = (pot, genre)
-
-    db = get_db()
-    cursor = db.cursor()
 
     cursor.execute("UPDATE country SET pot = NULL, genre = NULL")
     for country_id, (pot, genre) in parsed.items():
