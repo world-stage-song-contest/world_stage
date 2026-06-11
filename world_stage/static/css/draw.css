@@ -40,12 +40,14 @@
     text-align: center;
 }
 
-/* Stacked pots (regular draw): tiles auto-size to the widest content in
-   the pot, so long country names like "Bosnia and Herzegovina" fit on
-   one line without forcing every other pot to be that wide. */
+/* Stacked pots (regular draw): every pot shares one column width so a
+   single long name like "Bosnia and Herzegovina" doesn't leave its pot
+   wider than the others. draw.js measures the widest country card across
+   all pots and sets --pot-tile-width; until then (or with JS disabled)
+   each pot falls back to auto-sizing to its own widest content. */
 .pot:not(.pot-big) > .pot-container {
     display: grid;
-    grid-template-columns: minmax(200px, max-content);
+    grid-template-columns: var(--pot-tile-width, minmax(200px, max-content));
     gap: 0.1em;
 }
 

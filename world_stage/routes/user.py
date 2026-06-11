@@ -545,7 +545,7 @@ def predictions(username: str):
             else:
                 val["penalty"] = None
             items.append(val)
-        items.sort(key=lambda x: (x["result_place"] is None, x["result_place"]))
+        items.sort(key=lambda x: x["pos"])
         ps["points"] = items
         ps["score"] = score
         rank_info = set_rank.get(ps["id"])

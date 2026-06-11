@@ -1447,6 +1447,9 @@ def set_pots_json(year: int):
     # doesn't half-apply.
     parsed: dict[str, tuple[int | None, int | None]] = {}
     for key, fields in raw_payload.items():
+        # Ignore an empty-string key (e.g. a trailing blank entry).
+        if not key.strip():
+            continue
         country_id = _resolve(key)
         if country_id is None:
             return render_template(

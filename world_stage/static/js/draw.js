@@ -1103,3 +1103,38 @@ async function next() {
 
     clicked = false;
 }
+
+/**
+ * Size every stacked pot to the widest country card across all of them,
+ * so one long name (e.g. "Bosnia and Herzegovina") doesn't leave a single
+ * pot wider than the rest. Skips the specials / single-pot layout, which
+ * uses its own responsive grid and hides the country name.
+ */
+function sizePotsToWidestCountry() {
+    const potsEl = document.getElementById('pots');
+    if (!potsEl || potsEl.classList.contains('with-titles')) return;
+
+    // Clear any previous value first so a re-run (e.g. after web fonts
+    // load) measures the natural content width rather than the uniform
+    // width we last applied. Reading layout below forces the reflow.
+    potsEl.style.removeProperty('--pot-tile-width');
+
+    let max = 0;
+    for (const item of potsEl.querySelectorAll('.pot:not(.pot-big) .pot-item')) {
+        max = Math.max(max, item.getBoundingClientRect().width);
+    }
+    if (max > 0) {
+        potsEl.style.setProperty('--pot-tile-width', `${Math.ceil(max)}px`);
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', sizePotsToWidestCountry);
+} else {
+    sizePotsToWidestCountry();
+}
+// Web fonts can change text width after first paint — re-measure once
+// they're ready so the uniform width still fits the longest name.
+if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(sizePotsToWidestCountry);
+}
