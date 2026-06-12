@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS song (
     admin_approved boolean,
     poster_link text,
     vtt_link text,
+    duration double precision,
     entry_number integer NOT NULL DEFAULT 1,
     CONSTRAINT song_year_country_entry_key UNIQUE (year_id, country_id, entry_number)
 );

@@ -84,12 +84,19 @@
 {% block onload%}onLoad(){% endblock %}
 {% block content %}
 
-{% if can_edit %}
+{% if can_edit or can_update_duration %}
 <div>
+    {% if can_edit %}
     {% if special %}
     <a class="button" href="{{ url_for('member.submit', country=song.country.cc.lower(), year=song.year.id, entry_number=song.entry_number) }}">Edit</a>
     {% else %}
     <a class="button" href="{{ url_for('member.submit', country=song.country.cc.lower(), year=song.year.id) }}">Edit</a>
+    {% endif %}
+    {% endif %}
+    {% if can_update_duration %}
+    <form method="post" action="{{ url_for('country.update_duration', song_id=song.id) }}" style="float: right;">
+        <button type="submit">Update duration</button>
+    </form>
     {% endif %}
 </div>
 {% endif %}
@@ -131,14 +138,22 @@
             <td>{{ song.subgenres|join(', ') }}</td>
         </tr>
         {% endif %}
+        {% if song.duration %}
+        <tr>
+            <th>Duration</th>
+            <td>{{ song.duration_display }}</td>
+        </tr>
+        {% endif %}
         <tr>
             <th>Submitter</th>
             <td>{{ song.submitter }}</td>
         </tr>
+        {% if song.placeholder %}
         <tr>
             <th>Placeholder</th>
-            <td>{{ "Yes" if song.placeholder else "No" }}</td>
+            <td>Yes</td>
         </tr>
+        {% endif %}
         {% if song.recap_start_seconds is not none %}
         <tr>
             <th>Recap start</th>

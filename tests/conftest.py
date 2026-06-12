@@ -100,17 +100,24 @@ def _seeded_db(_test_db):
             ON CONFLICT DO NOTHING
         """)
 
-        # Year (open for submissions, closed = 0)
+        # Year statuses (reference rows; the schema-only dump skips them)
         cur.execute("""
-            INSERT INTO year (id, closed, host_id)
-            VALUES (2025, 0, 'US')
+            INSERT INTO year_status (name)
+            VALUES ('open'), ('closed'), ('ongoing')
+            ON CONFLICT DO NOTHING
+        """)
+
+        # Year (open for submissions)
+        cur.execute("""
+            INSERT INTO year (id, status, host_id)
+            VALUES (2025, 'open', 'US')
             ON CONFLICT DO NOTHING
         """)
 
         # A closed year (for deletion-restriction tests)
         cur.execute("""
-            INSERT INTO year (id, closed, host_id)
-            VALUES (2024, 1, 'ES')
+            INSERT INTO year (id, status, host_id)
+            VALUES (2024, 'closed', 'ES')
             ON CONFLICT DO NOTHING
         """)
 
@@ -123,12 +130,22 @@ def _seeded_db(_test_db):
             ON CONFLICT DO NOTHING
         """)
 
+        # Account roles (reference rows; the schema-only dump skips them)
+        cur.execute("""
+            INSERT INTO account_role (name, can_edit, can_view_restricted)
+            VALUES ('user', false, false),
+                   ('editor', true, false),
+                   ('admin', true, true),
+                   ('owner', true, true)
+            ON CONFLICT DO NOTHING
+        """)
+
         # Accounts – passwords are irrelevant; we authenticate via API tokens.
         cur.execute("""
             INSERT INTO account (id, username, email, password, salt, approved, role)
-            VALUES (1, 'alice', 'alice@test', '\\x00', '\\x00', 1, 'admin'),
-                   (2, 'bob',   'bob@test',   '\\x00', '\\x00', 1, 'user'),
-                   (3, 'carol', 'carol@test', '\\x00', '\\x00', 1, 'user')
+            VALUES (1, 'alice', 'alice@test', '\\x00', '\\x00', true, 'admin'),
+                   (2, 'bob',   'bob@test',   '\\x00', '\\x00', true, 'user'),
+                   (3, 'carol', 'carol@test', '\\x00', '\\x00', true, 'user')
             ON CONFLICT DO NOTHING
         """)
 

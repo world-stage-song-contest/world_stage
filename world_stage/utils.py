@@ -408,6 +408,7 @@ class Song:
     video_link: str | None
     poster_link: str | None
     vtt_link: str | None
+    duration: float | None
     recap_start: str | None
     recap_end: str | None
     sources: str | None
@@ -435,6 +436,7 @@ class Song:
             video_link=song["video_link"],
             poster_link=song["poster_link"],
             vtt_link=song.get("vtt_link"),
+            duration=song.get("duration"),
             recap_start=song["snippet_start"],
             recap_end=song["snippet_end"],
             country=Country(
@@ -482,6 +484,7 @@ class Song:
         latin_lyrics: str | None,
         native_lyrics: str | None,
         video_link: str | None,
+        duration: float | None = None,
         recap_start: int | None,
         recap_end: int | None,
         sources: str | None,
@@ -515,6 +518,7 @@ class Song:
         self.video_link = video_link
         self.poster_link = poster_link
         self.vtt_link = vtt_link
+        self.duration = duration
         self.sources = sources
         self.recap_start = format_seconds(recap_start) if recap_start is not None else None
         self.recap_end = format_seconds(recap_end) if recap_end is not None else None
@@ -530,6 +534,10 @@ class Song:
             self.vote_data = VoteData(ro, None, None, None)
         else:
             self.vote_data = None
+
+    @property
+    def duration_display(self) -> str:
+        return format_seconds(round(self.duration)) if self.duration else ""
 
     def __lt__(self, other):
         if not isinstance(other, Song):
@@ -1222,7 +1230,7 @@ def get_show_songs(
                song_show.running_order, song.is_placeholder,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                account.username, song.title_language_id, song.native_language_id,
-               song.video_link, song.snippet_start, song.snippet_end,
+               song.video_link, song.duration, song.snippet_start, song.snippet_end,
                song.submitter_id, song.notes, song.sources, song.poster_link,
                song.entry_number
         FROM song
@@ -1300,7 +1308,7 @@ def get_year_songs(year: int, *, select_languages=False) -> list[Song]:
                year.special_name, year.special_short_name, song.poster_link,
                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                song.title_language_id, song.native_language_id,
-               song.video_link, song.snippet_start, song.snippet_end,
+               song.video_link, song.duration, song.snippet_start, song.snippet_end,
                song.submitter_id, song.notes, song.sources, song.entry_number
         FROM song
         JOIN country ON song.country_id = country.id
@@ -1354,7 +1362,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages=Fa
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id, song.poster_link,
-                   song.video_link, song.snippet_start, song.snippet_end,
+                   song.video_link, song.duration, song.snippet_start, song.snippet_end,
                    song.submitter_id, song.notes, song.sources,
                    song.entry_number, year.special_name, year.special_short_name
             FROM song
@@ -1382,7 +1390,7 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages=Fa
                    song.is_placeholder, song.native_language_id, song.title_language_id,
                    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                    account.username, song.year_id, song.poster_link,
-                   song.video_link, song.snippet_start, song.snippet_end,
+                   song.video_link, song.duration, song.snippet_start, song.snippet_end,
                    song.submitter_id, song.notes, song.sources,
                    song.entry_number, year.special_name, year.special_short_name
             FROM song
@@ -1504,7 +1512,7 @@ def get_country_songs(code: str, *, select_languages=False) -> list[Song]:
                 song.is_placeholder, song.native_language_id, song.title_language_id,
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id, song.poster_link,
-                song.video_link, song.snippet_start, song.snippet_end,
+                song.video_link, song.duration, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources,
                 song.entry_number, year.special_name, year.special_short_name
         FROM song
@@ -1545,7 +1553,7 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id,
                 year.special_name, year.special_short_name, song.poster_link,
-                song.video_link, song.snippet_start, song.snippet_end,
+                song.video_link, song.duration, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources, song.entry_number
         FROM song
         JOIN country ON song.country_id = country.id
@@ -1588,7 +1596,7 @@ def get_special_songs_for_country(year: int, code: str) -> list[Song]:
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id,
                 year.special_name, year.special_short_name, song.poster_link,
-                song.video_link, song.snippet_start, song.snippet_end,
+                song.video_link, song.duration, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources, song.entry_number
         FROM song
         JOIN country ON song.country_id = country.id
@@ -1624,7 +1632,7 @@ def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
                 song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
                 account.username, song.year_id,
                 year.special_name, year.special_short_name, song.poster_link,
-                song.video_link, song.snippet_start, song.snippet_end,
+                song.video_link, song.duration, song.snippet_start, song.snippet_end,
                 song.submitter_id, song.notes, song.sources, song.entry_number
         FROM song
         JOIN country ON song.country_id = country.id

@@ -4,6 +4,7 @@ from collections import defaultdict
 from flask import Blueprint, redirect, request, url_for
 
 from ..db import get_db
+from ..media import duration_for_link, is_media_link
 from ..utils import (
     get_closed_years,
     get_countries,
@@ -202,9 +203,34 @@ def details(code: str, year: int):
         latin_lyrics=latin_lyrics,
         translated_lyrics=translated_lyrics,
         can_edit=can_edit,
+        can_update_duration=permissions.can_edit,
         notes=notes,
         song_results=song_results,
     )
+
+
+@bp.post("/duration/<int:song_id>")
+def update_duration(song_id: int):
+    permissions = get_user_role_from_session(request.cookies.get("session"))
+    if not permissions.can_edit:
+        return render_template("error.html", error="Not authorized"), 403
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT video_link FROM song WHERE id = %s", (song_id,))
+    row = cursor.fetchone()
+    if not row:
+        return render_template("error.html", error=f"Song {song_id} not found"), 404
+
+    duration = duration_for_link(row["video_link"])
+    if is_media_link(row["video_link"]) and duration is None:
+        return render_template(
+            "error.html", error="Could not read the duration from the media file"
+        ), 502
+
+    cursor.execute("UPDATE song SET duration = %s WHERE id = %s", (duration, song_id))
+    db.commit()
+    return redirect(request.referrer or url_for("country.index"))
 
 
 def _resolve_special(short_name: str) -> dict | None:
@@ -262,6 +288,7 @@ def _render_song_details(song, name, special_short_name, special_name):
         latin_lyrics=latin_lyrics,
         translated_lyrics=translated_lyrics,
         can_edit=can_edit,
+        can_update_duration=permissions.can_edit,
         notes=notes,
         song_results=song_results,
         special=special_short_name,

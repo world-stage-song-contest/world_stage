@@ -114,9 +114,10 @@ def create_app(config: dict | None = None) -> Flask:
     with contextlib.suppress(OSError):
         os.makedirs(app.instance_path)
 
-    from . import db
+    from . import db, media
 
     db.init_app(app)
+    media.init_app(app)
 
     from .routes import (
         admin,
@@ -125,6 +126,7 @@ def create_app(config: dict | None = None) -> Flask:
         index,
         member,
         playlist,
+        radio,
         results,
         session,
         user,
@@ -143,5 +145,6 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(country.bp)
     app.register_blueprint(api.bp)
     app.register_blueprint(playlist.bp)
+    app.register_blueprint(radio.bp)
 
     return app

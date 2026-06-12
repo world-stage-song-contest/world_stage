@@ -5,6 +5,7 @@ from flask import Blueprint, make_response, redirect, request, url_for
 from psycopg import sql
 
 from world_stage.db import fetchone, get_db
+from world_stage.media import duration_for_link
 from world_stage.utils import (
     ErrorID,
     err,
@@ -219,7 +220,7 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
                song.submitter_id, account.username, song.entry_number,
-               year.special_short_name
+               song.duration, year.special_short_name
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT JOIN year ON year.id = song.year_id
@@ -654,7 +655,7 @@ def _select_song_by_country(cursor, cc: str, year: int, entry_number: int | None
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
                song.submitter_id, account.username, song.entry_number,
-               year.special_short_name
+               song.duration, year.special_short_name
         FROM song
         JOIN country ON song.country_id = country.id
         LEFT JOIN year ON year.id = song.year_id
@@ -924,11 +925,11 @@ def create_song():
         """
         INSERT INTO song (
             year_id, country_id, entry_number, title, native_title, artist, is_placeholder,
-            title_language_id, native_language_id, video_link, poster_link, vtt_link,
+            title_language_id, native_language_id, video_link, duration, poster_link, vtt_link,
             snippet_start, snippet_end, translated_lyrics,
             romanized_lyrics, native_lyrics, submitter_id,
             notes, sources, admin_approved, modified_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                    CURRENT_TIMESTAMP)
         RETURNING id
     """,
@@ -943,6 +944,7 @@ def create_song():
             title_language_id,
             native_language_id,
             text["video_link"],
+            duration_for_link(text["video_link"]),
             text["poster_link"],
             text["vtt_link"],
             parse_seconds(text["snippet_start"]),
@@ -1102,7 +1104,7 @@ def replace_song(id: int):
         UPDATE song SET
             title = %s, native_title = %s, artist = %s,
             is_placeholder = %s, title_language_id = %s, native_language_id = %s,
-            video_link = %s, poster_link = %s, vtt_link = %s,
+            video_link = %s, duration = %s, poster_link = %s, vtt_link = %s,
             snippet_start = %s, snippet_end = %s,
             translated_lyrics = %s, romanized_lyrics = %s, native_lyrics = %s,
             notes = %s, sources = %s,
@@ -1118,6 +1120,7 @@ def replace_song(id: int):
             title_language_id,
             native_language_id,
             text["video_link"],
+            duration_for_link(text["video_link"], row["video_link"], row["duration"]),
             poster_link,
             vtt_link,
             parse_seconds(text["snippet_start"]),
@@ -1201,6 +1204,14 @@ def update_song(id: int):
             else:
                 sets.append(_assign(field))
                 params.append(_normalize_text(data[field]))
+
+    if "video_link" in data:
+        sets.append(_assign("duration"))
+        params.append(
+            duration_for_link(
+                _normalize_text(data["video_link"]), row["video_link"], row["duration"]
+            )
+        )
 
     if "is_placeholder" in data:
         sets.append(_assign("is_placeholder"))

@@ -317,6 +317,99 @@ class TestUpdateSong:
         assert resp.status_code == 200
         assert _result(resp)["video_link"] is None
 
+
+class TestSongDuration:
+    """video_link writes keep the probed duration column in sync."""
+
+    MEDIA_LINK = "https://media.world-stage.org/ws2025us.mp4"
+
+    def _stored_duration(self, db, song_id):
+        with db.cursor() as cur:
+            cur.execute("SELECT duration FROM song WHERE id = %s", (song_id,))
+            return cur.fetchone()["duration"]
+
+    def test_create_with_media_link_probes_duration(
+        self, client, db, bob_headers, monkeypatch
+    ):
+        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 187.5)
+        song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
+        assert self._stored_duration(db, song_id) == 187.5
+
+    def test_create_with_external_link_does_not_probe(
+        self, client, db, bob_headers, monkeypatch
+    ):
+        def boom(url):
+            raise AssertionError("probe_duration must not be called")
+
+        monkeypatch.setattr("world_stage.media.probe_duration", boom)
+        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com/x"))["id"]
+        assert self._stored_duration(db, song_id) is None
+
+    def test_patch_to_media_link_sets_duration(self, client, db, bob_headers, monkeypatch):
+        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com/x"))["id"]
+
+        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 203.0)
+        resp = client.patch(
+            f"/api/song/{song_id}", json={"video_link": self.MEDIA_LINK}, headers=bob_headers
+        )
+        assert resp.status_code == 200
+        assert self._stored_duration(db, song_id) == 203.0
+
+    def test_patch_to_external_link_clears_duration(
+        self, client, db, bob_headers, monkeypatch
+    ):
+        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 203.0)
+        song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
+
+        resp = client.patch(
+            f"/api/song/{song_id}", json={"video_link": "http://example.com/x"}, headers=bob_headers
+        )
+        assert resp.status_code == 200
+        assert self._stored_duration(db, song_id) is None
+
+    def test_patch_with_unchanged_link_keeps_duration_without_reprobe(
+        self, client, db, bob_headers, monkeypatch
+    ):
+        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 203.0)
+        song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
+
+        def boom(url):
+            raise AssertionError("unchanged link must not re-probe")
+
+        monkeypatch.setattr("world_stage.media.probe_duration", boom)
+        resp = client.patch(
+            f"/api/song/{song_id}",
+            json={"video_link": self.MEDIA_LINK, "notes": "edited"},
+            headers=bob_headers,
+        )
+        assert resp.status_code == 200
+        assert self._stored_duration(db, song_id) == 203.0
+
+    def test_backfill_command(self, app, db, monkeypatch):
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO song (submitter_id, country_id, year_id, title, artist,
+                    video_link, is_placeholder)
+                VALUES (1, 'US', 2024, 'Backfill me', 'Artist', %s, false)
+                RETURNING id
+                """,
+                (self.MEDIA_LINK,),
+            )
+            song_id = cur.fetchone()["id"]
+        db.commit()
+
+        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 154.2)
+        runner = app.test_cli_runner()
+        result = runner.invoke(args=["backfill-durations"])
+        assert "1 updated, 0 failed" in result.output
+        assert self._stored_duration(db, song_id) == 154.2
+
+    def test_admin_update_duration_endpoint_requires_auth(self, client, db, bob_headers):
+        song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
+        resp = client.post(f"/country/duration/{song_id}")
+        assert resp.status_code == 403
+
     def test_non_admin_cannot_clear_required(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
@@ -507,16 +600,31 @@ class TestDeleteSong:
         resp = client.delete(f"/api/song/{song_id}", headers=alice_headers)
         assert resp.status_code == 204
 
-    def test_cannot_delete_closed_year(self, client, bob_headers):
-        create = _create_song(client, bob_headers, year=2024)
-        song_id = _result(create)["id"]
+    # The create API rejects non-open years for everyone, so songs in
+    # a closed year are seeded directly in the database.
+    @staticmethod
+    def _insert_closed_year_song(db, submitter_id=2):
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO song (submitter_id, country_id, year_id, title, artist, is_placeholder)
+                VALUES (%s, 'US', 2024, 'Closed Song', 'Artist', false)
+                RETURNING id
+                """,
+                (submitter_id,),
+            )
+            song_id = cur.fetchone()["id"]
+        db.commit()
+        return song_id
+
+    def test_cannot_delete_closed_year(self, client, db, bob_headers):
+        song_id = self._insert_closed_year_song(db)
 
         resp = client.delete(f"/api/song/{song_id}", headers=bob_headers)
         assert resp.status_code == 403
 
-    def test_admin_can_delete_closed_year(self, client, bob_headers, alice_headers):
-        create = _create_song(client, bob_headers, year=2024)
-        song_id = _result(create)["id"]
+    def test_admin_can_delete_closed_year(self, client, db, bob_headers, alice_headers):
+        song_id = self._insert_closed_year_song(db)
 
         resp = client.delete(f"/api/song/{song_id}", headers=alice_headers)
         assert resp.status_code == 204
