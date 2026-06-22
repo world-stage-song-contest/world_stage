@@ -207,8 +207,8 @@
     --no-entry-bg:    oklch(90.7% 0 none);
     --input-readonly: oklch(93.1% 0 none);
 
-    --result-dtf:    oklch(91.6% 0.073 77.4);
-    --result-sc:     oklch(90.7% 0.063 196.1);
+    --result-dtf:    oklch(85.8% 0.159 144.0);
+    --result-sc:     oklch(89.3% 0.071 195.9);
     --result-gold:   oklch(88.7% 0.182 95.3);
     --result-silver: oklch(84.5% 0 none);
     --result-bronze: oklch(72.0% 0.091 65.5);
@@ -288,8 +288,8 @@
     --no-entry-bg:    oklch(32.1% 0 none);
     --input-readonly: oklch(32.1% 0 none);
 
-    --result-dtf:    oklch(91.6% 0.073 77.4);
-    --result-sc:     oklch(90.7% 0.063 196.1);
+    --result-dtf:    oklch(43.9% 0.149 144.0);
+    --result-sc:     oklch(54.9% 0.046 195.9);
     --result-gold:   oklch(88.7% 0.182 95.3);
     --result-silver: oklch(84.5% 0 none);
     --result-bronze: oklch(72.0% 0.091 65.5);
