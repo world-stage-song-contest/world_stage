@@ -12,11 +12,21 @@
 
     const player = videojs('radio-player');
     // The schedule is gapless (slot_end = slot_start + stored
-    // duration), so a song normally ends right as the next one is
-    // fetched. The countdown overlay is only worth showing when the
-    // media ran out well before its stored duration says it should.
+    // duration), so a song normally ends right at its window boundary.
+    // 'ended' — not a timer — is the primary switch trigger: media
+    // events still fire in backgrounded mobile tabs, while setTimeout
+    // is throttled to uselessness there. Without this, the radio would
+    // fall silent after one song once the screen turns off.
     player.on('ended', () => {
-        if (current && current.slot_end - serverNow() > 2) showUpNext();
+        if (!current) return;
+        if (current.slot_end - serverNow() > 2) {
+            // The media ran out well before its stored duration says
+            // it should; wait out the window with the countdown (the
+            // timer fallback handles the switch).
+            showUpNext();
+            return;
+        }
+        tune();
     });
 
     function videoElement() {
@@ -54,6 +64,49 @@
             origin.textContent = song.country + ' ' + song.year;
         }
         $('now-playing').style.display = 'flex';
+    }
+
+    function resync() {
+        // Jump back to the live position, e.g. after a pause from the
+        // lock screen: a radio resumes at "now", not where it left off.
+        if (current && serverNow() < current.slot_end) {
+            player.currentTime(Math.max(0, serverNow() - current.slot_start));
+            const p = player.play();
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+        } else {
+            tune();
+        }
+    }
+
+    function updateMediaSession(data) {
+        // Lock-screen / notification metadata and controls. Also what
+        // makes mobile OSes treat the page as a proper audio app.
+        if (!('mediaSession' in navigator)) return;
+        const song = data.song;
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: song.title || 'Untitled',
+            artist: song.artist || '',
+            album: 'World Stage Radio',
+            artwork: song.poster ? [{ src: song.poster }] : [],
+        });
+        navigator.mediaSession.setActionHandler('play', resync);
+        navigator.mediaSession.setActionHandler('pause', () => player.pause());
+        // It's live radio: no seeking, no track skipping.
+        for (const action of ['seekbackward', 'seekforward', 'seekto',
+                              'previoustrack', 'nexttrack']) {
+            try {
+                navigator.mediaSession.setActionHandler(action, null);
+            } catch (e) { /* action not supported by this browser */ }
+        }
+        if (navigator.mediaSession.setPositionState) {
+            try {
+                navigator.mediaSession.setPositionState({
+                    duration: song.duration,
+                    position: Math.min(song.duration, Math.max(0, data.offset)),
+                    playbackRate: 1,
+                });
+            } catch (e) { /* invalid state values; cosmetic only */ }
+        }
     }
 
     function showUpNext() {
@@ -144,6 +197,9 @@
     }
 
     async function tune() {
+        // 'ended' and the fallback timer can race within the handoff
+        // window; whichever fires first owns the switch.
+        clearTimeout(switchTimer);
         let data;
         try {
             data = await fetchNow();
@@ -153,14 +209,22 @@
             // fetch, so a late retry still lands on the right song.
             $('radio-error').textContent = 'Lost the signal, retrying…';
             $('radio-error').style.display = 'block';
-            clearTimeout(switchTimer);
             switchTimer = setTimeout(tune, 5000);
             return;
         }
         $('radio-error').style.display = 'none';
+        if (current && data.slot_start === current.slot_start) {
+            // 'ended' beat the server clock to the boundary by a hair
+            // and the same window came back; ask again just past it.
+            current = data;
+            const ms = Math.max(250, (data.slot_end - serverNow()) * 1000 + 250);
+            switchTimer = setTimeout(tune, ms);
+            return;
+        }
         hideUpNext();
         current = data;
         renderMeta(data);
+        updateMediaSession(data);
         player.ready(() => playSong(data.song));
         scheduleSwitch();
     }

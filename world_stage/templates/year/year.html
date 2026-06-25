@@ -29,19 +29,19 @@
     {% endif %}
 {% endblock %}
 {% block content %}
-{% if not is_closed %}
+{% if is_open %}
 <div class="banner compact">
     <p>Highlighted songs are placeholders and can be replaced.</p>
 </div>
-{% endif %}
 
 <div>
     <input type="checkbox" id="hidesolid" onchange="hideNonPlaceholders(this)">
     <label for="hidesolid">Only show placeholders</label>
 </div>
 <div>
-    <strong><big>Total entries:{{total}} ({{placeholders}} placeholders)</big></strong>
+    <strong><big>Total entries: {{total}} ({{placeholders}} placeholders)</big></strong>
 </div>
+{% endif %}
 {% if special %}
 {% set year_key = special %}
 {% else %}

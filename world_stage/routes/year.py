@@ -279,6 +279,7 @@ def special(short_name: str):
         songs=songs,
         free_countries=[],
         is_closed=cl,
+        is_open=special_year["status"] == "open",
         shows=shows,
         total=total_entries,
         placeholders=total_placeholders,
@@ -800,7 +801,7 @@ def special_predictions(short_name: str, show: str):
         pred_rank[song.id] = rank
 
     real_positions: dict[int, int] = {}
-    if show_data.status == "full":
+    if show_data.status in ("partial", "full"):
         cursor.execute(
             "SELECT song_id, place FROM country_show_results WHERE show_id = %s",
             (show_data.id,),
@@ -1183,6 +1184,7 @@ def year(year: int):
         songs=songs,
         free_countries=free_countries,
         is_closed=cl,
+        is_open=year_row["status"] == "open",
         shows=shows,
         total=total_entries,
         placeholders=total_placeholders,
@@ -2266,7 +2268,7 @@ def show_predictions(year: int, show: str):
         pred_rank[song.id] = rank
 
     real_positions: dict[int, int] = {}
-    if show_data.status == "full":
+    if show_data.status in ("partial", "full"):
         cursor.execute(
             "SELECT song_id, place FROM country_show_results WHERE show_id = %s",
             (show_data.id,),

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet');
+
 :root {
     --background1: oklch(97.6% 0 none);
     --foreground1: oklch(32.1% 0 none);
@@ -343,7 +345,7 @@ html {
 }
 
 body {
-    font-family: sans-serif;
+    font-family: 'Open Sans', sans-serif;
     color: var(--foreground1);
     background-color: var(--background1);
     display: flex;
