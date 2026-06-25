@@ -20,6 +20,12 @@
     height: 100%;
 }
 
+/* The seek bar normally flexes to fill the control bar; without it the
+   controls bunch left, so push fullscreen back to the right edge. */
+#player-shell .vjs-fullscreen-control {
+    margin-left: auto;
+}
+
 #tune-in,
 #up-next {
     position: absolute;

@@ -18,7 +18,11 @@
 
     const $ = (id) => document.getElementById(id);
 
-    const player = videojs('radio-player');
+    // No seek bar: the radio is live, so scrubbing within a track is
+    // meaningless (the schedule always wins on the next tune()).
+    const player = videojs('radio-player', {
+        controlBar: { progressControl: false },
+    });
     // The schedule is gapless (slot_end = slot_start + stored
     // duration), so a song normally ends right at its window boundary.
     // 'ended' — not a timer — is the primary switch trigger: media
