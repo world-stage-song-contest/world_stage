@@ -8,6 +8,14 @@
     let countdownTimer = null;
     let tunedIn = false;
 
+    // Scrobbling: only active for logged-in users who've linked an
+    // account (the server sets this flag). When off, no events are sent.
+    const scrobbleEnabled = !!window.SCROBBLE_ENABLED;
+    let listenedSeconds = 0;     // actual playback time for `current`
+    let lastTick = null;         // serverNow() at last accounting point, null while paused
+    let nowPlayingSent = false;  // de-dupe now-playing per song
+    let scrobbledSlot = null;    // slot_start already scrobbled (ended/timer race guard)
+
     const $ = (id) => document.getElementById(id);
 
     const player = videojs('radio-player');
@@ -47,6 +55,45 @@
         const data = await res.json();
         clockSkew = data.server_time - Date.now() / 1000;
         return data;
+    }
+
+    // Count ACTUAL playback time toward the scrobble threshold — paused
+    // time doesn't count, and each gap is capped so a throttled/
+    // backgrounded tab can't inflate the total in one jump.
+    player.on('timeupdate', () => {
+        if (!current || player.paused()) { lastTick = null; return; }
+        const t = serverNow();
+        if (lastTick !== null) listenedSeconds += Math.max(0, Math.min(2, t - lastTick));
+        lastTick = t;
+    });
+    player.on('play', () => { lastTick = serverNow(); });
+    player.on('pause', () => { lastTick = null; });
+
+    function postScrobble(path, slot) {
+        const body = JSON.stringify({ song_id: slot.song.id, started_at: slot.slot_start });
+        // Fire-and-forget: the audio handoff must never block on the
+        // server's round trip out to Last.fm/Libre.fm.
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon(path, new Blob([body], { type: 'application/json' }));
+        } else {
+            fetch(path, {
+                method: 'POST', keepalive: true,
+                headers: { 'Content-Type': 'application/json' }, body,
+            }).catch(() => {});
+        }
+    }
+
+    function maybeScrobble(slot) {
+        // Scrobble the outgoing song if the user heard enough of it.
+        // Last.fm rules: longer than 30s, and played for at least half
+        // its length or 4 minutes, whichever comes first.
+        if (!scrobbleEnabled || !slot) return;
+        if (slot.slot_start === scrobbledSlot) return;
+        const dur = slot.song.duration;
+        if (!dur || dur <= 30) return;
+        if (listenedSeconds < Math.min(dur / 2, 240)) return;
+        scrobbledSlot = slot.slot_start;
+        postScrobble('/radio/scrobble', slot);
     }
 
     function renderMeta(data) {
@@ -216,13 +263,22 @@
         if (current && data.slot_start === current.slot_start) {
             // 'ended' beat the server clock to the boundary by a hair
             // and the same window came back; ask again just past it.
+            // Not a real switch — don't scrobble or reset counters.
             current = data;
             const ms = Math.max(250, (data.slot_end - serverNow()) * 1000 + 250);
             switchTimer = setTimeout(tune, ms);
             return;
         }
+        maybeScrobble(current);  // the song being replaced, if heard enough
         hideUpNext();
         current = data;
+        listenedSeconds = 0;
+        lastTick = null;
+        nowPlayingSent = false;
+        if (scrobbleEnabled && tunedIn) {
+            nowPlayingSent = true;
+            postScrobble('/radio/now-playing', data);
+        }
         renderMeta(data);
         updateMediaSession(data);
         player.ready(() => playSong(data.song));

@@ -105,5 +105,40 @@
     <p>You have no API tokens.</p>
     {% endif %}
 
+    {% if scrobble_services %}
+    <hr>
+    <h2>Scrobbling</h2>
+    <p>Link an account to scrobble what the radio plays while you're listening.</p>
+    <table class="token-table">
+        <tbody>
+        {% for svc in scrobble_services %}
+            <tr>
+                <td>{{ svc.name }}</td>
+                <td>
+                    {% if svc.linked %}
+                        Linked as <strong>{{ svc.linked.remote_username or 'unknown' }}</strong>
+                        {% if not svc.linked.enabled %} (paused){% endif %}
+                    {% else %}
+                        Not linked
+                    {% endif %}
+                </td>
+                <td>
+                    {% if svc.linked %}
+                        <form method="POST" action="{{ url_for('main.scrobble_toggle', service=svc.id) }}" style="display:inline">
+                            <button type="submit">{{ 'Pause' if svc.linked.enabled else 'Resume' }}</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('main.scrobble_disconnect', service=svc.id) }}" style="display:inline">
+                            <button type="submit" class="token-delete-btn" onclick="return confirm('Disconnect {{ svc.name }}?')">Disconnect</button>
+                        </form>
+                    {% else %}
+                        <a href="{{ url_for('main.scrobble_connect', service=svc.id) }}"><button type="button">Connect</button></a>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
     {% endif %}
 {% endblock %}

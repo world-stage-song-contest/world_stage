@@ -114,10 +114,11 @@ def create_app(config: dict | None = None) -> Flask:
     with contextlib.suppress(OSError):
         os.makedirs(app.instance_path)
 
-    from . import db, media
+    from . import db, media, scrobble
 
     db.init_app(app)
     media.init_app(app)
+    scrobble.init_app(app)
 
     from .routes import (
         admin,

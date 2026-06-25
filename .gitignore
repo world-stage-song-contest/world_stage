@@ -26,3 +26,4 @@ import_data/
 *.zstd
 
 uv.lock
+run.sh

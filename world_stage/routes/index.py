@@ -3,6 +3,7 @@ import re
 
 from flask import Blueprint, current_app, make_response, redirect, request, send_file, url_for
 
+from .. import scrobble
 from ..db import get_db
 from ..utils import (
     create_cookie,
@@ -157,8 +158,25 @@ def settings():
     session_id = request.cookies.get("session")
     user = get_user_id_from_session(session_id) if session_id else None
     tokens = _get_user_tokens(user[0]) if user else []
+    scrobble_services = _scrobble_services(user[0]) if user else []
 
-    return render_template("settings.html", settings=settings, user=user, tokens=tokens)
+    return render_template(
+        "settings.html",
+        settings=settings,
+        user=user,
+        tokens=tokens,
+        scrobble_services=scrobble_services,
+    )
+
+
+def _scrobble_services(user_id: int) -> list[dict]:
+    """Per configured service, its display name and the user's linked
+    row (or None) — for the settings "Scrobbling" section."""
+    linked = {a["service"]: a for a in scrobble.get_accounts(user_id)}
+    return [
+        {"id": s, "name": scrobble.SERVICES[s]["name"], "linked": linked.get(s)}
+        for s in scrobble.configured_services()
+    ]
 
 
 @bp.post("/settings")
@@ -233,6 +251,72 @@ def delete_token():
         )
         db.commit()
 
+    return redirect(url_for("main.settings"))
+
+
+def _scrobble_user_or_login():
+    session_id = request.cookies.get("session")
+    user = get_user_id_from_session(session_id) if session_id else None
+    return user[0] if user else None
+
+
+@bp.get("/settings/scrobble/<service>/connect")
+def scrobble_connect(service: str):
+    user_id = _scrobble_user_or_login()
+    if user_id is None:
+        return redirect(url_for("session.login"))
+    if not scrobble.is_configured(service):
+        return redirect(url_for("main.settings"))
+
+    cb = url_for("main.scrobble_callback", service=service, _external=True)
+    return redirect(scrobble.auth_redirect_url(service, cb))
+
+
+@bp.get("/settings/scrobble/<service>/callback")
+def scrobble_callback(service: str):
+    user_id = _scrobble_user_or_login()
+    if user_id is None:
+        return redirect(url_for("session.login"))
+    if not scrobble.is_configured(service):
+        return redirect(url_for("main.settings"))
+
+    token = request.args.get("token")
+    if token:
+        sess = scrobble.get_session(service, token)
+        if sess:
+            scrobble.upsert_account(user_id, service, sess["session_key"], sess["username"])
+    return redirect(url_for("main.settings"))
+
+
+@bp.post("/settings/scrobble/<service>/disconnect")
+def scrobble_disconnect(service: str):
+    user_id = _scrobble_user_or_login()
+    if user_id is None:
+        return redirect(url_for("session.login"))
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "DELETE FROM scrobble_account WHERE user_id = %s AND service = %s",
+        (user_id, service),
+    )
+    db.commit()
+    return redirect(url_for("main.settings"))
+
+
+@bp.post("/settings/scrobble/<service>/toggle")
+def scrobble_toggle(service: str):
+    user_id = _scrobble_user_or_login()
+    if user_id is None:
+        return redirect(url_for("session.login"))
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "UPDATE scrobble_account SET enabled = NOT enabled WHERE user_id = %s AND service = %s",
+        (user_id, service),
+    )
+    db.commit()
     return redirect(url_for("main.settings"))
 
 
