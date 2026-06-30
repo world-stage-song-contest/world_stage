@@ -75,16 +75,18 @@
 
     function postScrobble(path, slot) {
         const body = JSON.stringify({ song_id: slot.song.id, started_at: slot.slot_start });
-        // Fire-and-forget: the audio handoff must never block on the
-        // server's round trip out to Last.fm/Libre.fm.
-        if (navigator.sendBeacon) {
-            navigator.sendBeacon(path, new Blob([body], { type: 'application/json' }));
-        } else {
-            fetch(path, {
-                method: 'POST', keepalive: true,
-                headers: { 'Content-Type': 'application/json' }, body,
-            }).catch(() => {});
-        }
+        // Plain keepalive fetch, NOT navigator.sendBeacon: privacy/ad
+        // blockers neutralise the Beacon API wholesale (it's the classic
+        // telemetry transport), so beacons were silently dropped as
+        // "blocked:other" and no scrobble ever reached the server. We
+        // only fire during active page life — song start and boundary,
+        // never on unload — so keepalive fetch is all we need.
+        fetch(path, {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body,
+        }).catch(() => {});
     }
 
     function maybeScrobble(slot) {
