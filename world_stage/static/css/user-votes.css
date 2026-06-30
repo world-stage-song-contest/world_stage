@@ -16,6 +16,14 @@
     padding: 0.3em;
 }
 
+.reveal-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin-left: auto;
+    cursor: pointer;
+}
+
 .country-heading {
     display: flex;
     align-items: center;

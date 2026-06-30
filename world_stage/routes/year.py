@@ -755,7 +755,7 @@ def special_predictions(short_name: str, show: str):
         FROM prediction_set
         JOIN account ON prediction_set.user_id = account.id
         WHERE prediction_set.show_id = %s
-        ORDER BY COALESCE(prediction_set.updated_at, prediction_set.created_at)
+        ORDER BY prediction_set.created_at
     """,
         (show_data.id,),
     )
@@ -2216,7 +2216,7 @@ def show_predictions(year: int, show: str):
         FROM prediction_set
         JOIN account ON prediction_set.user_id = account.id
         WHERE prediction_set.show_id = %s
-        ORDER BY COALESCE(prediction_set.updated_at, prediction_set.created_at)
+        ORDER BY prediction_set.created_at
     """,
         (show_data.id,),
     )

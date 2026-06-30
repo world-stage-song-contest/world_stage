@@ -113,6 +113,15 @@
         </select>
     </label>
     {% endif %}
+    {% if can_reveal and view not in ('country', 'user', 'year') %}
+    <label class="reveal-toggle">
+        <input type="checkbox" {{ 'checked' if unredacted else '' }}
+               onchange="location.href = this.checked
+                   ? '{{ url_for('user.votes', username=username, hidden='false') }}'
+                   : '{{ url_for('user.votes', username=username) }}'">
+        <span>Reveal hidden votes</span>
+    </label>
+    {% endif %}
 </div>
 {% if view == 'country' %}
 {% if selected_country %}

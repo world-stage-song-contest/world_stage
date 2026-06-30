@@ -9,6 +9,7 @@ from ..db import fetchone, get_db
 from ..utils import (
     get_closed_years,
     get_show_results_for_songs,
+    get_user_id_from_session,
     get_user_role_from_session,
     get_user_songs,
     render_template,
@@ -47,7 +48,7 @@ def profile(username: str):
 
 
 def redact_song_if_show(
-    song: dict, year: int, show_short_name: str, status: str
+    song: dict, year: int, show_short_name: str, status: str, blank: bool = True
 ) -> tuple[bool, bool]:
     db = get_db()
     cursor = db.cursor()
@@ -73,7 +74,7 @@ def redact_song_if_show(
         if fetchone(cursor)["c"] > 0:
             song_modified = True
             song["class"] = f"qualifier {show_short_name}-qualifier"
-            if status == "partial":
+            if blank and status == "partial":
                 song["title"] = ""
                 song["artist"] = ""
                 song["country"] = ""
@@ -341,6 +342,15 @@ def votes(username: str):
         return render_template("error.html", error="User not found"), 404
     user_id = user_id["id"]
 
+    # A user may opt to see votes for not-yet-revealed shows unblanked
+    # (?hidden=false) when looking at their own history, or when they hold a
+    # role that can_view_restricted (admins/staff). Everyone else stays redacted.
+    session_id = request.cookies.get("session")
+    viewer = get_user_id_from_session(session_id)
+    is_owner = viewer is not None and viewer[0] == user_id
+    can_reveal = is_owner or get_user_role_from_session(session_id).can_view_restricted
+    unredacted = can_reveal and request.args.get("hidden") == "false"
+
     if request.args.get("view") == "country":
         return _votes_by_country(cursor, user_id, username)
     if request.args.get("view") == "user":
@@ -412,9 +422,9 @@ def votes(username: str):
         songs = []
         for val in cursor.fetchall():
             if vote["short_name"] != "f":
-                redact_song_if_show(val, vote["year"], "f", vote["status"])
+                redact_song_if_show(val, vote["year"], "f", vote["status"], blank=not unredacted)
                 if vote["short_name"] != "sc":
-                    redact_song_if_show(val, vote["year"], "sc", vote["status"])
+                    redact_song_if_show(val, vote["year"], "sc", vote["status"], blank=not unredacted)
             # Only show result placement for non-redacted songs.
             if val.get("code") == "XX":
                 val["result_place"] = None
@@ -425,7 +435,8 @@ def votes(username: str):
         vote["points"] = songs
 
     return render_template(
-        "user/votes.html", votes=votes, username=username, view="shows"
+        "user/votes.html", votes=votes, username=username, view="shows",
+        can_reveal=can_reveal, unredacted=unredacted,
     )
 
 
