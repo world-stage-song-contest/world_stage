@@ -682,6 +682,7 @@ def draw_final(year: int, show: str):
         year=year,
         num=len(songs),
         lim=math.ceil((len(songs) / 2) or 1),
+        single_pot=year < 0,
     )
 
 

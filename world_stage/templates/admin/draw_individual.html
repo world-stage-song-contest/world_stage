@@ -29,7 +29,7 @@
 <p class="error hidden"></p>
 
 <div id="wrapper">
-<div id="shows" class="with-titles">
+<div id="shows"{% if single_pot %} class="with-titles"{% endif %}>
     <div class="show active1"
          data-name="{{ show }}"
          data-songs="{{ num }}">
@@ -49,14 +49,16 @@
                 <div class="running-order value">{{ loop.index }}</div>
                 <div class="flag-container value transparent">{{ flag("XX", 24, "Unknown") }}</div>
                 <div class="country-name value transparent"></div>
+                {% if single_pot %}
                 <div class="song-title value transparent"></div>
+                {% endif %}
             </div>
         {% endfor %}
         </div>
     </div>
 </div>
 
-<div id="pots" class="single with-titles">
+<div id="pots" class="single{% if single_pot %} with-titles{% endif %}">
     <div class="pot pot-big active1"
          data-index="0">
         <h2>Participants</h2>
@@ -74,7 +76,9 @@
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="flag-container">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}</div>
                 <div class="country-name">{{ song.country.name }}</div>
+                {% if single_pot %}
                 <div class="song-title">{{ song.title }}</div>
+                {% endif %}
             </div>
         {% endfor %}
         </div>
