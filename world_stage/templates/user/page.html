@@ -4,32 +4,32 @@
 <div class="cards-container">
     <a href="{{ url_for('user.submissions', username=username) }}" class="card">
         <h3>Submissions</h3>
-        <img src="/static/images/history.png" alt="Submit Icon">
+        <img src="/static/images/history.png" alt="Submissions Icon">
         <p>Views the user's submissions.</p>
     </a>
     <a href="{{ url_for('user.votes', username=username) }}" class="card">
-        <h3>History</h3>
-        <img src="/static/images/history.png" alt="History Icon">
+        <h3>Votes</h3>
+        <img src="/static/images/hands.png" alt="Votes Icon">
         <p>View the user's vote history.</p>
     </a>
     <a href="{{ url_for('user.predictions', username=username) }}" class="card">
         <h3>Predictions</h3>
-        <img src="/static/images/history.png" alt="Predictions Icon">
+        <img src="/static/images/predictions.png" alt="Predictions Icon">
         <p>View the user's prediction history.</p>
     </a>
     <a href="{{ url_for('user.bias', username=username) }}" class="card">
         <h3>Bias</h3>
-        <img src="/static/images/hands.png" alt="Bias Icon">
+        <img src="/static/images/bias.png" alt="Bias Icon">
         <p>View the user's bias.</p>
     </a>
     <a href="{{ url_for('user.bias_for', username=username) }}" class="card">
-        <h3>Received biases</h3>
-        <img src="/static/images/hands.png" alt="Received biases icon">
+        <h3>Received bias</h3>
+        <img src="/static/images/bias-alt.png" alt="Received Bias Icon">
         <p>View which voters are biased toward this user.</p>
     </a>
     <a href="{{ url_for('user.similar', username=username) }}" class="card">
         <h3>Similar tastes</h3>
-        <img src="/static/images/hands.png" alt="Similar tastes icon">
+        <img src="/static/images/similarity.png" alt="Similar Tastes Icon">
         <p>Find voters who rank songs most like this user.</p>
     </a>
 </div>

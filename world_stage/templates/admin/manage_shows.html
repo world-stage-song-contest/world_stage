@@ -25,10 +25,17 @@
         <li><a href="{{ url_for('admin.create_show', year=year.id) }}">Create Show</a></li>
         <li><a href="{{ url_for('admin.set_pots', year=year.id) }}">Set Pots</a></li>
         {% endif %}
+        {% set has_repechage = shows | selectattr('short_name', 'equalto', 'sc') | list | length > 0 %}
         {% if year.special_short_name %}
-        <li><a href="{{ url_for('admin.draw_special', short_name=year.special_short_name) }}">Draw</a></li>
+        <li>
+            <a href="{{ url_for('admin.draw_special', short_name=year.special_short_name) }}">Draw</a>
+            ({% if has_repechage %}<a href="{{ url_for('admin.draw_special_final', short_name=year.special_short_name, show='sc') }}">Repechage</a>, {% endif %}<a href="{{ url_for('admin.draw_special_final', short_name=year.special_short_name, show='f') }}">Final</a>)
+        </li>
         {% else %}
-        <li><a href="{{ url_for('admin.draw', year=year.id) }}">Draw</a></li>
+        <li>
+            <a href="{{ url_for('admin.draw', year=year.id) }}">Draw</a>
+            ({% if has_repechage %}<a href="{{ url_for('admin.draw_final', year=year.id, show='sc') }}">Repechage</a>, {% endif %}<a href="{{ url_for('admin.draw_final', year=year.id, show='f') }}">Final</a>)
+        </li>
         {% endif %}
     </ul>
 </div>

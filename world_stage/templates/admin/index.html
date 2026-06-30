@@ -1,13 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Administrator Utilities{% endblock %}
 {% block content %}
-<div>
-    <p>Since I'm lazy, I'm not gonna try to figure out how to add a tile for draw functionality.
-    <p>To draw the semifinals for the year, go to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;</code>.
-    <p>To draw the finals for the year, go to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;/f</code>.
-    <p>If the second chance round returns, you can draw it by going to <code>https://ws.funcall.me/admin/draw/&lt;year&gt;/sc</code>.
-    <p>To set the pots, go to <code>https://ws.funcall.me/admin/setpots/&lt;year&gt;</code>.
-</div>
 <div class="cards-container">
     <a href="{{ url_for('admin.manage_index') }}" class="card">
         <h3>Manage</h3>
@@ -26,30 +19,37 @@
     </a>
     <a href="{{ url_for('admin.move') }}" class="card">
         <h3>Move</h3>
+        <img src="/static/images/move.png" alt="Move Icon">
         <p>Change years and countries for entries</p>
     </a>
     <a href="{{ url_for('admin.fuckup_db') }}" class="card">
         <h3>Fuck Up The Database</h3>
+        <img src="/static/images/database.png" alt="Database Icon">
         <p>Please don't use this if you don't know what you're doing</p>
     </a>
     <a href="{{ url_for('admin.upload') }}" class="card">
         <h3>Upload a file</h3>
+        <img src="/static/images/upload.png" alt="Upload Icon">
         <p>Upload something to the server</p>
     </a>
     <a href="{{ url_for('admin.predictions_index') }}" class="card">
         <h3>Predictions</h3>
+        <img src="/static/images/predictions.png" alt="Predictions Icon">
         <p>View submitted predictions and win odds per show</p>
     </a>
     <a href="{{ url_for('admin.genre_index') }}" class="card">
         <h3>Genres</h3>
+        <img src="/static/images/genre.png" alt="Genres Icon">
         <p>Manage song genres and subgenres</p>
     </a>
     <a href="{{ url_for('admin.language_create') }}" class="card">
         <h3>Add Language</h3>
+        <img src="/static/images/languages.png" alt="Language Icon">
         <p>Add a new language to the database</p>
     </a>
     <a href="{{ url_for('admin.alternative_name_index') }}" class="card">
         <h3>Add Alternative Name</h3>
+        <img src="/static/images/alternative.png" alt="Alternative Name Icon">
         <p>Add a country name/flag override for a year range</p>
     </a>
 </div>
