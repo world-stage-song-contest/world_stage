@@ -11,8 +11,12 @@
     // Scrobbling: only active for logged-in users who've linked an
     // account (the server sets this flag). When off, no events are sent.
     const scrobbleEnabled = !!window.SCROBBLE_ENABLED;
-    let listenedSeconds = 0;     // actual playback time for `current`
-    let lastTick = null;         // serverNow() at last accounting point, null while paused
+    // Real playback time for `current`, accumulated from discrete media
+    // events + wall clock — NOT periodic 'timeupdate' sampling, which is
+    // throttled (or silent) in background/locked tabs and made long
+    // background listens fall short of the scrobble threshold.
+    let heardAccum = 0;
+    let playingSince = null;     // wall seconds when playback began, null while stopped
     let nowPlayingSent = false;  // de-dupe now-playing per song
     let scrobbledSlot = null;    // slot_start already scrobbled (ended/timer race guard)
 
@@ -31,6 +35,7 @@
     // fall silent after one song once the screen turns off.
     player.on('ended', () => {
         if (!current) return;
+        freezeHeard();
         if (current.slot_end - serverNow() > 2) {
             // The media ran out well before its stored duration says
             // it should; wait out the window with the countdown (the
@@ -61,17 +66,22 @@
         return data;
     }
 
-    // Count ACTUAL playback time toward the scrobble threshold — paused
-    // time doesn't count, and each gap is capped so a throttled/
-    // backgrounded tab can't inflate the total in one jump.
-    player.on('timeupdate', () => {
-        if (!current || player.paused()) { lastTick = null; return; }
-        const t = serverNow();
-        if (lastTick !== null) listenedSeconds += Math.max(0, Math.min(2, t - lastTick));
-        lastTick = t;
-    });
-    player.on('play', () => { lastTick = serverNow(); });
-    player.on('pause', () => { lastTick = null; });
+    // Accumulate real playback time from discrete media events, so the
+    // measure survives background/throttled tabs (where 'timeupdate' is
+    // sparse). Only actual playing time counts; paused and buffering
+    // time do not.
+    function freezeHeard() {
+        if (playingSince !== null) {
+            heardAccum += Date.now() / 1000 - playingSince;
+            playingSince = null;
+        }
+    }
+    function heardSeconds() {
+        return heardAccum + (playingSince !== null ? Date.now() / 1000 - playingSince : 0);
+    }
+    player.on('playing', () => { if (playingSince === null) playingSince = Date.now() / 1000; });
+    player.on('pause', freezeHeard);
+    player.on('waiting', freezeHeard);
 
     function postScrobble(path, slot) {
         const body = JSON.stringify({ song_id: slot.song.id, started_at: slot.slot_start });
@@ -97,7 +107,7 @@
         if (slot.slot_start === scrobbledSlot) return;
         const dur = slot.song.duration;
         if (!dur || dur <= 30) return;
-        if (listenedSeconds < Math.min(dur / 2, 240)) return;
+        if (heardSeconds() < Math.min(dur / 2, 240)) return;
         scrobbledSlot = slot.slot_start;
         postScrobble('/radio/scrobble', slot);
     }
@@ -278,8 +288,8 @@
         maybeScrobble(current);  // the song being replaced, if heard enough
         hideUpNext();
         current = data;
-        listenedSeconds = 0;
-        lastTick = null;
+        heardAccum = 0;
+        playingSince = null;
         nowPlayingSent = false;
         if (scrobbleEnabled && tunedIn) {
             nowPlayingSent = true;
@@ -297,12 +307,21 @@
         tune();
     });
 
-    // Background tabs throttle timers, so a suspended tab can wake up
-    // mid-way through a later song. Re-tune immediately: the fetch
-    // recomputes the schedule, so we land exactly where the radio is.
+    // Leaving or backgrounding the page often happens mid-song, before
+    // the boundary that normally triggers the scrobble. Flush the current
+    // song here if it's already eligible; the scrobbledSlot guard stops a
+    // later double, and keepalive fetch survives the page going away.
+    function flushScrobble() {
+        if (current) maybeScrobble(current);
+    }
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && tunedIn && current && serverNow() > current.slot_end) {
+        if (document.hidden) {
+            flushScrobble();
+        } else if (tunedIn && current && serverNow() > current.slot_end) {
+            // Came back after the current window already ended (timers were
+            // throttled while away): resync to whatever is live now.
             tune();
         }
     });
+    window.addEventListener('pagehide', flushScrobble);
 })();
