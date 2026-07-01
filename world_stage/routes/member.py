@@ -4,13 +4,15 @@ from flask import Blueprint, redirect, request, url_for
 
 from ..db import fetchone, get_db
 from ..utils import (
+    UserPermissions,
     format_seconds,
     get_user_id_from_session,
     get_user_permissions,
-    get_user_role_from_session,
     get_years_grouped,
     render_template,
+    require_user,
     resolve_country_code,
+    with_permissions,
 )
 
 bp = Blueprint("member", __name__, url_prefix="/member")
@@ -193,42 +195,18 @@ def get_users() -> list[dict]:
 
 # Route handlers
 @bp.get("/")
-def index():
-    session_id = request.cookies.get("session")
-    if not session_id:
-        return redirect(url_for("session.login"))
-
-    db = get_db()
-    cursor = db.cursor()
-    cursor.execute(
-        """
-        SELECT account.username
-        FROM session
-        JOIN account ON session.user_id = account.id
-        WHERE session_id = %s
-    """,
-        (session_id,),
-    )
-
-    result = cursor.fetchone()
-    if not result:
-        resp = redirect(url_for("session.login"))
-        resp.delete_cookie("session")
-        return resp
-
-    return render_template("member/index.html", username=result["username"])
+@require_user(redirect_to_login=True)
+def index(user: tuple[int, str]):
+    return render_template("member/index.html", username=user[1])
 
 
 @bp.get("/submit")
-def submit():
-    session_id = request.cookies.get("session")
-    if not session_id:
-        return redirect(url_for("session.login"))
-
+@require_user(redirect_to_login=True)
+@with_permissions
+def submit(user: tuple[int, str], permissions: UserPermissions):
     year = request.args.get("year")
     country = request.args.get("country")
     entry_number = request.args.get("entry_number")
-    permissions = get_user_role_from_session(session_id)
 
     return render_template(
         "member/submit.html",

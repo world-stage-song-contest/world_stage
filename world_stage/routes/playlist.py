@@ -2,14 +2,15 @@ import re
 import unicodedata
 import urllib.parse
 
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response
 
 from ..db import get_db
 from ..utils import (
+    UserPermissions,
     get_show_id,
-    get_user_role_from_session,
     render_template,
     resolve_country_code,
+    with_permissions,
     write_m3u,
 )
 from .year import generate_playlist
@@ -61,7 +62,8 @@ def _m3u(value: str, filename_stem: str) -> Response:
 
 
 @bp.get("/show/<key>.m3u")
-def show(key: str):
+@with_permissions
+def show(key: str, permissions: UserPermissions):
     stem, postcards, include_host = _split_show_flags(key)
 
     db = get_db()
@@ -88,7 +90,6 @@ def show(key: str):
 
     value, bad_countries = generate_playlist(show_data, postcards, include_host)
 
-    permissions = get_user_role_from_session(request.cookies.get("session"))
     err = _bad_links_error(bad_countries, permissions)
     if err:
         return err
@@ -109,7 +110,8 @@ def _resolve_year(stem: str) -> int | None:
 
 
 @bp.get("/year/<key>.m3u")
-def year(key: str):
+@with_permissions
+def year(key: str, permissions: UserPermissions):
     stem, postcards = _split_np(key)
 
     year_id = _resolve_year(stem)
@@ -136,7 +138,6 @@ def year(key: str):
     if not entries:
         return render_template("error.html", error=f"No entries for {stem}"), 404
 
-    permissions = get_user_role_from_session(request.cookies.get("session"))
     value, bad_countries = write_m3u(entries, postcards=postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:
@@ -146,7 +147,8 @@ def year(key: str):
 
 
 @bp.get("/country/<key>.m3u")
-def country(key: str):
+@with_permissions
+def country(key: str, permissions: UserPermissions):
     stem, postcards = _split_np(key)
     canonical = resolve_country_code(stem.upper())
     if not canonical:
@@ -171,7 +173,6 @@ def country(key: str):
     if not entries:
         return render_template("error.html", error=f"No published entries for {canonical}"), 404
 
-    permissions = get_user_role_from_session(request.cookies.get("session"))
     value, bad_countries = write_m3u(entries, postcards=postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:
@@ -181,7 +182,8 @@ def country(key: str):
 
 
 @bp.get("/user/<key>.m3u")
-def user(key: str):
+@with_permissions
+def user(key: str, permissions: UserPermissions):
     stem, postcards = _split_np(key)
     stem = unicodedata.normalize("NFKC", urllib.parse.unquote(stem))
     normalized = re.sub(r"\s+", "_", stem).lower()
@@ -207,7 +209,6 @@ def user(key: str):
         return render_template("error.html", error=f"No published entries for {stem}"), 404
 
     entries = [(r["cc"], r["video_link"]) for r in rows]
-    permissions = get_user_role_from_session(request.cookies.get("session"))
     value, bad_countries = write_m3u(entries, postcards=postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:

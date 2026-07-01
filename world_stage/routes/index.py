@@ -6,12 +6,15 @@ from flask import Blueprint, current_app, make_response, redirect, request, send
 from .. import scrobble
 from ..db import get_db
 from ..utils import (
+    UserPermissions,
     create_cookie,
     generate_api_token,
     get_user_id_from_session,
-    get_user_role_from_session,
     parse_cookie,
     render_template,
+    require_user,
+    with_auth,
+    with_user,
 )
 
 # Lazy cache: 2-letter code → 3-letter code (populated on first miss).
@@ -41,14 +44,13 @@ bp = Blueprint("main", __name__, url_prefix="/")
 
 
 @bp.get("/")
-def home():
+@with_auth
+def home(user: tuple[int, str] | None, permissions: UserPermissions):
     # Highlight the Vote tile when the signed-in user has at least one
     # open voting they haven't cast a ballot in yet — a nudge to
     # finish what they started. Anonymous visitors don't get the nudge
     # because there's no per-user vote history to check against.
     has_pending_vote = False
-    session_id = request.cookies.get("session")
-    user = get_user_id_from_session(session_id) if session_id else None
     if user:
         user_id = user[0]
         db = get_db()
@@ -67,7 +69,6 @@ def home():
         )
         has_pending_vote = cursor.fetchone() is not None
 
-    permissions = get_user_role_from_session(session_id)
     is_admin = permissions.can_view_restricted
 
     return render_template(
@@ -151,12 +152,11 @@ def _get_user_tokens(user_id: int) -> list[dict]:
 
 
 @bp.get("/settings")
-def settings():
+@with_user
+def settings(user: tuple[int, str] | None):
     preferences = request.cookies.get("preferences", "")
     settings = parse_cookie(preferences)
 
-    session_id = request.cookies.get("session")
-    user = get_user_id_from_session(session_id) if session_id else None
     tokens = _get_user_tokens(user[0]) if user else []
     scrobble_services = _scrobble_services(user[0]) if user else []
 
@@ -194,12 +194,8 @@ def settings_post():
 
 
 @bp.post("/settings/token")
-def create_token():
-    session_id = request.cookies.get("session")
-    user = get_user_id_from_session(session_id) if session_id else None
-    if not user:
-        return redirect(url_for("session.login"))
-
+@require_user(redirect_to_login=True)
+def create_token(user: tuple[int, str]):
     user_id, _ = user
     label = request.form.get("token_label", "").strip()
 
@@ -231,12 +227,8 @@ def create_token():
 
 
 @bp.post("/settings/token/delete")
-def delete_token():
-    session_id = request.cookies.get("session")
-    user = get_user_id_from_session(session_id) if session_id else None
-    if not user:
-        return redirect(url_for("session.login"))
-
+@require_user(redirect_to_login=True)
+def delete_token(user: tuple[int, str]):
     user_id, _ = user
     token_id = request.form.get("token_id", type=int)
 

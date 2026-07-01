@@ -14,17 +14,18 @@ from ..utils import (
     Show,
     ShowData,
     SuspensefulVoteSequencer,
+    UserPermissions,
     dt_now,
     get_show_id,
     get_show_results_for_songs,
     get_show_songs,
-    get_user_role_from_session,
     get_votes_for_song,
     get_year_placements,
     get_year_songs,
     get_year_winner,
     render_template,
     resolve_country_code,
+    with_permissions,
 )
 
 bp = Blueprint("year", __name__, url_prefix="/year")
@@ -212,7 +213,8 @@ def index():
 
 
 @bp.get("/special/<short_name>")
-def special(short_name: str):
+@with_permissions
+def special(short_name: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -261,8 +263,6 @@ def special(short_name: str):
         )
         sf_numbers = {row["song_id"]: row["short_name"] for row in cursor.fetchall()}
 
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
     if permissions.can_view_restricted:
         can_view_voters = True
     else:
@@ -295,7 +295,13 @@ def special(short_name: str):
     )
 
 
-def _render_year_voters(year_id: int, year_label: str, special_short: str | None, special_name: str | None):
+def _render_year_voters(
+    year_id: int,
+    year_label: str,
+    special_short: str | None,
+    special_name: str | None,
+    permissions: UserPermissions,
+):
     """Shared body for the regular and special year-voters pages.
 
     Visibility:
@@ -313,9 +319,6 @@ def _render_year_voters(year_id: int, year_label: str, special_short: str | None
         return render_template("error.html", error="Year not found"), 404
 
     is_closed = year_row["status"] == "closed"
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     allowed_shows: list[str] | None
     if permissions.can_view_restricted:
@@ -349,12 +352,14 @@ def _render_year_voters(year_id: int, year_label: str, special_short: str | None
 
 
 @bp.get("/<int:year>/voters")
-def year_voters(year: int):
-    return _render_year_voters(year, str(year), None, None)
+@with_permissions
+def year_voters(year: int, permissions: UserPermissions):
+    return _render_year_voters(year, str(year), None, None, permissions)
 
 
 @bp.get("/special/<short_name>/voters")
-def special_year_voters(short_name: str):
+@with_permissions
+def special_year_voters(short_name: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -363,11 +368,13 @@ def special_year_voters(short_name: str):
         short_name,
         short_name,
         special_year["special_name"],
+        permissions,
     )
 
 
 @bp.get("/special/<short_name>/<show>")
-def special_results(short_name: str, show: str):
+@with_permissions
+def special_results(short_name: str, show: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -377,9 +384,6 @@ def special_results(short_name: str, show: str):
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status == "none" and not permissions.can_view_restricted:
         return render_template("error.html", error="This show has no songs"), 400
@@ -498,7 +502,8 @@ def special_results(short_name: str, show: str):
 
 
 @bp.get("/special/<short_name>/<show>/detailed")
-def special_detailed_results(short_name: str, show: str):
+@with_permissions
+def special_detailed_results(short_name: str, show: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -508,9 +513,6 @@ def special_detailed_results(short_name: str, show: str):
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return render_template(
@@ -584,7 +586,8 @@ def special_detailed_results(short_name: str, show: str):
 
 
 @bp.get("/special/<short_name>/<show>/scoreboard")
-def special_scoreboard(short_name: str, show: str):
+@with_permissions
+def special_scoreboard(short_name: str, show: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -594,9 +597,6 @@ def special_scoreboard(short_name: str, show: str):
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return render_template(
@@ -621,7 +621,8 @@ def special_scoreboard(short_name: str, show: str):
 
 
 @bp.get("/special/<short_name>/<show>/scoreboard/votes")
-def special_scores(short_name: str, show: str):
+@with_permissions
+def special_scores(short_name: str, show: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return {"error": "Special not found"}, 404
@@ -631,9 +632,6 @@ def special_scores(short_name: str, show: str):
 
     if not show_data:
         return {"error": "Show not found"}, 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return {"error": "You aren't allowed to access the scoreboard"}, 400
@@ -716,7 +714,8 @@ def special_scores(short_name: str, show: str):
 
 
 @bp.get("/special/<short_name>/<show>/predictions")
-def special_predictions(short_name: str, show: str):
+@with_permissions
+def special_predictions(short_name: str, show: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -726,9 +725,6 @@ def special_predictions(short_name: str, show: str):
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return render_template(
@@ -942,7 +938,10 @@ def special_song_votes_disambig(short_name: str, show: str, country_code: str):
 
 
 @bp.get("/special/<short_name>/<show>/song/<country_code>/<int:entry_number>")
-def special_song_votes(short_name: str, show: str, country_code: str, entry_number: int):
+@with_permissions
+def special_song_votes(
+    short_name: str, show: str, country_code: str, entry_number: int, permissions: UserPermissions
+):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -965,9 +964,6 @@ def special_song_votes(short_name: str, show: str, country_code: str, entry_numb
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status not in ("full", "partial") and not permissions.can_view_restricted:
         return render_template(
@@ -1099,7 +1095,8 @@ def special_song_votes(short_name: str, show: str, country_code: str, entry_numb
 
 
 @bp.get("/<int:year>")
-def year(year: int):
+@with_permissions
+def year(year: int, permissions: UserPermissions):
     _year = year
     db = get_db()
     cursor = db.cursor()
@@ -1166,8 +1163,6 @@ def year(year: int):
         )
         sf_numbers = {row["song_id"]: row["short_name"] for row in cursor.fetchall()}
 
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
     if permissions.can_view_restricted:
         can_view_voters = True
     else:
@@ -1199,15 +1194,13 @@ def year(year: int):
 
 
 @bp.get("/<int:year>/<show>")
-def results(year: int, show: str):
+@with_permissions
+def results(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status == "none" and not permissions.can_view_restricted:
         return render_template("error.html", error="This show has no songs"), 400
@@ -1324,15 +1317,13 @@ def results(year: int, show: str):
 
 
 @bp.get("/<int:year>/<show>/detailed")
-def detailed_results(year: int, show: str):
+@with_permissions
+def detailed_results(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return render_template(
@@ -1404,7 +1395,8 @@ def detailed_results(year: int, show: str):
 
 
 @bp.get("/<int:year>/<show>/song/<country_code>")
-def song_votes(year: int, show: str, country_code: str):
+@with_permissions
+def song_votes(year: int, show: str, country_code: str, permissions: UserPermissions):
     canonical = resolve_country_code(country_code.upper())
     if canonical and canonical.lower() != country_code.lower():
         return redirect(
@@ -1416,9 +1408,6 @@ def song_votes(year: int, show: str, country_code: str):
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status not in ("full", "partial") and not permissions.can_view_restricted:
         return render_template(
@@ -1553,15 +1542,13 @@ def song_votes(year: int, show: str, country_code: str):
 
 
 @bp.get("/<int:year>/<show>/scoreboard")
-def scoreboard(year: int, show: str):
+@with_permissions
+def scoreboard(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return render_template(
@@ -1579,15 +1566,13 @@ def scoreboard(year: int, show: str):
 
 
 @bp.get("/<int:year>/<show>/scoreboard/votes")
-def scores(year: int, show: str):
+@with_permissions
+def scores(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return {"error": "Show not found"}, 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return {"error": "You aren't allowed to access the scoreboard"}, 400
@@ -1670,7 +1655,8 @@ def scores(year: int, show: str):
 
 
 @bp.get("/<int:year>/<show>/qualifiers")
-def qualifiers(year: int, show: str):
+@with_permissions
+def qualifiers(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
@@ -1679,9 +1665,6 @@ def qualifiers(year: int, show: str):
 
     if show_data.dtf is None:
         return render_template("error.html", error="Not a semi-final."), 400
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return render_template("error.html", error="You aren't allowed to access the qualifiers")
@@ -1697,7 +1680,8 @@ def qualifiers(year: int, show: str):
 
 
 @bp.post("/<int:year>/<show>/qualifiers")
-def qualifiers_post(year: int, show: str):
+@with_permissions
+def qualifiers_post(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
@@ -1706,9 +1690,6 @@ def qualifiers_post(year: int, show: str):
 
     if show_data.dtf is None:
         return {"error": "Not a semi-final."}, 400
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return {"error": "You aren't allowed to access the qualifiers"}, 400
@@ -1782,7 +1763,8 @@ def qualifiers_post(year: int, show: str):
 
 
 @bp.get("/<int:year>/<show>/qualifiers/votes")
-def qualifiers_scores(year: int, show: str):
+@with_permissions
+def qualifiers_scores(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
@@ -1791,9 +1773,6 @@ def qualifiers_scores(year: int, show: str):
 
     if show_data.dtf is None:
         return {"error": "Not a semi-final."}, 400
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return {"error": "You aren't allowed to access the qualifiers"}, 400
@@ -1871,7 +1850,8 @@ def qualifiers_scores(year: int, show: str):
 # automatically.
 
 @bp.get("/special/<short_name>/<show>/qualifiers")
-def special_qualifiers(short_name: str, show: str):
+@with_permissions
+def special_qualifiers(short_name: str, show: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -1884,9 +1864,6 @@ def special_qualifiers(short_name: str, show: str):
 
     if show_data.dtf is None:
         return render_template("error.html", error="Not a semi-final."), 400
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return render_template("error.html", error="You aren't allowed to access the qualifiers")
@@ -2180,15 +2157,13 @@ def _compute_prediction_scores(
 
 
 @bp.get("/<int:year>/<show>/predictions")
-def show_predictions(year: int, show: str):
+@with_permissions
+def show_predictions(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if show_data.status != "full" and not permissions.can_view_restricted:
         return render_template(
@@ -2346,15 +2321,13 @@ def show_predictions(year: int, show: str):
 
 
 @bp.get("/<int:year>/<show>/voters")
-def show_voters(year: int, show: str):
+@with_permissions
+def show_voters(year: int, show: str, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if not permissions.can_view_restricted:
         return render_template("error.html", error="You aren't allowed to access this show"), 400
@@ -2514,9 +2487,8 @@ def _apply_penalty(show_data: ShowData):
 
 
 @bp.get("/<int:year>/<show>/penalty")
-def show_penalty(year: int, show: str):
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
+@with_permissions
+def show_penalty(year: int, show: str, permissions: UserPermissions):
     if not permissions.can_view_restricted:
         return render_template("error.html", error="Admins only."), 403
     show_data = get_show_id(show, year)
@@ -2526,9 +2498,8 @@ def show_penalty(year: int, show: str):
 
 
 @bp.post("/<int:year>/<show>/penalty")
-def show_penalty_post(year: int, show: str):
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
+@with_permissions
+def show_penalty_post(year: int, show: str, permissions: UserPermissions):
     if not permissions.can_view_restricted:
         return {"error": "Admins only"}, 403
     show_data = get_show_id(show, year)
@@ -2538,9 +2509,8 @@ def show_penalty_post(year: int, show: str):
 
 
 @bp.get("/special/<short_name>/<show>/penalty")
-def special_show_penalty(short_name: str, show: str):
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
+@with_permissions
+def special_show_penalty(short_name: str, show: str, permissions: UserPermissions):
     if not permissions.can_view_restricted:
         return render_template("error.html", error="Admins only."), 403
     special_year = resolve_special(short_name)
@@ -2555,9 +2525,8 @@ def special_show_penalty(short_name: str, show: str):
 
 
 @bp.post("/special/<short_name>/<show>/penalty")
-def special_show_penalty_post(short_name: str, show: str):
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
+@with_permissions
+def special_show_penalty_post(short_name: str, show: str, permissions: UserPermissions):
     if not permissions.can_view_restricted:
         return {"error": "Admins only"}, 403
     special_year = resolve_special(short_name)
@@ -2792,7 +2761,8 @@ def get_show_play_entries(
 
 
 @bp.get("/<int:year>/<show>/play")
-def show_play(year: int, show: str):
+@with_permissions
+def show_play(year: int, show: str, permissions: UserPermissions):
     show_data = get_show_id(show, year)
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
@@ -2800,9 +2770,6 @@ def show_play(year: int, show: str):
     postcards = request.args.get("postcards", "false") == "true"
 
     entries, bad_countries = get_show_play_entries(show_data, postcards)
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if not permissions.can_view_restricted and bad_countries:
         bad_countries = sorted(set(bad_countries))
@@ -2831,7 +2798,8 @@ def show_play(year: int, show: str):
 
 
 @bp.get("/special/<short_name>/<show>/play")
-def special_show_play(short_name: str, show: str):
+@with_permissions
+def special_show_play(short_name: str, show: str, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -2844,9 +2812,6 @@ def special_show_play(short_name: str, show: str):
     postcards = request.args.get("postcards", "false") == "true"
 
     entries, bad_countries = get_show_play_entries(show_data, postcards)
-
-    session_id = request.cookies.get("session")
-    permissions = get_user_role_from_session(session_id)
 
     if not permissions.can_view_restricted and bad_countries:
         bad_countries = sorted(set(bad_countries))

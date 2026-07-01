@@ -7,12 +7,12 @@ from flask import Blueprint, request
 
 from ..db import fetchone, get_db
 from ..utils import (
+    UserPermissions,
     get_closed_years,
     get_show_results_for_songs,
-    get_user_id_from_session,
-    get_user_role_from_session,
     get_user_songs,
     render_template,
+    with_auth,
 )
 
 bp = Blueprint("user", __name__, url_prefix="/user")
@@ -324,7 +324,8 @@ def _votes_by_year(cursor, user_id: int, username: str):
 
 
 @bp.get("/<username>/votes")
-def votes(username: str):
+@with_auth
+def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissions):
     username = urllib.parse.unquote(username)
     username = unicodedata.normalize("NFKC", username)
 
@@ -345,10 +346,8 @@ def votes(username: str):
     # A user may opt to see votes for not-yet-revealed shows unblanked
     # (?hidden=false) when looking at their own history, or when they hold a
     # role that can_view_restricted (admins/staff). Everyone else stays redacted.
-    session_id = request.cookies.get("session")
-    viewer = get_user_id_from_session(session_id)
-    is_owner = viewer is not None and viewer[0] == user_id
-    can_reveal = is_owner or get_user_role_from_session(session_id).can_view_restricted
+    is_owner = user is not None and user[0] == user_id
+    can_reveal = is_owner or permissions.can_view_restricted
     unredacted = can_reveal and request.args.get("hidden") == "false"
 
     if request.args.get("view") == "country":

@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from .. import scrobble
 from ..db import get_db
-from ..utils import LCG, get_user_id_from_session, render_template
+from ..utils import LCG, get_user_id_from_session, render_template, with_user
 from .country import mime_types
 
 bp = Blueprint("radio", __name__, url_prefix="/radio")
@@ -163,8 +163,8 @@ def _submission_song():
 
 
 @bp.get("/")
-def index():
-    user = get_user_id_from_session(request.cookies.get("session"))
+@with_user
+def index(user: tuple[int, str] | None):
     enabled = bool(user) and scrobble.has_enabled_account(user[0])
     return render_template("radio.html", scrobble_enabled=enabled)
 

@@ -6,6 +6,7 @@ from flask import Blueprint, redirect, request, url_for
 from ..db import get_db
 from ..media import duration_for_link, is_media_link
 from ..utils import (
+    UserPermissions,
     get_closed_years,
     get_countries,
     get_country_name,
@@ -15,11 +16,10 @@ from ..utils import (
     get_song,
     get_special_song,
     get_special_songs_for_country,
-    get_user_id_from_session,
-    get_user_permissions,
-    get_user_role_from_session,
     render_template,
+    require_permissions,
     resolve_country_code,
+    with_auth,
 )
 
 bp = Blueprint("country", __name__, url_prefix="/country")
@@ -143,7 +143,8 @@ def generate_iframe(url: str, img_url: str | None):
 
 
 @bp.get("/<code>/<int:year>")
-def details(code: str, year: int):
+@with_auth
+def details(code: str, year: int, user: tuple[int, str] | None, permissions: UserPermissions):
     canonical = resolve_country_code(code.upper())
     if canonical and canonical.lower() != code.lower():
         return redirect(url_for("country.details", code=canonical.lower(), year=year), 301)
@@ -158,13 +159,7 @@ def details(code: str, year: int):
         embed = generate_iframe(url, song.poster_link)
     name = get_country_name(code.upper())
 
-    session_id = request.cookies.get("session")
-    user_data = get_user_id_from_session(session_id)
-    user_id = None
-    if user_data:
-        user_id = user_data[0]
-    permissions = get_user_permissions(user_id)
-
+    user_id = user[0] if user else None
     can_edit = permissions.can_edit or user_id == song.submitter_id
     translated_lyrics = []
     latin_lyrics = []
@@ -210,11 +205,8 @@ def details(code: str, year: int):
 
 
 @bp.post("/duration/<int:song_id>")
-def update_duration(song_id: int):
-    permissions = get_user_role_from_session(request.cookies.get("session"))
-    if not permissions.can_edit:
-        return render_template("error.html", error="Not authorized"), 403
-
+@require_permissions(lambda p: p.can_edit)
+def update_duration(song_id: int, permissions: UserPermissions):
     db = get_db()
     cursor = db.cursor()
     cursor.execute("SELECT video_link FROM song WHERE id = %s", (song_id,))
@@ -245,18 +237,21 @@ def _resolve_special(short_name: str) -> dict | None:
     return cursor.fetchone()
 
 
-def _render_song_details(song, name, special_short_name, special_name):
+def _render_song_details(
+    song,
+    name,
+    special_short_name,
+    special_name,
+    user: tuple[int, str] | None,
+    permissions: UserPermissions,
+):
     """Render the song details page for a special song."""
     url = song.video_link
     embed = ""
     if url and url != "N/A":
         embed = generate_iframe(url, song.poster_link)
 
-    session_id = request.cookies.get("session")
-    user_data = get_user_id_from_session(session_id)
-    user_id = user_data[0] if user_data else None
-    permissions = get_user_permissions(user_id)
-
+    user_id = user[0] if user else None
     can_edit = permissions.can_edit or user_id == song.submitter_id
 
     md = get_markdown_parser()
@@ -298,7 +293,14 @@ def _render_song_details(song, name, special_short_name, special_name):
 
 @bp.get("/<code>/<special_short_name>", defaults={"entry_number": None})
 @bp.get("/<code>/<special_short_name>/<int:entry_number>")
-def special_details(code: str, special_short_name: str, entry_number: int | None):
+@with_auth
+def special_details(
+    code: str,
+    special_short_name: str,
+    entry_number: int | None,
+    user: tuple[int, str] | None,
+    permissions: UserPermissions,
+):
     # Don't match numeric year segments — those belong to the existing details() route
     try:
         int(special_short_name)
@@ -334,7 +336,7 @@ def special_details(code: str, special_short_name: str, entry_number: int | None
                 "error.html",
                 error=f"Song not found for {name} in {special_name} (entry {entry_number})",
             ), 404
-        return _render_song_details(song, name, special_short_name, special_name)
+        return _render_song_details(song, name, special_short_name, special_name, user, permissions)
 
     # No entry number — find all songs for this country in this special
     songs = get_special_songs_for_country(year_id, code.upper())
@@ -345,7 +347,9 @@ def special_details(code: str, special_short_name: str, entry_number: int | None
 
     if len(songs) == 1:
         # Only one entry — show it directly
-        return _render_song_details(songs[0], name, special_short_name, special_name)
+        return _render_song_details(
+            songs[0], name, special_short_name, special_name, user, permissions
+        )
 
     # Multiple entries — show disambiguation page
     return render_template(

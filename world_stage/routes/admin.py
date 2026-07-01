@@ -28,11 +28,9 @@ from ..utils import (
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 
-def verify_user():
-    session_id = request.cookies.get("session")
-    if not session_id:
-        return redirect("/")
-    permissions = get_user_role_from_session(session_id)
+@bp.before_request
+def _require_admin():
+    permissions = get_user_role_from_session(request.cookies.get("session"))
     if not permissions.can_view_restricted:
         return redirect("/")
     return None
@@ -58,9 +56,6 @@ def _resolve_special(short_name: str) -> dict | None:
 
 @bp.get("/")
 def index():
-    resp = verify_user()
-    if resp:
-        return resp
     return render_template("admin/index.html")
 
 
@@ -94,18 +89,11 @@ def _render_genre_index(error: str | None = None):
 
 @bp.get("/genre")
 def genre_index():
-    resp = verify_user()
-    if resp:
-        return resp
     return _render_genre_index()
 
 
 @bp.post("/genre/<int:genre_id>/delete")
 def genre_delete(genre_id: int):
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cur = db.cursor()
     cur.execute("SELECT name FROM genre WHERE id = %s", (genre_id,))
@@ -134,9 +122,6 @@ def genre_delete(genre_id: int):
 
 @bp.get("/language/create")
 def language_create():
-    resp = verify_user()
-    if resp:
-        return resp
     cursor = get_db().cursor()
     cursor.execute("SELECT name FROM language ORDER BY name")
     return render_template(
@@ -147,10 +132,6 @@ def language_create():
 
 @bp.post("/language/create")
 def language_create_post():
-    resp = verify_user()
-    if resp:
-        return resp
-
     def _clean(field: str) -> str | None:
         raw = (request.form.get(field) or "").strip()
         return raw or None
@@ -232,18 +213,11 @@ def _render_alternative_name_form(error: str | None = None, **values):
 
 @bp.get("/alternative-name")
 def alternative_name_index():
-    resp = verify_user()
-    if resp:
-        return resp
     return _render_alternative_name_form()
 
 
 @bp.post("/alternative-name")
 def alternative_name_create_post():
-    resp = verify_user()
-    if resp:
-        return resp
-
     def _clean(field: str) -> str | None:
         raw = (request.form.get(field) or "").strip()
         return raw or None
@@ -304,10 +278,6 @@ def alternative_name_create_post():
 
 @bp.post("/alternative-name/<int:name_id>/delete")
 def alternative_name_delete(name_id: int):
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cur = db.cursor()
     try:
@@ -322,10 +292,6 @@ def alternative_name_delete(name_id: int):
 
 @bp.post("/subgenre/<int:subgenre_id>/delete")
 def subgenre_delete(subgenre_id: int):
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cur = db.cursor()
     cur.execute(
@@ -355,10 +321,6 @@ def subgenre_delete(subgenre_id: int):
 
 @bp.get("/genre/create")
 def genre_create():
-    resp = verify_user()
-    if resp:
-        return resp
-
     cursor = get_db().cursor()
     cursor.execute('SELECT id, name FROM genre ORDER BY name COLLATE "C"')
     genres = cursor.fetchall()
@@ -367,10 +329,6 @@ def genre_create():
 
 @bp.post("/genre/create")
 def genre_create_post():
-    resp = verify_user()
-    if resp:
-        return resp
-
     genre_name = (request.form.get("genre_name") or "").strip()
     subgenre_name = (request.form.get("subgenre_name") or "").strip()
 
@@ -427,18 +385,11 @@ def genre_create_post():
 
 @bp.get("/manage/<int:year>/createshow")
 def create_show(year: int):
-    resp = verify_user()
-    if resp:
-        return resp
     return render_template("admin/create_show.html", years=get_years(), year=year)
 
 
 @bp.post("/manage/<int:year>/createshow")
 def create_show_post(year: int):
-    resp = verify_user()
-    if resp:
-        return resp
-
     data: dict[str, int | str | None] = {"year": year}
     value: int | str | None
     for key, value_ in request.form.items():
@@ -544,18 +495,11 @@ def _render_draw(year_id: int, label: str):
 
 @bp.get("/draw/<int:year>")
 def draw(year: int):
-    resp = verify_user()
-    if resp:
-        return resp
     return _render_draw(year, str(year))
 
 
 @bp.get("/draw/special/<short_name>")
 def draw_special(short_name: str):
-    resp = verify_user()
-    if resp:
-        return resp
-
     special = _resolve_special(short_name)
     if not special:
         return render_template("error.html", error=f"Special '{short_name}' not found"), 404
@@ -565,10 +509,6 @@ def draw_special(short_name: str):
 
 @bp.post("/draw/<int:year>")
 def draw_post(year: int):
-    resp = verify_user()
-    if resp:
-        return {"error": "Not an admin"}, 401
-
     # Each value is a list of song IDs in running order.
     data: dict[str, list[int]] | None = request.json
     if not data:
@@ -618,10 +558,6 @@ def draw_special_post(short_name: str):
 
 @bp.get("/draw/special/<short_name>/<show>")
 def draw_special_final(short_name: str, show: str):
-    resp = verify_user()
-    if resp:
-        return resp
-
     special = _resolve_special(short_name)
     if not special:
         return render_template("error.html", error=f"Special '{short_name}' not found"), 404
@@ -639,10 +575,6 @@ def draw_special_final_post(short_name: str, show: str):
 
 @bp.get("/draw/<int:year>/<show>")
 def draw_final(year: int, show: str):
-    resp = verify_user()
-    if resp:
-        return resp
-
     show_data = get_show_id(show, year)
     if not show_data:
         return render_template("error.html", error=f"Invalid show '{show}' for {year}"), 404
@@ -688,10 +620,6 @@ def draw_final(year: int, show: str):
 
 @bp.post("/draw/<int:year>/<show>")
 def draw_final_post(year: int, show: str):
-    resp = verify_user()
-    if resp:
-        return {"error": "Not an admin"}, 401
-
     # The client now sends a list of song IDs (in running order).
     data: dict[str, list[int]] | None = request.json
     if not data:
@@ -742,10 +670,6 @@ ALL_EVENT_TYPES = [
 
 @bp.get("/changes")
 def changes():
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cursor = db.cursor()
 
@@ -829,10 +753,6 @@ def changes():
 
 @bp.get("/move")
 def move():
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cursor = db.cursor()
 
@@ -851,10 +771,6 @@ def move():
 
 @bp.post("/move")
 def move_post():
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     db = get_db()
     cursor = db.cursor()
 
@@ -955,10 +871,6 @@ def move_post():
 
 @bp.get("/manage")
 def manage_index():
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cursor = db.cursor()
 
@@ -994,10 +906,6 @@ def _render_manage(year_id: int, year_data: dict):
 
 @bp.get("/manage/<int:year>")
 def manage(year: int):
-    resp = verify_user()
-    if resp:
-        return resp
-
     cursor = get_db().cursor()
     cursor.execute(
         "SELECT id, status FROM year WHERE id = %s AND id >= 0",
@@ -1012,10 +920,6 @@ def manage(year: int):
 
 @bp.get("/manage/special/<short_name>")
 def manage_special(short_name: str):
-    resp = verify_user()
-    if resp:
-        return resp
-
     year_data = _resolve_special(short_name)
     if not year_data:
         return render_template("error.html", error=f"Special '{short_name}' not found"), 404
@@ -1025,10 +929,6 @@ def manage_special(short_name: str):
 
 @bp.post("/manage/<int:year>")
 def manage_post(year: int):
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     body = request.get_json()
     if not body:
         return render_template("error.html", error="Empty request body"), 400
@@ -1078,10 +978,6 @@ def manage_show_special_post(short_name: str, show: str):
 
 @bp.post("/manage/<int:year>/<show>")
 def manage_show_post(year: int, show: str):
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     body = request.get_json()
     if not body:
         return render_template("error.html", error="Empty request body"), 400
@@ -1173,19 +1069,11 @@ def manage_show_post(year: int, show: str):
 
 @bp.get("/fuckupdb")
 def fuckup_db():
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     return render_template("admin/fuckupdb.html")
 
 
 @bp.post("/fuckupdb")
 def fuckup_db_post():
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     db = get_db()
     cursor = db.cursor()
 
@@ -1238,10 +1126,6 @@ def fuckup_db_post():
 
 @bp.get("/users")
 def users():
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cursor = db.cursor()
 
@@ -1257,10 +1141,6 @@ def users():
 
 @bp.post("/users")
 def users_post():
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     body = request.get_json()
     if not body:
         return render_template("error.html", error="Empty request body"), 400
@@ -1311,10 +1191,6 @@ def users_post():
 
 @bp.get("/manage/<int:year>/setpots")
 def set_pots(year: int):
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cursor = db.cursor()
 
@@ -1335,10 +1211,6 @@ def set_pots(year: int):
 
 @bp.post("/manage/<int:year>/setpots")
 def set_pots_post(year: int):
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     db = get_db()
     cursor = db.cursor()
 
@@ -1393,10 +1265,6 @@ def set_pots_json(year: int):
     missing key) maps to NULL, and any country not listed in the payload
     has its pot and genre cleared.
     """
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     # The payload may arrive as raw JSON in the request body or as a
     # ``payload`` form field (used by the textarea on the page).
     raw_payload: dict | None = None
@@ -1481,19 +1349,11 @@ def set_pots_json(year: int):
 
 @bp.get("/upload")
 def upload():
-    resp = verify_user()
-    if resp:
-        return resp
-
     return render_template("admin/upload.html")
 
 
 @bp.post("/upload")
 def upload_post():
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     file = request.files.get("file")
     if not file:
         return render_template("error.html", error="No file uploaded"), 400
@@ -1515,10 +1375,6 @@ def upload_post():
 
 @bp.get("/predictions")
 def predictions_index():
-    resp = verify_user()
-    if resp:
-        return resp
-
     db = get_db()
     cursor = db.cursor()
 
@@ -1537,10 +1393,6 @@ def predictions_index():
 
 @bp.get("/recapdata")
 def recap_data():
-    resp = verify_user()
-    if resp:
-        return resp
-
     return render_template("admin/recap_data.html")
 
 
@@ -1761,10 +1613,6 @@ def drop_none(obj):
 
 @bp.post("/recapdata")
 def recap_data_post() -> Response | tuple[Response, int]:
-    resp = verify_user()
-    if resp:
-        return render_template("error.html", error="Not an admin"), 401
-
     form_data = request.form.getlist("show")
     type = request.form.get("type", "")
     action = request.form.get("action", "render")

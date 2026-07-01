@@ -10,8 +10,8 @@ from world_stage.utils import (
     ErrorID,
     err,
     format_seconds,
-    get_api_auth,
     parse_seconds,
+    require_api_auth,
     resolve_country_code,
     resp,
 )
@@ -771,10 +771,8 @@ def get_song_by_country_entry(cc: str, year: str, entry_number: int):
 
 
 @bp.post("")
-def create_song():
-    auth = get_api_auth()
-    if not auth:
-        return err(ErrorID.UNAUTHORIZED, "Authentication required")
+@require_api_auth
+def create_song(auth: tuple):
     user_id, _username, permissions = auth
 
     data, _is_form = _get_request_data()
@@ -993,10 +991,8 @@ def create_song():
 
 
 @bp.put("/<int:id>")
-def replace_song(id: int):
-    auth = get_api_auth()
-    if not auth:
-        return err(ErrorID.UNAUTHORIZED, "Authentication required")
+@require_api_auth
+def replace_song(id: int, auth: tuple):
     user_id, _username, permissions = auth
 
     data, _is_form = _get_request_data()
@@ -1164,10 +1160,8 @@ def replace_song(id: int):
 
 
 @bp.patch("/<int:id>")
-def update_song(id: int):
-    auth = get_api_auth()
-    if not auth:
-        return err(ErrorID.UNAUTHORIZED, "Authentication required")
+@require_api_auth
+def update_song(id: int, auth: tuple):
     user_id, _username, permissions = auth
 
     data, _is_form = _get_request_data()
@@ -1357,10 +1351,8 @@ def update_song(id: int):
 
 
 @bp.delete("/<int:id>")
-def delete_song(id: int):
-    auth = get_api_auth()
-    if not auth:
-        return err(ErrorID.UNAUTHORIZED, "Authentication required")
+@require_api_auth
+def delete_song(id: int, auth: tuple):
     user_id, _username, permissions = auth
 
     db = get_db()

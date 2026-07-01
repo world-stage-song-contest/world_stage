@@ -2,7 +2,7 @@ import datetime
 from collections import defaultdict
 from typing import Any
 
-from flask import Blueprint, make_response, redirect, request, url_for
+from flask import Blueprint, make_response, request
 
 from ..db import fetchone, get_db
 from ..utils import (
@@ -15,6 +15,7 @@ from ..utils import (
     get_user_songs,
     get_vote_count_for_show,
     render_template,
+    require_user,
 )
 
 bp = Blueprint("vote", __name__, url_prefix="/vote")
@@ -162,15 +163,11 @@ def index():
 
 
 @bp.get("/<show>")
-def vote(show: str):
-    username = request.cookies.get("username", "")
-    session_id = request.cookies.get("session")
+@require_user(message="Please log in to vote")
+def vote(show: str, user: tuple[int, str]):
     nickname = None
     country = ""
     country_id = ""
-
-    if not session_id:
-        return render_template("error.html", error="Please log in to vote"), 403
 
     selected: dict[int, dict[str, Any]] = defaultdict(dict)
 
@@ -190,11 +187,7 @@ def vote(show: str):
     db = get_db()
     cursor = db.cursor()
 
-    d = get_user_id_from_session(session_id)
-    if not d:
-        return render_template("error.html", error="Unknown user ID"), 404
-
-    _, username = d
+    _, username = user
 
     vote_set_id = None
     countries = []
@@ -257,17 +250,14 @@ def vote(show: str):
 
 
 @bp.post("/<show>")
-def vote_post(show: str):
+@require_user(message="Please log in to vote")
+def vote_post(show: str, user: tuple[int, str]):
     votes = {}
     invalid = []
     username = ""
     nickname = ""
 
     show_data = get_show_id(show)
-
-    session_id = request.cookies.get("session")
-    if not session_id:
-        return render_template("error.html", error="Please log in to vote"), 403
 
     if not show_data or not show_data.id:
         return render_template("error.html", error="Show not found"), 404
@@ -286,11 +276,7 @@ def vote_post(show: str):
 
     errors = []
 
-    d = get_user_id_from_session(session_id)
-    if not d:
-        return render_template("error.html", error="Unknown user ID"), 404
-
-    voter_id, username = d
+    voter_id, username = user
 
     nickname = request.form["nickname"]
     nickname = nickname.strip()
@@ -381,16 +367,9 @@ def vote_post(show: str):
 
 
 @bp.get("/<show>/predict")
-def predict(show: str):
-    session_id = request.cookies.get("session")
-    if not session_id:
-        return redirect(url_for("session.login"))
-
-    session_data = get_user_id_from_session(session_id)
-    if not session_data:
-        return redirect(url_for("session.login"))
-
-    user_id, _ = session_data
+@require_user(redirect_to_login=True)
+def predict(show: str, user: tuple[int, str]):
+    user_id, _ = user
 
     show_data = get_show_id(show)
     if not show_data or not show_data.id:
@@ -459,16 +438,9 @@ def predict(show: str):
 
 
 @bp.post("/<show>/predict")
-def predict_post(show: str):
-    session_id = request.cookies.get("session")
-    if not session_id:
-        return redirect(url_for("session.login"))
-
-    session_data = get_user_id_from_session(session_id)
-    if not session_data:
-        return redirect(url_for("session.login"))
-
-    user_id, _ = session_data
+@require_user(redirect_to_login=True)
+def predict_post(show: str, user: tuple[int, str]):
+    user_id, _ = user
 
     show_data = get_show_id(show)
     if not show_data or not show_data.id:
