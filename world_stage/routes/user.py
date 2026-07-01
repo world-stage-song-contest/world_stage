@@ -421,12 +421,18 @@ def votes(username: str):
         )
         songs = []
         for val in cursor.fetchall():
+            # A song is in a not-yet-revealed show when it qualifies into a
+            # partial 'f'/'sc' show. Track this independently of blanking so
+            # results stay hidden even when the viewer reveals vote details.
+            in_hidden_show = False
             if vote["short_name"] != "f":
-                redact_song_if_show(val, vote["year"], "f", vote["status"], blank=not unredacted)
+                _, mod = redact_song_if_show(val, vote["year"], "f", vote["status"], blank=not unredacted)
+                in_hidden_show |= mod and vote["status"] == "partial"
                 if vote["short_name"] != "sc":
-                    redact_song_if_show(val, vote["year"], "sc", vote["status"], blank=not unredacted)
-            # Only show result placement for non-redacted songs.
-            if val.get("code") == "XX":
+                    _, mod = redact_song_if_show(val, vote["year"], "sc", vote["status"], blank=not unredacted)
+                    in_hidden_show |= mod and vote["status"] == "partial"
+            # Only show result placement for shows that aren't hidden.
+            if in_hidden_show or val.get("code") == "XX":
                 val["result_place"] = None
             else:
                 val["result_place"] = show_results.get((vote["show_id"], val["id"]))

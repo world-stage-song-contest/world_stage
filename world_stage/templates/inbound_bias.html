@@ -55,24 +55,34 @@
     {% endif %}
     <button type="submit">Apply</button>
 </form>
-<label class="bias-filter">
-    <input type="checkbox" onchange="document.querySelector('table.sortable').classList.toggle('hide-inconclusive', this.checked)">
-    Hide inconclusive
-</label>
-<table class="sortable with-sticky">
+<div class="bias-controls">
+    <label class="bias-filter">
+        <input type="checkbox" onchange="document.getElementById('bias-table').classList.toggle('hide-inconclusive', this.checked)">
+        Hide inconclusive
+    </label>
+    <label class="bias-filter">
+        <input type="checkbox" checked onchange="document.getElementById('bias-table').classList.toggle('hide-detail', this.checked)">
+        Collapse detail columns
+    </label>
+</div>
+<table id="bias-table" class="sortable with-sticky hide-detail">
     <thead class="sticky">
         <tr>
             <th>#</th>
             <th>Voter</th>
-            <th>Votings</th>
-            <th>Given<br>Points</th>
-            <th>Given<br>Points %</th>
-            <th>Total<br>Points</th>
-            <th>Total<br>Points %</th>
-            <th>Bias</th>
+            <th title="Times this voter saw one of the subject's entries">Votings</th>
+            <th class="detail-col" title="Votings where this voter awarded any points">Non-blank</th>
+            <th class="detail-col" title="Votings where this voter awarded the maximum score">Max</th>
+            <th title="Points they actually awarded">Given</th>
+            <th title="Points the other voters' consensus predicts they'd award">Expected</th>
+            <th aria-sort="descending" title="Bias score: 100 × ln((given+10)/(expected+10)). Positive = they favour the subject, negative = they snub them; symmetric and doesn't blow up on strong snubs.">Bias</th>
+            <th class="detail-col" title="Raw ratio of given to expected, as a percentage — intuitive, but unbounded and saturates for strong snubs.">Ratio</th>
+            <th class="detail-col" title="Evidence strength: (given − expected) / √expected">z</th>
             {% if subject_type == 'user' %}
-            <th>Received<br>Points</th>
-            <th>Point<br>Deficit</th>
+            <th title="Points the subject awarded this voter's entries">Received</th>
+            <th title="Given − Received">Deficit</th>
+            <th class="detail-col" title="Votings where the subject awarded this voter's entries any points">Got any</th>
+            <th class="detail-col" title="Votings where the subject awarded this voter's entries the maximum score">Got max</th>
             {% endif %}
         </tr>
     </thead>
@@ -82,17 +92,53 @@
             <th>{{ loop.index }}</th>
             <td><a href="{{ url_for('user.profile', username=bias.voter_name) }}">{{ bias.voter_name }}</a></td>
             <td class="number">{{ bias.parts }}</td>
-            <td class="number">{{ bias.user_given }}</td>
-            <td class="number">{{ "{:.02f}%".format(bias.user_ratio * 100) }}</td>
-            <td class="number">{{ bias.total_given }}</td>
-            <td class="number">{{ "{:.02f}%".format(bias.total_ratio * 100) }}</td>
-            <td class="number bias-value bias-{{ bias.bias_class }}">{{ "{:.02f}%".format(bias.bias * 100) }}</td>
+            <td class="number detail-col" data-value="{{ bias.votings_nonblank }}">{{ bias.votings_nonblank }}</td>
+            <td class="number detail-col" data-value="{{ bias.votings_max }}">{{ bias.votings_max }}</td>
+            <td class="number">{{ bias.given }}</td>
+            <td class="number" data-value="{{ bias.expected }}">{{ "{:.1f}".format(bias.expected) }}</td>
+            <td class="number bias-value bias-{{ bias.bias_class }}" data-value="{{ bias.log_ratio }}">{{ "{:+.2f}".format(bias.log_ratio * 100) }}</td>
+            <td class="number detail-col" data-value="{{ bias.bias }}">{{ "{:+.1f}%".format(bias.bias * 100) }}</td>
+            <td class="number detail-col" data-value="{{ bias.z }}">{{ "{:+.1f}".format(bias.z) }}</td>
             {% if subject_type == 'user' %}
-            <td class="number">{{ bias.submitter_given }}</td>
-            <td class="number">{{ bias.points_deficit }}</td>
+            <td class="number">{{ bias.received }}</td>
+            <td class="number" data-value="{{ bias.deficit }}">{{ "{:+d}".format(bias.deficit) }}</td>
+            <td class="number detail-col" data-value="{{ bias.received_any }}">{{ bias.received_any }}</td>
+            <td class="number detail-col" data-value="{{ bias.received_max }}">{{ bias.received_max }}</td>
             {% endif %}
         </tr>
         {% endfor %}
     </tbody>
 </table>
+
+<details class="column-guide">
+    <summary>What the columns mean</summary>
+    <dl>
+        <dt>Votings</dt>
+        <dd>The number of times one of the subject's entries came up in a show this voter took part in. The same entry can count more than once if it appeared in several shows.</dd>
+        <dt>Non-blank</dt>
+        <dd>How many of those votings this voter actually gave points in, rather than leaving the subject off their ballot.</dd>
+        <dt>Max</dt>
+        <dd>How many votings this voter gave the subject the highest score on offer.</dd>
+        <dt>Given</dt>
+        <dd>The total points this voter awarded the subject, added up across every voting.</dd>
+        <dt>Expected</dt>
+        <dd>The points this voter would have given if they had voted like everyone else. This is the baseline the bias is measured against.</dd>
+        <dt>Bias</dt>
+        <dd>How strongly this voter favours or works against the subject, compared with that baseline. Deeper fields carry more weight, because a point is harder to earn when more entries are competing for it. A positive number means they backed the subject more than the crowd did, and a negative number means they backed them less. It is <code>100 × ln((g + 2) ÷ (e + 2))</code>, where <code>g</code> and <code>e</code> are Given and Expected after each show is weighted by its field size (votable entries ÷ points they gave). The <code>+ 2</code> steadies small samples.</dd>
+        <dt>Ratio</dt>
+        <dd>A simpler take on the same idea, as a plain percentage above or below expected. It ignores field size, so it reads naturally but can look extreme when the expected total is small. It is <code>Given ÷ Expected − 1</code>.</dd>
+        <dt>z</dt>
+        <dd>How confident we can be that the bias is real rather than chance. The further it sits from zero, the stronger the evidence. It is <code>(g − e) ÷ √v</code>, where <code>g</code> and <code>e</code> are the weighted Given and Expected and <code>v</code> is the weighted variance — each show's squared weight times its expected points.</dd>
+        {% if subject_type == 'user' %}
+        <dt>Received</dt>
+        <dd>The total points the subject awarded this voter's entries — the mirror image of what the voter gave.</dd>
+        <dt>Deficit</dt>
+        <dd>The gap between what this voter gave the subject and what they got back. A positive number means the voter supported the subject more than the subject supported them.</dd>
+        <dt>Got any</dt>
+        <dd>How many votings the subject gave this voter's entries at least some points in.</dd>
+        <dt>Got max</dt>
+        <dd>How many votings the subject gave this voter's entries the highest score on offer.</dd>
+        {% endif %}
+    </dl>
+</details>
 {% endblock %}

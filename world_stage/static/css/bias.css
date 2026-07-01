@@ -29,3 +29,39 @@
 table.hide-inconclusive tr:has(.bias-inconclusive) {
     display: none;
 }
+
+.bias-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+    align-items: center;
+    margin-bottom: 0.5em;
+}
+
+#bias-table.hide-detail .detail-col {
+    display: none;
+}
+
+.column-guide {
+    margin-top: 2rem;
+    max-width: 45rem;
+}
+
+.column-guide > summary {
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1.15em;
+}
+
+.column-guide dl {
+    margin-top: 0.75em;
+}
+
+.column-guide dt {
+    font-weight: bold;
+    margin-top: 0.7em;
+}
+
+.column-guide dd {
+    margin: 0;
+}

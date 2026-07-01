@@ -44,24 +44,34 @@
     {% endif %}
     <button type="submit">Apply</button>
 </form>
-<label class="bias-filter">
-    <input type="checkbox" onchange="document.querySelector('table.sortable').classList.toggle('hide-inconclusive', this.checked)">
-    Hide inconclusive
-</label>
-<table class="sortable with-sticky">
+<div class="bias-controls">
+    <label class="bias-filter">
+        <input type="checkbox" onchange="document.getElementById('bias-table').classList.toggle('hide-inconclusive', this.checked)">
+        Hide inconclusive
+    </label>
+    <label class="bias-filter">
+        <input type="checkbox" checked onchange="document.getElementById('bias-table').classList.toggle('hide-detail', this.checked)">
+        Collapse detail columns
+    </label>
+</div>
+<table id="bias-table" class="sortable with-sticky hide-detail">
     <thead class="sticky">
         <tr>
             <th>#</th>
             <th>{{ bias_type.capitalize() }}</th>
-            <th>Votings</th>
-            <th>Given<br>Points</th>
-            <th>Given<br>Points %</th>
-            <th>Total<br>Points</th>
-            <th>Total<br>Points %</th>
-            <th>Bias</th>
+            <th title="Times you saw one of this {{ 'country' if bias_type == 'country' else 'user' }}'s entries">Votings</th>
+            <th class="detail-col" title="Votings where you awarded any points">Non-blank</th>
+            <th class="detail-col" title="Votings where you awarded the maximum score">Max</th>
+            <th title="Points you actually awarded">Given</th>
+            <th title="Points the other voters' consensus predicts you'd award">Expected</th>
+            <th aria-sort="descending" title="Bias score: 100 × ln((given+10)/(expected+10)). Positive = you favour them, negative = you snub them; symmetric and doesn't blow up on strong snubs.">Bias</th>
+            <th class="detail-col" title="Raw ratio of given to expected, as a percentage — intuitive, but unbounded and saturates for strong snubs.">Ratio</th>
+            <th class="detail-col" title="Evidence strength: (given − expected) / √expected">z</th>
             {% if bias_type == 'user' %}
-            <th>Received<br>Points</th>
-            <th>Point<br>Deficit</th>
+            <th title="Points this user awarded your entries">Received</th>
+            <th title="Given − Received">Deficit</th>
+            <th class="detail-col" title="Votings where this user awarded your entries any points">Got any</th>
+            <th class="detail-col" title="Votings where this user awarded your entries the maximum score">Got max</th>
             {% endif %}
         </tr>
     </thead>
@@ -71,24 +81,60 @@
             <th>{{ loop.index }}</th>
             {% if bias_type == 'country' %}
             <td>{{ flag(bias.country_id, 24, bias.country_name) }}
-                <a href="{{ url_for('country.country', code=bias.country_id) }}">{{ bias.country_name }}</span></td>
+                <a href="{{ url_for('country.country', code=bias.country_id) }}">{{ bias.country_name }}</a></td>
             {% elif bias_type == 'user' %}
             <td>{{ bias.submitter_name }}</td>
             {% else %}
             <td>ERROR - Unknown bias type</td>
             {% endif %}
             <td class="number">{{ bias.parts }}</td>
-            <td class="number">{{ bias.user_given }}</td>
-            <td class="number">{{ "{:.02f}%".format(bias.user_ratio * 100) }}</td>
-            <td class="number">{{ bias.total_given }}</td>
-            <td class="number">{{ "{:.02f}%".format(bias.total_ratio * 100) }}</td>
-            <td class="number bias-value bias-{{bias.bias_class}}">{{ "{:.02f}%".format(bias.bias * 100) }}</td>
+            <td class="number detail-col" data-value="{{ bias.votings_nonblank }}">{{ bias.votings_nonblank }}</td>
+            <td class="number detail-col" data-value="{{ bias.votings_max }}">{{ bias.votings_max }}</td>
+            <td class="number">{{ bias.given }}</td>
+            <td class="number" data-value="{{ bias.expected }}">{{ "{:.1f}".format(bias.expected) }}</td>
+            <td class="number bias-value bias-{{ bias.bias_class }}" data-value="{{ bias.log_ratio }}">{{ "{:+.2f}".format(bias.log_ratio * 100) }}</td>
+            <td class="number detail-col" data-value="{{ bias.bias }}">{{ "{:+.1f}%".format(bias.bias * 100) }}</td>
+            <td class="number detail-col" data-value="{{ bias.z }}">{{ "{:+.1f}".format(bias.z) }}</td>
             {% if bias_type == 'user' %}
-            <td class="number">{{ bias.submitter_given }}</td>
-            <td class="number">{{ bias.points_deficit }}</td>
+            <td class="number">{{ bias.received }}</td>
+            <td class="number" data-value="{{ bias.deficit }}">{{ "{:+d}".format(bias.deficit) }}</td>
+            <td class="number detail-col" data-value="{{ bias.received_any }}">{{ bias.received_any }}</td>
+            <td class="number detail-col" data-value="{{ bias.received_max }}">{{ bias.received_max }}</td>
             {% endif %}
         </tr>
         {% endfor %}
     </tbody>
 </table>
+
+<details class="column-guide">
+    <summary>What the columns mean</summary>
+    <dl>
+        <dt>Votings</dt>
+        <dd>The number of times one of their entries came up in a show you voted in. The same entry can count more than once if it appeared in several shows.</dd>
+        <dt>Non-blank</dt>
+        <dd>How many of those votings you actually gave them points in, rather than leaving them off your ballot.</dd>
+        <dt>Max</dt>
+        <dd>How many votings you gave them the highest score on offer.</dd>
+        <dt>Given</dt>
+        <dd>The total points you awarded them, added up across every voting.</dd>
+        <dt>Expected</dt>
+        <dd>The points you would have given them if you had voted like everyone else. This is the baseline the bias is measured against.</dd>
+        <dt>Bias</dt>
+        <dd>How strongly your voting favours or works against them, compared with that baseline. Deeper fields carry more weight, because a point is harder to earn when more entries are competing for it. A positive number means you backed them more than the crowd did, and a negative number means you backed them less. It is <code>100 × ln((g + 2) ÷ (e + 2))</code>, where <code>g</code> and <code>e</code> are Given and Expected after each show is weighted by its field size (votable entries ÷ points you gave). The <code>+ 2</code> steadies small samples.</dd>
+        <dt>Ratio</dt>
+        <dd>A simpler take on the same idea, as a plain percentage above or below expected. It ignores field size, so it reads naturally but can look extreme when the expected total is small. It is <code>Given ÷ Expected − 1</code>.</dd>
+        <dt>z</dt>
+        <dd>How confident we can be that the bias is real rather than chance. The further it sits from zero, the stronger the evidence. It is <code>(g − e) ÷ √v</code>, where <code>g</code> and <code>e</code> are the weighted Given and Expected and <code>v</code> is the weighted variance — each show's squared weight times its expected points.</dd>
+        {% if bias_type == 'user' %}
+        <dt>Received</dt>
+        <dd>The total points they awarded your entries — the mirror image of what you gave them.</dd>
+        <dt>Deficit</dt>
+        <dd>The gap between what you gave them and what they gave back. A positive number means you supported them more than they supported you.</dd>
+        <dt>Got any</dt>
+        <dd>How many votings they gave your entries at least some points in.</dd>
+        <dt>Got max</dt>
+        <dd>How many votings they gave your entries the highest score on offer.</dd>
+        {% endif %}
+    </dl>
+</details>
 {% endblock %}
