@@ -83,7 +83,8 @@ def login_post():
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
-        "SELECT id, password, salt, approved FROM account WHERE username = %s", (username,)
+        "SELECT id, password, salt, approved FROM account WHERE LOWER(username) = LOWER(%s)",
+        (username,),
     )
     user = cursor.fetchone()
     if not user:
@@ -148,7 +149,9 @@ def set_password_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT id, approved FROM account WHERE username = %s", (username,))
+    cursor.execute(
+        "SELECT id, approved FROM account WHERE LOWER(username) = LOWER(%s)", (username,)
+    )
     user = cursor.fetchone()
     if not user:
         return render_template("session/set_password.html", message="User not found.")
@@ -205,7 +208,9 @@ def sign_up_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT id FROM account WHERE username = %s", (username,))
+    cursor.execute(
+        "SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,)
+    )
     user = cursor.fetchone()
     if user:
         return render_template(

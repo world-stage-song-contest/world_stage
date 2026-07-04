@@ -35,7 +35,10 @@ def country(id: str):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("SELECT id, name, cc3 FROM country WHERE id = %s ORDER BY name", (id,))
+    cursor.execute(
+        "SELECT id, name, cc3 FROM country WHERE id = %s ORDER BY name",
+        (canonical or id.upper(),),
+    )
 
     res = cursor.fetchone()
     if not res:
@@ -89,7 +92,7 @@ def songs(id: str):
         WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id IS NOT NULL
         ORDER BY song.year_id, country.name
     """,
-        {"cc": id},
+        {"cc": canonical or id.upper()},
     )
 
     data = cursor.fetchall()

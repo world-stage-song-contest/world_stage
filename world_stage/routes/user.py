@@ -334,7 +334,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
 
     cursor.execute(
         """
-        SELECT id FROM account WHERE username = %s
+        SELECT id FROM account WHERE LOWER(username) = LOWER(%s)
     """,
         (username,),
     )
@@ -455,7 +455,7 @@ def predictions(username: str):
 
     cursor.execute(
         """
-        SELECT id FROM account WHERE username = %s
+        SELECT id FROM account WHERE LOWER(username) = LOWER(%s)
     """,
         (username,),
     )
@@ -586,7 +586,7 @@ def submissions(username: str):
 
     cursor.execute(
         """
-        SELECT id FROM account WHERE username = %s
+        SELECT id FROM account WHERE LOWER(username) = LOWER(%s)
     """,
         (username,),
     )
@@ -666,7 +666,7 @@ def bias(username: str):
 
     cursor.execute(
         """
-        SELECT id FROM account WHERE username = %s
+        SELECT id FROM account WHERE LOWER(username) = LOWER(%s)
     """,
         (username,),
     )
@@ -720,7 +720,7 @@ def similar(username: str):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("SELECT id FROM account WHERE username = %s", (username,))
+    cursor.execute("SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,))
     user_id_g = cursor.fetchone()
     if not user_id_g:
         return render_template("error.html", error="User not found"), 404
@@ -747,7 +747,7 @@ def bias_for(username: str):
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT id FROM account WHERE username = %s", (username,))
+    cursor.execute("SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,))
     row = cursor.fetchone()
     if not row:
         return render_template("error.html", error="User not found"), 404

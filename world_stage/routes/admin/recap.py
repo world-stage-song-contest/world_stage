@@ -94,7 +94,7 @@ def _parse_submitter_ids(form_data: list[str], cursor) -> list[int]:
     params_list = [(u,) for u in form_data]
     return _lookup_many(
         cursor,
-        "SELECT id FROM account WHERE username = %s",
+        "SELECT id FROM account WHERE LOWER(username) = LOWER(%s)",
         params_list,
         not_found_msg=lambda p: f"User '{p[0]}' is unknown",
     )

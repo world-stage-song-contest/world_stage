@@ -43,9 +43,9 @@ def get_genre_options() -> list[dict]:
                subgenre.id AS subgenre_id, subgenre.name AS subgenre_name
         FROM genre
         JOIN subgenre ON subgenre.genre_id = genre.id
-        ORDER BY genre.name COLLATE "C",
+        ORDER BY genre.name,
                  (subgenre.name = genre.name) DESC,
-                 subgenre.name COLLATE "C"
+                 subgenre.name
         """
     )
     grouped: dict[int, dict] = {}

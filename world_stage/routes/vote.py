@@ -74,7 +74,7 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("SELECT id FROM account WHERE username = %s", (username,))
+    cursor.execute("SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,))
     voter_id_data = cursor.fetchone()
     if not voter_id_data:
         return (
@@ -192,7 +192,7 @@ def vote(show: str, user: tuple[int, str]):
     vote_set_id = None
     countries = []
     if username:
-        cursor.execute("SELECT id FROM account WHERE username = %s", (username,))
+        cursor.execute("SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,))
         user_id = cursor.fetchone()
         if user_id:
             user_songs = get_user_songs(user_id["id"], show_data.year)
@@ -202,7 +202,7 @@ def vote(show: str, user: tuple[int, str]):
                 SELECT vote_set.id AS vsid, vote_set.nickname, vote_set.country_id AS cid
                 FROM vote_set
                 JOIN account ON vote_set.voter_id = account.id
-                WHERE account.username = %s AND vote_set.show_id = %s
+                WHERE LOWER(account.username) = LOWER(%s) AND vote_set.show_id = %s
             """,
                 (username, show_data.id),
             )

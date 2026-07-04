@@ -73,9 +73,9 @@ def show(key: str, permissions: UserPermissions):
         SELECT show.short_name AS show_short, year.id AS year_id
         FROM show
         JOIN year ON year.id = show.year_id
-        WHERE LPAD(ABS(year.id)::text, 4, '0') || show.short_name = %(k)s
+        WHERE LOWER(LPAD(ABS(year.id)::text, 4, '0') || show.short_name) = LOWER(%(k)s)
            OR (year.special_short_name IS NOT NULL
-               AND year.special_short_name || show.short_name = %(k)s)
+               AND LOWER(year.special_short_name || show.short_name) = LOWER(%(k)s))
         LIMIT 1
         """,
         {"k": stem},
@@ -104,7 +104,7 @@ def _resolve_year(stem: str) -> int | None:
         pass
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT id FROM year WHERE special_short_name = %s", (stem,))
+    cursor.execute("SELECT id FROM year WHERE LOWER(special_short_name) = LOWER(%s)", (stem,))
     row = cursor.fetchone()
     return row["id"] if row else None
 

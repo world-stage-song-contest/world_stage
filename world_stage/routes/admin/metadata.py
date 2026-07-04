@@ -18,7 +18,7 @@ def _render_genre_index(error: str | None = None):
                subgenre.id AS subgenre_id, subgenre.name AS subgenre_name
         FROM genre
         LEFT JOIN subgenre ON subgenre.genre_id = genre.id
-        ORDER BY genre.name COLLATE "C", subgenre.name COLLATE "C"
+        ORDER BY genre.name, subgenre.name
         """
     )
     grouped: dict[int, dict[str, Any]] = {}
@@ -148,7 +148,7 @@ def _render_alternative_name_form(error: str | None = None, **values):
                country.name AS country_name
         FROM alternative_name an
         JOIN country ON an.country_id = country.id
-        ORDER BY country.name COLLATE "C", an.from_year_id NULLS FIRST
+        ORDER BY country.name, an.from_year_id NULLS FIRST
         """
     )
     existing = cursor.fetchall()
@@ -273,7 +273,7 @@ def subgenre_delete(subgenre_id: int):
 @bp.get("/genre/create")
 def genre_create():
     cursor = get_db().cursor()
-    cursor.execute('SELECT id, name FROM genre ORDER BY name COLLATE "C"')
+    cursor.execute('SELECT id, name FROM genre ORDER BY name')
     genres = cursor.fetchall()
     return render_template("admin/genre_create.html", genres=genres)
 
@@ -285,7 +285,7 @@ def genre_create_post():
 
     def _render_form(error: str):
         cursor = get_db().cursor()
-        cursor.execute('SELECT id, name FROM genre ORDER BY name COLLATE "C"')
+        cursor.execute('SELECT id, name FROM genre ORDER BY name')
         return render_template(
             "admin/genre_create.html",
             genres=cursor.fetchall(),
