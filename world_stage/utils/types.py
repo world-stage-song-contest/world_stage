@@ -45,6 +45,7 @@ class Year:
     id: int
     special_name: str | None = None
     special_short_name: str | None = None
+    status: str | None = None
 
 
 @total_ordering

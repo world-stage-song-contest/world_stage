@@ -1,5 +1,6 @@
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
+from decimal import Decimal
 
 from flask import Blueprint, redirect, request, url_for
 
@@ -23,6 +24,286 @@ from ..utils import (
 )
 
 bp = Blueprint("country", __name__, url_prefix="/country")
+
+
+def _ordinal(n: int) -> str:
+    suffix = (
+        "th"
+        if 10 <= n % 100 <= 20
+        else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    )
+    return f"{n}{suffix}"
+
+
+def _format_decimal(value: Decimal | float) -> str:
+    rounded = Decimal(str(value)).quantize(Decimal("0.1"))
+    if rounded == rounded.to_integral():
+        return str(rounded.to_integral())
+    return str(rounded)
+
+
+def _result_groups(entries: list[dict]) -> list[dict]:
+    groups = defaultdict(list)
+    for entry in entries:
+        result = entry["result"]
+        groups[(result["place"], result["total_countries"])].append(entry["label"])
+
+    return [
+        {
+            "labels": labels,
+            "place": place,
+            "ordinal": _ordinal(place),
+            "total": total,
+        }
+        for (place, total), labels in sorted(groups.items(), key=lambda item: item[0])
+    ]
+
+
+def _best_worst_results(entries: list[dict]) -> tuple[list[dict], list[dict]]:
+    result_entries = [entry for entry in entries if entry.get("result")]
+    if not result_entries:
+        return [], []
+
+    best_pct = max(entry["result"]["placement_percentage"] for entry in result_entries)
+    worst_pct = min(entry["result"]["placement_percentage"] for entry in result_entries)
+    return (
+        _result_groups(
+            [
+                entry
+                for entry in result_entries
+                if entry["result"]["placement_percentage"] == best_pct
+            ]
+        ),
+        _result_groups(
+            [
+                entry
+                for entry in result_entries
+                if entry["result"]["placement_percentage"] == worst_pct
+            ]
+        ),
+    )
+
+
+def _qualification_stats(entries: list[dict]) -> dict | None:
+    attempts = 0
+    score = Decimal("0")
+    for entry in entries:
+        result = entry["results"]
+        has_final = bool(result.get("f"))
+        has_second_chance = bool(result.get("sc"))
+        has_semi = bool(result.get("sf"))
+
+        if not (has_semi or has_second_chance):
+            continue
+
+        attempts += 1
+        if has_semi and has_second_chance:
+            score += Decimal("0.5")
+        if has_second_chance and has_final:
+            score += Decimal("0.5")
+        elif has_semi and has_final:
+            score += Decimal("1")
+
+    if attempts == 0:
+        return None
+
+    return {
+        "percentage": (score / Decimal(attempts)) * 100,
+        "score": score,
+        "attempts": attempts,
+    }
+
+
+def _qualification_periods(entries: list[dict]) -> list[dict]:
+    periods_by_id: dict[int, dict] = {}
+    for entry in entries:
+        period_id = entry["song"].year.id
+        period = periods_by_id.setdefault(
+            period_id,
+            {
+                "has_semi": False,
+                "has_final_qualifier": False,
+                "has_q_qualifier": False,
+                "has_nq": False,
+                "has_non_final": False,
+            },
+        )
+        result = entry["results"]
+        has_semi = bool(result.get("sf"))
+        if not has_semi:
+            continue
+
+        period["has_semi"] = True
+        if result.get("f"):
+            period["has_final_qualifier"] = True
+            period["has_q_qualifier"] = True
+        elif result.get("sc"):
+            period["has_q_qualifier"] = True
+
+    for period in periods_by_id.values():
+        period["has_nq"] = period["has_semi"] and not period["has_q_qualifier"]
+        period["has_non_final"] = period["has_semi"] and not period["has_final_qualifier"]
+
+    return list(periods_by_id.values())
+
+
+def _current_streak(periods: list[dict], success_key: str) -> int:
+    streak = 0
+    for period in reversed(periods):
+        if not period["has_semi"]:
+            continue
+        if period[success_key]:
+            streak += 1
+            continue
+        break
+
+    return streak
+
+
+def _best_streak(periods: list[dict], success_key: str) -> int:
+    best = 0
+    streak = 0
+    for period in periods:
+        if not period["has_semi"]:
+            continue
+        if period[success_key]:
+            streak += 1
+            best = max(best, streak)
+        else:
+            streak = 0
+
+    return best
+
+
+def _most_frequent_submitters(songs: list) -> list[dict]:
+    counted_statuses = {"closed", "ongoing"}
+    counts = Counter(
+        song.submitter
+        for song in songs
+        if song.submitter and song.year.status in counted_statuses
+    )
+    if not counts:
+        return []
+
+    top_count = max(counts.values())
+    return [
+        {"name": name, "count": count}
+        for name, count in sorted(counts.items())
+        if count == top_count
+    ]
+
+
+def _eligible_participation_entries(entries: list[dict]) -> list[dict]:
+    counted_statuses = {"closed", "ongoing"}
+    return [
+        entry
+        for entry in entries
+        if entry["song"].year.status in counted_statuses
+    ]
+
+
+def _country_stats(
+    songs: list,
+    results: dict[int, dict],
+    *,
+    special: bool = False,
+    ten_year_window: set[int] | None = None,
+) -> dict:
+    entries = [
+        {
+            "song": song,
+            "label": song.year.special_name if special else str(song.year.id),
+            "results": results.get(song.id, {}),
+            "result": results.get(song.id, {}).get("year"),
+        }
+        for song in songs
+    ]
+    participation_entries = _eligible_participation_entries(entries)
+    qualification_periods = _qualification_periods(participation_entries)
+    best_results, worst_results = _best_worst_results(entries)
+
+    final_entries = [
+        {
+            "label": entry["label"],
+            "result": entry["results"]["f"],
+        }
+        for entry in entries
+        if entry["results"].get("f")
+    ]
+    _, worst_final_results = _best_worst_results(final_entries)
+
+    closed_results = [entry["result"] for entry in entries if entry.get("result")]
+    wins = sum(1 for result in closed_results if result["place"] == 1)
+    podiums = sum(1 for result in closed_results if result["place"] <= 3)
+    top_fives = sum(1 for result in closed_results if result["place"] <= 5)
+    top_tens = sum(1 for result in closed_results if result["place"] <= 10)
+    avg_result = None
+    if closed_results:
+        avg_result = sum(
+            Decimal(str(result["placement_percentage"])) for result in closed_results
+        ) / len(closed_results)
+    recent_results = [
+        entry["result"]
+        for entry in entries
+        if entry.get("result")
+        and ten_year_window is not None
+        and entry["song"].year.id in ten_year_window
+    ]
+    recent_avg_result = None
+    if recent_results:
+        recent_avg_result = sum(
+            Decimal(str(result["placement_percentage"])) for result in recent_results
+        ) / len(recent_results)
+
+    return {
+        "participations": len(participation_entries),
+        "first": participation_entries[0]["label"] if participation_entries else None,
+        "latest": participation_entries[-1]["label"] if participation_entries else None,
+        "best_results": best_results,
+        "worst_results": worst_results,
+        "finals": len(final_entries),
+        "qualification": _qualification_stats(entries),
+        "current_final_streak": _current_streak(
+            qualification_periods,
+            "has_final_qualifier",
+        ),
+        "best_final_streak": _best_streak(
+            qualification_periods,
+            "has_final_qualifier",
+        ),
+        "current_q_streak": _current_streak(
+            qualification_periods,
+            "has_q_qualifier",
+        ),
+        "best_q_streak": _best_streak(
+            qualification_periods,
+            "has_q_qualifier",
+        ),
+        "current_nq_streak": _current_streak(
+            qualification_periods,
+            "has_nq",
+        ),
+        "best_nq_streak": _best_streak(
+            qualification_periods,
+            "has_nq",
+        ),
+        "current_non_final_streak": _current_streak(
+            qualification_periods,
+            "has_non_final",
+        ),
+        "best_non_final_streak": _best_streak(
+            qualification_periods,
+            "has_non_final",
+        ),
+        "average_result": avg_result,
+        "recent_average_result": recent_avg_result,
+        "wins": wins,
+        "podiums": podiums,
+        "top_fives": top_fives,
+        "top_tens": top_tens,
+        "worst_final_results": worst_final_results,
+        "most_frequent_submitters": _most_frequent_submitters(songs),
+    }
 
 
 @bp.get("/")
@@ -78,6 +359,7 @@ def country(code: str):
     results = get_show_results_for_songs([s.id for s in songs])
     regular_songs = [s for s in songs if s.year.id >= 0]
     special_songs = [s for s in songs if s.year.id < 0]
+    ten_year_window = set(get_closed_years()[-10:])
     return render_template(
         "country/country.html",
         songs=regular_songs,
@@ -85,6 +367,11 @@ def country(code: str):
         country=code,
         country_name=name,
         results=results,
+        stats=_country_stats(regular_songs, results, ten_year_window=ten_year_window),
+        special_stats=(
+            _country_stats(special_songs, results, special=True) if special_songs else None
+        ),
+        format_decimal=_format_decimal,
     )
 
 

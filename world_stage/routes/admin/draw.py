@@ -6,6 +6,8 @@ from flask import request
 
 from ...db import get_db
 from ...utils import (
+    draw_running_order,
+    draw_semifinals,
     get_show_id,
     get_show_songs,
     get_year_shows,
@@ -75,6 +77,23 @@ def _render_draw(year_id: int, label: str):
         songs[i] += 1
 
     limits = list(map(lambda n: math.ceil(n / 2), songs))
+    show_names = [show["short_name"] for show in shows]
+    try:
+        draw_assignments = draw_semifinals(
+            pots,
+            show_names,
+            songs,
+            year_id,
+            single_pot=single_pot,
+        )
+    except ValueError as e:
+        return render_template("error.html", error=str(e)), 400
+
+    entry_show_by_song = {
+        entry["song_id"]: show
+        for show, assigned_entries in draw_assignments.items()
+        for entry in assigned_entries
+    }
 
     return render_template(
         "admin/draw.html",
@@ -82,6 +101,8 @@ def _render_draw(year_id: int, label: str):
         shows=shows,
         songs=songs,
         limits=limits,
+        draw_assignments=draw_assignments,
+        entry_show_by_song=entry_show_by_song,
         year=year_id,
         single_pot=single_pot,
     )
@@ -101,6 +122,40 @@ def draw_special(short_name: str):
     return _render_draw(special["id"], special["special_name"] or short_name)
 
 
+def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -> str | None:
+    if year < 0:
+        return None
+
+    for show, ro in data.items():
+        if not ro:
+            continue
+
+        cursor.execute(
+            """
+            SELECT song.id AS song_id, country.pot
+            FROM song
+            JOIN country ON song.country_id = country.id
+            WHERE song.year_id = %s AND song.id = ANY(%s)
+            """,
+            (year, ro),
+        )
+        pot_by_song = {row["song_id"]: row["pot"] for row in cursor.fetchall()}
+        missing = [song_id for song_id in ro if song_id not in pot_by_song]
+        if missing:
+            return f"Song {missing[0]} not found in year {year}"
+
+        seen: dict[int, int] = {}
+        for song_id in ro:
+            pot = pot_by_song[song_id]
+            if pot is None:
+                return f"Song {song_id} has no pot"
+            if pot in seen:
+                return f"Show {show} contains multiple entries from pot {pot}"
+            seen[pot] = song_id
+
+    return None
+
+
 @bp.post("/draw/<int:year>")
 def draw_post(year: int):
     # Each value is a list of song IDs in running order.
@@ -110,6 +165,10 @@ def draw_post(year: int):
 
     db = get_db()
     cursor = db.cursor()
+
+    validation_error = _validate_regular_draw_pots(cursor, year, data)
+    if validation_error:
+        return {"error": validation_error}, 400
 
     try:
         for show, ro in data.items():
@@ -197,10 +256,26 @@ def draw_final(year: int, show: str):
         ([s.id for s in songs],),
     )
     language_by_song = {row["song_id"]: row["language_id"] for row in cursor.fetchall()}
+    song_by_id = {song.id: song for song in songs}
+    draw_order_entries = draw_running_order(
+        [
+            {
+                "song_id": song.id,
+                "cc": song.country.cc,
+                "submitter": song.submitter_id,
+                "genre": genre_by_cc.get(song.country.cc),
+                "language": language_by_song.get(song.id),
+            }
+            for song in songs
+        ],
+        f"{year}:{show}",
+    )
+    draw_order = [song_by_id[entry["song_id"]] for entry in draw_order_entries]
 
     return render_template(
         "admin/draw_individual.html",
         songs=songs,
+        draw_order=draw_order,
         genre_by_cc=genre_by_cc,
         language_by_song=language_by_song,
         show=show,

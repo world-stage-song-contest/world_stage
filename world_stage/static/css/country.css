@@ -3,6 +3,54 @@
     height: 28px;
 }
 
+.country-infobox {
+    margin: 1rem 0;
+}
+
+.country-infobox h2 {
+    margin-bottom: 0.35rem;
+}
+
+.country-infobox-tables {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    align-items: flex-start;
+}
+
+.country-infobox table {
+    display: inline-table;
+    width: auto;
+    max-width: 100%;
+    border-collapse: collapse;
+}
+
+.country-infobox th,
+.country-infobox td {
+    padding: 0.35rem 0.5rem;
+    vertical-align: top;
+}
+
+.country-infobox th {
+    text-align: left;
+    white-space: nowrap;
+}
+
+.country-infobox td {
+    overflow-wrap: anywhere;
+}
+
+.country-infobox .streaks-table th,
+.country-infobox .streaks-table td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.country-infobox .streaks-table th:first-child {
+    width: auto;
+    text-align: left;
+}
+
 /* ── Year-level result column ──────────────────────────────────── */
 th.year-result,
 td.year-result {

@@ -16,6 +16,7 @@ from .decorators import (
     with_permissions,
     with_user,
 )
+from .draw import draw_running_order, draw_semifinals, spread_running_order
 from .lookups import (
     get_closed_years,
     get_countries,
@@ -110,6 +111,8 @@ __all__ = (
     "Year",
     "create_cookie",
     "dt_now",
+    "draw_semifinals",
+    "draw_running_order",
     "err",
     "footnote_plugin",
     "format_seconds",
@@ -165,6 +168,7 @@ __all__ = (
     "require_user",
     "resolve_country_code",
     "resp",
+    "spread_running_order",
     "url_bool",
     "with_auth",
     "with_permissions",

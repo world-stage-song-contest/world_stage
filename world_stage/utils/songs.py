@@ -43,6 +43,7 @@ class Song:
             id=song["year_id"],
             special_name=song.get("special_name"),
             special_short_name=song.get("special_short_name"),
+            status=song.get("year_status"),
         )
         self._raw_init(
             id=song["id"],
@@ -532,7 +533,7 @@ _SONG_COLUMNS: LiteralString = """
     account.username, song.year_id, song.poster_link,
     song.video_link, song.duration, song.snippet_start, song.snippet_end,
     song.submitter_id, song.notes, song.sources, song.entry_number,
-    year.special_name, year.special_short_name"""
+    year.special_name, year.special_short_name, year.status AS year_status"""
 
 _SONG_JOINS: LiteralString = """
 FROM song

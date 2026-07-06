@@ -195,8 +195,13 @@
                      'second' if place == 2 else
                      'third' if place == 3 else ''
                    ) ~ (' last' if is_last else '') %}
+                {% if special %}
+                    {% set votes_url = url_for('year.special_song_votes', short_name=special, show=entry.short_name, country_code=song.country.cc.lower(), entry_number=song.entry_number) %}
+                {% else %}
+                    {% set votes_url = url_for('year.song_votes', year=song.year.id, show=entry.short_name, country_code=song.country.cc.lower()) %}
+                {% endif %}
                 <tr class="{{ cat_class }}">
-                    <th>{{ label }}</th>
+                    <th><a href="{{ votes_url }}">{{ label }}</a></th>
                     <td class="number place-cell {{ cat_class }} {{ place_class }}">{{ place }}</td>
                     <td class="number pts-cell  {{ cat_class }} {{ place_class }}">{{ entry.pts }}</td>
                 </tr>

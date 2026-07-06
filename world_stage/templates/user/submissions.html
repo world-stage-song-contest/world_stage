@@ -19,6 +19,154 @@
 </div>
 {% endif %}
 
+{% macro result_group_list(groups) %}
+  {% if groups %}
+    {% for group in groups %}
+      {{ group.labels|join(', ') }} (<strong>{{ group.ordinal }}</strong>/{{ group.total }}){% if not loop.last %}; {% endif %}
+    {% endfor %}
+  {% else %}
+    &mdash;
+  {% endif %}
+{% endmacro %}
+
+{% macro frequent_country_list(countries) %}
+  {% if countries %}
+    {% for country in countries %}
+      {{ country.name }} ({{ country.count }}){% if not loop.last %}, {% endif %}
+    {% endfor %}
+  {% else %}
+    &mdash;
+  {% endif %}
+{% endmacro %}
+
+{% macro qualification_rate(qualification) %}
+  {% if qualification %}
+    {{ "%.1f%%" | format(qualification.percentage|float) }}
+    ({{ format_decimal(qualification.score) }}/{{ qualification.attempts }})
+  {% else %}
+    &mdash;
+  {% endif %}
+{% endmacro %}
+
+{% macro stats_infobox(stats, heading, first_label, latest_label, show_ten_year_average=True) %}
+<section class="country-infobox">
+    <h2>{{ heading }}</h2>
+    <div class="country-infobox-tables">
+        <table>
+            <tbody>
+                <tr>
+                    <th>Participations</th>
+                    <td>{{ stats.participations }}</td>
+                </tr>
+                <tr>
+                    <th>{{ first_label }}</th>
+                    <td>{{ stats.first or '&mdash;'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>{{ latest_label }}</th>
+                    <td>{{ stats.latest or '&mdash;'|safe }}</td>
+                </tr>
+                <tr>
+                    <th>Best result</th>
+                    <td>{{ result_group_list(stats.best_results) }}</td>
+                </tr>
+                <tr>
+                    <th>Worst result</th>
+                    <td>{{ result_group_list(stats.worst_results) }}</td>
+                </tr>
+                <tr>
+                    <th>Worst final result</th>
+                    <td>{{ result_group_list(stats.worst_final_results) }}</td>
+                </tr>
+                <tr>
+                    <th>Finals</th>
+                    <td>{{ stats.finals }}</td>
+                </tr>
+                <tr>
+                    <th>Qualification rate</th>
+                    <td>{{ qualification_rate(stats.qualification) }}</td>
+                </tr>
+                <tr>
+                    <th>Average result</th>
+                    <td>
+                        {% if stats.average_result is not none %}
+                        {{ "%.1f%%" | format(stats.average_result|float) }}
+                        {% else %}
+                        &mdash;
+                        {% endif %}
+                    </td>
+                </tr>
+                {% if show_ten_year_average %}
+                    <tr>
+                        <th>10-year average</th>
+                        <td>
+                        {% if stats.recent_average_result is not none %}
+                        {{ "%.1f%%" | format(stats.recent_average_result|float) }}
+                        {% else %}
+                        &mdash;
+                        {% endif %}
+                        </td>
+                    </tr>
+                {% endif %}
+                <tr>
+                    <th>Wins</th>
+                    <td>{{ stats.wins }}</td>
+                </tr>
+                <tr>
+                    <th>Podiums</th>
+                    <td>{{ stats.podiums }}</td>
+                </tr>
+                <tr>
+                    <th>Top 5s</th>
+                    <td>{{ stats.top_fives }}</td>
+                </tr>
+                <tr>
+                    <th>Top 10s</th>
+                    <td>{{ stats.top_tens }}</td>
+                </tr>
+                <tr>
+                    <th>Most frequent country</th>
+                    <td>{{ frequent_country_list(stats.most_frequent_countries) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        <table class="streaks-table">
+            <thead>
+                <tr>
+                    <th>Streak</th>
+                    <th>Current</th>
+                    <th>Longest</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>Qualification</th>
+                    <td>{{ stats.current_q_streak }}</td>
+                    <td>{{ stats.best_q_streak }}</td>
+                </tr>
+                <tr>
+                    <th>Non-qualification</th>
+                    <td>{{ stats.current_nq_streak }}</td>
+                    <td>{{ stats.best_nq_streak }}</td>
+                </tr>
+                <tr>
+                    <th>Final</th>
+                    <td>{{ stats.current_final_streak }}</td>
+                    <td>{{ stats.best_final_streak }}</td>
+                </tr>
+                <tr>
+                    <th>Non-final</th>
+                    <td>{{ stats.current_non_final_streak }}</td>
+                    <td>{{ stats.best_non_final_streak }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endmacro %}
+
+{{ stats_infobox(stats, 'Main years', 'First participation', 'Latest participation') }}
+
 <div>
     <strong>Download playlist:</strong>
     <a href="{{ url_for('playlist.user', key=username) }}">With postcards</a>/<a
@@ -112,6 +260,7 @@
 </table>
 
 {% if special_songs %}
+{{ stats_infobox(special_stats, 'Specials', 'First entry', 'Latest entry', False) }}
 <h2>Specials</h2>
 <table class="songs-table sortable">
     <thead>

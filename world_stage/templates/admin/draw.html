@@ -27,19 +27,20 @@
              data-limit="{{ lim }}"
              data-name="{{ show.short_name }}"
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
-        {% for _ in range(num) %}
+        {% for entry in draw_assignments[show.short_name] %}
             <div class="show-country item transparent"
-                 data-id=""
-                 data-code="XX"
-                 data-genre=""
-                 data-language=""
+                 data-id="{{ entry.song_id }}"
+                 data-code="{{ entry.cc }}"
+                 data-genre="{{ entry.genre if entry.genre is not none else '' }}"
+                 data-language="{{ entry.language if entry.language is not none else '' }}"
+                 data-pot="{{ entry.pot if entry.pot is not none else '' }}"
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
-                <div class="flag-container value">{{ flag("XX", 24, "Unknown") }}</div>
-                <div class="country-name value"></div>
+                <div class="flag-container value">{{ flag(entry.cc, 24, entry.name) }}</div>
+                <div class="country-name value">{{ entry.name }}</div>
                 {% if single_pot %}
-                <div class="song-title value"></div>
+                <div class="song-title value">{{ entry.title }}</div>
                 {% endif %}
             </div>
         {% endfor %}
@@ -60,7 +61,8 @@
                  data-code="{{ entry.cc }}"
                  data-genre="{{ entry.genre if entry.genre is not none else '' }}"
                  data-language="{{ entry.language if entry.language is not none else '' }}"
-                 data-submitter="{{ entry.submitter }}">
+                 data-submitter="{{ entry.submitter }}"
+                 data-show="{{ entry_show_by_song.get(entry.song_id, '') }}">
                 <div class="flag-container">{{ flag(entry.cc, 24, entry.name) }}</div>
                 <div class="country-name">{{ entry.name }}</div>
                 {% if single_pot %}

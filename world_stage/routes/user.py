@@ -1,6 +1,6 @@
 import unicodedata
 import urllib.parse
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Literal, overload
 
 from flask import Blueprint, request
@@ -9,11 +9,13 @@ from ..db import fetchone, get_db
 from ..utils import (
     UserPermissions,
     get_closed_years,
+    get_countries,
     get_show_results_for_songs,
     get_user_songs,
     render_template,
     with_auth,
 )
+from .country import _country_stats, _format_decimal
 
 bp = Blueprint("user", __name__, url_prefix="/user")
 
@@ -45,6 +47,45 @@ def profile(username: str):
     username = unicodedata.normalize("NFKC", username)
 
     return render_template("user/page.html", username=username)
+
+
+def _most_frequent_submission_countries(songs: list) -> list[dict]:
+    counted_statuses = {"closed", "ongoing"}
+    country_names = {country.cc: country.name for country in get_countries()}
+    counts = Counter(
+        song.country.cc
+        for song in songs
+        if song.year.status in counted_statuses
+    )
+    if not counts:
+        return []
+
+    top_count = max(counts.values())
+    return [
+        {"name": country_names.get(code, code), "count": count}
+        for code, count in sorted(
+            counts.items(),
+            key=lambda item: country_names.get(item[0], item[0]),
+        )
+        if count == top_count
+    ]
+
+
+def _user_submission_stats(
+    songs: list,
+    results: dict[int, dict],
+    *,
+    special: bool = False,
+    ten_year_window: set[int] | None = None,
+) -> dict:
+    stats = _country_stats(
+        songs,
+        results,
+        special=special,
+        ten_year_window=ten_year_window,
+    )
+    stats["most_frequent_countries"] = _most_frequent_submission_countries(songs)
+    return stats
 
 
 def redact_song_if_show(
@@ -600,6 +641,7 @@ def submissions(username: str):
 
     regular_songs = [s for s in songs if s.year.id >= 0]
     special_songs = [s for s in songs if s.year.id < 0]
+    ten_year_window = set(get_closed_years()[-10:])
 
     return render_template(
         "user/submissions.html",
@@ -607,6 +649,17 @@ def submissions(username: str):
         special_songs=special_songs,
         username=username,
         results=results,
+        stats=_user_submission_stats(
+            regular_songs,
+            results,
+            ten_year_window=ten_year_window,
+        ),
+        special_stats=(
+            _user_submission_stats(special_songs, results, special=True)
+            if special_songs
+            else None
+        ),
+        format_decimal=_format_decimal,
     )
 
 

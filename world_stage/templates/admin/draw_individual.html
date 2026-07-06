@@ -38,19 +38,19 @@
              data-limit="{{ lim }}"
              data-name="{{ show }}"
              style="--rows: {{ lim }}; --columns: {{ round(num / lim) }};">
-        {% for _ in songs %}
+        {% for song in draw_order %}
             <div class="show-country item transparent"
-                 data-id=""
-                 data-code="XX"
-                 data-genre=""
-                 data-language=""
+                 data-id="{{ song.id }}"
+                 data-code="{{ song.country.cc }}"
+                 data-genre="{{ genre_by_cc.get(song.country.cc) if genre_by_cc.get(song.country.cc) is not none else '' }}"
+                 data-language="{{ language_by_song.get(song.id) if language_by_song.get(song.id) is not none else '' }}"
                  data-index="{{ loop.index0 }}"
                  style="--row: {{ loop.index0 % lim }}; --column: {{ loop.index0 // lim }};">
                 <div class="running-order value">{{ loop.index }}</div>
-                <div class="flag-container value transparent">{{ flag("XX", 24, "Unknown") }}</div>
-                <div class="country-name value transparent"></div>
+                <div class="flag-container value">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}</div>
+                <div class="country-name value">{{ song.country.name }}</div>
                 {% if single_pot %}
-                <div class="song-title value transparent"></div>
+                <div class="song-title value">{{ song.title }}</div>
                 {% endif %}
             </div>
         {% endfor %}
