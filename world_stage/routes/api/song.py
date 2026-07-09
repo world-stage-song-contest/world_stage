@@ -189,7 +189,10 @@ def _song_row_to_json(
         "native_title": row["native_title"],
         "artist": row["artist"],
         "is_placeholder": row["is_placeholder"],
+        "title_language_id": row["title_language_id"],
+        "native_language_id": row["native_language_id"],
         "video_link": row["video_link"],
+        "duration": row["duration"],
         "poster_link": row["poster_link"],
         "vtt_link": row["vtt_link"],
         "snippet_start": format_seconds(row["snippet_start"]) if row["snippet_start"] else None,
@@ -230,6 +233,20 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
         (song_id,),
     )
     return cursor.fetchone()
+
+
+def _song_rows_to_json(cursor, rows: list[dict]) -> list[dict]:
+    results = []
+    for row in rows:
+        song_id = row["id"]
+        languages = _fetch_song_languages(cursor, song_id)
+        key_signatures = _fetch_song_key_signatures(cursor, song_id)
+        time_signatures = _fetch_song_time_signatures(cursor, song_id)
+        subgenres = _fetch_song_subgenres(cursor, song_id)
+        results.append(
+            _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
+        )
+    return results
 
 
 def _fetch_song_languages(cursor, song_id: int) -> list[dict]:
@@ -927,8 +944,10 @@ def create_song(auth: tuple):
             snippet_start, snippet_end, translated_lyrics,
             romanized_lyrics, native_lyrics, submitter_id,
             notes, sources, admin_approved, modified_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                   CURRENT_TIMESTAMP)
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP
+        )
         RETURNING id
     """,
         (

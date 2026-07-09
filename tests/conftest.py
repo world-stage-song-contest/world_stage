@@ -219,6 +219,9 @@ def _clean_songs(_seeded_db):
     conn = psycopg.connect(_seeded_db)
     with conn.cursor() as cur:
         cur.execute("DELETE FROM song_language")
+        cur.execute("DELETE FROM song_key_signature")
+        cur.execute("DELETE FROM song_time_signature")
+        cur.execute("DELETE FROM song_subgenre")
         cur.execute("DELETE FROM song_audit_log")
         cur.execute("DELETE FROM song")
     conn.commit()

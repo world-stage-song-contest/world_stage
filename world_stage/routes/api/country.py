@@ -1,8 +1,10 @@
 from flask import Blueprint, redirect, request, url_for
 
 from world_stage.db import get_db
-from world_stage.models import Country, Language, Song, User
-from world_stage.utils import ErrorID, err, format_seconds, resolve_country_code, resp, url_bool
+from world_stage.models import Country
+from world_stage.utils import ErrorID, err, resolve_country_code, resp, url_bool
+
+from .song import _song_rows_to_json
 
 bp = Blueprint("country", __name__, url_prefix="/country")
 
@@ -56,93 +58,25 @@ def songs(id: str):
     db = get_db()
     cursor = db.cursor()
 
-    def get_languages(song_id: int) -> list[Language]:
-        cursor.execute(
-            """
-            SELECT name, tag, extlang, region, subvariant, suppress_script
-            FROM language
-            JOIN song_language ON song_language.language_id = language.id
-            WHERE song_language.song_id = %s
-        """,
-            (song_id,),
-        )
-
-        return [Language(**d) for d in cursor.fetchall()]
-
     cursor.execute(
         """
-        SELECT song.id, song.title, song.artist, song.native_title,
-                song.country_id, country.name, country.cc3, song.is_placeholder,
-                tl.name AS t_name, tl.tag AS t_tag, tl.extlang AS t_extlang,
-                tl.region AS t_region, tl.subvariant AS t_subvariant,
-                tl.suppress_script AS t_suppress_script,
-                nl.name AS n_name, nl.tag AS n_tag, nl.extlang AS n_extlang,
-                nl.region AS n_region, nl.subvariant AS n_subvariant,
-                nl.suppress_script AS n_suppress_script,
-                song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-                account.username, account.approved, account.role,
-                song.year_id, song.poster_link,
-                song.video_link, song.snippet_start, song.snippet_end,
-                song.submitter_id, song.notes, song.sources
+        SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
+               song.title, song.native_title, song.artist, song.is_placeholder,
+               song.title_language_id, song.native_language_id,
+               song.video_link, song.poster_link, song.vtt_link,
+               song.snippet_start, song.snippet_end,
+               song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
+               song.notes, song.sources, song.admin_approved,
+               song.submitter_id, account.username, song.entry_number,
+               song.duration, year.special_short_name
         FROM song
         JOIN country ON song.country_id = country.id
-        LEFT OUTER JOIN account ON song.submitter_id = account.id
-        LEFT OUTER JOIN language tl ON song.title_language_id = tl.id
-        LEFT OUTER JOIN language nl ON song.native_language_id = nl.id
+        LEFT JOIN year ON year.id = song.year_id
+        LEFT JOIN account ON song.submitter_id = account.id
         WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id IS NOT NULL
-        ORDER BY song.year_id, country.name
+        ORDER BY song.year_id, country.name, song.entry_number
     """,
         {"cc": canonical or id.upper()},
     )
 
-    data = cursor.fetchall()
-
-    res = [
-        Song(
-            id=d["id"],
-            title=d["title"],
-            artist=d["artist"],
-            country=Country(id=d["country_id"], cc3=d["cc3"], name=d["name"]),
-            native_title=d["native_title"],
-            year=d["year_id"],
-            languages=get_languages(d["id"]),
-            placeholder=d["is_placeholder"],
-            submitter=User(
-                id=d["submitter_id"], username=d["username"], approved=d["approved"], role=d["role"]
-            ),
-            translated_lyrics=d["translated_lyrics"],
-            latin_lyrics=d["romanized_lyrics"],
-            native_lyrics=d["native_lyrics"],
-            lyrics_notes=d["notes"],
-            video_link=d["video_link"],
-            poster_link=d["poster_link"],
-            sources=d["sources"],
-            recap_start=format_seconds(d["snippet_start"])
-            if d["snippet_start"] is not None
-            else None,
-            recap_end=format_seconds(d["snippet_end"]) if d["snippet_end"] is not None else None,
-            title_language=Language(
-                name=d["t_name"],
-                tag=d["t_tag"],
-                extlang=d["t_extlang"],
-                region=d["t_region"],
-                subvariant=d["t_subvariant"],
-                suppress_script=d["t_suppress_script"],
-            )
-            if d["t_tag"] is not None
-            else None,
-            native_language=Language(
-                name=d["n_name"],
-                tag=d["n_tag"],
-                extlang=d["n_extlang"],
-                region=d["n_region"],
-                subvariant=d["n_subvariant"],
-                suppress_script=d["n_suppress_script"],
-            )
-            if d["n_tag"] is not None
-            else None,
-        )
-        for d in data
-    ]
-
-    return resp(res)
+    return resp(_song_rows_to_json(cursor, cursor.fetchall()))
