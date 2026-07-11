@@ -23,18 +23,26 @@ def _seed_show_and_songs(db):
         cursor.execute(
             """
             INSERT INTO show (
-                id, year_id, point_system_id, show_name, short_name,
+                year_id, point_system_id, show_name, short_name,
                 voting_opens, voting_closes, predictions_close, status
             )
             VALUES (
-                10, 2025, 10, 'Final', 'f',
+                2025, 10, 'Final', 'f',
                 CURRENT_TIMESTAMP - INTERVAL '1 hour',
                 CURRENT_TIMESTAMP + INTERVAL '1 hour',
                 CURRENT_TIMESTAMP + INTERVAL '30 minutes', 'full'
             )
-            ON CONFLICT DO NOTHING
+            ON CONFLICT (year_id, show_name) DO UPDATE
+            SET point_system_id = EXCLUDED.point_system_id,
+                short_name = EXCLUDED.short_name,
+                voting_opens = EXCLUDED.voting_opens,
+                voting_closes = EXCLUDED.voting_closes,
+                predictions_close = EXCLUDED.predictions_close,
+                status = EXCLUDED.status
+            RETURNING id
             """
         )
+        show_id = cursor.fetchone()["id"]
         song_ids = []
         for country_id, entry_number, submitter_id, title in (
             ('US', 1, 2, 'Home Entry'),
@@ -54,8 +62,11 @@ def _seed_show_and_songs(db):
             )
             song_ids.append(cursor.fetchone()["id"])
         cursor.executemany(
-            "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, 10, %s)",
-            [(song_id, index) for index, song_id in enumerate(song_ids, start=1)],
+            "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
+            [
+                (song_id, show_id, index)
+                for index, song_id in enumerate(song_ids, start=1)
+            ],
         )
     db.commit()
     return song_ids

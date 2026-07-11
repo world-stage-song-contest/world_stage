@@ -119,7 +119,8 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
                 """
                 SELECT country.name, country.id AS cc FROM song
                 JOIN country ON song.country_id = country.id
-                WHERE song.year_id = %(year)s AND submitter_id <> %(user)s
+                WHERE song.year_id = %(year)s
+                  AND submitter_id IS DISTINCT FROM %(user)s
                 ORDER BY country.name
             """,
                 {"year": year, "user": user_id},
