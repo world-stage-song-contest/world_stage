@@ -166,6 +166,20 @@ def _parse_pairs(
     return parsed, None
 
 
+@bp.get("/<show>/countries")
+@require_api_auth
+def voter_countries(show: str, auth):
+    """Countries available in the voting-page flag selector for this user."""
+    show_data, error = _show_or_error(show)
+    if error:
+        return error
+    if not _voting_is_open(show_data):
+        return err(ErrorID.BAD_REQUEST, "Voting is closed")
+
+    user_id, _, _ = auth
+    return resp(_voter_countries(get_db().cursor(), user_id, show_data.year))
+
+
 @bp.get("/<show>")
 @require_api_auth
 def ballot(show: str, auth):

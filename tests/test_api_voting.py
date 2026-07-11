@@ -87,6 +87,10 @@ class TestVotingApi:
         assert [song['id'] for song in data['songs']] == song_ids
         assert data['countries'] == [{'id': 'US', 'name': 'United States', 'cc3': 'USA'}]
 
+        response = client.get('/api/voting/2025-f/countries', headers=bob_headers)
+        assert response.status_code == 200
+        assert _result(response) == data['countries']
+
         response = client.put(
             '/api/voting/2025-f',
             headers=bob_headers,
