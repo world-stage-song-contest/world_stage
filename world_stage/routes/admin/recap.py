@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -232,6 +234,88 @@ def drop_none(obj):
     return obj
 
 
+_MEDIA_URL = "https://media.world-stage.org"
+
+
+def get_cytube_playlist(form_data: list[str]) -> str | None:
+    """Build a CyTube import playlist for one regular show."""
+    if len(form_data) != 1:
+        return None
+
+    try:
+        year, short_name = _parse_show_key(form_data[0])
+    except BadRecapRequestError:
+        return None
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT id FROM show
+        WHERE year_id = %s AND short_name = %s
+        """,
+        (year, short_name),
+    )
+    show = cursor.fetchone()
+    if not show:
+        return None
+
+    cursor.execute(
+        """
+        SELECT LOWER(country.id) AS cc, country.name AS country, song.artist, song.title
+        FROM song_show
+        JOIN song ON song_show.song_id = song.id
+        JOIN country ON song.country_id = country.id
+        WHERE song_show.show_id = %s
+        ORDER BY song_show.running_order
+        """,
+        (show["id"],),
+    )
+    songs = cursor.fetchall()
+
+    # The host performs halfway through odd-numbered semi-finals, but is not
+    # normally assigned to a semi-final's song_show rows.
+    if short_name in ("sf1", "sf3"):
+        cursor.execute(
+            """
+            SELECT LOWER(country.id) AS cc, country.name AS country, song.artist, song.title
+            FROM year
+            JOIN country ON year.host_id = country.id
+            JOIN song ON song.year_id = year.id AND song.country_id = year.host_id
+            WHERE year.id = %s
+            ORDER BY song.entry_number
+            LIMIT 1
+            """,
+            (year,),
+        )
+        host = cursor.fetchone()
+        if host:
+            midpoint = (len(songs) + 1) // 2
+            songs.insert(midpoint, {**host, "is_host": True})
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, delimiter=";", lineterminator="\n")
+    writer.writerow((f"WS {year} Opening", f"{_MEDIA_URL}/openings/{year}.mov"))
+
+    for song in songs:
+        cc = song["cc"]
+        is_host = song.get("is_host", False)
+        postcard_name = f"[HOST] {song['country']}" if is_host else ""
+        song_name = (
+            f"[HOST] {song['artist'] or ''} - {song['title'] or ''}" if is_host else ""
+        )
+        writer.writerow((postcard_name, f"{_MEDIA_URL}/postcards/{cc}.mov"))
+        writer.writerow((song_name, f"{_MEDIA_URL}/ws{year}{cc}.json"))
+
+    writer.writerow(("Voting announcement", f"{_MEDIA_URL}/silence/silence.mov"))
+    writer.writerow(("Recap 1", f"{_MEDIA_URL}/recaps/{year}{short_name}.mov"))
+    writer.writerow(("", f"{_MEDIA_URL}/intervals/{year}/{short_name}/i1.json"))
+    writer.writerow(("Recap 2", f"{_MEDIA_URL}/recaps/{year}{short_name}s.mov"))
+    writer.writerow(("", f"{_MEDIA_URL}/intervals/{year}/{short_name}/i2.json"))
+    writer.writerow(("", f"{_MEDIA_URL}/countdown/countdown_with_sound.json"))
+    writer.writerow(("", f"{_MEDIA_URL}/intervals/{year}/{short_name}/i3.json"))
+    return output.getvalue()
+
+
 @bp.post("/recapdata")
 def recap_data_post() -> Response | tuple[Response, int]:
     form_data = request.form.getlist("show")
@@ -239,6 +323,12 @@ def recap_data_post() -> Response | tuple[Response, int]:
     action = request.form.get("action", "render")
     pretty = request.form.get("pretty", "off") == "on"
     indent = 2 if pretty else None
+
+    if action == "cytube":
+        cytube_data = get_cytube_playlist(form_data)
+        if cytube_data is None:
+            return render_template("error.html", error="An error has occured")
+        return render_template("admin/recap_data.html", data=cytube_data)
 
     data = get_recap_data(type, form_data)
     if data is None:
