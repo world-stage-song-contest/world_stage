@@ -60,19 +60,20 @@
 </table>
 </div>
 {% endmacro %}
-{% if not is_revote %}
 <div class="view-controls">
     <label class="view-select">
         <span>View:</span>
         <select onchange="location.href=this.value">
-            <option value="{{ url_for('user.votes', username=username) }}"
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username) }}"
                 {{ 'selected' if view not in ('country', 'user', 'year') else '' }}>Per show</option>
-            <option value="{{ url_for('user.votes', username=username, view='country') }}"
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='country') }}"
                 {{ 'selected' if view == 'country' else '' }}>Per country</option>
-            <option value="{{ url_for('user.votes', username=username, view='user') }}"
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='user') }}"
                 {{ 'selected' if view == 'user' else '' }}>Per user</option>
-            <option value="{{ url_for('user.votes', username=username, view='year') }}"
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='year') }}"
                 {{ 'selected' if view == 'year' else '' }}>Per year</option>
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='medals') }}"
+                {{ 'selected' if view == 'medals' else '' }}>Medal table</option>
         </select>
     </label>
     {% if view == 'country' %}
@@ -81,7 +82,7 @@
         <select onchange="location.href=this.value">
             <option value="" disabled {{ 'selected' if not selected_country else '' }}>Select a country…</option>
             {% for c in country_list %}
-            <option value="{{ url_for('user.votes', username=username, view='country', country=c.cc) }}"
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='country', country=c.cc) }}"
                 {{ 'selected' if selected_country and selected_country.cc == c.cc else '' }}>{{ c.name }}</option>
             {% endfor %}
         </select>
@@ -92,7 +93,7 @@
         <select onchange="location.href=this.value">
             <option value="" disabled {{ 'selected' if not selected_user else '' }}>Select a user…</option>
             {% for u in user_list %}
-            <option value="{{ url_for('user.votes', username=username, view='user', user=u.id) }}"
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='user', user=u.id) }}"
                 {{ 'selected' if selected_user and selected_user.id == u.id else '' }}>{{ u.username }}</option>
             {% endfor %}
         </select>
@@ -104,18 +105,26 @@
             <option value="" disabled {{ 'selected' if not selected_year else '' }}>Select a year…</option>
             <optgroup label="Years">
             {% for y in regular_years %}
-            <option value="{{ url_for('user.votes', username=username, view='year', year=y.id) }}"
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='year', year=y.id) }}"
                 {{ 'selected' if selected_year and selected_year.id == y.id else '' }}>{{ y.id }}</option>
             {% endfor %}
             </optgroup>
             {% if special_years %}
             <optgroup label="Specials">
             {% for y in special_years %}
-            <option value="{{ url_for('user.votes', username=username, view='year', year=y.id) }}"
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='year', year=y.id) }}"
                 {{ 'selected' if selected_year and selected_year.id == y.id else '' }}>{{ y.special_name }}</option>
             {% endfor %}
             </optgroup>
             {% endif %}
+        </select>
+    </label>
+    {% elif view == 'medals' %}
+    <label class="view-select">
+        <span>Shows:</span>
+        <select onchange="location.href=this.value">
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='medals') }}" {{ 'selected' if not finals_only else '' }}>All shows</option>
+            <option value="{{ url_for(history_endpoint|default('user.votes'), username=username, view='medals', finals='true') }}" {{ 'selected' if finals_only else '' }}>Finals only</option>
         </select>
     </label>
     {% endif %}
@@ -129,7 +138,6 @@
     </label>
     {% endif %}
 </div>
-{% endif %}
 {% if view == 'country' %}
 {% if selected_country %}
 <h3 class="country-heading">{{ flag(selected_country.cc, 36) }} {{ selected_country.name }}</h3>
@@ -181,6 +189,15 @@
 {% else %}
 <p>Select a year to see the entries you voted for.</p>
 {% endif %}
+{% elif view == 'medals' %}
+<div id="scroll-container">
+<table class="sortable votes-by-country">
+    <thead><tr><th>Country</th><th class="num">1st</th><th class="num">2nd</th><th class="num">3rd</th><th class="num">4th</th><th class="num">5th</th><th class="num">Votings</th></tr></thead>
+    <tbody>{% for country in medals %}
+        <tr><td><a class="country-cell" href="{{ url_for('country.country', code=country.cc.lower()) }}">{{ flag(country.cc, 24, country.country) }}{{ country.country }}</a></td><td class="num">{{ country.first }}</td><td class="num">{{ country.second }}</td><td class="num">{{ country.third }}</td><td class="num">{{ country.fourth }}</td><td class="num">{{ country.fifth }}</td><td class="num">{{ country.votings }}</td></tr>
+    {% endfor %}</tbody>
+</table>
+</div>
 {% else %}
 {% if votes %}
 <div class="vote-card-container">

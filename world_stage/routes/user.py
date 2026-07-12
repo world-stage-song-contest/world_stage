@@ -193,7 +193,7 @@ def _aggregate_entries(rows) -> list[dict]:
     return entries
 
 
-def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val) -> list[dict]:
+def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val, *, revote=False) -> list[dict]:
     """``voter_id``'s vote totals over the entries selected by ``where_sql``,
     oldest year first.
 
@@ -204,6 +204,18 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val) -> list[dic
     leak which entries qualified. ``where_sql`` is a trusted constant (never
     user input); the matching value is always parameterised.
     """
+    vote_set_join = """
+        LEFT JOIN LATERAL (
+            SELECT id FROM vote_set
+            WHERE show_id = sh.id AND voter_id = %s
+            ORDER BY (result_mode = 'revote') DESC
+            LIMIT 1
+        ) vote_set ON TRUE
+    """ if revote else """
+        LEFT JOIN vote_set ON vote_set.show_id = sh.id AND vote_set.voter_id = %s
+                          AND vote_set.result_mode = 'official'
+    """
+    eligible = "AND sh.revote_eligible_at IS NOT NULL" if revote else ""
     cursor.execute(
         f"""
         SELECT sh.short_name, sh.year_id,
@@ -218,10 +230,9 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val) -> list[dic
         JOIN show sh ON song_show.show_id = sh.id AND sh.status = 'full'
         JOIN country ON song.country_id = country.id
         LEFT JOIN year ON sh.year_id = year.id
-        LEFT JOIN vote_set ON vote_set.show_id = sh.id AND vote_set.voter_id = %s
-                          AND vote_set.result_mode = 'official'
+        {vote_set_join}
         LEFT JOIN vote ON vote.vote_set_id = vote_set.id AND vote.song_id = song.id
-        WHERE {where_sql}
+        WHERE {where_sql} {eligible}
     """,
         (voter_id, where_val),
     )
@@ -230,22 +241,22 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val) -> list[dic
     return entries
 
 
-def _country_entries(cursor, voter_id: int, code: str) -> list[dict]:
+def _country_entries(cursor, voter_id: int, code: str, *, revote=False) -> list[dict]:
     """``voter_id``'s vote totals for one country's entries."""
-    return _fetch_entries(cursor, voter_id, "song.country_id = %s", code)
+    return _fetch_entries(cursor, voter_id, "song.country_id = %s", code, revote=revote)
 
 
-def _submitter_entries(cursor, voter_id: int, submitter_id: int) -> list[dict]:
+def _submitter_entries(cursor, voter_id: int, submitter_id: int, *, revote=False) -> list[dict]:
     """``voter_id``'s vote totals for entries submitted by ``submitter_id``."""
-    return _fetch_entries(cursor, voter_id, "song.submitter_id = %s", submitter_id)
+    return _fetch_entries(cursor, voter_id, "song.submitter_id = %s", submitter_id, revote=revote)
 
 
-def _year_entries(cursor, voter_id: int, year_id: int) -> list[dict]:
+def _year_entries(cursor, voter_id: int, year_id: int, *, revote=False) -> list[dict]:
     """``voter_id``'s vote totals for every entry in one year (by country)."""
-    return _fetch_entries(cursor, voter_id, "song.year_id = %s", year_id)
+    return _fetch_entries(cursor, voter_id, "song.year_id = %s", year_id, revote=revote)
 
 
-def _votes_by_country(cursor, user_id: int, username: str):
+def _votes_by_country(cursor, user_id: int, username: str, *, revote=False):
     """Per-country view: a dropdown of every participating country; picking one
     lists that country's entries with the user's points. Regular-year entries
     (oldest first) and special editions (by name) are split into two tables.
@@ -269,7 +280,7 @@ def _votes_by_country(cursor, user_id: int, username: str):
             (c for c in country_list if c["cc"].lower() == selected_code.lower()), None
         )
         if selected_country:
-            entries = _country_entries(cursor, user_id, selected_country["cc"])
+            entries = _country_entries(cursor, user_id, selected_country["cc"], revote=revote)
             # Specials use negative year ids; split them into their own table.
             regular_entries = [e for e in entries if (e["year_id"] or 0) >= 0]
             special_entries = [e for e in entries if (e["year_id"] or 0) < 0]
@@ -283,10 +294,12 @@ def _votes_by_country(cursor, user_id: int, username: str):
         selected_country=selected_country,
         regular_entries=regular_entries,
         special_entries=special_entries,
+        is_revote=revote,
+        history_endpoint="user.revotes" if revote else "user.votes",
     )
 
 
-def _votes_by_user(cursor, user_id: int, username: str):
+def _votes_by_user(cursor, user_id: int, username: str, *, revote=False):
     """Per-submitter view: a dropdown of every submitter; picking one lists the
     entries they submitted with this user's points. Like the per-country view
     but spanning countries, so the tables also carry a country column.
@@ -308,7 +321,7 @@ def _votes_by_user(cursor, user_id: int, username: str):
     if selected_id:
         selected_user = next((u for u in user_list if u["id"] == selected_id), None)
         if selected_user:
-            entries = _submitter_entries(cursor, user_id, selected_user["id"])
+            entries = _submitter_entries(cursor, user_id, selected_user["id"], revote=revote)
             # Specials use negative year ids; split them into their own table.
             regular_entries = [e for e in entries if (e["year_id"] or 0) >= 0]
             special_entries = [e for e in entries if (e["year_id"] or 0) < 0]
@@ -322,10 +335,12 @@ def _votes_by_user(cursor, user_id: int, username: str):
         selected_user=selected_user,
         regular_entries=regular_entries,
         special_entries=special_entries,
+        is_revote=revote,
+        history_endpoint="user.revotes" if revote else "user.votes",
     )
 
 
-def _votes_by_year(cursor, user_id: int, username: str):
+def _votes_by_year(cursor, user_id: int, username: str, *, revote=False):
     """Per-year view: a dropdown of every year (and special edition); picking
     one lists that year's entries with the user's points. The year is fixed, so
     the table leads with the country instead of a year column.
@@ -341,30 +356,61 @@ def _votes_by_year(cursor, user_id: int, username: str):
     )
     rows = [dict(r) for r in cursor.fetchall()]
     regular_years = [r for r in rows if r["id"] >= 0]
-    special_years = sorted(
-        (r for r in rows if r["id"] < 0), key=lambda r: r["special_name"] or ""
-    )
-
+    special_years = sorted((r for r in rows if r["id"] < 0), key=lambda r: r["special_name"] or "")
     selected_id = request.args.get("year", type=int)
-    selected_year = None
-    entries: list[dict] = []
-    if selected_id is not None:
-        selected_year = next((r for r in rows if r["id"] == selected_id), None)
-        if selected_year:
-            entries = _year_entries(cursor, user_id, selected_year["id"])
+    selected_year = next((r for r in rows if r["id"] == selected_id), None)
+    entries = _year_entries(cursor, user_id, selected_year["id"], revote=revote) if selected_year else []
+    return render_template("user/votes.html", username=username, view="year", regular_years=regular_years, special_years=special_years, selected_year=selected_year, year_is_special=selected_year is not None and selected_year["id"] < 0, entries=entries, is_revote=revote, history_endpoint="user.revotes" if revote else "user.votes")
 
+
+def _medal_table(cursor, user_id: int, username: str, *, revote=False):
+    finals_only = request.args.get("finals") == "true"
+    ballot_join = """
+        JOIN LATERAL (
+            SELECT id FROM vote_set
+            WHERE show_id = sh.id AND voter_id = %s
+            ORDER BY (result_mode = 'revote') DESC
+            LIMIT 1
+        ) vs ON TRUE
+    """ if revote else """
+        JOIN vote_set vs ON vs.show_id = sh.id AND vs.voter_id = %s
+                         AND vs.result_mode = 'official'
+    """
+    revote_filter = "AND sh.revote_eligible_at IS NOT NULL" if revote else ""
+    final_filter = "AND sh.short_name = 'f'" if finals_only else ""
+    cursor.execute(
+        f"""
+        SELECT country.id AS cc, country.name AS country,
+               COUNT(*) FILTER (WHERE point.place = 1) AS first,
+               COUNT(*) FILTER (WHERE point.place = 2) AS second,
+               COUNT(*) FILTER (WHERE point.place = 3) AS third,
+               COUNT(*) FILTER (WHERE point.place = 4) AS fourth,
+               COUNT(*) FILTER (WHERE point.place = 5) AS fifth,
+               COUNT(DISTINCT sh.id) AS votings
+        FROM show sh
+        {ballot_join}
+        JOIN song_show ss ON ss.show_id = sh.id
+        JOIN song ON song.id = ss.song_id
+        JOIN country ON country.id = song.country_id
+        LEFT JOIN vote ON vote.vote_set_id = vs.id AND vote.song_id = song.id
+        LEFT JOIN point ON point.point_system_id = sh.point_system_id
+                       AND point.score = vote.score
+        WHERE sh.status = 'full' {revote_filter} {final_filter}
+        GROUP BY country.id, country.name
+        ORDER BY first DESC, second DESC, third DESC, fourth DESC, fifth DESC,
+                 votings DESC, country.name ASC
+        """,
+        (user_id,),
+    )
     return render_template(
         "user/votes.html",
         username=username,
-        view="year",
-        regular_years=regular_years,
-        special_years=special_years,
-        selected_year=selected_year,
-        year_is_special=selected_year is not None and selected_year["id"] < 0,
-        entries=entries,
+        view="medals",
+        medals=cursor.fetchall(),
+        finals_only=finals_only,
+        is_revote=revote,
+        history_endpoint="user.revotes" if revote else "user.votes",
     )
-
-
 @bp.get("/<username>/votes")
 @with_auth
 def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissions):
@@ -398,6 +444,8 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         return _votes_by_user(cursor, user_id, username)
     if request.args.get("view") == "year":
         return _votes_by_year(cursor, user_id, username)
+    if request.args.get("view") == "medals":
+        return _medal_table(cursor, user_id, username)
 
     cursor.execute(
         """
@@ -501,6 +549,15 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         return render_template("error.html", error="User not found"), 404
     user_id = account["id"]
 
+    if request.args.get("view") == "country":
+        return _votes_by_country(cursor, user_id, username, revote=True)
+    if request.args.get("view") == "user":
+        return _votes_by_user(cursor, user_id, username, revote=True)
+    if request.args.get("view") == "year":
+        return _votes_by_year(cursor, user_id, username, revote=True)
+    if request.args.get("view") == "medals":
+        return _medal_table(cursor, user_id, username, revote=True)
+
     cursor.execute(
         """
         SELECT vote_set.id, vote_set.show_id, vote_set.nickname, vote_set.country_id,
@@ -602,7 +659,12 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         vote["points"] = points
 
     return render_template(
-        "user/votes.html", votes=votes, username=username, view="shows", is_revote=True
+        "user/votes.html",
+        votes=votes,
+        username=username,
+        view="shows",
+        is_revote=True,
+        history_endpoint="user.revotes",
     )
 
 

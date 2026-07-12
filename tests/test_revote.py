@@ -146,6 +146,11 @@ def test_revote_keeps_official_results_unchanged(client, db):
     assert b">-2</td>" in response.data
     assert b">+2</td>" in response.data
 
+    response = client.get("/user/bob/revotes?view=year&year=2024", headers={"Accept": "text/html"})
+    assert response.status_code == 200
+    assert b"View:" in response.data
+    assert b"Voting history" in response.data
+
     with db.cursor() as cursor:
         cursor.execute(
             """
