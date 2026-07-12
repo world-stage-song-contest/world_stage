@@ -694,7 +694,9 @@ def get_user_songs(user_id: int, year: int | None = None, *, select_languages=Fa
     return _load_songs(sql, params, select_languages=select_languages)
 
 
-def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
+def get_show_results_for_songs(
+    song_ids: list[int], *, result_mode: str = "official", include_year: bool = True
+) -> dict[int, dict]:
     """Return published show results for a list of song IDs.
 
     Returns a dict keyed by song_id.  Each value is a dict with keys
@@ -722,10 +724,10 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
         JOIN show ON show.id = csr.show_id
         WHERE csr.song_id = ANY(%s)
           AND show.status = 'full'
-          AND csr.result_mode = 'official'
+          AND csr.result_mode = %s
         ORDER BY csr.song_id, csr.year_id, csr.short_name
     """,
-        (song_ids,),
+        (song_ids, result_mode),
     )
 
     results: dict[int, dict] = {}
@@ -752,6 +754,9 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
                 "show_name": row["show_name"],
                 "short_name": row["short_name"],
             }
+
+    if not include_year:
+        return results
 
     # Year-level placements (only for closed years)
     cursor.execute(

@@ -2,6 +2,7 @@
 {% block title %}Overview: {{ name }} {{ year }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
+    <link rel="stylesheet" href="/static/css/country.css">
     <link rel="stylesheet" href="/static/css/song-overview.css">
     <script src="/static/js/sort-table.js"></script>
     <script src="/static/js/year.js"></script>
@@ -173,8 +174,9 @@
     </table>
 </div>
 
-{% if song_results %}
+{% macro results_table(results, title, is_revote=false) %}
 <div class="song-results">
+    <h3 class="song-results-title">{{ title }}</h3>
     <table>
         <thead>
             <tr>
@@ -185,7 +187,7 @@
         </thead>
         <tbody>
         {% for key, label, cat_class in [('f', 'Final', 'final'), ('sc', 'Repechage', 'repechage'), ('sf', 'Semi-Final', 'semifinal')] %}
-            {% set entry = song_results.get(key) %}
+            {% set entry = results.get(key) %}
             {% if entry %}
                 {% set place = entry.place %}
                 {% set total = entry.total_countries %}
@@ -195,7 +197,9 @@
                      'second' if place == 2 else
                      'third' if place == 3 else ''
                    ) ~ (' last' if is_last else '') %}
-                {% if special %}
+                {% if is_revote %}
+                    {% set votes_url = url_for('revote.song_votes', year=special if special else song.year.id, show=entry.short_name, song_id=song.id) %}
+                {% elif special %}
                     {% set votes_url = url_for('year.special_song_votes', short_name=special, show=entry.short_name, country_code=song.country.cc.lower(), entry_number=song.entry_number) %}
                 {% else %}
                     {% set votes_url = url_for('year.song_votes', year=song.year.id, show=entry.short_name, country_code=song.country.cc.lower()) %}
@@ -209,6 +213,17 @@
         {% endfor %}
         </tbody>
     </table>
+</div>
+{% endmacro %}
+
+{% if song_results or revote_results %}
+<div class="song-results-comparison">
+{% if song_results %}
+{{ results_table(song_results, 'Results') }}
+{% endif %}
+{% if revote_results %}
+{{ results_table(revote_results, 'Revote Results', true) }}
+{% endif %}
 </div>
 {% endif %}
 

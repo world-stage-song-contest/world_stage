@@ -114,7 +114,7 @@
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
                 <td><span class="col-truncate" title="{{ song.artist }}">{{ song.artist }}</span></td>
                 {% if is_revote %}
-                <td><span class="col-truncate" title="{{ song.title }}">{{ song.title }}</span></td>
+                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('revote.song_votes', year=revote_year, show=show, song_id=song.id) }}">{{ song.title }}</a></td>
                 {% elif special %}
                 <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('year.special_song_votes', short_name=special, show=show, country_code=song.country.cc.lower(), entry_number=song.entry_number) }}">{{ song.title }}</a></td>
                 {% else %}

@@ -164,6 +164,7 @@ def test_revote_keeps_official_results_unchanged(client, db):
     response = client.get(f"/revote/2024/rv/song/{song_ids[0]}", headers={"Accept": "text/html"})
     assert response.status_code == 200
     assert b"Original winner" in response.data
+    assert b"/country/us/2024" in response.data
     assert b">carol</a>" in response.data
     assert b"changed-vote" in response.data
     assert response.data.count(b'class="voter-entry changed-vote"') == 1
@@ -172,6 +173,7 @@ def test_revote_keeps_official_results_unchanged(client, db):
     assert response.status_code == 200
     assert b"revote-voter" in response.data
     assert response.data.count(b'title="bob"') == 1
+    assert f'/revote/2024/rv/song/{song_ids[0]}'.encode() in response.data
 
     response = client.get("/revote", headers={"Accept": "text/html"})
     assert response.status_code == 200

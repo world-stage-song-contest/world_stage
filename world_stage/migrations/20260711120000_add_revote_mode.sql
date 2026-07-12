@@ -180,7 +180,8 @@ BEGIN
         JOIN vote v ON v.song_id = s.id
         JOIN all_vote_sets vs ON vs.id = v.vote_set_id
         WHERE
-            (si.year_id IS NULL OR si.year_id < 0 OR si.year_id >= 1979)
+            p_result_mode = 'revote'
+            OR (si.year_id IS NULL OR si.year_id < 0 OR si.year_id >= 1979)
             OR (si.year_id BETWEEN 1965 AND 1978 AND vs.country_id IS DISTINCT FROM s.country_id)
             OR (si.year_id >= 0 AND si.year_id < 1965 AND si.year_id <> 1960
                 AND vs.country_id IS DISTINCT FROM s.country_id)

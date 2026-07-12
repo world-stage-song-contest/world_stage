@@ -111,7 +111,7 @@
 <div class="song-header">
     {{ flag(song.country_id, 32, song.country_name) }}
     <div>
-        <h2>{% if is_revote %}{{ song.artist }} — {{ song.title }}{% elif special %}<a href="{{ url_for('country.special_details', code=song.country_id|lower, special_short_name=special, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>{% else %}<a href="{{ url_for('country.details', code=song.country_id|lower, year=year) }}">{{ song.artist }} — {{ song.title }}</a>{% endif %}</h2>
+        <h2>{% if special %}<a href="{{ url_for('country.special_details', code=song.country_id|lower, special_short_name=special, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>{% else %}<a href="{{ url_for('country.details', code=song.country_id|lower, year=year) }}">{{ song.artist }} — {{ song.title }}</a>{% endif %}</h2>
         <div class="song-meta">{{ song.country_name }} | {{ show_name }} | {{ total_points }} points from {{ voters_who_gave }} voter{{ 's' if voters_who_gave != 1 else '' }}</div>
     </div>
 </div>

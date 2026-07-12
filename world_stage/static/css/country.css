@@ -83,6 +83,28 @@ td.no-entry {
     margin-bottom: 16px;
 }
 
+.song-results-comparison {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-start;
+    max-width: fit-content;
+}
+
+.song-results-comparison .song-results {
+    flex: 0 1 auto;
+}
+
+.song-results-title {
+    margin: 0 0 0.5rem;
+}
+
+@media (max-width: 700px) {
+    .song-results-comparison {
+        flex-direction: column;
+    }
+}
+
 .song-results th {
     text-align: left;
     padding-right: 16px;

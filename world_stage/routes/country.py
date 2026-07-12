@@ -471,6 +471,9 @@ def details(code: str, year: int, user: tuple[int, str] | None, permissions: Use
     )
 
     song_results = get_show_results_for_songs([song.id]).get(song.id, {})
+    revote_results = get_show_results_for_songs(
+        [song.id], result_mode="revote", include_year=False
+    ).get(song.id, {})
 
     return render_template(
         "country/details.html",
@@ -488,6 +491,7 @@ def details(code: str, year: int, user: tuple[int, str] | None, permissions: Use
         can_update_duration=permissions.can_edit,
         notes=notes,
         song_results=song_results,
+        revote_results=revote_results,
     )
 
 
@@ -556,6 +560,9 @@ def _render_song_details(
     )
 
     song_results = get_show_results_for_songs([song.id]).get(song.id, {})
+    revote_results = get_show_results_for_songs(
+        [song.id], result_mode="revote", include_year=False
+    ).get(song.id, {})
 
     return render_template(
         "country/details.html",
@@ -573,6 +580,7 @@ def _render_song_details(
         can_update_duration=permissions.can_edit,
         notes=notes,
         song_results=song_results,
+        revote_results=revote_results,
         special=special_short_name,
         special_name=special_name,
     )

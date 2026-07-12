@@ -369,6 +369,8 @@ def song_votes(year: str, show: str, song_id: int):
         original_results_url=_original_results_url(show_data.year, show_data.short_name),
         showing_original=not has_revotes,
         is_revote=True,
+        special=revote_year["key"] if show_data.year < 0 else None,
+        special_name=revote_year["label"] if show_data.year < 0 else None,
     )
 
 
