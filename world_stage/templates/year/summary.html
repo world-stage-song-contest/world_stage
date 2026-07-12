@@ -44,6 +44,9 @@
     <a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>
     {% endif %}
     {% endif %}
+    {% if revote_eligible %}
+    <a class="nav-item" href="{{ url_for('revote.results', year=special if special else year, show=show) }}">Revote Results</a>
+    {% endif %}
 {% endblock %}
 {% block content %}
 {% if secret %}

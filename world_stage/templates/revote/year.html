@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Revotes: {{ year.label }}{% endblock %}
+{% block headercontents %}
+<style>
+    .revote-card.card { width: 160px; height: auto; min-height: 5em; }
+    .revote-card h4 { margin: 0 0 1em; }
+    .revote-card-links { display: flex; justify-content: center; gap: 1em; }
+</style>
+{% endblock %}
+{% block navigation %}
+<a class="nav-item" href="{{ url_for('revote.index') }}">Revotes</a>
+{% endblock %}
+{% block content %}
+<h3>{{ year.label }}</h3>
+{% if shows %}
+<div class="cards-container">
+    {% for show in shows %}
+    <div class="card revote-card">
+        <h4>{{ show.name }}</h4>
+        <div class="revote-card-links">
+            <a href="{{ url_for('revote.vote', year=year.key, show=show.short_name) }}">Vote</a>
+            <a href="{{ url_for('revote.results', year=year.key, show=show.short_name) }}">Results</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>No shows are eligible for revoting in this year.</p>
+{% endif %}
+{% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ song.artist }} — {{ song.title }} | {{ year or '' }} {{ show_name }}{% endblock %}
+{% block title %}{{ 'Revote votes: ' if is_revote else '' }}{{ song.artist }} — {{ song.title }} | {{ year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/results.css">
     <style>
@@ -57,6 +57,9 @@
         .voter-entry a {
             text-decoration: none;
         }
+        .changed-vote {
+            font-weight: bold;
+        }
         .no-voters {
             color: var(--muted);
             font-style: italic;
@@ -64,6 +67,18 @@
     </style>
 {% endblock %}
 {% block navigation %}
+    {% if is_revote %}
+    <a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ year }}</a>
+    <span class="nav-separator"></span>
+    {% for other_show in other_revote_shows %}
+    <a class="nav-item" href="{{ url_for('revote.results', year=revote_year, show=other_show.short_name) }}">{{ other_show.short_name|upper }}</a>
+    {% endfor %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ original_results_url }}">Original Results</a>
+    <a class="nav-item" href="{{ url_for('revote.results', year=revote_year, show=show) }}">Results Summary</a>
+    <a class="nav-item" href="{{ url_for('revote.detailed_results', year=revote_year, show=show) }}">Detailed Results</a>
+    <a class="nav-item" href="{{ url_for('revote.vote', year=revote_year, show=show) }}">Change Vote</a>
+    {% else %}
     {% if special %}
     <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
     {% else %}
@@ -87,12 +102,16 @@
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
     <a class="nav-item" href="{{ url_for('year.show_play', year=year, show=show) }}">Play</a>
     {% endif %}
+    {% endif %}
 {% endblock %}
 {% block content %}
+{% if is_revote and showing_original %}
+<div class="banner long-text">No revotes have been cast yet, so this is currently showing the original votes.</div>
+{% endif %}
 <div class="song-header">
     {{ flag(song.country_id, 32, song.country_name) }}
     <div>
-        <h2>{% if special %}<a href="{{ url_for('country.special_details', code=song.country_id|lower, special_short_name=special, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>{% else %}<a href="{{ url_for('country.details', code=song.country_id|lower, year=year) }}">{{ song.artist }} — {{ song.title }}</a>{% endif %}</h2>
+        <h2>{% if is_revote %}{{ song.artist }} — {{ song.title }}{% elif special %}<a href="{{ url_for('country.special_details', code=song.country_id|lower, special_short_name=special, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>{% else %}<a href="{{ url_for('country.details', code=song.country_id|lower, year=year) }}">{{ song.artist }} — {{ song.title }}</a>{% endif %}</h2>
         <div class="song-meta">{{ song.country_name }} | {{ show_name }} | {{ total_points }} points from {{ voters_who_gave }} voter{{ 's' if voters_who_gave != 1 else '' }}</div>
     </div>
 </div>
@@ -116,7 +135,7 @@
                 <div class="voters-cell">
                 {% if group.voters %}
                     {% for voter in group.voters %}
-                    <span class="voter-entry">
+                    <span class="voter-entry{% if voter.changed %} changed-vote{% endif %}">
                         {{ flag(voter.code, 21, voter.country_name) }}
                         <a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>
                     </span>
@@ -135,7 +154,7 @@
                 <div class="voters-cell">
                 {% if no_points_voters %}
                     {% for voter in no_points_voters %}
-                    <span class="voter-entry">
+                    <span class="voter-entry{% if voter.changed %} changed-vote{% endif %}">
                         {{ flag(voter.code, 21, voter.country_name) }}
                         <a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>
                     </span>

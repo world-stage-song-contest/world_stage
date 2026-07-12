@@ -54,6 +54,14 @@ td.header-like {
     text-align: center;
 }
 
+/* A result-comparison cell must not pick up the new-result row colour when
+   the corresponding old result has no highlight of its own.  This precedes
+   the highlight rules so an old-result highlight can still override it. */
+.old-result {
+    background: var(--background1);
+    color: var(--foreground1);
+}
+
 /* Result placement highlights — all share the same text colour */
 .direct-to-final,
 .second-chance,

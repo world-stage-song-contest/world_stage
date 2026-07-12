@@ -1,9 +1,22 @@
 {% extends "base.html" %}
-{% block title %}Vote - {{ show_name }}{% endblock %}
+{% block title %}{{ 'Revote' if is_revote else 'Vote' }} - {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="/static/css/vote.css">
     <link rel="stylesheet" href="/static/css/forms.css">
     <script src="/static/js/vote.js"></script>
+{% endblock %}
+{% block navigation %}
+{% if is_revote %}
+    <a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ year }}</a>
+    <span class="nav-separator"></span>
+    {% for other_show in other_revote_shows %}
+    <a class="nav-item" href="{{ url_for('revote.vote', year=revote_year, show=other_show.short_name) }}">{{ other_show.short_name|upper }}</a>
+    {% endfor %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ original_results_url }}">Original Results</a>
+    <a class="nav-item" href="{{ url_for('revote.results', year=revote_year, show=show) }}">Results Summary</a>
+    <a class="nav-item" href="{{ url_for('revote.detailed_results', year=revote_year, show=show) }}">Detailed Results</a>
+{% endif %}
 {% endblock %}
 {% block content %}
 
@@ -11,7 +24,7 @@
     <p class="error">{{ error }}</p>
 {% endfor %}
 
-<div class="big">{{ vote_count }} people have already voted</div>
+<div class="big">{{ vote_count }} people have already {{ 'revoted' if is_revote else 'voted' }}</div>
 
 <div class="banner long-text">
     <div>
@@ -85,8 +98,9 @@
         {% endfor %}
         </fieldset>
     </div>
-    <div>
+    <div class="vote-actions">
         <button type="submit" class="big">Submit</button>
+        <button type="button" class="big" onclick="clearVotes()">Clear</button>
     </div>
     <fieldset class="grid">
         <legend>Recap</legend>

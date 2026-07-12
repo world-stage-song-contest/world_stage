@@ -207,7 +207,7 @@ def open_votings():
                COUNT(vote_set.id) AS vote_count
         FROM show
         JOIN year ON year.id = show.year_id
-        LEFT JOIN vote_set ON vote_set.show_id = show.id
+        LEFT JOIN vote_set ON vote_set.show_id = show.id AND vote_set.result_mode = 'official'
         WHERE show.voting_opens <= CURRENT_TIMESTAMP
           AND (show.voting_closes IS NULL OR show.voting_closes >= CURRENT_TIMESTAMP)
         GROUP BY show.id, year.id

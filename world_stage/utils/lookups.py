@@ -232,7 +232,7 @@ def get_vote_count_for_show(show_id: int) -> int:
     cursor.execute(
         """
         SELECT COUNT(*) AS c FROM vote_set
-        WHERE show_id = %s
+        WHERE show_id = %s AND result_mode = 'official'
     """,
         (show_id,),
     )

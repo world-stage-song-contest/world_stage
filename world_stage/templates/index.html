@@ -12,6 +12,11 @@
         <img src="/static/images/ballot-box.png" alt="Vote Icon">
         <p>Cast your vote for one of the ongoing votings.</p>
     </a>
+    <a href="{{ url_for('revote.index') }}" class="card">
+        <h3>Revote</h3>
+        <img src="/static/images/history.png" alt="History Icon">
+        <p>Update your ballot for completed shows and view their revote results.</p>
+    </a>
     <a href="{{ url_for('year.index') }}" class="card">
         <h3>Years</h3>
         <img src="/static/images/calendar.png" alt="Calendar Icon">

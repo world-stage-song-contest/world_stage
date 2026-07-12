@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Revote results: {{ year }} {{ show_name }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="/static/css/results.css">
+    <script src="/static/js/sort-table.js"></script>
+{% endblock %}
+{% block navigation %}
+<a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ year }}</a>
+<span class="nav-separator"></span>
+{% for other_show in other_revote_shows %}
+<a class="nav-item" href="{{ url_for('revote.results', year=revote_year, show=other_show.short_name, revoters_only='true' if revoters_only else none) }}">{{ other_show.short_name|upper }}</a>
+{% endfor %}
+<span class="nav-separator"></span>
+<a class="nav-item" href="{{ original_results_url }}">Original Results</a>
+<a class="nav-item" href="{{ url_for('revote.vote', year=revote_year, show=show) }}">Change Vote</a>
+<a class="nav-item" href="{{ url_for('revote.detailed_results', year=revote_year, show=show) }}">Detailed Results</a>
+{% endblock %}
+{% block content %}
+{% if showing_original %}
+<div class="banner long-text">
+    No revotes have been cast yet, so this is currently showing the original results.
+</div>
+{% endif %}
+{% if songs %}
+<div>
+    <strong><big>Total voters: {{ voters }}</big></strong>
+</div>
+<form method="get">
+    <label><input type="checkbox" name="revoters_only" value="true" {% if revoters_only %}checked{% endif %} onchange="this.form.submit()"> Only use Revote votes</label>
+</form>
+<div id="scroll-container">
+<table class="sortable">
+    <thead>
+        <tr>
+            <th>RO</th>
+            <th class="sticky">Country</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Place</th>
+            <th>Old</th>
+            <th>Diff</th>
+            <th>Points</th>
+            <th>Diff</th>
+            <th>% of Max</th>
+            <th>Voters</th>
+            {% for point in points %}
+            <th class="point-header"><div>{{ point }}</div></th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for song in songs %}
+        {% set place = loop.index %}
+        {% set original = original_results.get(song.id) %}
+        {% set points_difference = song.vote_data.sum - original.total_points if original else 0 %}
+        {% set place_difference = original.place - place if original else 0 %}
+        {% set original_place = original.place if original else place %}
+        {% set original_total = original.total_countries if original else songs|length %}
+        {% set class = {1: 'first', 2: 'second', 3: 'third', participants: 'last'}.get(place, '') %}
+        {% set qclass = (
+            'direct-to-final' if place <= qualifiers
+            else 'second-chance' if place <= sc_qualifiers
+            else 'non-qualifier'
+        ) %}
+        {% set old_class = {1: 'first', 2: 'second', 3: 'third', original_total: 'last'}.get(original_place, '') %}
+        {% set old_qclass = (
+            'direct-to-final' if original and original.entry_status == 'dtf'
+            else 'second-chance' if original and original.entry_status in ('sc', 'special')
+            else 'non-qualifier' if original and original.entry_status == 'nq'
+            else ''
+        ) %}
+        <tr data-value="{{ place }}" class="{{ class }} {{ qclass }}">
+            <th class="number">{{ song.vote_data.ro }}</th>
+            <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
+            <td><span class="col-truncate" title="{{ song.artist }}">{{ song.artist }}</span></td>
+            <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('revote.song_votes', year=revote_year, show=show, song_id=song.id) }}">{{ song.title }}</a></td>
+            <td class="number extra-visible">{{ place }}</td>
+            <td class="number old-result {{ old_class }} {{ old_qclass }}">{{ original_place }}</td>
+            <td class="number">{{ '+' if place_difference > 0 else '' }}{{ place_difference }}</td>
+            <td class="number{% if song.vote_data.penalty %} has-penalty{% endif %}"
+                {% if song.vote_data.penalty %}title="Penalty of {{ song.vote_data.penalty }} points applied"{% endif %}
+            >{{ song.vote_data.sum }}</td>
+            <td class="number">{{ '+' if points_difference > 0 else '' }}{{ points_difference }}</td>
+            <td class="number percent">{{ song.vote_data.pct() }}</td>
+            <td class="number">{{ song.vote_data.count }}</td>
+            {% for point in points %}
+            {% set received = song.get_pt(point) %}
+            <td class="number">{{ received if received != 0 else '' }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<p>No one has revoted in this show yet.</p>
+{% endif %}
+{% endblock %}

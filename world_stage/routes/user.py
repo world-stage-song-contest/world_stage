@@ -219,6 +219,7 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val) -> list[dic
         JOIN country ON song.country_id = country.id
         LEFT JOIN year ON sh.year_id = year.id
         LEFT JOIN vote_set ON vote_set.show_id = sh.id AND vote_set.voter_id = %s
+                          AND vote_set.result_mode = 'official'
         LEFT JOIN vote ON vote.vote_set_id = vote_set.id AND vote.song_id = song.id
         WHERE {where_sql}
     """,
@@ -407,7 +408,8 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         JOIN account ON vote_set.voter_id = account.id
         JOIN show ON vote_set.show_id = show.id
         LEFT JOIN year ON show.year_id = year.id
-        WHERE vote_set.voter_id = %s AND (show.status = 'full' OR show.status = 'partial')
+        WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
+          AND (show.status = 'full' OR show.status = 'partial')
         ORDER BY show.date DESC
     """,
         (user_id,),
@@ -423,7 +425,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
             "show_name": row["show_name"],
             "short_name": row["short_name"],
             "status": row["status"],
-            "date": row["date"].strftime("%d %b %Y"),
+            "date": row["date"].strftime("%d %b %Y") if row["date"] else "",
             "year": row["year_id"],
             "special_name": row["special_name"],
             "special_short_name": row["special_short_name"],
@@ -433,13 +435,13 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
     # Batch-fetch show results for all shows this user voted in,
     # keyed by (show_id, song_id) → place.
     show_ids = list({v["show_id"] for v in votes})
-    show_results: dict[tuple[int, int], int] = {}
+    show_results: dict[tuple[int, int], dict] = {}
     if show_ids:
         cursor.execute(
             """
             SELECT show_id, song_id, place
             FROM country_show_results
-            WHERE show_id = ANY(%s)
+            WHERE show_id = ANY(%s) AND result_mode = 'official'
         """,
             (show_ids,),
         )
@@ -483,6 +485,124 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
     return render_template(
         "user/votes.html", votes=votes, username=username, view="shows",
         can_reveal=can_reveal, unredacted=unredacted,
+    )
+
+
+@bp.get("/<username>/revotes")
+@with_auth
+def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermissions):
+    username = urllib.parse.unquote(username)
+    username = unicodedata.normalize("NFKC", username)
+
+    cursor = get_db().cursor()
+    cursor.execute("SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,))
+    account = cursor.fetchone()
+    if not account:
+        return render_template("error.html", error="User not found"), 404
+    user_id = account["id"]
+
+    cursor.execute(
+        """
+        SELECT vote_set.id, vote_set.show_id, vote_set.nickname, vote_set.country_id,
+               show.show_name, show.short_name, show.date, show.year_id,
+               year.special_name, year.special_short_name
+        FROM vote_set
+        JOIN show ON show.id = vote_set.show_id
+        LEFT JOIN year ON year.id = show.year_id
+        WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'revote'
+          AND show.status = 'full'
+        ORDER BY show.date DESC
+        """,
+        (user_id,),
+    )
+    votes = [
+        {
+            "id": row["id"],
+            "show_id": row["show_id"],
+            "nickname": row["nickname"] or username,
+            "code": row["country_id"],
+            "show_name": row["show_name"],
+            "short_name": row["short_name"],
+            "date": row["date"].strftime("%d %b %Y") if row["date"] else "",
+            "year": row["year_id"],
+            "special_name": row["special_name"],
+            "special_short_name": row["special_short_name"],
+        }
+        for row in cursor.fetchall()
+    ]
+    show_ids = list({vote["show_id"] for vote in votes})
+    original_scores: dict[tuple[int, int], int] = {}
+    original_vote_show_ids: set[int] = set()
+    show_results: dict[tuple[int, int], int] = {}
+    if show_ids:
+        cursor.execute(
+            """
+            SELECT show_id FROM vote_set
+            WHERE voter_id = %s AND result_mode = 'official' AND show_id = ANY(%s)
+            """,
+            (user_id, show_ids),
+        )
+        original_vote_show_ids = {row["show_id"] for row in cursor.fetchall()}
+        cursor.execute(
+            """
+            SELECT vote_set.show_id, vote.song_id, vote.score
+            FROM vote
+            JOIN vote_set ON vote_set.id = vote.vote_set_id
+            WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
+              AND vote_set.show_id = ANY(%s)
+            """,
+            (user_id, show_ids),
+        )
+        original_scores = {
+            (row["show_id"], row["song_id"]): row["score"] for row in cursor.fetchall()
+        }
+        cursor.execute(
+            """
+            SELECT show_id, song_id, place, entry_status
+            FROM country_show_results
+            WHERE show_id = ANY(%s) AND result_mode = 'revote'
+            """,
+            (show_ids,),
+        )
+        show_results = {
+            (row["show_id"], row["song_id"]): row for row in cursor.fetchall()
+        }
+
+    for vote in votes:
+        vote["has_original_vote"] = vote["show_id"] in original_vote_show_ids
+        cursor.execute(
+            """
+            SELECT vote.score AS pts, song.title, song.country_id AS code, song.id
+            FROM vote
+            JOIN song ON song.id = vote.song_id
+            WHERE vote.vote_set_id = %s
+            ORDER BY vote.score DESC
+            """,
+            (vote["id"],),
+        )
+        points = []
+        for row in cursor.fetchall():
+            result = show_results.get((vote["show_id"], row["id"]))
+            entry_status = result["entry_status"] if result else None
+            row["result_place"] = result["place"] if result else None
+            row["points_difference"] = row["pts"] - original_scores.get(
+                (vote["show_id"], row["id"]), 0
+            )
+            if vote["short_name"].startswith("sf"):
+                row["class"] = (
+                    "qualifier"
+                    if entry_status == "dtf"
+                    else "sc-qualifier" if entry_status in ("sc", "special") else ""
+                )
+            elif vote["short_name"] == "sc" and entry_status == "dtf":
+                row["class"] = "qualifier"
+            else:
+                row["class"] = ""
+            points.append(row)
+        vote["points"] = points
+
+    return render_template(
+        "user/votes.html", votes=votes, username=username, view="shows", is_revote=True
     )
 
 
@@ -540,7 +660,7 @@ def predictions(username: str):
             """
             SELECT show_id, song_id, place
             FROM country_show_results
-            WHERE show_id = ANY(%s)
+            WHERE show_id = ANY(%s) AND result_mode = 'official'
         """,
             (show_ids,),
         )
@@ -560,8 +680,9 @@ def predictions(username: str):
             FROM prediction_set
             JOIN prediction ON prediction.set_id = prediction_set.id
             LEFT JOIN country_show_results csr
-              ON csr.show_id = prediction_set.show_id
+             ON csr.show_id = prediction_set.show_id
              AND csr.song_id = prediction.song_id
+             AND csr.result_mode = 'official'
             WHERE prediction_set.show_id = ANY(%s)
             GROUP BY prediction_set.id, prediction_set.show_id
         """,

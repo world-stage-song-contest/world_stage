@@ -130,6 +130,10 @@ h3 a:visited {
     text-align: right;
 }
 
+.points-difference {
+    font-weight: bold;
+}
+
 .result-data {
     white-space: nowrap;
     text-align: right;
@@ -140,6 +144,23 @@ h3 a:visited {
     border-right: none !important;
 }
 .user-votes td:nth-child(3) {
+    border-left: none !important;
+}
+
+.user-votes.revotes-with-difference td:nth-child(2) {
+    border-right: 1px solid var(--foreground1) !important;
+}
+
+.user-votes.revotes-with-difference .points-difference {
+    border-right: 1px solid var(--foreground1) !important;
+}
+
+.user-votes.revotes-with-difference td:nth-child(3) {
+    border-left: 1px solid var(--foreground1) !important;
+    border-right: none !important;
+}
+
+.user-votes.revotes-with-difference td:nth-child(4) {
     border-left: none !important;
 }
 

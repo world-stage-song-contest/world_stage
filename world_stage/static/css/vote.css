@@ -2,6 +2,12 @@ select, input[type="text"] {
     border-width: 1.5px;
 }
 
+.vote-actions {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
 .invalid {
     border-color: var(--error);
 }

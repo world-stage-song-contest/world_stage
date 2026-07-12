@@ -41,6 +41,7 @@ def _penalty_candidates(year_id: int, show_id: int) -> list[dict]:
               SELECT 1 FROM vote_set
               WHERE vote_set.show_id = %s
                 AND vote_set.voter_id = song.submitter_id
+                AND vote_set.result_mode = 'official'
           )
         ORDER BY country.name, song.entry_number
         """,

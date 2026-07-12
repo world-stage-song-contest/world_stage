@@ -129,6 +129,7 @@ def create_app(config: dict | None = None) -> Flask:
         playlist,
         radio,
         results,
+        revote,
         session,
         user,
         vote,
@@ -147,5 +148,6 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(api.bp)
     app.register_blueprint(playlist.bp)
     app.register_blueprint(radio.bp)
+    app.register_blueprint(revote.bp)
 
     return app

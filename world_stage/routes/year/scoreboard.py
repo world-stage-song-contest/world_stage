@@ -87,7 +87,7 @@ def special_scores(short_name: str, show: str, permissions: UserPermissions):
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
         JOIN song ON vote.song_id = song.id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY vote_set.created_at
     """,
         (show_data.id,),
@@ -125,7 +125,7 @@ def special_scores(short_name: str, show: str, permissions: UserPermissions):
         SELECT username, nickname, country_id AS code, country.name AS country FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
     """,
         (show_data.id,),
     )
@@ -199,7 +199,7 @@ def scores(year: int, show: str, permissions: UserPermissions):
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
         JOIN song ON vote.song_id = song.id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY vote_set.created_at
     """,
         (show_data.id,),
@@ -237,7 +237,7 @@ def scores(year: int, show: str, permissions: UserPermissions):
         SELECT username, nickname, country_id AS code, country.name AS country FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
     """,
         (show_data.id,),
     )

@@ -34,7 +34,10 @@ def update_votes(
         user_id = user_data[0]
 
     cursor.execute(
-        "SELECT id, ip_address FROM vote_set WHERE voter_id = %s AND show_id = %s",
+        """
+        SELECT id, ip_address FROM vote_set
+        WHERE voter_id = %s AND show_id = %s AND result_mode = 'official'
+        """,
         (voter_id, show_id),
     )
     vote_set_data = cursor.fetchone()
@@ -85,7 +88,11 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
     voter_id = voter_id_data["id"]
 
     cursor.execute(
-        "SELECT id FROM vote_set WHERE voter_id = %s AND show_id = %s", (voter_id, show_id)
+        """
+        SELECT id FROM vote_set
+        WHERE voter_id = %s AND show_id = %s AND result_mode = 'official'
+        """,
+        (voter_id, show_id),
     )
     existing_vote_set = cursor.fetchone()
 
@@ -93,8 +100,9 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
     if not existing_vote_set:
         cursor.execute(
             """
-            INSERT INTO vote_set (voter_id, show_id, country_id, nickname, ip_address, created_at)
-            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO vote_set
+                (voter_id, show_id, country_id, nickname, ip_address, created_at, result_mode)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 'official')
             RETURNING id
             """,
             (voter_id, show_id, country_id or "XX", nickname, request.remote_addr),
@@ -203,6 +211,7 @@ def vote(show: str, user: tuple[int, str]):
                 FROM vote_set
                 JOIN account ON vote_set.voter_id = account.id
                 WHERE LOWER(account.username) = LOWER(%s) AND vote_set.show_id = %s
+                  AND vote_set.result_mode = 'official'
             """,
                 (username, show_data.id),
             )
@@ -229,7 +238,11 @@ def vote(show: str, user: tuple[int, str]):
             selected[row["score"]]["sid"] = row["song_id"]
             selected[row["score"]]["cc"] = row["cc"]
 
-    songs = get_show_songs(show_data.year, show_data.short_name)
+    songs = [
+        song
+        for song in get_show_songs(show_data.year, show_data.short_name) or []
+        if song.submitter_id != user[0]
+    ]
 
     return render_template(
         "vote/vote.html",
@@ -270,13 +283,12 @@ def vote_post(show: str, user: tuple[int, str]):
     ):
         return render_template("error.html", error="Voting is closed"), 400
 
-    songs = get_show_songs(show_data.year, show_data.short_name)
-    if songs is None:
-        songs = []
+    songs = get_show_songs(show_data.year, show_data.short_name) or []
 
     errors = []
 
     voter_id, username = user
+    selectable_songs = [song for song in songs if song.submitter_id != voter_id]
 
     nickname = request.form["nickname"]
     nickname = nickname.strip()
@@ -351,7 +363,7 @@ def vote_post(show: str, user: tuple[int, str]):
 
     return render_template(
         "vote/vote.html",
-        songs=songs,
+        songs=selectable_songs,
         points=show_data.points,
         errors=errors,
         selected=selected,

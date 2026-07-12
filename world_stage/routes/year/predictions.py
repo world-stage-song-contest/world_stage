@@ -99,7 +99,10 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
     real_positions: dict[int, int] = {}
     if show_data.status in ("partial", "full"):
         cursor.execute(
-            "SELECT song_id, place FROM country_show_results WHERE show_id = %s",
+            """
+            SELECT song_id, place FROM country_show_results
+            WHERE show_id = %s AND result_mode = 'official'
+            """,
             (show_data.id,),
         )
         real_positions = {row["song_id"]: row["place"] for row in cursor.fetchall()}
@@ -515,7 +518,10 @@ def show_predictions(year: int, show: str, permissions: UserPermissions):
     real_positions: dict[int, int] = {}
     if show_data.status in ("partial", "full"):
         cursor.execute(
-            "SELECT song_id, place FROM country_show_results WHERE show_id = %s",
+            """
+            SELECT song_id, place FROM country_show_results
+            WHERE show_id = %s AND result_mode = 'official'
+            """,
             (show_data.id,),
         )
         real_positions = {row["song_id"]: row["place"] for row in cursor.fetchall()}

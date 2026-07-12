@@ -90,6 +90,7 @@ def _result_entries(cursor, show_id: int) -> list[dict]:
           ON song_show.song_id = country_show_results.song_id
          AND song_show.show_id = country_show_results.show_id
         WHERE country_show_results.show_id = %s
+          AND country_show_results.result_mode = 'official'
         ORDER BY country_show_results.place, country_show_results.song_id
         """,
         (show_id,),
@@ -137,7 +138,10 @@ def results(show: str):
         )
 
     entries = _result_entries(cursor, show_data.id)
-    cursor.execute("SELECT COUNT(*) AS count FROM vote_set WHERE show_id = %s", (show_data.id,))
+    cursor.execute(
+        "SELECT COUNT(*) AS count FROM vote_set WHERE show_id = %s AND result_mode = 'official'",
+        (show_data.id,),
+    )
     voter_count = cursor.fetchone()["count"]
     qualifiers = _qualifiers(entries, show_data) if show_data.status == "partial" else []
 
@@ -183,7 +187,7 @@ def detailed_results(show: str):
         FROM vote_set
         JOIN account ON account.id = vote_set.voter_id
         LEFT JOIN country ON country.id = vote_set.country_id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY vote_set.created_at, vote_set.id
         """,
         (show_data.id,),

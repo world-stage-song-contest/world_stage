@@ -54,8 +54,16 @@ def special_results(short_name: str, show: str, permissions: UserPermissions):
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT COUNT(voter_id) AS c FROM vote_set WHERE show_id = %s", (show_data.id,))
+    cursor.execute(
+        "SELECT COUNT(voter_id) AS c FROM vote_set WHERE show_id = %s AND result_mode = 'official'",
+        (show_data.id,),
+    )
     voter_count = fetchone(cursor)["c"]
+    cursor.execute(
+        "SELECT revote_eligible_at IS NOT NULL AS eligible FROM show WHERE id = %s",
+        (show_data.id,),
+    )
+    revote_eligible = fetchone(cursor)["eligible"]
     songs.sort(reverse=True)
 
     off = 0
@@ -137,6 +145,7 @@ def special_results(short_name: str, show: str, permissions: UserPermissions):
         voters=voter_count,
         can_apply_penalty=permissions.can_view_restricted,
         has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
+        revote_eligible=revote_eligible,
         special=short_name,
         special_name=special_year["special_name"],
     )
@@ -180,7 +189,7 @@ def special_detailed_results(short_name: str, show: str, permissions: UserPermis
         SELECT username, COALESCE(country_id, 'XX') as code, country.name AS country FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         LEFT OUTER JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY created_at
     """,
         (show_data.id,),
@@ -194,7 +203,7 @@ def special_detailed_results(short_name: str, show: str, permissions: UserPermis
             SELECT score, username FROM vote
             JOIN vote_set ON vote.vote_set_id = vote_set.id
             JOIN account ON vote_set.voter_id = account.id
-            WHERE song_id = %s AND show_id = %s
+            WHERE song_id = %s AND show_id = %s AND vote_set.result_mode = 'official'
             ORDER BY created_at
         """,
             (song.id, show_data.id),
@@ -262,8 +271,16 @@ def results(year: int, show: str, permissions: UserPermissions):
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT COUNT(voter_id) AS c FROM vote_set WHERE show_id = %s", (show_data.id,))
+    cursor.execute(
+        "SELECT COUNT(voter_id) AS c FROM vote_set WHERE show_id = %s AND result_mode = 'official'",
+        (show_data.id,),
+    )
     voter_count = fetchone(cursor)["c"]
+    cursor.execute(
+        "SELECT revote_eligible_at IS NOT NULL AS eligible FROM show WHERE id = %s",
+        (show_data.id,),
+    )
+    revote_eligible = fetchone(cursor)["eligible"]
     songs.sort(reverse=True)
 
     off = 0
@@ -345,6 +362,7 @@ def results(year: int, show: str, permissions: UserPermissions):
         voters=voter_count,
         can_apply_penalty=permissions.can_view_restricted,
         has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
+        revote_eligible=revote_eligible,
     )
 
 
@@ -382,7 +400,7 @@ def detailed_results(year: int, show: str, permissions: UserPermissions):
         SELECT username, COALESCE(country_id, 'XX') as code, country.name AS country FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         LEFT OUTER JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY created_at
     """,
         (show_data.id,),
@@ -396,7 +414,7 @@ def detailed_results(year: int, show: str, permissions: UserPermissions):
             SELECT score, username FROM vote
             JOIN vote_set ON vote.vote_set_id = vote_set.id
             JOIN account ON vote_set.voter_id = account.id
-            WHERE song_id = %s AND show_id = %s
+            WHERE song_id = %s AND show_id = %s AND vote_set.result_mode = 'official'
             ORDER BY created_at
         """,
             (song.id, show_data.id),

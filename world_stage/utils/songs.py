@@ -38,7 +38,9 @@ class Song:
     sources: str | None
     hidden: bool = False
 
-    def __init__(self, song: dict, *, show_id: int | None = None):
+    def __init__(
+        self, song: dict, *, show_id: int | None = None, result_mode: str = "official"
+    ):
         year = Year(
             id=song["year_id"],
             special_name=song.get("special_name"),
@@ -77,6 +79,7 @@ class Song:
             submitter=song["username"],
             show_id=show_id,
             ro=song.get("running_order"),
+            result_mode=result_mode,
         )
 
     def _raw_init(
@@ -108,6 +111,7 @@ class Song:
         languages: list["Language"] | None = None,
         show_id: int | None = None,
         ro: int | None = None,
+        result_mode: str = "official",
     ):
         if languages is None:
             languages = []
@@ -146,7 +150,7 @@ class Song:
         self.title_lang = get_language(title_lang) if title_lang else Language()
         self.native_lang = get_language(native_lang) if native_lang else Language()
         if show_id is not None and ro is not None:
-            self.vote_data = get_votes_for_song(self.id, show_id, ro)
+            self.vote_data = get_votes_for_song(self.id, show_id, ro, result_mode=result_mode)
         elif ro is not None:
             self.vote_data = VoteData(ro, None, None, None)
         else:
@@ -191,7 +195,9 @@ class Song:
         return self.vote_data.get_pt(points)
 
 
-def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
+def get_votes_for_song(
+    song_id: int, show_id: int, ro: int, *, result_mode: str = "official"
+) -> VoteData:
     db = get_db()
     cursor = db.cursor()
 
@@ -203,8 +209,9 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         FROM country_show_results csr
         LEFT JOIN song_show ss ON ss.song_id = csr.song_id AND ss.show_id = csr.show_id
         WHERE csr.song_id = %s AND csr.show_id = %s
+          AND csr.result_mode = %s
     """,
-        (song_id, show_id),
+        (song_id, show_id, result_mode),
     )
 
     row = cursor.fetchone()
@@ -227,9 +234,9 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         """
         SELECT COUNT(*) AS c FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
-        WHERE song_id = %s AND show_id = %s
+        WHERE song_id = %s AND show_id = %s AND vote_set.result_mode = %s
     """,
-        (song_id, show_id),
+        (song_id, show_id, result_mode),
     )
     count = fetchone(cursor)["c"]
 
@@ -246,9 +253,9 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
     cursor.execute(
         """
         SELECT COUNT(DISTINCT voter_id) AS c FROM vote_set
-        WHERE show_id = %s
+        WHERE show_id = %s AND result_mode = %s
     """,
-        (show_id,),
+        (show_id, result_mode),
     )
     show_voters = fetchone(cursor)["c"]
 
@@ -257,10 +264,10 @@ def get_votes_for_song(song_id: int, show_id: int, ro: int) -> VoteData:
         SELECT score FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
-        WHERE song_id = %s AND show_id = %s
+        WHERE song_id = %s AND show_id = %s AND vote_set.result_mode = %s
         ORDER BY score
     """,
-        (song_id, show_id),
+        (song_id, show_id, result_mode),
     )
     res = VoteData(ro=ro, total_votes=count, max_pts=max_pts, show_voters=show_voters)
     for points in cursor.fetchall():
@@ -421,10 +428,7 @@ def get_song_time_signature_timeline(song_id: int) -> list[dict]:
     rows: list[dict] = []
     for r in cursor.fetchall():
         num, den = r["numerator"], r["denominator"]
-        if num is None and den is None:
-            label = "mixed meter"
-        else:
-            label = f"{num}⁄{den}"
+        label = "mixed meter" if num is None and den is None else f"{num}⁄{den}"
         rows.append(
             {
                 "start_seconds": r["start_seconds"],
@@ -575,10 +579,11 @@ def _load_songs(
     *,
     show_id: int | None = None,
     select_languages: bool = False,
+    result_mode: str = "official",
 ) -> list[Song]:
     cursor = get_db().cursor()
     cursor.execute(sql, params)
-    songs = [Song(row, show_id=show_id) for row in cursor.fetchall()]
+    songs = [Song(row, show_id=show_id, result_mode=result_mode) for row in cursor.fetchall()]
     if select_languages:
         languages_by_song = get_languages_for_songs([s.id for s in songs])
         for song in songs:
@@ -603,6 +608,7 @@ def get_show_songs(
     select_languages=False,
     select_votes=False,
     sort_reveal=False,
+    result_mode: str = "official",
 ) -> list[Song] | None:
     data = get_show_id(short_name, year)
     if not data:
@@ -626,6 +632,7 @@ JOIN show ON song_show.show_id = show.id""",
         (show_id,),
         show_id=show_id if select_votes else None,
         select_languages=select_languages,
+        result_mode=result_mode,
     )
 
 
@@ -715,6 +722,7 @@ def get_show_results_for_songs(song_ids: list[int]) -> dict[int, dict]:
         JOIN show ON show.id = csr.show_id
         WHERE csr.song_id = ANY(%s)
           AND show.status = 'full'
+          AND csr.result_mode = 'official'
         ORDER BY csr.song_id, csr.year_id, csr.short_name
     """,
         (song_ids,),

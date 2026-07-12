@@ -66,6 +66,7 @@ def get_voter_participation(
         JOIN show ON vote_set.show_id = show.id
         JOIN account ON vote_set.voter_id = account.id
         WHERE show.year_id = %s AND show.short_name = ANY(%s)
+          AND vote_set.result_mode = 'official'
         """,
         (year_id, short_names),
     )
@@ -208,7 +209,7 @@ def show_voters(year: int, show: str, permissions: UserPermissions):
         SELECT username, nickname, COALESCE(country.id, 'XX') FROM vote_set
         JOIN account ON voter_id = account.id
         LEFT OUTER JOIN country ON country_id = country.id
-        WHERE show_id = %s
+        WHERE show_id = %s AND vote_set.result_mode = 'official'
     """,
         (show_data.id,),
     )

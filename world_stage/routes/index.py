@@ -61,7 +61,7 @@ def home(user: tuple[int, str] | None, permissions: UserPermissions):
             WHERE voting_opens <= CURRENT_TIMESTAMP
               AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
               AND id NOT IN (
-                  SELECT show_id FROM vote_set WHERE voter_id = %s
+                  SELECT show_id FROM vote_set WHERE voter_id = %s AND result_mode = 'official'
               )
             LIMIT 1
             """,

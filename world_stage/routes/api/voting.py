@@ -92,7 +92,7 @@ def _ballot(cursor, user_id: int, show_id: int) -> dict | None:
         """
         SELECT id, nickname, country_id, created_at
         FROM vote_set
-        WHERE voter_id = %s AND show_id = %s
+        WHERE voter_id = %s AND show_id = %s AND result_mode = 'official'
         """,
         (user_id, show_id),
     )
@@ -248,9 +248,9 @@ def save_ballot(show: str, auth):
 
     cursor.execute(
         """
-        INSERT INTO vote_set (voter_id, show_id, country_id, nickname, ip_address)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (voter_id, show_id) DO UPDATE
+        INSERT INTO vote_set (voter_id, show_id, country_id, nickname, ip_address, result_mode)
+        VALUES (%s, %s, %s, %s, %s, 'official')
+        ON CONFLICT (voter_id, show_id, result_mode) DO UPDATE
         SET country_id = EXCLUDED.country_id,
             nickname = EXCLUDED.nickname,
             ip_address = EXCLUDED.ip_address

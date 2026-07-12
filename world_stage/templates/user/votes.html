@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Voting History: {{ username }}{% endblock %}
+{% block title %}{{ 'Revote' if is_revote else 'Voting' }} History: {{ username }}{% endblock %}
 {% block headercontents %}
 <link rel="stylesheet" href="/static/css/user-votes.css">
 <script src="/static/js/sort-table.js"></script>
@@ -9,6 +9,11 @@
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
     <span class="nav-separator"></span>
+    {% if is_revote %}
+    <a class="nav-item" href="{{ url_for('user.votes', username=username) }}">Voting history</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('user.revotes', username=username) }}">Revote history</a>
+    {% endif %}
     <a class="nav-item" href="{{ url_for('user.predictions', username=username) }}">Predictions history</a>
 {% endblock %}
 {% block content %}
@@ -55,6 +60,7 @@
 </table>
 </div>
 {% endmacro %}
+{% if not is_revote %}
 <div class="view-controls">
     <label class="view-select">
         <span>View:</span>
@@ -123,6 +129,7 @@
     </label>
     {% endif %}
 </div>
+{% endif %}
 {% if view == 'country' %}
 {% if selected_country %}
 <h3 class="country-heading">{{ flag(selected_country.cc, 36) }} {{ selected_country.name }}</h3>
@@ -180,7 +187,9 @@
 {% for vote in votes %}
 <div class="vote-card">
     <h3 class="card-show-name">
-    {% if vote.special_short_name %}
+    {% if is_revote %}
+        <a href="{{ url_for('revote.results', year=vote.special_short_name if vote.special_short_name else vote.year, show=vote.short_name) }}">{{ (vote.special_name ~ ' ') if vote.special_short_name else (vote.year ~ ' ') }}{{ vote.show_name }}</a>
+    {% elif vote.special_short_name %}
         <a href="{{ url_for('year.special_results', short_name=vote.special_short_name, show=vote.short_name) }}">{{ vote.special_name }} {{ vote.show_name }}</a>
     {% else %}
         <a href="{{ url_for('year.results', year=vote.year, show=vote.short_name) }}">{{ vote.year }} {{ vote.show_name }}</a>
@@ -188,11 +197,12 @@
     </h3>
     <p class="vote-date">{{ vote.date }}</p>
     <p class="voter-name">{{ flag(vote.code, 42) }}{{ vote.nickname }}</p>
-    <table class="user-votes">
+    <table class="user-votes{% if is_revote %} revotes{% if vote.has_original_vote %} revotes-with-difference{% endif %}{% endif %}">
         <tbody>
         {% for v in vote.points %}
             <tr class="{{ v.class }}">
                 <td class="points-data">{{ v.pts }}p</td>
+                {% if is_revote and vote.has_original_vote %}<td class="points-data points-difference">{{ '+' if v.points_difference > 0 else '' }}{{ v.points_difference }}</td>{% endif %}
                 <td><div class="song-container">{{ flag(v.code, 36) }} <div class="song-title">{{ v.title }}</div></div></td>
                 <td class="result-data">{% if v.result_place %}{{ v.result_place }}{% endif %}</td>
             </tr>

@@ -147,7 +147,7 @@ def special_song_votes(
             cursor.execute(
                 """
                 SELECT place FROM country_show_results
-                WHERE song_id = %s AND show_id = %s
+                WHERE song_id = %s AND show_id = %s AND result_mode = 'official'
             """,
                 (song["id"], show_data.id),
             )
@@ -164,7 +164,7 @@ def special_song_votes(
         FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         LEFT OUTER JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY account.username
     """,
         (show_data.id,),
@@ -178,6 +178,7 @@ def special_song_votes(
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
         WHERE vote.song_id = %s AND vote_set.show_id = %s
+          AND vote_set.result_mode = 'official'
     """,
         (song["id"], show_data.id),
     )
@@ -290,7 +291,7 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
             cursor.execute(
                 """
                 SELECT place FROM country_show_results
-                WHERE song_id = %s AND show_id = %s
+                WHERE song_id = %s AND show_id = %s AND result_mode = 'official'
             """,
                 (song["id"], show_data.id),
             )
@@ -308,7 +309,7 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
         FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         LEFT OUTER JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = %s
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY account.username
     """,
         (show_data.id,),
@@ -323,6 +324,7 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
         WHERE vote.song_id = %s AND vote_set.show_id = %s
+          AND vote_set.result_mode = 'official'
     """,
         (song["id"], show_data.id),
     )

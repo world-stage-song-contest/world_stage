@@ -7,3 +7,12 @@ function updateFlag(select) {
     const flagEl = document.getElementById(select.dataset.flag);
     flagEl.src = flagUrl;
 }
+
+function clearVotes() {
+    document.querySelectorAll('select[name^="pts-"]').forEach((select) => {
+        select.value = '';
+        select.classList.remove('invalid');
+        select.classList.add('valid');
+        updateFlag(select);
+    });
+}
