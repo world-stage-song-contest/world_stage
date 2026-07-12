@@ -205,7 +205,10 @@ def get_votes_for_song(
         """
         SELECT csr.total_points, csr.total_votes_received, csr.point_distribution,
                csr.max_pts, csr.total_voters,
-               COALESCE(ss.penalty, 0) AS penalty
+               COALESCE(
+                   CASE WHEN csr.result_mode = 'revote' THEN ss.revote_penalty ELSE ss.penalty END,
+                   0
+               ) AS penalty
         FROM country_show_results csr
         LEFT JOIN song_show ss ON ss.song_id = csr.song_id AND ss.show_id = csr.show_id
         WHERE csr.song_id = %s AND csr.show_id = %s
