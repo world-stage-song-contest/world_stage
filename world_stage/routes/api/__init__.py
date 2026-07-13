@@ -2,6 +2,7 @@ from flask import Blueprint
 
 from .country import bp as c_bp
 from .discovery import bp as d_bp
+from .recap import bp as recap_bp
 from .results import bp as r_bp
 from .song import bp as s_bp
 from .voting import bp as v_bp
@@ -12,5 +13,6 @@ bp.register_blueprint(c_bp)
 bp.register_blueprint(s_bp)
 bp.register_blueprint(y_bp)
 bp.register_blueprint(d_bp)
+bp.register_blueprint(recap_bp)
 bp.register_blueprint(r_bp)
 bp.register_blueprint(v_bp)
