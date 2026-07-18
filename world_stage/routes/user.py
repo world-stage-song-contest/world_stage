@@ -398,7 +398,7 @@ def _medal_table(cursor, user_id: int, username: str, *, revote=False):
         WHERE sh.status = 'full' {revote_filter} {final_filter}
         GROUP BY country.id, country.name
         ORDER BY first DESC, second DESC, third DESC, fourth DESC, fifth DESC,
-                 votings DESC, country.name ASC
+                 votings ASC, country.name ASC
         """,
         (user_id,),
     )
@@ -869,22 +869,28 @@ def _parse_bias_filters(with_specials: bool):
     return year_from, year_to
 
 
-def get_country_biases(user_id: int, year_from: int | None, year_to: int | None):
+def get_country_biases(
+    user_id: int, year_from: int | None, year_to: int | None, include_revotes: bool
+):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT * FROM user_country_bias(%s, %s, %s)", (user_id, year_from, year_to))
+    cursor.execute(
+        "SELECT * FROM user_country_bias(%s, %s, %s, %s)",
+        (user_id, year_from, year_to, include_revotes),
+    )
     for r in cursor:
         yield dict(r)
 
 
 def get_submitter_biases(
-    user_id: int, year_from: int | None, year_to: int | None, include_specials: bool
+    user_id: int, year_from: int | None, year_to: int | None,
+    include_specials: bool, include_revotes: bool,
 ):
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
-        "SELECT * FROM user_submitter_bias(%s, %s, %s, %s)",
-        (user_id, year_from, year_to, include_specials),
+        "SELECT * FROM user_submitter_bias(%s, %s, %s, %s, %s)",
+        (user_id, year_from, year_to, include_specials, include_revotes),
     )
     for r in cursor:
         yield dict(r)
@@ -910,14 +916,17 @@ def bias(username: str):
     if not user_id_g:
         return {"error": "User not found"}, 404
     user_id = user_id_g["id"]
+    include_revotes = request.args.get("include_revotes") == "true"
 
     if bias_type == "user":
         year_from, year_to, include_specials = _parse_bias_filters(with_specials=True)
-        biases = get_submitter_biases(user_id, year_from, year_to, include_specials)
+        biases = get_submitter_biases(
+            user_id, year_from, year_to, include_specials, include_revotes
+        )
     elif bias_type == "country":
         year_from, year_to = _parse_bias_filters(with_specials=False)
         include_specials = True  # N/A; template reads it for checkbox state only
-        biases = get_country_biases(user_id, year_from, year_to)
+        biases = get_country_biases(user_id, year_from, year_to, include_revotes)
     else:
         return render_template(
             "error.html", error=f"Invalid bias type specified: {bias_type}."
@@ -932,6 +941,7 @@ def bias(username: str):
         year_from=year_from,
         year_to=year_to,
         include_specials=include_specials,
+        include_revotes=include_revotes,
     )
 
 
@@ -989,9 +999,10 @@ def bias_for(username: str):
         return render_template("error.html", error="User not found"), 404
 
     year_from, year_to, include_specials = _parse_bias_filters(with_specials=True)
+    include_revotes = request.args.get("include_revotes") == "true"
     cursor.execute(
-        "SELECT * FROM submitter_voter_bias(%s, %s, %s, %s)",
-        (row["id"], year_from, year_to, include_specials),
+        "SELECT * FROM submitter_voter_bias(%s, %s, %s, %s, %s)",
+        (row["id"], year_from, year_to, include_specials, include_revotes),
     )
     biases = [dict(r) for r in cursor]
 
@@ -1004,4 +1015,5 @@ def bias_for(username: str):
         year_from=year_from,
         year_to=year_to,
         include_specials=include_specials,
+        include_revotes=include_revotes,
     )

@@ -991,10 +991,23 @@ CREATE OR REPLACE FUNCTION bias_reciprocal_class(parts bigint, mutual numeric, v
 
 -- ── Forward: for one voter, which countries are they biased toward? ──
 
+-- The bias views normally use the original ballot.  When requested, a
+-- revote replaces that voter’s original ballot for the same show.
+CREATE FUNCTION bias_vote_sets(p_include_revotes boolean DEFAULT false)
+RETURNS SETOF vote_set
+LANGUAGE sql STABLE AS $$
+    SELECT DISTINCT ON (vs.show_id, vs.voter_id) vs.*
+    FROM vote_set vs
+    WHERE vs.result_mode = 'official'
+       OR (p_include_revotes AND vs.result_mode = 'revote')
+    ORDER BY vs.show_id, vs.voter_id, (vs.result_mode = 'revote') DESC
+$$;
+
 CREATE FUNCTION user_country_bias(
     p_user_id bigint,
     p_year_from bigint DEFAULT NULL,
-    p_year_to bigint DEFAULT NULL
+    p_year_to bigint DEFAULT NULL,
+    p_include_revotes boolean DEFAULT false
 )
 RETURNS TABLE (
     country_id text,
@@ -1015,7 +1028,7 @@ WITH point_max AS (
 ),
 user_shows AS (
     SELECT s.id AS show_id
-    FROM vote_set vs
+    FROM bias_vote_sets(p_include_revotes) vs
     JOIN show s ON s.id = vs.show_id
     WHERE vs.voter_id = p_user_id
       AND s.status = 'full'
@@ -1029,7 +1042,7 @@ sc AS (
         COALESCE(SUM(v.score) FILTER (WHERE vs.voter_id = p_user_id), 0) AS actual,
         COALESCE(SUM(v.score) FILTER (WHERE vs.voter_id <> p_user_id), 0) AS others_t
     FROM user_shows us
-    JOIN vote_set vs ON vs.show_id = us.show_id
+    JOIN bias_vote_sets(p_include_revotes) vs ON vs.show_id = us.show_id
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN song sg ON sg.id = v.song_id
     WHERE sg.submitter_id <> p_user_id
@@ -1070,7 +1083,7 @@ parts AS (
     JOIN song sg ON sg.id = ss.song_id
     JOIN show sh ON sh.id = us.show_id
     JOIN point_max pm ON pm.point_system_id = sh.point_system_id
-    LEFT JOIN vote_set uvs ON uvs.show_id = us.show_id AND uvs.voter_id = p_user_id
+    LEFT JOIN bias_vote_sets(p_include_revotes) uvs ON uvs.show_id = us.show_id AND uvs.voter_id = p_user_id
     LEFT JOIN vote uv ON uv.vote_set_id = uvs.id AND uv.song_id = sg.id
     WHERE sg.submitter_id <> p_user_id
     GROUP BY sg.country_id
@@ -1094,7 +1107,8 @@ CREATE FUNCTION user_submitter_bias(
     p_user_id bigint,
     p_year_from bigint DEFAULT NULL,
     p_year_to bigint DEFAULT NULL,
-    p_include_specials boolean DEFAULT true
+    p_include_specials boolean DEFAULT true,
+    p_include_revotes boolean DEFAULT false
 )
 RETURNS TABLE (
     submitter_id bigint,
@@ -1121,7 +1135,7 @@ WITH point_max AS (
 ),
 user_shows AS (
     SELECT s.id AS show_id
-    FROM vote_set vs
+    FROM bias_vote_sets(p_include_revotes) vs
     JOIN show s ON s.id = vs.show_id
     WHERE vs.voter_id = p_user_id
       AND s.status = 'full'
@@ -1138,7 +1152,7 @@ sc AS (
         COALESCE(SUM(v.score) FILTER (WHERE vs.voter_id = p_user_id), 0) AS actual,
         COALESCE(SUM(v.score) FILTER (WHERE vs.voter_id <> p_user_id), 0) AS others_t
     FROM user_shows us
-    JOIN vote_set vs ON vs.show_id = us.show_id
+    JOIN bias_vote_sets(p_include_revotes) vs ON vs.show_id = us.show_id
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN song sg ON sg.id = v.song_id
     WHERE sg.submitter_id <> p_user_id
@@ -1179,7 +1193,7 @@ parts AS (
     JOIN song sg ON sg.id = ss.song_id
     JOIN show sh ON sh.id = us.show_id
     JOIN point_max pm ON pm.point_system_id = sh.point_system_id
-    LEFT JOIN vote_set uvs ON uvs.show_id = us.show_id AND uvs.voter_id = p_user_id
+    LEFT JOIN bias_vote_sets(p_include_revotes) uvs ON uvs.show_id = us.show_id AND uvs.voter_id = p_user_id
     LEFT JOIN vote uv ON uv.vote_set_id = uvs.id AND uv.song_id = sg.id
     WHERE sg.submitter_id <> p_user_id
     GROUP BY sg.submitter_id
@@ -1189,7 +1203,7 @@ reciprocal AS (
         SUM(v.score) AS pts_target_to_user,
         COUNT(*) AS received_any,
         COUNT(*) FILTER (WHERE v.score = pm.max_score) AS received_max
-    FROM vote_set vs
+    FROM bias_vote_sets(p_include_revotes) vs
     JOIN vote v ON v.vote_set_id = vs.id
     JOIN song s ON s.id = v.song_id
     JOIN show sh ON sh.id = vs.show_id
@@ -1235,7 +1249,8 @@ $$;
 CREATE FUNCTION country_voter_bias(
     p_country_id text,
     p_year_from bigint DEFAULT NULL,
-    p_year_to bigint DEFAULT NULL
+    p_year_to bigint DEFAULT NULL,
+    p_include_revotes boolean DEFAULT false
 )
 RETURNS TABLE (
     voter_id bigint,
@@ -1256,7 +1271,7 @@ WITH point_max AS (
 ),
 voter_shows AS (
     SELECT vs.voter_id AS v, vs.show_id
-    FROM vote_set vs
+    FROM bias_vote_sets(p_include_revotes) vs
     JOIN show sh ON sh.id = vs.show_id
     WHERE sh.status = 'full'
       AND sh.year_id > 0
@@ -1268,7 +1283,7 @@ sc AS (
         COALESCE(SUM(vo.score) FILTER (WHERE iv.voter_id = vss.v), 0) AS actual,
         COALESCE(SUM(vo.score) FILTER (WHERE iv.voter_id <> vss.v), 0) AS others_t
     FROM voter_shows vss
-    JOIN vote_set iv ON iv.show_id = vss.show_id
+    JOIN bias_vote_sets(p_include_revotes) iv ON iv.show_id = vss.show_id
     JOIN vote vo ON vo.vote_set_id = iv.id
     JOIN song s ON s.id = vo.song_id
     WHERE s.submitter_id <> vss.v
@@ -1313,7 +1328,7 @@ parts AS (
     JOIN song s ON s.id = ss.song_id
     JOIN show sh ON sh.id = vss.show_id
     JOIN point_max pm ON pm.point_system_id = sh.point_system_id
-    LEFT JOIN vote_set uvs ON uvs.show_id = vss.show_id AND uvs.voter_id = vss.v
+    LEFT JOIN bias_vote_sets(p_include_revotes) uvs ON uvs.show_id = vss.show_id AND uvs.voter_id = vss.v
     LEFT JOIN vote uv ON uv.vote_set_id = uvs.id AND uv.song_id = s.id
     WHERE s.country_id = p_country_id AND s.submitter_id <> vss.v
     GROUP BY vss.v
@@ -1337,7 +1352,8 @@ CREATE FUNCTION submitter_voter_bias(
     p_submitter_id bigint,
     p_year_from bigint DEFAULT NULL,
     p_year_to bigint DEFAULT NULL,
-    p_include_specials boolean DEFAULT true
+    p_include_specials boolean DEFAULT true,
+    p_include_revotes boolean DEFAULT false
 )
 RETURNS TABLE (
     voter_id bigint,
@@ -1364,7 +1380,7 @@ WITH point_max AS (
 ),
 voter_shows AS (
     SELECT vs.voter_id AS v, vs.show_id
-    FROM vote_set vs
+    FROM bias_vote_sets(p_include_revotes) vs
     JOIN show sh ON sh.id = vs.show_id
     WHERE sh.status = 'full'
       AND (
@@ -1379,7 +1395,7 @@ sc AS (
         COALESCE(SUM(vo.score) FILTER (WHERE iv.voter_id = vss.v), 0) AS actual,
         COALESCE(SUM(vo.score) FILTER (WHERE iv.voter_id <> vss.v), 0) AS others_t
     FROM voter_shows vss
-    JOIN vote_set iv ON iv.show_id = vss.show_id
+    JOIN bias_vote_sets(p_include_revotes) iv ON iv.show_id = vss.show_id
     JOIN vote vo ON vo.vote_set_id = iv.id
     JOIN song s ON s.id = vo.song_id
     WHERE s.submitter_id <> vss.v
@@ -1424,7 +1440,7 @@ parts AS (
     JOIN song s ON s.id = ss.song_id
     JOIN show sh ON sh.id = vss.show_id
     JOIN point_max pm ON pm.point_system_id = sh.point_system_id
-    LEFT JOIN vote_set uvs ON uvs.show_id = vss.show_id AND uvs.voter_id = vss.v
+    LEFT JOIN bias_vote_sets(p_include_revotes) uvs ON uvs.show_id = vss.show_id AND uvs.voter_id = vss.v
     LEFT JOIN vote uv ON uv.vote_set_id = uvs.id AND uv.song_id = s.id
     WHERE s.submitter_id = p_submitter_id AND s.submitter_id <> vss.v
     GROUP BY vss.v
@@ -1434,7 +1450,7 @@ reciprocal AS (
         SUM(vo.score) AS pts_target_to_voter,
         COUNT(*) AS received_any,
         COUNT(*) FILTER (WHERE vo.score = pm.max_score) AS received_max
-    FROM vote_set vs
+    FROM bias_vote_sets(p_include_revotes) vs
     JOIN vote vo ON vo.vote_set_id = vs.id
     JOIN song s ON s.id = vo.song_id
     JOIN show sh ON sh.id = vs.show_id

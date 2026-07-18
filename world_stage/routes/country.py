@@ -328,10 +328,14 @@ def bias(code: str):
     name = get_country_name(canonical)
     year_from = request.args.get("from", type=int)
     year_to = request.args.get("to", type=int)
+    include_revotes = request.args.get("include_revotes") == "true"
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT * FROM country_voter_bias(%s, %s, %s)", (canonical, year_from, year_to))
+    cursor.execute(
+        "SELECT * FROM country_voter_bias(%s, %s, %s, %s)",
+        (canonical, year_from, year_to, include_revotes),
+    )
     biases = [dict(r) for r in cursor]
 
     return render_template(
@@ -344,6 +348,7 @@ def bias(code: str):
         year_from=year_from,
         year_to=year_to,
         include_specials=True,
+        include_revotes=include_revotes,
     )
 
 

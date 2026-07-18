@@ -53,6 +53,10 @@
         Include specials
     </label>
     {% endif %}
+    <label>
+        <input type="checkbox" name="include_revotes" value="true" {% if include_revotes %}checked{% endif %}>
+        Include revotes
+    </label>
     <button type="submit">Apply</button>
 </form>
 <div class="bias-controls">
