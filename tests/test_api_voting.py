@@ -72,6 +72,96 @@ def _seed_show_and_songs(db):
     return song_ids
 
 
+def test_show_results_are_rebuilt_once_after_a_complete_ballot(db):
+    song_ids = _seed_show_and_songs(db)
+    refresh_notices = []
+
+    def capture_refresh_notice(diagnostic):
+        if diagnostic.message_primary.startswith("Refreshed official results"):
+            refresh_notices.append(diagnostic.message_primary)
+
+    db.add_notice_handler(capture_refresh_notice)
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
+            SELECT 2, show_id, 'US', 'official'
+            FROM song_show
+            WHERE song_id = %s
+            RETURNING id, show_id
+            """,
+            (song_ids[0],),
+        )
+        ballot = cursor.fetchone()
+        cursor.executemany(
+            "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
+            [
+                (ballot["id"], song_ids[1], 12),
+                (ballot["id"], song_ids[2], 10),
+                (ballot["id"], song_ids[3], 8),
+            ],
+        )
+
+        # Results stay unchanged until the complete ballot transaction commits.
+        cursor.execute(
+            "SELECT COUNT(*) AS count FROM country_show_results WHERE show_id = %s",
+            (ballot["show_id"],),
+        )
+        assert cursor.fetchone()["count"] == 0
+
+    db.commit()
+
+    assert len(refresh_notices) == 1
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT country_id, total_points
+            FROM country_show_results
+            WHERE show_id = %s AND result_mode = 'official'
+            ORDER BY total_points DESC
+            """,
+            (ballot["show_id"],),
+        )
+        assert [
+            (row["country_id"], row["total_points"]) for row in cursor.fetchall()
+        ] == [("ES", 12), ("FR", 10), ("ES", 8), ("US", 0)]
+
+        cursor.execute("SELECT COUNT(*) AS count FROM show_result_refresh_queue")
+        assert cursor.fetchone()["count"] == 0
+
+    refresh_notices.clear()
+    with db.cursor() as cursor:
+        cursor.execute(
+            "UPDATE vote_set SET nickname = 'Changed' WHERE id = %s",
+            (ballot["id"],),
+        )
+        cursor.execute("DELETE FROM vote WHERE vote_set_id = %s", (ballot["id"],))
+        cursor.executemany(
+            "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
+            [
+                (ballot["id"], song_ids[1], 8),
+                (ballot["id"], song_ids[2], 12),
+                (ballot["id"], song_ids[3], 10),
+            ],
+        )
+    db.commit()
+
+    assert len(refresh_notices) == 1
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT country_id, total_points
+            FROM country_show_results
+            WHERE show_id = %s AND result_mode = 'official'
+            ORDER BY total_points DESC
+            """,
+            (ballot["show_id"],),
+        )
+        assert [
+            (row["country_id"], row["total_points"]) for row in cursor.fetchall()
+        ] == [("FR", 12), ("ES", 10), ("ES", 8), ("US", 0)]
+
+
 class TestVotingApi:
     def test_ballot_requires_authentication(self, client):
         response = client.get('/api/voting/2025-f')
