@@ -600,7 +600,12 @@ h1 {
 
 .flag {
     border: 1px solid var(--border-subtle);
+}
+
+.flag-image {
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
 }
 
 .center {

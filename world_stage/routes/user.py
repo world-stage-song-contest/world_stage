@@ -7,6 +7,7 @@ from flask import Blueprint, request
 
 from ..db import fetchone, get_db
 from ..utils import (
+    Song,
     UserPermissions,
     get_closed_years,
     get_countries,
@@ -49,7 +50,7 @@ def profile(username: str):
     return render_template("user/page.html", username=username)
 
 
-def _most_frequent_submission_countries(songs: list) -> list[dict]:
+def _most_frequent_submission_countries(songs: list[Song]) -> list[dict]:
     counted_statuses = {"closed", "ongoing"}
     country_names = {country.cc: country.name for country in get_countries()}
     counts = Counter(
@@ -72,7 +73,7 @@ def _most_frequent_submission_countries(songs: list) -> list[dict]:
 
 
 def _user_submission_stats(
-    songs: list,
+    songs: list[Song],
     results: dict[int, dict],
     *,
     special: bool = False,
@@ -359,8 +360,15 @@ def _votes_by_year(cursor, user_id: int, username: str, *, revote=False):
     special_years = sorted((r for r in rows if r["id"] < 0), key=lambda r: r["special_name"] or "")
     selected_id = request.args.get("year", type=int)
     selected_year = next((r for r in rows if r["id"] == selected_id), None)
-    entries = _year_entries(cursor, user_id, selected_year["id"], revote=revote) if selected_year else []
-    return render_template("user/votes.html", username=username, view="year", regular_years=regular_years, special_years=special_years, selected_year=selected_year, year_is_special=selected_year is not None and selected_year["id"] < 0, entries=entries, is_revote=revote, history_endpoint="user.revotes" if revote else "user.votes")
+    entries = []
+    if selected_year:
+        entries = _year_entries(cursor, user_id, selected_year["id"], revote=revote)
+    return render_template("user/votes.html", username=username, view="year",
+                           regular_years=regular_years, special_years=special_years,
+                           selected_year=selected_year,
+                           year_is_special=selected_year is not None and selected_year["id"] < 0,
+                           entries=entries, is_revote=revote,
+                           history_endpoint="user.revotes" if revote else "user.votes")
 
 
 def _medal_table(cursor, user_id: int, username: str, *, revote=False):
@@ -483,7 +491,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
     # Batch-fetch show results for all shows this user voted in,
     # keyed by (show_id, song_id) → place.
     show_ids = list({v["show_id"] for v in votes})
-    show_results: dict[tuple[int, int], dict] = {}
+    show_results: dict[tuple[int, int], int] = {}
     if show_ids:
         cursor.execute(
             """
@@ -516,10 +524,12 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
             # results stay hidden even when the viewer reveals vote details.
             in_hidden_show = False
             if vote["short_name"] != "f":
-                _, mod = redact_song_if_show(val, vote["year"], "f", vote["status"], blank=not unredacted)
+                _, mod = redact_song_if_show(val, vote["year"], "f", vote["status"],
+                                             blank=not unredacted)
                 in_hidden_show |= mod and vote["status"] == "partial"
                 if vote["short_name"] != "sc":
-                    _, mod = redact_song_if_show(val, vote["year"], "sc", vote["status"], blank=not unredacted)
+                    _, mod = redact_song_if_show(val, vote["year"], "sc", vote["status"],
+                                                 blank=not unredacted)
                     in_hidden_show |= mod and vote["status"] == "partial"
             # Only show result placement for shows that aren't hidden.
             if in_hidden_show or val.get("code") == "XX":
@@ -590,7 +600,7 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
     show_ids = list({vote["show_id"] for vote in votes})
     original_scores: dict[tuple[int, int], int] = {}
     original_vote_show_ids: set[int] = set()
-    show_results: dict[tuple[int, int], int] = {}
+    show_results: dict[tuple[int, int], dict] = {}
     if show_ids:
         cursor.execute(
             """
@@ -755,7 +765,7 @@ def predictions(username: str):
             scores_by_show[row["show_id"]].append(
                 (row["set_id"], row["score"], row["submitted_at"])
             )
-        for sid, rows in scores_by_show.items():
+        for _sid, rows in scores_by_show.items():
             rows.sort(key=lambda r: (r[1], r[2]))
             total = len(rows)
             for i, (set_id, _score, _ts) in enumerate(rows, start=1):

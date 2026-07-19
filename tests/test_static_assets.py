@@ -37,6 +37,22 @@ def test_static_url_uses_unversioned_path_without_a_deployed_release():
     assert _static_url(app, "css/index.css") == "/static/css/index.css"
 
 
+def test_flag_images_are_not_selectable_or_draggable(client):
+    response = client.get(
+        "/country/", headers={"Accept": "text/html"}, follow_redirects=True
+    )
+
+    assert response.status_code == 200
+    assert b'class="flag flag-image"' in response.data
+    assert b'draggable="false"' in response.data
+
+    stylesheet = client.get("/static/css/index.css")
+    assert stylesheet.status_code == 200
+    assert b".flag-image" in stylesheet.data
+    assert b"user-select: none" in stylesheet.data
+    assert b"-webkit-user-drag: none" in stylesheet.data
+
+
 def test_flag_url_selects_small_assets_and_falls_back_to_regular(tmp_path: Path):
     catalogue_path = tmp_path / "flags.sqlite"
     with sqlite3.connect(catalogue_path) as catalogue:

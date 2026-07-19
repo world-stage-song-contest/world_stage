@@ -253,7 +253,8 @@ function createEnvelope(n, country, isSecondChance) {
 
         const flag = document.createElement("img");
         flag.src = window.flagStaticUrl(code, 54);
-        flag.classList.add("card-flag");
+        flag.classList.add("card-flag", "flag-image");
+        flag.draggable = false;
         flag.title = countryName;
         front.appendChild(flag);
 
@@ -321,7 +322,8 @@ function createCountry(country, countryClass) {
     countryEl.dataset.cc = country.cc;
 
     const flag = document.createElement("img");
-    flag.classList.add("reveal-flag");
+    flag.classList.add("reveal-flag", "flag-image");
+    flag.draggable = false;
     flag.src = window.flagStaticUrl(country.cc, 24, "square");
     flag.title = country.country;
     countryEl.appendChild(flag);

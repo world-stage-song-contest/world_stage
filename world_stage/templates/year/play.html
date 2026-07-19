@@ -253,6 +253,8 @@
         img.className = 'pl-thumb';
         const fl = flagUrl(entry.cc);
         if (fl) {
+            img.classList.add('flag-image');
+            img.draggable = false;
             img.src = fl;
             img.alt = entry.cc ? entry.cc.toUpperCase() : '';
         } else {

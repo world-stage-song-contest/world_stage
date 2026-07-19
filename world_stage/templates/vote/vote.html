@@ -57,9 +57,9 @@
             <input type="text" name="nickname" value="{{ nickname or "" }}" maxlength="64">
             <label class="req" title="The country to display on the scoreboard." for="country">Country</label>
             <div class="flag-container">
-                <img class="flag" id="display-flag"
+                <img class="flag flag-image" id="display-flag"
                      src="{{ flag_url(selected_country or 'XX', 30) }}"
-                     height="30" width="45">
+                     height="30" width="45" draggable="false">
             </div>
             <select name="country" id="country"
                     onchange="updateFlag(this)"
@@ -79,9 +79,9 @@
             {% set pl = loop %}
             <label for="pts-{{point}}" class="req">{{point}} points</label>
             <div class="flag-container">
-                <img class="flag" id="flag-{{point}}"
+                <img class="flag flag-image" id="flag-{{point}}"
                      src="{{ flag_url(selected[point]['cc'] or 'XX', 30) }}"
-                     height="30" width="45">
+                     height="30" width="45" draggable="false">
             </div>
             <select name="pts-{{point}}" id="pts-{{point}}" data-flag="flag-{{point}}"
                     class="{% if point in invalid %}invalid{% else %}valid{% endif %}"

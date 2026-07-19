@@ -4,7 +4,8 @@
     width="{{ width }}"
     height="{{ (width*2//3)|int }}"
     alt="{{ country }}"
-    class="{{ class }}">
+    class="{{ class }} flag-image"
+    draggable="false">
 {%- endmacro %}
 {% macro static(filename) -%}
 {{ static_url(filename) }}
