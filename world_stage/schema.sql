@@ -1503,13 +1503,17 @@ $$;
 -- pushes toward +1 and disagreement toward -1, so the scale spans both ways.
 -- Songs either voter submitted are excluded, and each show is centred on its
 -- own mean so the fixed per-show point pool doesn't skew the scale.
+-- By default a voter's Revote ballot replaces their official ballot for that
+-- show; callers can disable Revotes to compare official ballots only.
 -- Fewer than 5 shared shows is flagged 'inconclusive' rather than dropped.
 DROP FUNCTION IF EXISTS user_taste_similarity(bigint, bigint, bigint, boolean);
+DROP FUNCTION IF EXISTS user_taste_similarity(bigint, bigint, bigint, boolean, boolean);
 CREATE FUNCTION user_taste_similarity(
     p_user_id bigint,
     p_year_from bigint DEFAULT NULL,
     p_year_to bigint DEFAULT NULL,
-    p_include_specials boolean DEFAULT true
+    p_include_specials boolean DEFAULT true,
+    p_include_revotes boolean DEFAULT true
 )
 RETURNS TABLE (
     other_id bigint,
@@ -1522,7 +1526,7 @@ RETURNS TABLE (
 LANGUAGE sql STABLE AS $$
 WITH target_shows AS (
     SELECT vs.id AS vote_set_id, vs.show_id
-    FROM vote_set vs
+    FROM bias_vote_sets(p_include_revotes) vs
     JOIN show sh ON sh.id = vs.show_id
     WHERE vs.voter_id = p_user_id
       AND sh.status = 'full'
@@ -1546,7 +1550,7 @@ target_votes AS (
 ),
 other_sets AS (
     SELECT vs.id AS vote_set_id, vs.show_id, vs.voter_id
-    FROM vote_set vs
+    FROM bias_vote_sets(p_include_revotes) vs
     JOIN target_shows ts ON ts.show_id = vs.show_id
     WHERE vs.voter_id <> p_user_id
 ),

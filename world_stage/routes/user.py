@@ -946,13 +946,17 @@ def bias(username: str):
 
 
 def get_taste_similarity(
-    user_id: int, year_from: int | None, year_to: int | None, include_specials: bool
+    user_id: int,
+    year_from: int | None,
+    year_to: int | None,
+    include_specials: bool,
+    include_revotes: bool = True,
 ):
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
-        "SELECT * FROM user_taste_similarity(%s, %s, %s, %s)",
-        (user_id, year_from, year_to, include_specials),
+        "SELECT * FROM user_taste_similarity(%s, %s, %s, %s, %s)",
+        (user_id, year_from, year_to, include_specials, include_revotes),
     )
     for r in cursor:
         yield dict(r)
@@ -973,7 +977,13 @@ def similar(username: str):
     user_id = user_id_g["id"]
 
     year_from, year_to, include_specials = _parse_bias_filters(with_specials=True)
-    similarities = get_taste_similarity(user_id, year_from, year_to, include_specials)
+    if "include_revotes" in request.args:
+        include_revotes = request.args.get("include_revotes") == "true"
+    else:
+        include_revotes = not request.args.get("_submitted")
+    similarities = get_taste_similarity(
+        user_id, year_from, year_to, include_specials, include_revotes
+    )
 
     return render_template(
         "user/similar.html",
@@ -983,6 +993,7 @@ def similar(username: str):
         year_from=year_from,
         year_to=year_to,
         include_specials=include_specials,
+        include_revotes=include_revotes,
     )
 
 
