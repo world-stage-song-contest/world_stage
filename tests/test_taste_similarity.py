@@ -152,15 +152,18 @@ def test_taste_similarity_revotes_replace_each_voters_official_ballot(client, db
         # Alice's Revote combines with Bob's official ballot when Bob has not
         # revoted, rather than dropping the show or using Alice's official.
         _delete_ballot(cursor, 2, show_id, "revote")
+        db.commit()
         assert _similarity(cursor) == pytest.approx(-1.0)
 
         # The opposite mixed pair independently selects Bob's Revote and
         # Alice's official ballot.
         _insert_ballot(cursor, 2, show_id, "revote", song_ids, [12, 8, 10])
         _delete_ballot(cursor, 1, show_id, "revote")
+        db.commit()
         assert _similarity(cursor) == pytest.approx(0.5)
 
         # With no Revotes, include_revotes naturally falls back to both
         # official ballots.
         _delete_ballot(cursor, 2, show_id, "revote")
+        db.commit()
         assert _similarity(cursor) == pytest.approx(1.0)
