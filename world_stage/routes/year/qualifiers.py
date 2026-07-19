@@ -8,7 +8,7 @@ from ...utils import (
     UserPermissions,
     dt_now,
     get_show_id,
-    get_votes_for_song,
+    get_votes_for_songs,
     render_template,
     with_permissions,
 )
@@ -159,15 +159,19 @@ def qualifiers_scores(year: int, show: str, permissions: UserPermissions):
     """,
         (show_data.id,),
     )
+    rows = cursor.fetchall()
+    votes_by_song = get_votes_for_songs(
+        {row["id"]: row["running_order"] for row in rows}, show_data.id
+    )
     countries = []
-    for row in cursor.fetchall():
+    for row in rows:
         val = {
             "id": row["id"],
             "title": row["title"],
             "country": row["country"],
             "cc": row["cc"],
             "entry_number": row["entry_number"],
-            "points": get_votes_for_song(row["id"], show_data.id, row["running_order"]),
+            "points": votes_by_song[row["id"]],
         }
         countries.append(val)
 

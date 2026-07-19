@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache, total_ordering
-from typing import Any, LiteralString
+from typing import Any, LiteralString, Self
 
-from ..db import fetchone, get_db
+from ..db import get_db
 from .lookups import get_show_id
 from .timefmt import format_seconds
 from .types import Country, Language, VoteData, Year
@@ -23,8 +23,8 @@ class Song:
     submitter: str | None
     submitter_id: int | None
     native_title: str | None
-    title_lang: Language | None
-    native_lang: Language | None
+    title_lang: Language
+    native_lang: Language
     translated_lyrics: str | None
     latin_lyrics: str | None
     native_lyrics: str | None
@@ -36,18 +36,28 @@ class Song:
     recap_start: str | None
     recap_end: str | None
     sources: str | None
+    recap_start_seconds: int | None = None
+    recap_end_seconds: int | None = None
+    key_signatures: list[str] = field(default_factory=list)
+    key_signature_timeline: list[dict] = field(default_factory=list)
+    time_signatures: list[str] = field(default_factory=list)
+    time_signature_timeline: list[dict] = field(default_factory=list)
+    subgenres: list[str] = field(default_factory=list)
     hidden: bool = False
 
-    def __init__(
-        self, song: dict, *, show_id: int | None = None, result_mode: str = "official"
-    ):
+    @classmethod
+    def from_row(cls, song: dict) -> Self:
+        """Build a Song from an already-hydrated query row without database I/O."""
+        recap_start_seconds = song["snippet_start"]
+        recap_end_seconds = song["snippet_end"]
+        running_order = song.get("running_order")
         year = Year(
             id=song["year_id"],
             special_name=song.get("special_name"),
             special_short_name=song.get("special_short_name"),
             status=song.get("year_status"),
         )
-        self._raw_init(
+        return cls(
             id=song["id"],
             title=song["title"],
             native_title=song["native_title"],
@@ -56,8 +66,6 @@ class Song:
             poster_link=song["poster_link"],
             vtt_link=song.get("vtt_link"),
             duration=song.get("duration"),
-            recap_start=song["snippet_start"],
-            recap_end=song["snippet_end"],
             country=Country(
                 cc=song["country_id"],
                 name=song["name"],
@@ -68,93 +76,32 @@ class Song:
             placeholder=bool(song["is_placeholder"]),
             year=year,
             entry_number=song["entry_number"],
-            title_lang=song["title_language_id"],
+            title_lang=_language_from_row(song, "title_language"),
             submitter_id=song["submitter_id"],
-            native_lang=song["native_language_id"],
+            native_lang=_language_from_row(song, "native_language"),
             translated_lyrics=song["translated_lyrics"],
             latin_lyrics=song["romanized_lyrics"],
             native_lyrics=song["native_lyrics"],
             lyrics_notes=song["notes"],
             sources=song["sources"],
             submitter=song["username"],
-            show_id=show_id,
-            ro=song.get("running_order"),
-            result_mode=result_mode,
+            languages=[],
+            vote_data=(
+                VoteData(running_order, None, None, None)
+                if running_order is not None
+                else None
+            ),
+            recap_start=(
+                format_seconds(recap_start_seconds)
+                if recap_start_seconds is not None
+                else None
+            ),
+            recap_end=(
+                format_seconds(recap_end_seconds) if recap_end_seconds is not None else None
+            ),
+            recap_start_seconds=recap_start_seconds,
+            recap_end_seconds=recap_end_seconds,
         )
-
-    def _raw_init(
-        self,
-        *,
-        id: int,
-        title: str,
-        native_title: str | None,
-        artist: str,
-        country: Country,
-        year: Year,
-        entry_number: int,
-        poster_link: str | None,
-        vtt_link: str | None,
-        placeholder: bool,
-        submitter: str | None,
-        submitter_id: int | None,
-        title_lang: int | None,
-        native_lang: int | None,
-        lyrics_notes: str | None,
-        translated_lyrics: str | None,
-        latin_lyrics: str | None,
-        native_lyrics: str | None,
-        video_link: str | None,
-        duration: float | None = None,
-        recap_start: int | None,
-        recap_end: int | None,
-        sources: str | None,
-        languages: list["Language"] | None = None,
-        show_id: int | None = None,
-        ro: int | None = None,
-        result_mode: str = "official",
-    ):
-        if languages is None:
-            languages = []
-
-        self.id = id
-        self.title = title
-        self.artist = artist
-        self.country = country
-        self.native_title = native_title
-        self.year = year
-        self.entry_number = entry_number
-        self.languages = languages
-        self.key_signatures: list[str] = []
-        self.key_signature_timeline: list[dict] = []
-        self.time_signatures: list[str] = []
-        self.time_signature_timeline: list[dict] = []
-        self.subgenres: list[str] = []
-        self.placeholder = placeholder
-        self.submitter = submitter
-        self.submitter_id = submitter_id
-        self.translated_lyrics = translated_lyrics
-        self.latin_lyrics = latin_lyrics
-        self.native_lyrics = native_lyrics
-        self.lyrics_notes = lyrics_notes
-        self.video_link = video_link
-        self.poster_link = poster_link
-        self.vtt_link = vtt_link
-        self.duration = duration
-        self.sources = sources
-        self.recap_start = format_seconds(recap_start) if recap_start is not None else None
-        self.recap_end = format_seconds(recap_end) if recap_end is not None else None
-        # Raw integer seconds for client-side timeline overlays where
-        # an "M:SS" string isn't useful.
-        self.recap_start_seconds = recap_start
-        self.recap_end_seconds = recap_end
-        self.title_lang = get_language(title_lang) if title_lang else Language()
-        self.native_lang = get_language(native_lang) if native_lang else Language()
-        if show_id is not None and ro is not None:
-            self.vote_data = get_votes_for_song(self.id, show_id, ro, result_mode=result_mode)
-        elif ro is not None:
-            self.vote_data = VoteData(ro, None, None, None)
-        else:
-            self.vote_data = None
 
     @property
     def duration_display(self) -> str:
@@ -195,15 +142,38 @@ class Song:
         return self.vote_data.get_pt(points)
 
 
+def _language_from_row(row: dict, prefix: str) -> Language:
+    if row.get(f"{prefix}_id") is None:
+        return Language()
+    return Language(
+        name=row[f"{prefix}_name"],
+        tag=row[f"{prefix}_tag"],
+        extlang=row[f"{prefix}_extlang"],
+        region=row[f"{prefix}_region"],
+        subvariant=row[f"{prefix}_subvariant"],
+        suppress_script=row[f"{prefix}_suppress_script"],
+    )
+
+
 def get_votes_for_song(
     song_id: int, show_id: int, ro: int, *, result_mode: str = "official"
 ) -> VoteData:
-    db = get_db()
-    cursor = db.cursor()
+    return get_votes_for_songs({song_id: ro}, show_id, result_mode=result_mode)[song_id]
 
+
+def get_votes_for_songs(
+    running_orders: dict[int, int], show_id: int, *, result_mode: str = "official"
+) -> dict[int, VoteData]:
+    """Batch-load vote totals for every requested song in a show."""
+    if not running_orders:
+        return {}
+
+    cursor = get_db().cursor()
+    song_ids = list(running_orders)
     cursor.execute(
         """
-        SELECT csr.total_points, csr.total_votes_received, csr.point_distribution,
+        SELECT csr.song_id, csr.total_points, csr.total_votes_received,
+               csr.point_distribution,
                csr.max_pts, csr.total_voters,
                COALESCE(
                    CASE WHEN csr.result_mode = 'revote' THEN ss.revote_penalty ELSE ss.penalty END,
@@ -211,74 +181,33 @@ def get_votes_for_song(
                ) AS penalty
         FROM country_show_results csr
         LEFT JOIN song_show ss ON ss.song_id = csr.song_id AND ss.show_id = csr.show_id
-        WHERE csr.song_id = %s AND csr.show_id = %s
+        WHERE csr.song_id = ANY(%s) AND csr.show_id = %s
           AND csr.result_mode = %s
     """,
-        (song_id, show_id, result_mode),
+        (song_ids, show_id, result_mode),
     )
 
-    row = cursor.fetchone()
-    if row:
-        res = VoteData(
-            ro=ro,
+    result: dict[int, VoteData] = {}
+    for row in cursor.fetchall():
+        vote_data = VoteData(
+            ro=running_orders[row["song_id"]],
             total_votes=row["total_votes_received"],
             max_pts=row["max_pts"],
             show_voters=row["total_voters"],
         )
-        res.sum = row["total_points"]
-        res.count = row["total_votes_received"]
-        res.penalty = row["penalty"] or 0
+        vote_data.sum = row["total_points"]
+        vote_data.count = row["total_votes_received"]
+        vote_data.penalty = row["penalty"] or 0
         for pt_str, cnt in (row["point_distribution"] or {}).items():
-            res.pts[int(pt_str)] = cnt
-        return res
+            vote_data.pts[int(pt_str)] = cnt
+        result[row["song_id"]] = vote_data
 
-    # Fallback: query raw vote table if cache is not yet populated
-    cursor.execute(
-        """
-        SELECT COUNT(*) AS c FROM vote
-        JOIN vote_set ON vote.vote_set_id = vote_set.id
-        WHERE song_id = %s AND show_id = %s AND vote_set.result_mode = %s
-    """,
-        (song_id, show_id, result_mode),
-    )
-    count = fetchone(cursor)["c"]
-
-    cursor.execute(
-        """
-        SELECT MAX(score) AS m FROM show
-        JOIN point ON show.point_system_id = point.point_system_id
-        WHERE show.id = %s
-    """,
-        (show_id,),
-    )
-    max_pts = fetchone(cursor)["m"]
-
-    cursor.execute(
-        """
-        SELECT COUNT(DISTINCT voter_id) AS c FROM vote_set
-        WHERE show_id = %s AND result_mode = %s
-    """,
-        (show_id, result_mode),
-    )
-    show_voters = fetchone(cursor)["c"]
-
-    cursor.execute(
-        """
-        SELECT score FROM vote
-        JOIN vote_set ON vote.vote_set_id = vote_set.id
-        JOIN account ON vote_set.voter_id = account.id
-        WHERE song_id = %s AND show_id = %s AND vote_set.result_mode = %s
-        ORDER BY score
-    """,
-        (song_id, show_id, result_mode),
-    )
-    res = VoteData(ro=ro, total_votes=count, max_pts=max_pts, show_voters=show_voters)
-    for points in cursor.fetchall():
-        pt = points["score"]
-        res.sum += pt
-        res.count += 1
-        res.pts[pt] += 1
-    return res
+    missing_ids = sorted(song_id for song_id in song_ids if song_id not in result)
+    if missing_ids:
+        raise RuntimeError(
+            f"Missing {result_mode} result rows for show {show_id}: {missing_ids}"
+        )
+    return result
 
 
 @lru_cache(maxsize=512)
@@ -540,13 +469,27 @@ _SONG_COLUMNS: LiteralString = """
     account.username, song.year_id, song.poster_link,
     song.video_link, song.duration, song.snippet_start, song.snippet_end,
     song.submitter_id, song.notes, song.sources, song.entry_number,
-    year.special_name, year.special_short_name, year.status AS year_status"""
+    year.special_name, year.special_short_name, year.status AS year_status,
+    title_language.name AS title_language_name,
+    title_language.tag AS title_language_tag,
+    title_language.extlang AS title_language_extlang,
+    title_language.region AS title_language_region,
+    title_language.subvariant AS title_language_subvariant,
+    title_language.suppress_script AS title_language_suppress_script,
+    native_language.name AS native_language_name,
+    native_language.tag AS native_language_tag,
+    native_language.extlang AS native_language_extlang,
+    native_language.region AS native_language_region,
+    native_language.subvariant AS native_language_subvariant,
+    native_language.suppress_script AS native_language_suppress_script"""
 
 _SONG_JOINS: LiteralString = """
 FROM song
 JOIN country ON song.country_id = country.id
 LEFT JOIN year ON year.id = song.year_id
 LEFT OUTER JOIN account ON song.submitter_id = account.id
+LEFT JOIN language title_language ON title_language.id = song.title_language_id
+LEFT JOIN language native_language ON native_language.id = song.native_language_id
 LEFT JOIN alternative_name an ON an.country_id = song.country_id
     AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
     AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)"""
@@ -586,7 +529,16 @@ def _load_songs(
 ) -> list[Song]:
     cursor = get_db().cursor()
     cursor.execute(sql, params)
-    songs = [Song(row, show_id=show_id, result_mode=result_mode) for row in cursor.fetchall()]
+    songs = [Song.from_row(row) for row in cursor.fetchall()]
+    if show_id is not None:
+        running_orders = {
+            song.id: song.vote_data.ro for song in songs if song.vote_data is not None
+        }
+        votes_by_song = get_votes_for_songs(
+            running_orders, show_id, result_mode=result_mode
+        )
+        for song in songs:
+            song.vote_data = votes_by_song.get(song.id)
     if select_languages:
         languages_by_song = get_languages_for_songs([s.id for s in songs])
         for song in songs:
@@ -640,33 +592,42 @@ JOIN show ON song_show.show_id = show.id""",
 
 
 def get_show_winner(year: int | None, show: str) -> Song | None:
-    songs = get_show_songs(year, show, select_votes=True)
-    if not songs:
-        return None
-
-    songs.sort(reverse=True)
-    winner = songs[0]
-    winner.languages = get_song_languages(winner.id)
-
-    return winner
+    sql = _song_query(
+        where="""song.id = (
+    SELECT csr.song_id
+    FROM country_show_results csr
+    WHERE csr.year_id IS NOT DISTINCT FROM %s
+      AND csr.short_name = %s
+      AND csr.result_mode = 'official'
+      AND csr.place = 1
+    ORDER BY csr.running_order NULLS LAST, csr.song_id
+    LIMIT 1
+)""",
+    )
+    songs = _load_songs(sql, (year, show), select_languages=True)
+    return songs[0] if songs else None
 
 
 def get_year_winner(year: int) -> Song | None:
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute(
-        """
-        SELECT status FROM year
-        WHERE id = %s
-        """,
-        (year,),
+    sql = _song_query(
+        where="""song.id = (
+    SELECT cyr.song_id
+    FROM country_year_results cyr
+    JOIN year result_year ON result_year.id = cyr.year_id
+    LEFT JOIN country_show_results final_result
+      ON final_result.song_id = cyr.song_id
+     AND final_result.year_id = cyr.year_id
+     AND final_result.short_name = 'f'
+     AND final_result.result_mode = 'official'
+    WHERE cyr.year_id = %s
+      AND cyr.place = 1
+      AND result_year.status = 'closed'
+    ORDER BY final_result.running_order NULLS LAST, cyr.song_id
+    LIMIT 1
+)""",
     )
-
-    if fetchone(cursor)["status"] != "closed":
-        return None
-
-    return get_show_winner(year, "f")
+    songs = _load_songs(sql, (year,), select_languages=True)
+    return songs[0] if songs else None
 
 
 def get_special_winner(show: str, year: int) -> Song | None:

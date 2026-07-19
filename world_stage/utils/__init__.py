@@ -74,6 +74,7 @@ from .songs import (
     get_special_winner,
     get_user_songs,
     get_votes_for_song,
+    get_votes_for_songs,
     get_year_songs,
     get_year_winner,
 )
@@ -149,6 +150,7 @@ __all__ = (
     "get_user_songs",
     "get_vote_count_for_show",
     "get_votes_for_song",
+    "get_votes_for_songs",
     "get_year_countries",
     "get_year_placements",
     "get_year_shows",
