@@ -1,10 +1,37 @@
 """Tests for authenticated ballot and prediction API endpoints."""
 
-from world_stage.utils import get_show_songs, get_show_winner, get_year_winner
+from world_stage.utils import (
+    get_show_songs,
+    get_show_winner,
+    get_year_winner,
+)
+from world_stage.utils import songs as song_utils
 
 
 def _result(response):
     return response.get_json()["result"]
+
+
+def test_show_winner_uses_indexable_year_predicates(monkeypatch):
+    calls = []
+
+    def capture_query(sql, params, **_kwargs):
+        calls.append((sql, params))
+        return []
+
+    monkeypatch.setattr(song_utils, "_load_songs", capture_query)
+
+    assert get_show_winner(2025, "f") is None
+    sql, params = calls.pop()
+    assert "winner_result.year_id = %s" in sql
+    assert "IS NOT DISTINCT FROM" not in sql
+    assert params == (2025, "f")
+
+    assert get_show_winner(None, "f") is None
+    sql, params = calls.pop()
+    assert "winner_result.year_id IS NULL" in sql
+    assert "IS NOT DISTINCT FROM" not in sql
+    assert params == ("f",)
 
 
 def _seed_show_and_songs(db):

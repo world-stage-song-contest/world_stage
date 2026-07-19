@@ -612,6 +612,19 @@ JOIN show ON song_show.show_id = show.id""",
 
 
 def get_show_winner(year: int | None, show: str) -> Song | None:
+    if year is None:
+        where: LiteralString = """winner_result.year_id IS NULL
+  AND winner_result.short_name = %s
+  AND winner_result.result_mode = 'official'
+  AND winner_result.place = 1"""
+        params = (show,)
+    else:
+        where = """winner_result.year_id = %s
+  AND winner_result.short_name = %s
+  AND winner_result.result_mode = 'official'
+  AND winner_result.place = 1"""
+        params = (year, show)
+
     sql = _song_query(
         select="""winner_result.running_order,
     winner_result.total_points AS result_total_points,
@@ -625,13 +638,10 @@ JOIN country_show_results winner_result ON winner_result.song_id = song.id
 LEFT JOIN song_show winner_song_show
   ON winner_song_show.song_id = winner_result.song_id
  AND winner_song_show.show_id = winner_result.show_id""",
-        where="""winner_result.year_id IS NOT DISTINCT FROM %s
-  AND winner_result.short_name = %s
-  AND winner_result.result_mode = 'official'
-  AND winner_result.place = 1""",
+        where=where,
         order_by="winner_result.running_order NULLS LAST, winner_result.song_id LIMIT 1",
     )
-    songs = _load_songs(sql, (year, show), select_languages=True)
+    songs = _load_songs(sql, params, select_languages=True)
     return songs[0] if songs else None
 
 
