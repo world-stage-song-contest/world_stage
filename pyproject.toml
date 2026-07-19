@@ -1,6 +1,6 @@
 [project]
 name = "world-stage"
-version = "3.15.5"
+version = "3.16.0"
 description = "Voting website for World Stage."
 requires-python = ">= 3.12"
 dependencies = [
@@ -10,9 +10,12 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["flit_core<4", "brotli"]
+requires = ["flit_core<4"]
 build-backend = "build_backend"
 backend-path = ["."]
+
+[tool.flit.sdist]
+exclude = ["world_stage/files/**", "world_stage/static/**"]
 
 [dependency-groups]
 dev = [

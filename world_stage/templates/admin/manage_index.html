@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Years{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/year.css">
-    <link rel="stylesheet" href="/static/css/song-table.css">
-    <script src="/static/js/sort-table.js"></script>
+    <link rel="stylesheet" href="{{ static('css/year.css') }}">
+    <link rel="stylesheet" href="{{ static('css/song-table.css') }}">
+    <script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
 {% block content %}
 

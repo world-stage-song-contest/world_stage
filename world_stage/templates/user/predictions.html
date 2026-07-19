@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Predictions History: {{ username }}{% endblock %}
 {% block headercontents %}
-<link rel="stylesheet" href="/static/css/user-votes.css">
+<link rel="stylesheet" href="{{ static('css/user-votes.css') }}">
 <style>
 .user-predictions td:nth-child(2) { border-right: 1px solid var(--foreground1) !important; }
 .user-predictions td:nth-child(3) { border-left: 1px solid var(--foreground1) !important; border-right: none !important; }

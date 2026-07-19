@@ -6,8 +6,8 @@
         const country = "{{ country or '' }}";
         const entryNumber = "{{ entry_number or '' }}";
     </script>
-    <script src="/static/js/submit.js"></script>
-    <link rel="stylesheet" href="/static/css/forms.css">
+    <script src="{{ static('js/submit.js') }}"></script>
+    <link rel="stylesheet" href="{{ static('css/forms.css') }}">
 {% endblock %}
 {% block onload %}onLoad(){% endblock %}
 {% block content %}

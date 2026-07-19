@@ -5,8 +5,8 @@
         const year = {{ year }};
         const multiDraw = true;
     </script>
-    <script src="/static/js/draw.js"></script>
-    <link rel="stylesheet" href="/static/css/draw.css">
+    <script src="{{ static('js/draw.js') }}"></script>
+    <link rel="stylesheet" href="{{ static('css/draw.css') }}">
 {% endblock %}
 {% block content %}
 <div id="controls">

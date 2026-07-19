@@ -63,7 +63,9 @@ def _test_db():
     conn.close()
 
     # Run any pending migrations (e.g. new ones not yet applied to source).
-    app = create_app({"TESTING": True, "DATABASE_URI": f"dbname={TEST_DB}"})
+    app = create_app(
+        {"TESTING": True, "LOCAL_ASSETS": True, "DATABASE_URI": f"dbname={TEST_DB}"}
+    )
     with app.app_context():
         from world_stage.db import migrate_db
 
@@ -168,7 +170,9 @@ def _seeded_db(_test_db):
 
 @pytest.fixture()
 def app(_seeded_db):
-    app = create_app({"TESTING": True, "DATABASE_URI": _seeded_db})
+    app = create_app(
+        {"TESTING": True, "LOCAL_ASSETS": True, "DATABASE_URI": _seeded_db}
+    )
     yield app
 
 

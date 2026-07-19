@@ -125,7 +125,9 @@ class TestRadioNow:
     def test_synchronised_across_instances(self, client, db, monkeypatch, _seeded_db):
         _add_three_songs(db)
 
-        other_app = create_app({"TESTING": True, "DATABASE_URI": _seeded_db})
+        other_app = create_app(
+            {"TESTING": True, "LOCAL_ASSETS": True, "DATABASE_URI": _seeded_db}
+        )
         other_client = other_app.test_client()
 
         _freeze_time(monkeypatch, 20000 * 86400 + 142)

@@ -4,17 +4,17 @@
 <div class="cards-container">
     <a href="{{ url_for('year.index') }}" class="card">
         <h3>Years</h3>
-        <img src="/static/images/calendar.png" alt="Calendar Icon">
+        <img src="{{ static('images/calendar.png') }}" alt="Calendar Icon">
         <p>Check information about previous years.</p>
     </a>
     <a href="{{ url_for('user.index') }}" class="card">
         <h3>Users</h3>
-        <img src="/static/images/user.png" alt="User Icon">
+        <img src="{{ static('images/user.png') }}" alt="User Icon">
         <p>Check information about other users.</p>
     </a>
     <a href="{{ url_for('country.index') }}" class="card">
         <h3>Countries</h3>
-        <img src="/static/images/globe.png" alt="Globe Icon">
+        <img src="{{ static('images/globe.png') }}" alt="Globe Icon">
         <p>Check information for each country.</p>
     </a>
 </div>

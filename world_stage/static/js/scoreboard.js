@@ -92,7 +92,7 @@ function makeRow(country) {
 
     const flagEl = document.createElement("img");
     flagEl.classList.add("flag");
-    flagEl.src = `/flag/${country.code}.svg?t=square&s=40`;
+    flagEl.src = window.flagStaticUrl(country.code, 40, "square");
     flagEl.alt = country.name;
     flagContainer.appendChild(flagEl);
 
@@ -182,7 +182,7 @@ function makeVotingCard(from, code, country, username = null) {
 
     const flagEl = document.createElement("img");
     flagEl.classList.add("voting-card-flag");
-    flagEl.src = `/flag/${code}.svg?t=rect&s=96`;
+    flagEl.src = window.flagStaticUrl(code, 96);
     flagEl.alt = from;
     container.appendChild(flagEl);
 

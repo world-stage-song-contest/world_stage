@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Revote' if is_revote else 'Voting' }} History: {{ username }}{% endblock %}
 {% block headercontents %}
-<link rel="stylesheet" href="/static/css/user-votes.css">
-<script src="/static/js/sort-table.js"></script>
+<link rel="stylesheet" href="{{ static('css/user-votes.css') }}">
+<script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
 {% block navigation %}
     <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>

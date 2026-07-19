@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Overview: {{ country_name }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/results.css">
-    <link rel="stylesheet" href="/static/css/country.css">
-    <link rel="stylesheet" href="/static/css/song-table.css">
-    <script src="/static/js/sort-table.js"></script>
-    <script src="/static/js/year.js"></script>
+    <link rel="stylesheet" href="{{ static('css/results.css') }}">
+    <link rel="stylesheet" href="{{ static('css/country.css') }}">
+    <link rel="stylesheet" href="{{ static('css/song-table.css') }}">
+    <script src="{{ static('js/sort-table.js') }}"></script>
+    <script src="{{ static('js/year.js') }}"></script>
 {% endblock %}
 {% block navigation %}
     <a class="nav-item" href="{{ url_for('country.index') }}">Countries</a>

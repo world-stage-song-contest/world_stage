@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Revote' if is_revote else 'Vote' }} - {{ show_name }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/vote.css">
-    <link rel="stylesheet" href="/static/css/forms.css">
-    <script src="/static/js/vote.js"></script>
+    <link rel="stylesheet" href="{{ static('css/vote.css') }}">
+    <link rel="stylesheet" href="{{ static('css/forms.css') }}">
+    <script src="{{ static('js/vote.js') }}"></script>
 {% endblock %}
 {% block navigation %}
 {% if is_revote %}
@@ -58,7 +58,7 @@
             <label class="req" title="The country to display on the scoreboard." for="country">Country</label>
             <div class="flag-container">
                 <img class="flag" id="display-flag"
-                     src="/flag/{{selected_country or 'XX'}}.svg?s=30"
+                     src="{{ flag_url(selected_country or 'XX', 30) }}"
                      height="30" width="45">
             </div>
             <select name="country" id="country"
@@ -80,7 +80,7 @@
             <label for="pts-{{point}}" class="req">{{point}} points</label>
             <div class="flag-container">
                 <img class="flag" id="flag-{{point}}"
-                     src="/flag/{{selected[point]['cc'] or 'XX'}}.svg?s=30"
+                     src="{{ flag_url(selected[point]['cc'] or 'XX', 30) }}"
                      height="30" width="45">
             </div>
             <select name="pts-{{point}}" id="pts-{{point}}" data-flag="flag-{{point}}"

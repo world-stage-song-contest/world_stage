@@ -166,7 +166,7 @@
     }
 
     function flagUrl(cc) {
-        return cc ? `/flag/${cc.toUpperCase()}.svg?t=rect&w=160` : null;
+        return cc ? window.flagStaticUrl(cc, 160) : null;
     }
 
     // Chrome rejects sources whose URL ends in .mov when set via

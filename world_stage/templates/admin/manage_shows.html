@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Manage shows: {{ year.special_name or year.id }}{% endblock %}
 {% block headercontents %}
-    <script src="/static/js/manage.js"></script>
+    <script src="{{ static('js/manage.js') }}"></script>
 {% endblock %}
 {% block content %}
 <style>

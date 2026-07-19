@@ -1,9 +1,13 @@
 {% macro flag(cc, width, country='', type="rect", class="flag", variant='') -%}
 <img
-    src="{{ url_for('main.flag', country=cc, t=type, w=width, v=variant) }}"
+    src="{{ flag_url(cc, width, type, variant) }}"
     width="{{ width }}"
     height="{{ (width*2//3)|int }}"
+    alt="{{ country }}"
     class="{{ class }}">
+{%- endmacro %}
+{% macro static(filename) -%}
+{{ static_url(filename) }}
 {%- endmacro %}
 {% macro title(title, native_title, lang, native_lang) -%}
 {%- endmacro %}
@@ -29,8 +33,38 @@
         <link rel="stylesheet"
               type="text/css"
               href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/fill/style.css">
-        <link rel="stylesheet" href="/static/css/index.css">
-        <script src="/static/js/index.js"></script>
+        <link rel="stylesheet" href="{{ static('css/index.css') }}">
+        <script>
+            window.WORLD_STAGE_STATIC_ROOT = {{ static_root_url()|tojson }};
+        </script>
+        <script src="{{ static('flag-manifest.js') }}"></script>
+        <script>
+            window.flagStaticUrl = (country, width, shape = "rect", variant = "") => {
+                const code = String(country || "XX").toUpperCase();
+                const requestedShape = ["rect", "square"].includes(shape) ? shape : "rect";
+                const requestedVariant = /^[A-Za-z0-9_-]+$/.test(variant) ? variant : "";
+                const requestedSize = Number(width) <= 40 ? "small" : "regular";
+                const codes = code === "XX" ? ["XX"] : [code, "XX"];
+                const variants = requestedVariant ? [requestedVariant, ""] : [""];
+                const sizes = requestedSize === "small" ? ["small", "regular"] : ["regular"];
+
+                for (const candidateCode of codes) {
+                    for (const candidateVariant of variants) {
+                        for (const candidateSize of sizes) {
+                            const path = window.WORLD_STAGE_FLAGS?.[candidateCode]
+                                ?.[candidateVariant]?.[requestedShape]?.[candidateSize];
+                            if (path) {
+                                return `${window.WORLD_STAGE_STATIC_ROOT}/${path}`;
+                            }
+                        }
+                    }
+                }
+                throw new Error(
+                    `No flag asset for ${code}/${requestedVariant}/${requestedShape}/${requestedSize}`
+                );
+            };
+        </script>
+        <script src="{{ static('js/index.js') }}"></script>
         <meta name="google" content="nopagereadaloud">
         {% block headercontents %}{% endblock %}
     </head>
@@ -39,7 +73,7 @@
         <header id="page-header">
             <div id="header-logo">
                 <svg viewBox="0 0 605 72.5" id="header-logo-image">
-                    <use xlink:href="/static/logo.svg#logo" href="/static/logo.svg#logo"></use>
+                    <use xlink:href="{{ static('logo.svg') }}#logo" href="{{ static('logo.svg') }}#logo"></use>
                 </svg>
                 <h1>
                     {{ self.title() }}

@@ -14,16 +14,14 @@ dist/
 build/
 *.egg-info/
 
+nginx/
+
 .DS_Store
 
 *.db
 
 import_data/
 .mypy_cache/
-
-*.br
-*.gzip
-*.zstd
 
 uv.lock
 run.sh

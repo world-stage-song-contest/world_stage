@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Results: {{ special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/results.css">
-    <link rel="stylesheet" href="/static/css/country-list.css">
-    <script src="/static/js/year.js"></script>
-    <script src="/static/js/sort-table.js"></script>
+    <link rel="stylesheet" href="{{ static('css/results.css') }}">
+    <link rel="stylesheet" href="{{ static('css/country-list.css') }}">
+    <script src="{{ static('js/year.js') }}"></script>
+    <script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
 {% block navigation %}
     {% if special %}

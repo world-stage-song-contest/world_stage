@@ -5,8 +5,8 @@
         const year = {{ year }};
         const multiDraw = false;
     </script>
-    <script src="/static/js/draw.js"></script>
-    <link rel="stylesheet" href="/static/css/draw.css">
+    <script src="{{ static('js/draw.js') }}"></script>
+    <link rel="stylesheet" href="{{ static('css/draw.css') }}">
     <style>
         .pot-item:first-child {
             background-color: var(--dtf-color);

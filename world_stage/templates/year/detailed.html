@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Detailed revote results' if is_revote else 'Detailed Results' }}: {{ special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/results.css">
-    <script src="/static/js/sort-table.js"></script>
+    <link rel="stylesheet" href="{{ static('css/results.css') }}">
+    <script src="{{ static('js/sort-table.js') }}"></script>
     {% if is_revote %}<style>.revote-voter { background: var(--qualifier-color); }</style>{% endif %}
 {% endblock %}
 {% block navigation %}

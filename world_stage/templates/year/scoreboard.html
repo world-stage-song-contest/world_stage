@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Scoreboard: {{ special_name or year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/font-dseg.css">
-    <link rel="stylesheet" href="/static/css/font-eurostile.css">
-    <link rel="stylesheet" href="/static/css/scoreboard.css">
-    <link rel="stylesheet" href="/static/css/scoreboard-cards.css">
-    <script src="/static/js/scoreboard.js"></script>
+    <link rel="stylesheet" href="{{ static('css/font-dseg.css') }}">
+    <link rel="stylesheet" href="{{ static('css/font-eurostile.css') }}">
+    <link rel="stylesheet" href="{{ static('css/scoreboard.css') }}">
+    <link rel="stylesheet" href="{{ static('css/scoreboard-cards.css') }}">
+    <script src="{{ static('js/scoreboard.js') }}"></script>
 {% endblock %}
 {% block navigation %}
     {% if special %}

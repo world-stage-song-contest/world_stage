@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Overview: {{ special_name or year }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/results.css">
-    <link rel="stylesheet" href="/static/css/year.css">
-    <link rel="stylesheet" href="/static/css/song-table.css">
-    <link rel="stylesheet" href="/static/css/country-list.css">
-    <link rel="stylesheet" href="/static/css/country.css">
-    <script src="/static/js/sort-table.js"></script>
-    <script src="/static/js/year.js"></script>
+    <link rel="stylesheet" href="{{ static('css/results.css') }}">
+    <link rel="stylesheet" href="{{ static('css/year.css') }}">
+    <link rel="stylesheet" href="{{ static('css/song-table.css') }}">
+    <link rel="stylesheet" href="{{ static('css/country-list.css') }}">
+    <link rel="stylesheet" href="{{ static('css/country.css') }}">
+    <script src="{{ static('js/sort-table.js') }}"></script>
+    <script src="{{ static('js/year.js') }}"></script>
 {% endblock %}
 {% block navigation %}
     <a class="nav-item" href="{{ url_for('year.index') }}">Years</a>

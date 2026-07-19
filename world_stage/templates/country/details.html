@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Overview: {{ name }} {{ year }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/results.css">
-    <link rel="stylesheet" href="/static/css/country.css">
-    <link rel="stylesheet" href="/static/css/song-overview.css">
-    <script src="/static/js/sort-table.js"></script>
-    <script src="/static/js/year.js"></script>
-    <script src="/static/js/footnote.js"></script>
+    <link rel="stylesheet" href="{{ static('css/results.css') }}">
+    <link rel="stylesheet" href="{{ static('css/country.css') }}">
+    <link rel="stylesheet" href="{{ static('css/song-overview.css') }}">
+    <script src="{{ static('js/sort-table.js') }}"></script>
+    <script src="{{ static('js/year.js') }}"></script>
+    <script src="{{ static('js/footnote.js') }}"></script>
     <link href="https://vjs.zencdn.net/8.23.3/video-js.css" rel="stylesheet" />
     <style>
         #video-player-container {

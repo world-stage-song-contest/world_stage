@@ -2,9 +2,9 @@
 {% extends "base.html" %}
 {% block title %}Qualifiers: {{ special_name or year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
-<link rel="stylesheet" href="/static/css/qualifiers.css">
-<link rel="stylesheet" href="/static/css/qualifiers-envelopes.css">
-<script src="/static/js/qualifiers.js"></script>
+<link rel="stylesheet" href="{{ static('css/qualifiers.css') }}">
+<link rel="stylesheet" href="{{ static('css/qualifiers-envelopes.css') }}">
+<script src="{{ static('js/qualifiers.js') }}"></script>
 {% endblock %}
 {% block navigation %}
 {% if special %}

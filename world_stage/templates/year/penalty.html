@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Penalty: {{ special_name or year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/results.css">
+    <link rel="stylesheet" href="{{ static('css/results.css') }}">
 {% endblock %}
 {% block navigation %}
     {% if special %}

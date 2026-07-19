@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ country_name }} — {{ special_name }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/results.css">
-    <link rel="stylesheet" href="/static/css/song-table.css">
+    <link rel="stylesheet" href="{{ static('css/results.css') }}">
+    <link rel="stylesheet" href="{{ static('css/song-table.css') }}">
 {% endblock %}
 {% block content %}
 <h2>{{ country_name }} in {{ special_name }}</h2>

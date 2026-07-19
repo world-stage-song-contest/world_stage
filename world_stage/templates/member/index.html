@@ -4,33 +4,33 @@
 <div class="cards-container">
     <a href="{{ url_for('member.submit') }}" class="card">
         <h3>Submit/Edit</h3>
-        <img src="/static/images/submit.png" alt="Submit Icon">
+        <img src="{{ static('images/submit.png') }}" alt="Submit Icon">
         <p>Submit or edit a song for one of the next World Stage editions.</p>
     </a>
     <a href="{{ url_for('user.submissions', username=(username)) }}" class="card">
         <h3>Submissions</h3>
-        <img src="/static/images/history.png" alt="Submissions Icon">
+        <img src="{{ static('images/history.png') }}" alt="Submissions Icon">
         <p>Check out your past submissions.</p>
     </a>
     <a href="{{ url_for('user.votes', username=(username)) }}" class="card">
         <h3>Previous votes</h3>
-        <img src="/static/images/hands.png" alt="Votes Icon">
+        <img src="{{ static('images/hands.png') }}" alt="Votes Icon">
         <p>Check out your past votes.</p>
     </a>
     <a href="{{ url_for('user.predictions', username=(username)) }}" class="card">
         <h3>Predictions</h3>
-        <img src="/static/images/predictions.png" alt="Predictions Icon">
+        <img src="{{ static('images/predictions.png') }}" alt="Predictions Icon">
         <p>Check out your past predictions.</p>
     </a>
     <a href="{{ url_for('user.bias', username=username) }}" class="card">
         <h3>Bias</h3>
-        <img src="/static/images/bias.png" alt="Bias Icon">
+        <img src="{{ static('images/bias.png') }}" alt="Bias Icon">
         <p>Check out your biases.</p>
     </a>
     <form id="logout-form" action="{{ url_for('session.logout') }}" method="POST">
         <a href="#" onclick="this.parentNode.submit()" class="card">
             <h3>Log out</h3>
-            <img src="/static/images/exit.png" alt="Log Out Icon">
+            <img src="{{ static('images/exit.png') }}" alt="Log Out Icon">
             <p>Log out of the website.</p>
         </a>
     </form>

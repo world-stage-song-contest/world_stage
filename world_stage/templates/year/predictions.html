@@ -1,9 +1,9 @@
 {%extends "base.html" %}
 {% block title %}Predictions: {{ special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
-    <link rel="stylesheet" href="/static/css/results.css">
-    <link rel="stylesheet" href="/static/css/predict.css">
-    <script src="/static/js/sort-table.js"></script>
+    <link rel="stylesheet" href="{{ static('css/results.css') }}">
+    <link rel="stylesheet" href="{{ static('css/predict.css') }}">
+    <script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
 {% block navigation %}
     {% if special %}

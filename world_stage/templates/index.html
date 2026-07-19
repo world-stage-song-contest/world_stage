@@ -3,49 +3,49 @@
 <div class="cards-container">
     <a href="{{ url_for('member.index') }}" class="card">
         <h3>User Page</h3>
-        <img src="/static/images/user.png" alt="User Icon">
+        <img src="{{ static('images/user.png') }}" alt="User Icon">
         <p>View information about yourself.</p>
     </a>
     <a href="{{ url_for('vote.index') }}" class="card{% if has_pending_vote %} card-pending-vote{% endif %}"
        {% if has_pending_vote %}title="You have an open vote you haven't cast yet"{% endif %}>
         <h3>Vote</h3>
-        <img src="/static/images/ballot-box.png" alt="Vote Icon">
+        <img src="{{ static('images/ballot-box.png') }}" alt="Vote Icon">
         <p>Cast your vote for one of the ongoing votings.</p>
     </a>
     <a href="{{ url_for('revote.index') }}" class="card">
         <h3>Revote</h3>
-        <img src="/static/images/history.png" alt="History Icon">
+        <img src="{{ static('images/history.png') }}" alt="History Icon">
         <p>Update your ballot for completed shows and view their revote results.</p>
     </a>
     <a href="{{ url_for('year.index') }}" class="card">
         <h3>Years</h3>
-        <img src="/static/images/calendar.png" alt="Calendar Icon">
+        <img src="{{ static('images/calendar.png') }}" alt="Calendar Icon">
         <p>Check information about previous years.</p>
     </a>
     <a href="{{ url_for('user.index') }}" class="card">
         <h3>Users</h3>
-        <img src="/static/images/users.png" alt="User Icon">
+        <img src="{{ static('images/users.png') }}" alt="User Icon">
         <p>Check information about other users.</p>
     </a>
     <a href="{{ url_for('country.index') }}" class="card">
         <h3>Countries</h3>
-        <img src="/static/images/globe.png" alt="Globe Icon">
+        <img src="{{ static('images/globe.png') }}" alt="Globe Icon">
         <p>Check information for each country.</p>
     </a>
     <a href="{{ url_for('radio.index') }}" class="card">
         <h3>Radio</h3>
-        <img src="/static/images/radio.png" alt="Radio Icon">
+        <img src="{{ static('images/radio.png') }}" alt="Radio Icon">
         <p>Tune into the World Stage radio.</p>
     </a>
     <a href="https://buymeacoffee.com/famicomguy" class="card">
         <h3>Support</h3>
-        <img src="/static/images/money.png" alt="Money Bag Icon">
+        <img src="{{ static('images/money.png') }}" alt="Money Bag Icon">
         <p>Support the development of World Stage by buying <del>a coffee</del> a treat (I don't like coffee).</p>
     </a>
     {% if is_admin %}
     <a href="{{ url_for('admin.index') }}" class="card">
         <h3>Admin</h3>
-        <img src="/static/images/administrator.png" alt="Administrator Icon">
+        <img src="{{ static('images/administrator.png') }}" alt="Administrator Icon">
         <p>Administrator utilities.</p>
     </a>
     {% endif %}
