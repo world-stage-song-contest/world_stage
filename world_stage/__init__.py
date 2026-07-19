@@ -247,6 +247,7 @@ def create_app(config: dict | None = None) -> Flask:
         SECRET_KEY="dev",
         DATABASE=os.path.join(app.instance_path, "songs.db"),
         LOCAL_ASSETS=_environment_boolean("LOCAL_ASSETS"),
+        PERFORMANCE_HEADERS=_environment_boolean("PERFORMANCE_HEADERS"),
         STATIC_ROOT="/opt/worldstage/static",
         STATIC_URL_PREFIX="/static",
     )
@@ -285,12 +286,14 @@ def create_app(config: dict | None = None) -> Flask:
     if app.config["LOCAL_ASSETS"]:
         _configure_local_assets(app)
 
+    from .db import InstrumentedCursor
+
     app.config["DB_POOL"] = ConnectionPool(
         conninfo=app.config.get("DATABASE_URI", os.environ.get("DATABASE_URI", "")),
         min_size=1,
         max_size=10,
         timeout=10.0,
-        kwargs={"row_factory": dict_row},
+        kwargs={"row_factory": dict_row, "cursor_factory": InstrumentedCursor},
     )
 
     app.url_map.strict_slashes = False
@@ -311,6 +314,10 @@ def create_app(config: dict | None = None) -> Flask:
 
     app.jinja_env.filters.update(urldecode=urllib.parse.unquote)
     app.jinja_env.filters.update(urlize_decoded=urlize_decoded)
+
+    from . import performance
+
+    performance.init_app(app)
 
     @app.before_request
     def clear_trailing():

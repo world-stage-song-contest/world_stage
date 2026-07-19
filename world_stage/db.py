@@ -1,12 +1,61 @@
 import sys
+import time
 import typing
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import click
 import psycopg
 from flask import current_app, g
+from psycopg.abc import Params, Query, QueryNoTemplate
 from psycopg_pool import ConnectionPool
+
+from .performance import record_sql
+
+
+class InstrumentedCursor(psycopg.Cursor[dict[str, Any]]):
+    """A regular psycopg cursor that records SQL work on the active request."""
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        started_at = time.perf_counter()
+        try:
+            return super().execute(
+                typing.cast(QueryNoTemplate, query),
+                params,
+                prepare=prepare,
+                binary=binary,
+            )
+        finally:
+            record_sql(time.perf_counter() - started_at)
+
+    def executemany(
+        self,
+        query: Query,
+        params_seq: Iterable[Params],
+        *,
+        returning: bool = False,
+    ) -> None:
+        statement_count = 0
+
+        def counted_params() -> Iterable[Params]:
+            nonlocal statement_count
+            for params in params_seq:
+                statement_count += 1
+                yield params
+
+        started_at = time.perf_counter()
+        try:
+            return super().executemany(query, counted_params(), returning=returning)
+        finally:
+            record_sql(time.perf_counter() - started_at, statement_count)
 
 
 def fetchone(cursor: psycopg.Cursor[dict[str, Any]]) -> dict[str, Any]:
