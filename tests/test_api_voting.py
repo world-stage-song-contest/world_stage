@@ -283,23 +283,45 @@ def test_winner_loading_hydrates_only_the_materialized_winner(app, db):
     def show_winner_loading():
         winner = get_show_winner(2025, "f")
         assert winner is not None
-        return {"id": winner.id, "languages": [lang.name for lang in winner.languages]}
+        assert winner.vote_data is not None
+        return {
+            "id": winner.id,
+            "languages": [lang.name for lang in winner.languages],
+            "points": winner.vote_data.sum,
+            "percentage": winner.vote_data.pct(),
+        }
 
     @app.get("/_test/year-winner-loading")
     def year_winner_loading():
         winner = get_year_winner(2025)
         assert winner is not None
-        return {"id": winner.id, "languages": [lang.name for lang in winner.languages]}
+        assert winner.vote_data is not None
+        return {
+            "id": winner.id,
+            "languages": [lang.name for lang in winner.languages],
+            "points": winner.vote_data.sum,
+            "percentage": winner.vote_data.pct(),
+        }
 
     show_response = app.test_client().get("/_test/show-winner-loading")
     year_response = app.test_client().get("/_test/year-winner-loading")
 
     assert show_response.status_code == 200
     assert show_response.headers["X-SQL-Query-Count"] == "2"
-    assert show_response.get_json() == {"id": song_ids[1], "languages": ["English"]}
+    assert show_response.get_json() == {
+        "id": song_ids[1],
+        "languages": ["English"],
+        "points": 12,
+        "percentage": "100.00%",
+    }
     assert year_response.status_code == 200
     assert year_response.headers["X-SQL-Query-Count"] == "2"
-    assert year_response.get_json() == {"id": song_ids[1], "languages": ["English"]}
+    assert year_response.get_json() == {
+        "id": song_ids[1],
+        "languages": ["English"],
+        "points": 12,
+        "percentage": "100.00%",
+    }
 
     with db.cursor() as cursor:
         cursor.execute("UPDATE year SET status = 'open' WHERE id = 2025")

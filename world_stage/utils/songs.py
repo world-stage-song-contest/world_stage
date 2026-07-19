@@ -50,7 +50,6 @@ class Song:
         """Build a Song from an already-hydrated query row without database I/O."""
         recap_start_seconds = song["snippet_start"]
         recap_end_seconds = song["snippet_end"]
-        running_order = song.get("running_order")
         year = Year(
             id=song["year_id"],
             special_name=song.get("special_name"),
@@ -86,11 +85,7 @@ class Song:
             sources=song["sources"],
             submitter=song["username"],
             languages=[],
-            vote_data=(
-                VoteData(running_order, None, None, None)
-                if running_order is not None
-                else None
-            ),
+            vote_data=_vote_data_from_row(song),
             recap_start=(
                 format_seconds(recap_start_seconds)
                 if recap_start_seconds is not None
@@ -140,6 +135,31 @@ class Song:
         if self.vote_data is None:
             return None
         return self.vote_data.get_pt(points)
+
+
+def _vote_data_from_row(song: dict) -> VoteData | None:
+    """Hydrate cached result data when the song query selected it."""
+    running_order = song.get("running_order")
+    total_points = song.get("result_total_points")
+    if total_points is None:
+        return (
+            VoteData(running_order, None, None, None)
+            if running_order is not None
+            else None
+        )
+
+    vote_data = VoteData(
+        ro=running_order if running_order is not None else 0,
+        total_votes=song.get("result_total_votes"),
+        max_pts=song.get("result_max_pts"),
+        show_voters=song.get("result_total_voters"),
+    )
+    vote_data.sum = total_points
+    vote_data.count = song.get("result_total_votes") or 0
+    vote_data.penalty = song.get("result_penalty") or 0
+    for pt_str, count in (song.get("result_point_distribution") or {}).items():
+        vote_data.pts[int(pt_str)] = count
+    return vote_data
 
 
 def _language_from_row(row: dict, prefix: str) -> Language:
@@ -593,16 +613,23 @@ JOIN show ON song_show.show_id = show.id""",
 
 def get_show_winner(year: int | None, show: str) -> Song | None:
     sql = _song_query(
-        where="""song.id = (
-    SELECT csr.song_id
-    FROM country_show_results csr
-    WHERE csr.year_id IS NOT DISTINCT FROM %s
-      AND csr.short_name = %s
-      AND csr.result_mode = 'official'
-      AND csr.place = 1
-    ORDER BY csr.running_order NULLS LAST, csr.song_id
-    LIMIT 1
-)""",
+        select="""winner_result.running_order,
+    winner_result.total_points AS result_total_points,
+    winner_result.total_votes_received AS result_total_votes,
+    winner_result.point_distribution AS result_point_distribution,
+    winner_result.max_pts AS result_max_pts,
+    winner_result.total_voters AS result_total_voters,
+    COALESCE(winner_song_show.penalty, 0) AS result_penalty""",
+        joins="""
+JOIN country_show_results winner_result ON winner_result.song_id = song.id
+LEFT JOIN song_show winner_song_show
+  ON winner_song_show.song_id = winner_result.song_id
+ AND winner_song_show.show_id = winner_result.show_id""",
+        where="""winner_result.year_id IS NOT DISTINCT FROM %s
+  AND winner_result.short_name = %s
+  AND winner_result.result_mode = 'official'
+  AND winner_result.place = 1""",
+        order_by="winner_result.running_order NULLS LAST, winner_result.song_id LIMIT 1",
     )
     songs = _load_songs(sql, (year, show), select_languages=True)
     return songs[0] if songs else None
@@ -610,21 +637,39 @@ def get_show_winner(year: int | None, show: str) -> Song | None:
 
 def get_year_winner(year: int) -> Song | None:
     sql = _song_query(
-        where="""song.id = (
-    SELECT cyr.song_id
-    FROM country_year_results cyr
-    JOIN year result_year ON result_year.id = cyr.year_id
-    LEFT JOIN country_show_results final_result
-      ON final_result.song_id = cyr.song_id
-     AND final_result.year_id = cyr.year_id
-     AND final_result.short_name = 'f'
-     AND final_result.result_mode = 'official'
-    WHERE cyr.year_id = %s
-      AND cyr.place = 1
-      AND result_year.status = 'closed'
-    ORDER BY final_result.running_order NULLS LAST, cyr.song_id
+        select="""winner_result.running_order,
+    winner_result.total_points AS result_total_points,
+    winner_result.total_votes_received AS result_total_votes,
+    winner_result.point_distribution AS result_point_distribution,
+    winner_result.max_pts AS result_max_pts,
+    winner_result.total_voters AS result_total_voters,
+    COALESCE(winner_song_show.penalty, 0) AS result_penalty""",
+        joins="""
+JOIN country_year_results cyr ON cyr.song_id = song.id
+JOIN LATERAL (
+    SELECT csr.*
+    FROM country_show_results csr
+    WHERE csr.song_id = cyr.song_id
+      AND csr.year_id = cyr.year_id
+      AND csr.result_mode = 'official'
+    ORDER BY
+      CASE
+        WHEN csr.short_name = 'f' THEN 1
+        WHEN csr.short_name = 'sc' THEN 2
+        WHEN csr.short_name = 'sf' OR csr.short_name LIKE 'sf%%' THEN 3
+        ELSE 4
+      END,
+      csr.place,
+      csr.running_order NULLS LAST
     LIMIT 1
-)""",
+) winner_result ON true
+LEFT JOIN song_show winner_song_show
+  ON winner_song_show.song_id = winner_result.song_id
+ AND winner_song_show.show_id = winner_result.show_id""",
+        where="""cyr.year_id = %s
+  AND cyr.place = 1
+  AND year.status = 'closed'""",
+        order_by="winner_result.running_order NULLS LAST, cyr.song_id LIMIT 1",
     )
     songs = _load_songs(sql, (year,), select_languages=True)
     return songs[0] if songs else None
