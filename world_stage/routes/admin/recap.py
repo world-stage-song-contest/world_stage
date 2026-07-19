@@ -229,6 +229,9 @@ _SPECS: dict[str, Spec] = {
     "submitter": Spec(parse=_parse_submitter_ids, sql=_SQL_SUBMITTER),
 }
 
+_DEFAULT_SNIPPET_START = 50
+_DEFAULT_SNIPPET_END = 70
+
 
 def get_recap_data(
     mode: str,
@@ -248,8 +251,12 @@ def get_recap_data(
         param = spec.parse(form_data, cursor)
         cursor.execute(spec.sql, (param, specials == "true", specials == "only"))
         data = cursor.fetchall()
-        if not include_change_metadata:
-            for row in data:
+        for row in data:
+            if row["snippet_start"] is None:
+                row["snippet_start"] = _DEFAULT_SNIPPET_START
+            if row["snippet_end"] is None:
+                row["snippet_end"] = _DEFAULT_SNIPPET_END
+            if not include_change_metadata:
                 row.pop("_changed_at", None)
         return data
     except BadRecapRequestError:

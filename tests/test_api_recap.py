@@ -48,9 +48,30 @@ def test_recap_api_returns_recap_data(client, db):
             "country": "United States",
             "artist": "API Artist",
             "title": "API Song",
+            "snippet_start": 50,
+            "snippet_end": 70,
             "type": "video",
         }
     ]
+
+
+def test_recap_api_preserves_configured_snippet_times(client, db):
+    song_id = _seed_recap_data(db, show_name="Timed API Recap", short_name="timed")
+    with db.cursor() as cur:
+        cur.execute(
+            "UPDATE song SET snippet_start = 0, snippet_end = 30 WHERE id = %s",
+            (song_id,),
+        )
+    db.commit()
+
+    response = client.get(
+        "/api/recap",
+        query_string={"type": "show", "show": "2025-timed"},
+    )
+
+    assert response.status_code == 200
+    assert _result(response)[0]["snippet_start"] == 0
+    assert _result(response)[0]["snippet_end"] == 30
 
 
 def test_recap_api_is_public(client, db):

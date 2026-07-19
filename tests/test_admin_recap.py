@@ -213,5 +213,7 @@ def test_all_recap_data_variants_include_submitter(client, db):
         row = next(row for row in json.loads(response.text) if row["title"] == "Metadata Song")
         assert row["year"] == 2027
         assert row["submitter"] == "alice"
+        assert row["snippet_start"] == 50
+        assert row["snippet_end"] == 70
         assert "short_name" not in row
         assert "show_name" not in row
