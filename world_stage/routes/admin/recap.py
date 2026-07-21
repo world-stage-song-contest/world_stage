@@ -252,9 +252,8 @@ def get_recap_data(
         cursor.execute(spec.sql, (param, specials == "true", specials == "only"))
         data = cursor.fetchall()
         for row in data:
-            if row["snippet_start"] is None:
+            if row["snippet_start"] is None and row["snippet_end"] is None:
                 row["snippet_start"] = _DEFAULT_SNIPPET_START
-            if row["snippet_end"] is None:
                 row["snippet_end"] = _DEFAULT_SNIPPET_END
             if not include_change_metadata:
                 row.pop("_changed_at", None)

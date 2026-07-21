@@ -74,6 +74,22 @@ def test_recap_api_preserves_configured_snippet_times(client, db):
     assert _result(response)[0]["snippet_end"] == 30
 
 
+def test_recap_api_does_not_default_end_when_start_is_configured(client, db):
+    song_id = _seed_recap_data(db, show_name="Open-ended API Recap", short_name="open-ended")
+    with db.cursor() as cur:
+        cur.execute("UPDATE song SET snippet_start = 12 WHERE id = %s", (song_id,))
+    db.commit()
+
+    response = client.get(
+        "/api/recap",
+        query_string={"type": "show", "show": "2025-open-ended"},
+    )
+
+    assert response.status_code == 200
+    assert _result(response)[0]["snippet_start"] == 12
+    assert "snippet_end" not in _result(response)[0]
+
+
 def test_recap_api_is_public(client, db):
     _seed_recap_data(db, show_name="Public API Recap", short_name="public-api")
 
