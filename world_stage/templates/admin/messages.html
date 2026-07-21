@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Admin messages{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="{{ static('css/messages.css') }}">
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('admin.index') }}"><i class="ph-fill ph-shield"></i> Admin</a>
+    <a class="nav-item" href="{{ url_for('messages.new') }}"><i class="ph-fill ph-pencil-simple"></i> New admin message</a>
+    <a class="nav-item" href="{{ url_for('messages.search') }}"><i class="ph-fill ph-magnifying-glass"></i> Search</a>
+    <a class="nav-item" href="{{ url_for('messages.inbox') }}"><i class="ph-fill ph-user"></i> Personal inbox</a>
+{% endblock %}
+{% block content %}
+<p class="message-muted">Shared conversations that all administrators can access.</p>
+
+{% if conversations %}
+<div class="conversation-list">
+    {% for conversation in conversations %}
+    <a class="conversation-row{% if conversation.unread_count %} unread{% endif %}" href="{{ url_for('messages.thread', conversation_id=conversation.id) }}">
+        <div class="conversation-main">
+            <div class="conversation-title-row">
+                <h3>{{ conversation.subject }}</h3>
+                {% if conversation.system_conversation %}
+                    <span class="message-badge system">System</span>
+                {% elif conversation.created_by_admin %}
+                    <span class="message-badge admin">Admin conversation</span>
+                {% else %}
+                    <span class="message-badge private">User shared</span>
+                {% endif %}
+                {% if conversation.current_participant_role %}
+                    <span class="message-badge private">{{ conversation.current_participant_role }}</span>
+                {% endif %}
+                {% if conversation.unread_count %}
+                    <span class="message-badge unread">{{ conversation.unread_count }} unread</span>
+                {% endif %}
+            </div>
+            <p class="conversation-participants">
+                <i class="ph-fill ph-users"></i>
+                {{ conversation.participant_usernames|join(', ') }}
+            </p>
+            {% if conversation.latest_message_body %}
+            <p class="conversation-preview">{% if conversation.latest_sender_kind == 'system' %}System{% else %}{{ conversation.latest_sender_username }}{% endif %}: {{ conversation.latest_message_body }}</p>
+            {% endif %}
+        </div>
+        <time datetime="{{ conversation.latest_message_at.isoformat() if conversation.latest_message_at else conversation.created_at.isoformat() }}">
+            {{ (conversation.latest_message_at or conversation.created_at).strftime('%d %b %Y, %H:%M') }}
+        </time>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="message-empty-state">
+    <i class="ph ph-chat-circle-dots"></i>
+    <h2>No shared admin conversations</h2>
+    <p>Start an admin conversation or wait for a user to grant administrator access.</p>
+    <a class="button-link primary" href="{{ url_for('messages.new') }}">New admin message</a>
+</div>
+{% endif %}
+
+<nav class="message-pagination" aria-label="Admin conversation pages">
+    {% if page > 1 %}<a href="{{ url_for('admin.messages_inbox', page=page-1) }}">Newer</a>{% endif %}
+    {% if has_next %}<a href="{{ url_for('admin.messages_inbox', page=page+1) }}">Older</a>{% endif %}
+</nav>
+{% endblock %}

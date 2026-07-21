@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "macros/participants.html" import participant_transfer %}
+{% block title %}Edit {{ conversation.subject }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="{{ static('css/forms.css') }}">
+    <link rel="stylesheet" href="{{ static('css/messages.css') }}">
+    <script src="{{ static('js/messages.js') }}" defer></script>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('messages.inbox') }}"><i class="ph-fill ph-chat-circle-dots"></i> Messages</a>
+    <a class="nav-item" href="{{ url_for('messages.search') }}"><i class="ph-fill ph-magnifying-glass"></i> Search</a>
+    {% if is_admin %}<a class="nav-item" href="{{ url_for('admin.messages_inbox') }}"><i class="ph-fill ph-shield"></i> Admin inbox</a>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="message-form-shell">
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+    <form method="POST">
+        <fieldset class="grid">
+            <legend>Conversation details</legend>
+
+            <label class="req" for="subject">Subject</label>
+            <input class="stretchable" id="subject" name="subject" required
+                   maxlength="{{ max_subject_length }}" size="60"
+                   value="{{ values.subject or '' }}">
+
+            <label>Owner</label>
+            <div>
+                <strong>{{ conversation.owner_username }}</strong>
+                <br><small>The owner remains a participant.</small>
+            </div>
+
+            {{ participant_transfer(recipients, values.participant_ids) }}
+
+            <div class="span-fieldset">
+                <div>
+                    {% if conversation.created_by_admin %}
+                    <input name="admin_accessible" type="hidden" value="on">
+                    <input id="admin_accessible" type="checkbox" checked disabled>
+                    <label for="admin_accessible">Allow administrators to access this conversation</label>
+                    <br><small>Admin-created conversations remain shared with all administrators.</small>
+                    {% else %}
+                    <input id="admin_accessible" name="admin_accessible" type="checkbox"
+                           {% if values.admin_accessible %}checked{% endif %}>
+                    <label for="admin_accessible">Allow administrators to access this conversation</label>
+                    <br><small>All administrators will be able to read and reply.</small>
+                    {% endif %}
+                </div>
+            </div>
+        </fieldset>
+
+        <div class="buttons">
+            <button type="button" onclick="window.location.href='{{ url_for('messages.thread', conversation_id=conversation.id) }}'">Cancel</button>
+            <button type="submit">Save changes</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

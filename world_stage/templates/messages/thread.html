@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "macros/formatting.html" import formatting_guide %}
+{% block title %}{{ conversation.subject }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="{{ static('css/forms.css') }}">
+    <link rel="stylesheet" href="{{ static('css/messages.css') }}">
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('messages.inbox') }}"><i class="ph-fill ph-chat-circle-dots"></i> Messages</a>
+    <a class="nav-item" href="{{ url_for('messages.search') }}"><i class="ph-fill ph-magnifying-glass"></i> Search</a>
+    {% if is_admin %}<a class="nav-item" href="{{ url_for('admin.messages_inbox') }}"><i class="ph-fill ph-shield"></i> Admin inbox</a>{% endif %}
+    {% if can_edit %}
+    <a class="nav-item" href="{{ url_for('messages.edit', conversation_id=conversation.id) }}"><i class="ph-fill ph-pencil-simple"></i> Edit conversation</a>
+    {% endif %}
+{% endblock %}
+{% block content %}
+<div class="thread-heading">
+    <div>
+        <p class="conversation-participants">
+            <i class="ph-fill ph-users"></i>
+            {% for participant in participants %}
+                {{ participant.username }}{% if participant.is_current_user %} (you){% endif %}{% if participant.role != 'participant' %} <small>[{{ participant.role }}]</small>{% endif %}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </p>
+    </div>
+    <div class="thread-badges">
+        {% if conversation.system_conversation %}
+            <span class="message-badge system">System notification</span>
+        {% elif conversation.admin_accessible %}
+            <span class="message-badge admin">Admins can access</span>
+        {% else %}
+            <span class="message-badge private">Participants only</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if conversation.is_participant %}
+<details class="notification-settings">
+    <summary>Email notifications: {{ 'on' if conversation.email_notifications else 'off' }}</summary>
+    <form method="POST" action="{{ url_for('messages.notification_preferences', conversation_id=conversation.id) }}">
+        <fieldset class="nongrid">
+            <legend>Email notifications</legend>
+            <input id="email_notifications" name="email_notifications" type="checkbox"
+                   {% if conversation.email_notifications %}checked{% endif %}>
+            <label for="email_notifications">Email me when this conversation receives new messages</label>
+        </fieldset>
+        <div class="buttons"><button type="submit">Save preference</button></div>
+    </form>
+</details>
+{% endif %}
+
+{% if has_older %}
+<nav class="message-pagination"><a href="{{ url_for('messages.thread', conversation_id=conversation.id, page=page+1) }}">View older messages</a></nav>
+{% endif %}
+
+<section class="message-thread" aria-label="Messages">
+    {% for message in messages %}
+    <div class="message-row {{ message.sender_kind }} {% if message.sender_kind == 'system' %}system-position{% elif message.is_current_user %}own{% else %}other{% endif %}"
+         {% if message.sender_colour %}style="--sender-colour: {{ message.sender_colour }}"{% endif %}>
+        {% if show_avatars and message.sender_id is not none %}
+            <img class="message-avatar"
+                 src="{{ url_for('main.avatar_image', user_id=message.sender_id) }}"
+                 alt="" width="42" height="42" loading="lazy" decoding="async">
+        {% endif %}
+        <article class="message-item {{ message.sender_kind }}" id="message-{{ message.id }}">
+            <header>
+                <strong>
+                    {% if message.sender_kind == 'system' %}System{% else %}{{ message.sender_username }}{% endif %}
+                </strong>
+                <a href="#message-{{ message.id }}">
+                    <time datetime="{{ message.created_at.isoformat() }}">{{ message.created_at.strftime('%d %b %Y, %H:%M') }}</time>
+                </a>
+            </header>
+            <div class="message-body">{{ message.rendered_body|safe }}</div>
+        </article>
+    </div>
+    {% else %}
+    <p class="message-muted">This conversation has no messages.</p>
+    {% endfor %}
+</section>
+
+{% if page > 1 %}
+<nav class="message-pagination"><a href="{{ url_for('messages.thread', conversation_id=conversation.id, page=page-1) }}">View newer messages</a></nav>
+{% endif %}
+
+{% if can_reply %}
+<section class="reply-panel">
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <form method="POST" action="{{ url_for('messages.reply', conversation_id=conversation.id) }}">
+        <fieldset class="nongrid">
+            <legend>Reply</legend>
+            {{ formatting_guide("the message") }}
+            <div><label class="req" for="body">Message</label></div>
+            <textarea class="stretchable" id="body" name="body" rows="8" cols="60" required
+                      maxlength="{{ max_message_length }}">{{ reply_body or '' }}</textarea>
+            <small>Maximum {{ max_message_length }} characters. Line breaks are preserved.</small>
+        </fieldset>
+        <div class="buttons"><button type="submit">Send reply</button></div>
+    </form>
+</section>
+{% else %}
+<div class="system-reply-notice">
+    <i class="ph-fill ph-lock"></i>
+    This is a system notification and cannot be replied to.
+</div>
+{% endif %}
+{% endblock %}

@@ -27,6 +27,12 @@
         <img src="{{ static('images/bias.png') }}" alt="Bias Icon">
         <p>Check out your biases.</p>
     </a>
+    <a href="{{ url_for('messages.inbox') }}" class="card{% if has_unread_messages %} card-attention{% endif %}"
+       {% if has_unread_messages %}title="You have unread messages"{% endif %}>
+        <h3>Messages</h3>
+        <img src="{{ static('images/message.png') }}" alt="Message Icon">
+        <p>Read your messages or start a conversation.</p>
+    </a>
     <form id="logout-form" action="{{ url_for('session.logout') }}" method="POST">
         <a href="#" onclick="this.parentNode.submit()" class="card">
             <h3>Log out</h3>

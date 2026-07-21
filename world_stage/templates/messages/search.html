@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "macros/participants.html" import participant_transfer %}
+{% block title %}Search messages{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="{{ static('css/forms.css') }}">
+    <link rel="stylesheet" href="{{ static('css/messages.css') }}">
+    <script src="{{ static('js/messages.js') }}" defer></script>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('messages.inbox') }}"><i class="ph-fill ph-chat-circle-dots"></i> Messages</a>
+    <a class="nav-item" href="{{ url_for('messages.new') }}"><i class="ph-fill ph-pencil-simple"></i> New message</a>
+    {% if is_admin %}<a class="nav-item" href="{{ url_for('admin.messages_inbox') }}"><i class="ph-fill ph-shield"></i> Admin inbox</a>{% endif %}
+{% endblock %}
+{% block content %}
+<p class="message-muted">Search message text or narrow results by conversation details.</p>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<form method="GET" data-message-search-form>
+    <fieldset class="grid">
+        <legend>Words and subject</legend>
+        <label for="q">Words or phrases</label>
+        <input class="stretchable" id="q" name="q" type="search" size="60"
+               value="{{ filters.get('q', '') }}" placeholder="Search messages and subjects">
+        <label for="subject">Subject contains</label>
+        <input class="stretchable" id="subject" name="subject" size="60"
+               value="{{ filters.get('subject', '') }}" placeholder="Optional subject filter">
+    </fieldset>
+
+    <fieldset class="grid">
+        <legend>People</legend>
+        <label for="sender">Sender</label>
+        <select class="stretchable" id="sender" name="sender">
+            <option value="">Any sender</option>
+            <option value="me" {% if filters.get('sender') == 'me' %}selected{% endif %}>Me ({{ current_username }})</option>
+            <option value="system" {% if filters.get('sender') == 'system' %}selected{% endif %}>System messages</option>
+            {% for account in sender_filter_accounts %}
+            <option value="{{ account.id }}" {% if filters.get('sender') == account.id|string %}selected{% endif %}>{{ account.username }}</option>
+            {% endfor %}
+        </select>
+        {{ participant_transfer(
+            participant_filter_accounts,
+            filters.getlist('participant'),
+            field_name='participant',
+            selected_id='participant',
+            selected_label='Required participants',
+            required=false,
+            help_text='Move people to the right to require them in matching conversations.'
+        ) }}
+    </fieldset>
+
+    <fieldset class="grid">
+        <legend>Date</legend>
+        <label for="date_mode">Date filter</label>
+        <select class="stretchable" id="date_mode" name="date_mode" data-date-mode>
+            <option value="">Any date</option>
+            {% for value, label in [('exact', 'On'), ('before', 'Before'), ('after', 'After'), ('between', 'Between')] %}
+            <option value="{{ value }}" {% if filters.get('date_mode') == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <label for="date" data-date-single data-date-label>Date</label>
+        <input class="stretchable" id="date" name="date" type="date" data-date-single
+               value="{{ filters.get('date', '') }}">
+        <label for="date_from" data-date-range>From</label>
+        <input class="stretchable" id="date_from" name="date_from" type="date" data-date-range
+               value="{{ filters.get('date_from', '') }}">
+        <label for="date_to" data-date-range>To</label>
+        <input class="stretchable" id="date_to" name="date_to" type="date" data-date-range
+               value="{{ filters.get('date_to', '') }}">
+    </fieldset>
+
+    <div class="buttons">
+        <button type="button" onclick="window.location.href='{{ url_for('messages.search') }}'">Clear filters</button>
+        <button type="submit"><i class="ph-fill ph-magnifying-glass" aria-hidden="true"></i> Search messages</button>
+    </div>
+</form>
+
+{% if results %}
+<div class="search-results">
+    {% for result in results %}
+    <a class="search-result" href="{{ url_for('messages.thread', conversation_id=result.conversation_id, _anchor='message-' ~ result.id) }}">
+        <div class="search-result-heading">
+            <h3>{{ result.subject }}</h3>
+            <time datetime="{{ result.created_at.isoformat() }}">{{ result.created_at.strftime('%d %b %Y, %H:%M') }}</time>
+        </div>
+        <p class="conversation-participants"><i class="ph-fill ph-users"></i> {{ result.participant_usernames|join(', ') }}</p>
+        <p class="search-result-message"><strong>{% if result.sender_kind == 'system' %}System{% else %}{{ result.sender_username }}{% endif %}:</strong> {{ result.body }}</p>
+    </a>
+    {% endfor %}
+</div>
+{% elif request.query_string and not error %}
+<div class="message-empty-state compact"><h2>No matching messages</h2><p>Try removing one or more filters.</p></div>
+{% endif %}
+
+<nav class="message-pagination" aria-label="Search result pages">
+    {% if previous_url %}<a href="{{ previous_url }}">Previous</a>{% endif %}
+    {% if next_url %}<a href="{{ next_url }}">Next</a>{% endif %}
+</nav>
+{% endblock %}

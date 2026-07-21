@@ -2,6 +2,12 @@
 {% block title %}Administrator Utilities{% endblock %}
 {% block content %}
 <div class="cards-container">
+    <a href="{{ url_for('admin.messages_inbox') }}" class="card{% if has_unread_admin_messages %} card-attention{% endif %}"
+       {% if has_unread_admin_messages %}title="The administrator inbox has unread messages"{% endif %}>
+        <h3>Messages</h3>
+        <img src="{{ static('images/message.png') }}" alt="Message Icon">
+        <p>Read and send shared administrator messages.</p>
+    </a>
     <a href="{{ url_for('admin.manage_index') }}" class="card">
         <h3>Manage</h3>
         <img src="{{ static('images/submit.png') }}" alt="Submit Icon">

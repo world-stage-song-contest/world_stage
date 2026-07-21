@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% from "macros/formatting.html" import formatting_guide %}
+{% from "macros/participants.html" import participant_transfer %}
+{% block title %}New conversation{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="{{ static('css/forms.css') }}">
+    <link rel="stylesheet" href="{{ static('css/messages.css') }}">
+    <script src="{{ static('js/messages.js') }}" defer></script>
+{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('messages.inbox') }}"><i class="ph-fill ph-chat-circle-dots"></i> Messages</a>
+    <a class="nav-item" href="{{ url_for('messages.search') }}"><i class="ph-fill ph-magnifying-glass"></i> Search</a>
+    {% if created_by_admin %}<a class="nav-item" href="{{ url_for('admin.messages_inbox') }}"><i class="ph-fill ph-shield"></i> Admin inbox</a>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="message-form-shell">
+    <p class="message-muted">Choose one person for a direct message or several for a group.</p>
+
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+    <form method="POST">
+        <fieldset class="grid">
+            <legend>Conversation details</legend>
+
+            <label class="req" for="subject">Subject</label>
+            <input class="stretchable" id="subject" name="subject" required
+                   maxlength="{{ max_subject_length }}" size="60"
+                   value="{{ values.subject or '' }}">
+
+            {{ participant_transfer(recipients, values.participant_ids) }}
+
+            <div class="span-fieldset">
+                <div>
+                    {% if created_by_admin %}
+                    <input name="admin_accessible" type="hidden" value="on">
+                    <input id="admin_accessible" type="checkbox" checked disabled>
+                    <label for="admin_accessible">Allow administrators to access this conversation</label>
+                    <br><small>Admin-created conversations are shared with all administrators.</small>
+                    {% else %}
+                    <input id="admin_accessible" name="admin_accessible" type="checkbox"
+                           {% if values.admin_accessible %}checked{% endif %}>
+                    <label for="admin_accessible">Allow administrators to access this conversation</label>
+                    <br><small>All administrators will be able to read and reply.</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="span-fieldset">
+                <div>
+                    <input id="email_notifications" name="email_notifications" type="checkbox"
+                           {% if values.email_notifications %}checked{% endif %}>
+                    <label for="email_notifications">Email me when this conversation receives new messages</label>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="nongrid">
+            <legend>First message</legend>
+            {{ formatting_guide("the message") }}
+            <div><label class="req" for="body">Message</label></div>
+            <textarea class="stretchable" id="body" name="body" rows="12" cols="60" required
+                      maxlength="{{ max_message_length }}">{{ values.body or '' }}</textarea>
+            <small>Maximum {{ max_message_length }} characters. Line breaks are preserved.</small>
+        </fieldset>
+
+        <div class="buttons">
+            <button type="button" onclick="window.location.href='{{ url_for('admin.messages_inbox') if created_by_admin else url_for('messages.inbox') }}'">Cancel</button>
+            <button type="submit">Start conversation</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

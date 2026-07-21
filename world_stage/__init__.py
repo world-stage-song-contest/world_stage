@@ -247,6 +247,7 @@ def create_app(config: dict | None = None) -> Flask:
         SECRET_KEY="dev",
         DATABASE=os.path.join(app.instance_path, "songs.db"),
         LOCAL_ASSETS=_environment_boolean("LOCAL_ASSETS"),
+        MESSAGING_TIMEZONE="Europe/Warsaw",
         PERFORMANCE_HEADERS=_environment_boolean("PERFORMANCE_HEADERS"),
         STATIC_ROOT="/opt/worldstage/static",
         STATIC_URL_PREFIX="/static",
@@ -342,6 +343,7 @@ def create_app(config: dict | None = None) -> Flask:
         country,
         index,
         member,
+        messages,
         playlist,
         radio,
         results,
@@ -357,6 +359,7 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(results.bp)
     app.register_blueprint(session.bp)
     app.register_blueprint(member.bp)
+    app.register_blueprint(messages.bp)
     app.register_blueprint(year.bp)
     app.register_blueprint(user.bp)
     app.register_blueprint(admin.bp)

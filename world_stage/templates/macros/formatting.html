@@ -1,0 +1,49 @@
+{% macro formatting_guide(subject="text", include_footnotes=false) -%}
+<div class="banner long-text formatting-guide">
+    <div>
+        While entering {{ subject }}, you may use basic BBCode-like markup.
+        <details>
+            <summary>Markup guide</summary>
+            <ul>
+                <li><strong>Bold</strong> – use <code>[b]bold text[/b]</code></li>
+                <li><em>Italic</em> – use <code>[i]italic text[/i]</code></li>
+                <li><ins>Underline</ins> – use <code>[u]underlined text[/u]</code></li>
+                <li><span class="overline">Overline</span> – use <code>[o]overlined text[/o]</code></li>
+                <li><del>Strikethrough</del> – use <code>[s]strikethrough text[/s]</code></li>
+                <li><small>Small text</small> – use <code>[sm]small text[/sm]</code></li>
+                <li><big>Big text</big> – use <code>[xl]big text[/xl]</code></li>
+                <li><code>Inline code</code> – use <code>[code]code[/code]</code></li>
+                <li>Preformatted text – use <code>[pre]preformatted text[/pre]</code></li>
+                <li>
+                    <div>
+                        <span class="colour-red">Coloured</span>
+                        <span class="colour-green">text</span> – use
+                        <code>[c=COLOUR]coloured text[/c]</code>.
+                    </div>
+                    <div>
+                        <span class="background-colour-yellow">Background-coloured text</span> – use
+                        <code>[bg=COLOUR]background-coloured text[/bg]</code>.
+                    </div>
+                    <div>Available colours:</div>
+                    <ul class="formatting-colours">
+                        <li><code class="colour-red">red</code> | <code class="background-colour-red">red</code></li>
+                        <li><code class="colour-green">green</code> | <code class="background-colour-green">green</code></li>
+                        <li><code class="colour-blue">blue</code> | <code class="background-colour-blue">blue</code></li>
+                        <li><code class="colour-yellow">yellow</code> | <code class="background-colour-yellow">yellow</code></li>
+                        <li><code class="colour-cyan">cyan</code> | <code class="background-colour-cyan">cyan</code></li>
+                        <li><code class="colour-magenta">magenta</code> | <code class="background-colour-magenta">magenta</code></li>
+                        <li><code class="colour-white background-colour-black">white</code> | <code class="background-colour-white colour-black">white</code></li>
+                        <li><code class="colour-black background-colour-white">black</code> | <code class="background-colour-black colour-white">black</code></li>
+                    </ul>
+                </li>
+            </ul>
+            {% if include_footnotes %}
+            <p>
+                You can also use <code>[NUMBER]</code> to insert an automatically
+                generated footnote number, for example <code>[1]</code>.
+            </p>
+            {% endif %}
+        </details>
+    </div>
+</div>
+{%- endmacro %}

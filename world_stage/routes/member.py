@@ -3,6 +3,7 @@ from typing import Any
 from flask import Blueprint, redirect, request, url_for
 
 from ..db import fetchone, get_db
+from ..messaging import has_unread_messages
 from ..utils import (
     UserPermissions,
     format_seconds,
@@ -197,8 +198,13 @@ def get_users() -> list[dict]:
 # Route handlers
 @bp.get("/")
 @require_user(redirect_to_login=True)
-def index(user: tuple[int, str]):
-    return render_template("member/index.html", username=user[1])
+@with_permissions
+def index(user: tuple[int, str], permissions: UserPermissions):
+    return render_template(
+        "member/index.html",
+        username=user[1],
+        has_unread_messages=has_unread_messages(user[0], permissions),
+    )
 
 
 @bp.get("/submit")

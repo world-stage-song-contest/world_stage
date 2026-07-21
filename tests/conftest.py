@@ -222,6 +222,10 @@ def _clean_songs(_seeded_db):
     yield
     conn = psycopg.connect(_seeded_db)
     with conn.cursor() as cur:
+        cur.execute("DELETE FROM account_avatar")
+        cur.execute("DELETE FROM message")
+        cur.execute("DELETE FROM conversation_participant")
+        cur.execute("DELETE FROM conversation")
         cur.execute("DELETE FROM radio_slot")
         cur.execute("DELETE FROM prediction")
         cur.execute("DELETE FROM prediction_set")

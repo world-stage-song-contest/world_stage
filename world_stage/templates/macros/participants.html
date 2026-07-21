@@ -1,0 +1,55 @@
+{% macro participant_transfer(
+    recipients,
+    participant_ids,
+    field_name='participant_id',
+    selected_id='participant_id',
+    selected_label='Participants',
+    required=true,
+    help_text='Select users on either side, then use Add or Remove to move them.'
+) %}
+{% set selected_ids = participant_ids or [] %}
+<div class="span-fieldset participant-field">
+    <div class="participant-transfer" data-participant-transfer
+         data-participant-required="{{ 'true' if required else 'false' }}">
+        <div class="participant-panel">
+            <label for="participant_available">Available users</label>
+            <select id="participant_available" multiple size="8"
+                    data-participant-available>
+                {% for recipient in recipients %}
+                    {% if recipient.id|string not in selected_ids %}
+                    <option value="{{ recipient.id }}">{{ recipient.username }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="participant-transfer-buttons">
+            <button type="button" data-participant-add disabled>Add <span aria-hidden="true">>></span></button>
+            <button type="button" data-participant-remove disabled><span aria-hidden="true"><<</span> Remove</button>
+        </div>
+
+        <div class="participant-panel">
+            <label {% if required %}class="req" {% endif %}for="{{ selected_id }}">{{ selected_label }}</label>
+            <select id="{{ selected_id }}" multiple size="8"
+                    {% if required %}aria-required="true"{% endif %}
+                    data-participant-selected>
+                {% for recipient in recipients %}
+                    {% if recipient.id|string in selected_ids %}
+                    <option value="{{ recipient.id }}">{{ recipient.username }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <div data-participant-inputs data-participant-field="{{ field_name }}">
+            {% for recipient in recipients %}
+                {% if recipient.id|string in selected_ids %}
+                <input type="hidden" name="{{ field_name }}" value="{{ recipient.id }}">
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    <small>{{ help_text }}</small>
+    <noscript><small class="error">JavaScript is required to change participants.</small></noscript>
+</div>
+{% endmacro %}

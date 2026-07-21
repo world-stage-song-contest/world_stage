@@ -22,6 +22,29 @@
             padding: 0.3em 0.6em;
             cursor: pointer;
         }
+        .avatar-editor {
+            align-items: flex-start;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .settings-avatar {
+            background: var(--background3);
+            border: 2px solid var(--foreground2);
+            border-radius: 20%;
+            height: 96px;
+            object-fit: cover;
+            width: 96px;
+        }
+        .avatar-upload-fields {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-width: 32rem;
+        }
+        .avatar-actions {
+            justify-content: flex-start;
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -29,6 +52,9 @@
     <p>Note that these settings are stored in a cookie, so they will only apply to this browser.</p>
     {% if message %}
         <p class="success">{{ message }}</p>
+    {% endif %}
+    {% if error %}
+        <p class="error">{{ error }}</p>
     {% endif %}
     <form id="settings-form" method="POST">
         <fieldset>
@@ -52,10 +78,54 @@
                 </div>
             </div>
         </fieldset>
+        <fieldset>
+            <legend>Message display</legend>
+            <div class="labels-row">
+                <div>
+                    <input type="checkbox" id="hide-message-avatars" name="hide_message_avatars"
+                           value="true" {% if settings.hide_message_avatars == "true" %}checked{% endif %}>
+                    <label for="hide-message-avatars">Hide avatars in messages</label>
+                </div>
+            </div>
+        </fieldset>
         <input type="submit" value="Save Settings">
     </form>
 
     {% if user %}
+    <hr>
+    <h2>Avatar</h2>
+    <form method="POST" action="{{ url_for('main.update_avatar') }}" enctype="multipart/form-data">
+        <fieldset class="nongrid">
+            <legend>Profile image</legend>
+            <div class="avatar-editor">
+                <img class="settings-avatar" src="{{ url_for('main.avatar_image', user_id=user[0]) }}"
+                     alt="Current avatar for {{ user[1] }}" width="96" height="96">
+                <div class="avatar-upload-fields">
+                    <div>
+                        {% if has_custom_avatar %}
+                            Your custom avatar is active.
+                        {% else %}
+                            You are using a generated avatar based on your account.
+                        {% endif %}
+                    </div>
+                    <label for="avatar">Choose a new avatar</label>
+                    <input id="avatar" name="avatar" type="file"
+                           accept="image/png,image/jpeg,image/webp">
+                    <small>
+                        PNG, JPEG, or WebP; maximum {{ max_avatar_dimension }} ×
+                        {{ max_avatar_dimension }} pixels and {{ max_avatar_megabytes }} MB.
+                    </small>
+                </div>
+            </div>
+        </fieldset>
+        <div class="buttons avatar-actions">
+            <button type="submit" name="action" value="upload">Upload avatar</button>
+            {% if has_custom_avatar %}
+                <button type="submit" name="action" value="remove">Use generated avatar</button>
+            {% endif %}
+        </div>
+    </form>
+
     <hr>
     <h2>API Tokens</h2>
     <p>API tokens let you authenticate with the API using a <code>Bearer</code> token in the <code>Authorization</code> header.</p>

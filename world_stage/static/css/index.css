@@ -25,6 +25,17 @@
     --blue:    oklch(56.7% 0.155 248.5);
     --magenta: oklch(48.6% 0.144 328.5);
     --cyan:    oklch(61.3% 0.100 222.1);
+    --white:   oklch(100% 0 none);
+    --black:   oklch(0% 0 none);
+
+    --on-red:     var(--white);
+    --on-green:   var(--white);
+    --on-yellow:  var(--black);
+    --on-blue:    var(--black);
+    --on-magenta: var(--white);
+    --on-cyan:    var(--black);
+    --on-white:   var(--black);
+    --on-black:   var(--white);
 
     --placeholder-bg: oklch(88.5% 0.071 84.4);
     --error:          oklch(52.3% 0.215 29.2);
@@ -110,6 +121,15 @@
         --blue:    oklch(67.1% 0.112 248.5);
         --magenta: oklch(70.2% 0.109 328.5);
         --cyan:    oklch(76.0% 0.115 222.1);
+
+        --on-red:     var(--black);
+        --on-green:   var(--black);
+        --on-yellow:  var(--black);
+        --on-blue:    var(--black);
+        --on-magenta: var(--black);
+        --on-cyan:    var(--black);
+        --on-white:   var(--black);
+        --on-black:   var(--white);
 
         --placeholder-bg: oklch(25% 0.075 12);
         --error:          oklch(70.2% 0.190 29.2);
@@ -578,10 +598,8 @@ h1 {
     padding: 0.5em;
 }
 
-/* Soft salmon highlight for the Vote tile when the signed-in user still
-   has an open voting they haven't cast a ballot in yet. Keeps the
-   default border and text colour so it doesn't look out of place. */
-.card.card.card-pending-vote {
+/* Soft salmon highlight for cards that need the signed-in user's attention. */
+.card.card.card-attention {
     background-color: #f5a99c;
     color: #1a1a1a;
 }
@@ -681,6 +699,10 @@ bdi {
     font-weight: bold;
 }
 
+.overline {
+    text-decoration-line: overline;
+}
+
 .colour-red {
     color: var(--red);
 }
@@ -698,6 +720,45 @@ bdi {
 }
 .colour-cyan {
     color: var(--cyan);
+}
+.colour-white {
+    color: var(--white);
+}
+.colour-black {
+    color: var(--black);
+}
+
+.background-colour-red {
+    background-color: var(--red);
+    color: var(--on-red);
+}
+.background-colour-green {
+    background-color: var(--green);
+    color: var(--on-green);
+}
+.background-colour-yellow {
+    background-color: var(--yellow);
+    color: var(--on-yellow);
+}
+.background-colour-blue {
+    background-color: var(--blue);
+    color: var(--on-blue);
+}
+.background-colour-magenta {
+    background-color: var(--magenta);
+    color: var(--on-magenta);
+}
+.background-colour-cyan {
+    background-color: var(--cyan);
+    color: var(--on-cyan);
+}
+.background-colour-white {
+    background-color: var(--white);
+    color: var(--on-white);
+}
+.background-colour-black {
+    background-color: var(--black);
+    color: var(--on-black);
 }
 
 .number.number {

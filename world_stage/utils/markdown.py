@@ -47,17 +47,32 @@ def footnote_plugin(md: MarkdownIt):
 
 
 def make_bbcode_plugin(allowed_colours):
-    tags = {"b": "strong", "i": "em", "u": "ins", "s": "del", "sm": "small", "xl": "big"}
+    tags = {
+        "b": "strong",
+        "i": "em",
+        "u": "ins",
+        "s": "del",
+        "o": "span",
+        "sm": "small",
+        "xl": "big",
+    }
+    literal_tags = {"code": "code", "pre": "pre"}
 
-    c_re = re.compile(r"\[c=([a-zA-Z]+)\]")
+    colour_names = "|".join(re.escape(colour) for colour in sorted(allowed_colours))
+    c_re = re.compile(rf"\[c=({colour_names})\]")
+    bg_re = re.compile(rf"\[bg=({colour_names})\]")
     close_re = {
         "b": "[/b]",
         "i": "[/i]",
         "u": "[/u]",
         "s": "[/s]",
+        "o": "[/o]",
         "sm": "[/sm]",
         "xl": "[/xl]",
+        "code": "[/code]",
+        "pre": "[/pre]",
         "c": "[/c]",
+        "bg": "[/bg]",
     }
 
     def bbcode_plugin(md: MarkdownIt):
@@ -65,6 +80,23 @@ def make_bbcode_plugin(allowed_colours):
         def tokenizer(state: StateInline, silent: bool):
             src = state.src
             pos = state.pos
+
+            for tag, html_tag in literal_tags.items():
+                open_tag = f"[{tag}]"
+                close_tag = close_re[tag]
+                if src.startswith(open_tag, pos):
+                    end_pos = src.find(close_tag, pos + len(open_tag))
+                    if end_pos == -1:
+                        return False
+                    if silent:
+                        return True
+
+                    state.push(f"bb_{tag}_open", html_tag, 1)
+                    token = state.push("text", "", 0)
+                    token.content = src[pos + len(open_tag) : end_pos]
+                    state.push(f"bb_{tag}_close", html_tag, -1)
+                    state.pos = end_pos + len(close_tag)
+                    return True
 
             for tag, html_tag in tags.items():
                 open_tag = f"[{tag}]"
@@ -105,10 +137,34 @@ def make_bbcode_plugin(allowed_colours):
                 state.posMax = end_pos
 
                 token = state.push("bb_colour_open", "span", 1)
-                if colour in allowed_colours:
-                    token.attrs = {"class": f"colour-{colour}"}
+                token.attrs = {"class": f"colour-{colour}"}
                 state.md.inline.tokenize(state)
                 state.push("bb_colour_close", "span", -1)
+
+                state.pos = end_pos + len(close_tag)
+                state.posMax = old_max
+                return True
+
+            m = bg_re.match(src, pos)
+            if m:
+                colour = m.group(1)
+
+                open_len = m.end()
+                close_tag = close_re["bg"]
+                end_pos = src.find(close_tag, open_len)
+                if end_pos == -1:
+                    return False
+                if silent:
+                    return True
+
+                old_max = state.posMax
+                state.pos = open_len
+                state.posMax = end_pos
+
+                token = state.push("bb_background_colour_open", "span", 1)
+                token.attrs = {"class": f"background-colour-{colour}"}
+                state.md.inline.tokenize(state)
+                state.push("bb_background_colour_close", "span", -1)
 
                 state.pos = end_pos + len(close_tag)
                 state.posMax = old_max
@@ -131,6 +187,15 @@ def make_bbcode_plugin(allowed_colours):
             return render
 
         for tag, html_tag in tags.items():
+            if tag == "o":
+                md.add_render_rule(
+                    "bb_o_open",
+                    lambda self, tokens, idx, opts, env: '<span class="overline">',
+                )
+            else:
+                md.add_render_rule(f"bb_{tag}_open", simple_open(html_tag))
+            md.add_render_rule(f"bb_{tag}_close", simple_close(html_tag))
+        for tag, html_tag in literal_tags.items():
             md.add_render_rule(f"bb_{tag}_open", simple_open(html_tag))
             md.add_render_rule(f"bb_{tag}_close", simple_close(html_tag))
 
@@ -141,6 +206,8 @@ def make_bbcode_plugin(allowed_colours):
 
         md.add_render_rule("bb_colour_open", render_colour_open)
         md.add_render_rule("bb_colour_close", simple_close("span"))
+        md.add_render_rule("bb_background_colour_open", render_colour_open)
+        md.add_render_rule("bb_background_colour_close", simple_close("span"))
 
     return bbcode_plugin
 
@@ -196,7 +263,7 @@ def make_entity_plugin(entities=None):
 
 @lru_cache(maxsize=1)
 def get_markdown_parser():
-    colours = {"red", "green", "blue", "yellow", "magenta", "cyan"}
+    colours = {"red", "green", "blue", "yellow", "magenta", "cyan", "white", "black"}
     md = (
         MarkdownIt("zero")
         .enable(["emphasis"])

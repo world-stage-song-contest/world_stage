@@ -1,4 +1,6 @@
 import json
+import math
+import re
 import sqlite3
 from pathlib import Path
 
@@ -12,6 +14,93 @@ from world_stage import (
     _flag_url,
     _static_url,
 )
+
+COLOUR_NAMES = (
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+    "black",
+)
+CSS_VARIABLE_RE = re.compile(r"--([\w-]+):\s*([^;]+);")
+ROOT_BLOCK_RE = re.compile(r":root\s*\{(.*?)\}", re.DOTALL)
+OKLCH_RE = re.compile(r"oklch\(([\d.]+)%\s+([\d.]+)\s+([\d.]+|none)\)")
+
+
+def _oklch_relative_luminance(value: str) -> float:
+    match = OKLCH_RE.fullmatch(value)
+    assert match is not None
+    lightness_text, chroma_text, hue_text = match.groups()
+    lightness = float(lightness_text) / 100
+    chroma = float(chroma_text)
+    hue_radians = math.radians(0 if hue_text == "none" else float(hue_text))
+    a = chroma * math.cos(hue_radians)
+    b = chroma * math.sin(hue_radians)
+
+    l_ = lightness + 0.3963377774 * a + 0.2158037573 * b
+    m_ = lightness - 0.1055613458 * a - 0.0638541728 * b
+    s_ = lightness - 0.0894841775 * a - 1.2914855480 * b
+    l_linear, m_linear, s_linear = l_**3, m_**3, s_**3
+    linear_srgb = (
+        4.0767416621 * l_linear
+        - 3.3077115913 * m_linear
+        + 0.2309699292 * s_linear,
+        -1.2684380046 * l_linear
+        + 2.6097574011 * m_linear
+        - 0.3413193965 * s_linear,
+        -0.0041960863 * l_linear
+        - 0.7034186147 * m_linear
+        + 1.707614701 * s_linear,
+    )
+    red, green, blue = (max(0, min(1, component)) for component in linear_srgb)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _contrast_ratio(first: float, second: float) -> float:
+    lighter, darker = max(first, second), min(first, second)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def test_formatted_background_colours_meet_wcag_contrast():
+    stylesheet = (
+        Path(__file__).parents[1] / "world_stage/static/css/index.css"
+    ).read_text()
+    root_blocks = ROOT_BLOCK_RE.findall(stylesheet)
+    assert len(root_blocks) >= 2
+
+    light_variables = dict(CSS_VARIABLE_RE.findall(root_blocks[0]))
+    dark_variables = {
+        **light_variables,
+        **dict(CSS_VARIABLE_RE.findall(root_blocks[1])),
+    }
+
+    for colour in COLOUR_NAMES:
+        class_match = re.search(
+            rf"\.background-colour-{colour}\s*\{{(.*?)\}}",
+            stylesheet,
+            re.DOTALL,
+        )
+        assert class_match is not None
+        assert f"color: var(--on-{colour});" in class_match.group(1)
+
+    for theme, variables in (("light", light_variables), ("dark", dark_variables)):
+        for colour in COLOUR_NAMES:
+            background = _oklch_relative_luminance(variables[colour])
+            black_ratio = _contrast_ratio(background, 0)
+            white_ratio = _contrast_ratio(background, 1)
+
+            foreground_match = re.fullmatch(
+                r"var\(--(black|white)\)", variables[f"on-{colour}"]
+            )
+            assert foreground_match is not None
+            foreground = 0 if foreground_match.group(1) == "black" else 1
+            selected_ratio = _contrast_ratio(background, foreground)
+
+            assert selected_ratio >= 4.5, f"{theme} {colour}: {selected_ratio:.2f}:1"
+            assert selected_ratio >= max(black_ratio, white_ratio) - 1e-9
 
 
 def test_current_static_release_uses_deployment_symlink(tmp_path: Path):

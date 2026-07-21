@@ -9,15 +9,23 @@ import psycopg
 from flask import Response, current_app, request
 
 from ...db import get_db
+from ...messaging import has_unread_admin_messages
 from ...utils import (
+    UserPermissions,
     render_template,
+    with_auth,
 )
 from .common import bp
 
 
 @bp.get("/")
-def index():
-    return render_template("admin/index.html")
+@with_auth
+def index(user: tuple[int, str] | None, permissions: UserPermissions):
+    assert user is not None and permissions.can_view_restricted
+    return render_template(
+        "admin/index.html",
+        has_unread_admin_messages=has_unread_admin_messages(user[0]),
+    )
 
 @bp.get("/fuckupdb")
 def fuckup_db():
