@@ -1,8 +1,8 @@
 """Tests for radio scrobbling (Last.fm / Libre.fm)."""
 
 import hashlib
-import time
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -66,44 +66,49 @@ def test_sign_excludes_format_and_appends_secret():
 
 
 class TestValidateSubmission:
-    def _live_slot(self, app):
-        with app.app_context():
-            return radio._song_at(time.time())
-
-    def test_valid_submission_returns_server_slot(self, app, db):
+    def test_valid_submission_returns_server_slot(self, app, client, db):
         _add_song(db, "US", 2024, "Real Title", "Real Artist", "https://m/x.mp4", 200.0)
+        slot = client.get("/radio/now").get_json()
         with app.app_context():
-            slot = radio._song_at(time.time())
-            got = radio._validate_submission(slot["slot_start"], slot["song"]["id"])
+            got = radio._validate_submission(slot["slot_id"])
         assert got is not None
         assert got["song"]["title"] == "Real Title"
 
-    def test_future_timestamp_rejected(self, app, db):
+    def test_future_slot_rejected(self, app, client, db):
         _add_song(db, "US", 2024, "T", "A", "https://m/x.mp4", 200.0)
+        client.get("/radio/now")
+        client.get("/radio/now")
+        with db.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id
+                FROM radio_slot
+                WHERE starts_at > clock_timestamp()
+                ORDER BY starts_at
+                LIMIT 1
+                """
+            )
+            future = cursor.fetchone()
+        assert future is not None
         with app.app_context():
-            slot = radio._song_at(time.time())
-            assert radio._validate_submission(time.time() + 60, slot["song"]["id"]) is None
+            assert radio._validate_submission(future["id"]) is None
 
-    def test_stale_timestamp_rejected(self, app, db):
+    def test_stale_slot_rejected(self, app, db):
         _add_song(db, "US", 2024, "T", "A", "https://m/x.mp4", 200.0)
+        old = datetime.now(UTC) - timedelta(seconds=radio.SCROBBLE_MAX_AGE + 60)
+        with db.cursor() as cursor:
+            cursor.execute("SELECT * FROM get_current_radio_slot(%s)", (old,))
+            slot = cursor.fetchone()
+        db.commit()
+        assert slot is not None
         with app.app_context():
-            old = time.time() - radio.SCROBBLE_MAX_AGE - 60
-            assert radio._validate_submission(old, 1) is None
+            assert radio._validate_submission(slot["slot_id"]) is None
 
-    def test_wrong_song_id_rejected(self, app, db):
+    def test_unknown_slot_id_rejected(self, app, client, db):
         _add_song(db, "US", 2024, "T", "A", "https://m/x.mp4", 200.0)
+        slot = client.get("/radio/now").get_json()
         with app.app_context():
-            slot = radio._song_at(time.time())
-            assert radio._validate_submission(slot["slot_start"], slot["song"]["id"] + 9999) is None
-
-    def test_misaligned_timestamp_rejected(self, app, db):
-        # Long songs so slot_start + 30s is still inside the same window
-        # but well beyond the alignment tolerance.
-        _add_song(db, "US", 2024, "T", "A", "https://m/x.mp4", 600.0)
-        with app.app_context():
-            slot = radio._song_at(time.time())
-            off = slot["slot_start"] + 30
-            assert radio._validate_submission(off, slot["song"]["id"]) is None
+            assert radio._validate_submission(slot["slot_id"] + 9999) is None
 
 
 # ── POST endpoints ───────────────────────────────────────────────────
@@ -128,7 +133,9 @@ class TestScrobbleEndpoints:
         with db.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO scrobble_account (user_id, service, session_key, remote_username, enabled)
+                INSERT INTO scrobble_account (
+                    user_id, service, session_key, remote_username, enabled
+                )
                 VALUES (%s, %s, 'SK', 'remote', true)
                 """,
                 (user_id, service),
@@ -137,24 +144,34 @@ class TestScrobbleEndpoints:
 
     def test_anonymous_scrobble_is_noop(self, client, db, fake_call):
         _add_song(db, "US", 2024, "T", "A", "https://m/x.mp4", 200.0)
-        resp = client.post("/radio/scrobble", json={"song_id": 1, "started_at": time.time()})
+        resp = client.post("/radio/scrobble", json={"slot_id": 1})
         assert resp.status_code == 204
         assert fake_call == []
 
-    def test_scrobble_uses_server_metadata_not_body(self, app, client, db, fake_call):
+    def test_scrobble_uses_scheduled_snapshot_not_request_or_catalog(
+        self, client, db, fake_call
+    ):
         _add_song(db, "US", 2024, "Server Title", "Server Artist", "https://m/x.mp4", 200.0)
         self._link(db, 2)  # bob
         sid = _make_session(db, 2)
         client.set_cookie("session", sid)
 
-        with app.app_context():
-            slot = radio._song_at(time.time())
+        slot = client.get("/radio/now").get_json()
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE song
+                SET title = 'Changed Title', artist = 'Changed Artist'
+                WHERE id = %s
+                """,
+                (slot["song"]["id"],),
+            )
+        db.commit()
 
         resp = client.post(
             "/radio/scrobble",
             json={
-                "song_id": slot["song"]["id"],
-                "started_at": slot["slot_start"],
+                "slot_id": slot["slot_id"],
                 "artist": "HACKED",  # must be ignored
                 "track": "HACKED",
             },
@@ -172,25 +189,39 @@ class TestScrobbleEndpoints:
             cur.execute("SELECT last_scrobbled_at FROM scrobble_account WHERE user_id = 2")
             assert cur.fetchone()["last_scrobbled_at"] is not None
 
-    def test_now_playing_sends_update(self, app, client, db, fake_call):
+    def test_invalid_slot_id_is_ignored(self, client, db, fake_call):
+        _add_song(db, "US", 2024, "T", "A", "https://m/x.mp4", 200.0)
+        self._link(db, 2)
+        sid = _make_session(db, 2)
+        client.set_cookie("session", sid)
+        client.get("/radio/now")
+
+        resp = client.post(
+            "/radio/scrobble",
+            json={"slot_id": "invalid"},
+        )
+
+        assert resp.status_code == 204
+        assert [call for call in fake_call if call["method"] == "track.scrobble"] == []
+
+    def test_now_playing_sends_update(self, client, db, fake_call):
         _add_song(db, "US", 2024, "NP Title", "NP Artist", "https://m/x.mp4", 200.0)
         self._link(db, 2)
         sid = _make_session(db, 2)
         client.set_cookie("session", sid)
 
-        with app.app_context():
-            slot = radio._song_at(time.time())
+        slot = client.get("/radio/now").get_json()
 
         resp = client.post(
             "/radio/now-playing",
-            json={"song_id": slot["song"]["id"], "started_at": slot["slot_start"]},
+            json={"slot_id": slot["slot_id"]},
         )
         assert resp.status_code == 204
         np = [c for c in fake_call if c["method"] == "track.updateNowPlaying"]
         assert len(np) == 1
         assert "timestamp" not in np[0]["params"]
 
-    def test_scrobble_through_real_creds_and_threads(self, app, client, db, monkeypatch):
+    def test_scrobble_through_real_creds_and_threads(self, client, db, monkeypatch):
         # Exercise the genuine path — real _creds()/_sign() running inside
         # the dispatch worker threads — rather than stubbing _call(). This
         # is the configuration that surfaced the worker-thread app-context
@@ -220,17 +251,16 @@ class TestScrobbleEndpoints:
         self._link(db, 2)
         sid = _make_session(db, 2)
         client.set_cookie("session", sid)
-        with app.app_context():
-            slot = radio._song_at(time.time())
+        slot = client.get("/radio/now").get_json()
 
         resp = client.post(
             "/radio/scrobble",
-            json={"song_id": slot["song"]["id"], "started_at": slot["slot_start"]},
+            json={"slot_id": slot["slot_id"]},
         )
         assert resp.status_code == 204  # not 500 — worker thread had app context
         assert any("audioscrobbler" in u for u in seen)
 
-    def test_disabled_account_does_not_scrobble(self, app, client, db, fake_call):
+    def test_disabled_account_does_not_scrobble(self, client, db, fake_call):
         _add_song(db, "US", 2024, "T", "A", "https://m/x.mp4", 200.0)
         with db.cursor() as cur:
             cur.execute(
@@ -242,11 +272,10 @@ class TestScrobbleEndpoints:
         db.commit()
         sid = _make_session(db, 2)
         client.set_cookie("session", sid)
-        with app.app_context():
-            slot = radio._song_at(time.time())
+        slot = client.get("/radio/now").get_json()
         client.post(
             "/radio/scrobble",
-            json={"song_id": slot["song"]["id"], "started_at": slot["slot_start"]},
+            json={"slot_id": slot["slot_id"]},
         )
         assert [c for c in fake_call if c["method"] == "track.scrobble"] == []
 
@@ -274,7 +303,10 @@ class TestConnectFlow:
             assert resp.status_code in (301, 302)
 
         with db.cursor() as cur:
-            cur.execute("SELECT session_key, remote_username FROM scrobble_account WHERE user_id = 2")
+            cur.execute(
+                "SELECT session_key, remote_username "
+                "FROM scrobble_account WHERE user_id = 2"
+            )
             rows = cur.fetchall()
         assert len(rows) == 1
         assert rows[0]["session_key"] == "SK-lastfm"

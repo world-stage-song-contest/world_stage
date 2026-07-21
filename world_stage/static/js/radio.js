@@ -18,7 +18,7 @@
     let heardAccum = 0;
     let playingSince = null;     // wall seconds when playback began, null while stopped
     let nowPlayingSent = false;  // de-dupe now-playing per song
-    let scrobbledSlot = null;    // slot_start already scrobbled (ended/timer race guard)
+    let scrobbledSlotId = null;  // persisted slot already scrobbled (ended/timer race guard)
 
     const $ = (id) => document.getElementById(id);
 
@@ -84,7 +84,7 @@
     player.on('waiting', freezeHeard);
 
     function postScrobble(path, slot) {
-        const body = JSON.stringify({ song_id: slot.song.id, started_at: slot.slot_start });
+        const body = JSON.stringify({ slot_id: slot.slot_id });
         // Plain keepalive fetch, NOT navigator.sendBeacon: privacy/ad
         // blockers neutralise the Beacon API wholesale (it's the classic
         // telemetry transport), so beacons were silently dropped as
@@ -104,11 +104,11 @@
         // Last.fm rules: longer than 30s, and played for at least half
         // its length or 4 minutes, whichever comes first.
         if (!scrobbleEnabled || !slot) return;
-        if (slot.slot_start === scrobbledSlot) return;
+        if (slot.slot_id === scrobbledSlotId) return;
         const dur = slot.song.duration;
         if (!dur || dur <= 30) return;
         if (heardSeconds() < Math.min(dur / 2, 240)) return;
-        scrobbledSlot = slot.slot_start;
+        scrobbledSlotId = slot.slot_id;
         postScrobble('/radio/scrobble', slot);
     }
 
@@ -268,15 +268,15 @@
             data = await fetchNow();
         } catch (e) {
             // Transient failure (or no songs yet): retry without
-            // losing the beat — the schedule is recomputed on every
-            // fetch, so a late retry still lands on the right song.
+            // losing the beat — a late retry reads whichever persisted
+            // schedule slot is live by then.
             $('radio-error').textContent = 'Lost the signal, retrying…';
             $('radio-error').style.display = 'block';
             switchTimer = setTimeout(tune, 5000);
             return;
         }
         $('radio-error').style.display = 'none';
-        if (current && data.slot_start === current.slot_start) {
+        if (current && data.slot_id === current.slot_id) {
             // 'ended' beat the server clock to the boundary by a hair
             // and the same window came back; ask again just past it.
             // Not a real switch — don't scrobble or reset counters.
@@ -309,7 +309,7 @@
 
     // Leaving or backgrounding the page often happens mid-song, before
     // the boundary that normally triggers the scrobble. Flush the current
-    // song here if it's already eligible; the scrobbledSlot guard stops a
+    // song here if it's already eligible; the slot-id guard stops a
     // later double, and keepalive fetch survives the page going away.
     function flushScrobble() {
         if (current) maybeScrobble(current);
