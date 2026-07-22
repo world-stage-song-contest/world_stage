@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS conversation_participant (
         REFERENCES account (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     role text NOT NULL DEFAULT 'participant',
     email_notifications boolean NOT NULL DEFAULT false,
+    suppress_unread_highlight boolean NOT NULL DEFAULT false,
+    pinned boolean NOT NULL DEFAULT false,
     joined_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (conversation_id, account_id),
     CONSTRAINT conversation_participant_role_check

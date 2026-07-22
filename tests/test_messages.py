@@ -207,11 +207,24 @@ def test_participant_can_change_own_email_notification_preference(client, db):
         f"/messages/{conversation_id}", headers={"Accept": "text/html"}
     )
     assert thread.status_code == 200
-    assert "Email notifications: off" in thread.text
+    notification_input = thread.text.split('id="email_notifications"', 1)[1].split(
+        ">", 1
+    )[0]
+    assert "checked" not in notification_input
+    highlight_input = thread.text.split(
+        'id="suppress_unread_highlight"', 1
+    )[1].split(">", 1)[0]
+    assert "checked" not in highlight_input
+    pinned_input = thread.text.split('id="pinned"', 1)[1].split(">", 1)[0]
+    assert "checked" not in pinned_input
 
     response = client.post(
         f"/messages/{conversation_id}/notifications",
-        data={"email_notifications": "on"},
+        data={
+            "email_notifications": "on",
+            "suppress_unread_highlight": "on",
+            "pinned": "on",
+        },
     )
     assert response.status_code == 302
     assert response.location.endswith(f"/messages/{conversation_id}")
@@ -219,18 +232,64 @@ def test_participant_can_change_own_email_notification_preference(client, db):
     with db.cursor() as cursor:
         cursor.execute(
             """
-            SELECT email_notifications
+            SELECT email_notifications, suppress_unread_highlight, pinned
             FROM conversation_participant
             WHERE conversation_id = %s AND account_id = 2
             """,
             (conversation_id,),
         )
-        assert cursor.fetchone()["email_notifications"] is True
+        assert cursor.fetchone() == {
+            "email_notifications": True,
+            "suppress_unread_highlight": True,
+            "pinned": True,
+        }
+
+        cursor.execute(
+            """
+            INSERT INTO message (conversation_id, sender_id, sender_kind, body)
+            VALUES (%s, 3, 'participant', 'Unread without the pink tint')
+            """,
+            (conversation_id,),
+        )
+    db.commit()
+
+    newer_conversation_id = _insert_conversation(
+        db,
+        owner_account_id=2,
+        subject="Newer unpinned conversation",
+        participants=[3],
+    )
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO message (conversation_id, sender_id, sender_kind, body)
+            VALUES (%s, 3, 'participant', 'This conversation is newer')
+            """,
+            (newer_conversation_id,),
+        )
+    db.commit()
+
+    inbox = client.get("/messages", headers={"Accept": "text/html"})
+    assert f'<a class="conversation-row" href="/messages/{conversation_id}">' in inbox.text
+    assert '<span class="message-badge unread">1 unread</span>' in inbox.text
+    assert '<i class="ph-fill ph-push-pin"></i> Pinned' in inbox.text
+    assert inbox.text.index("Notification preference") < inbox.text.index(
+        "Newer unpinned conversation"
+    )
 
     thread = client.get(
         f"/messages/{conversation_id}", headers={"Accept": "text/html"}
     )
-    assert "Email notifications: on" in thread.text
+    notification_input = thread.text.split('id="email_notifications"', 1)[1].split(
+        ">", 1
+    )[0]
+    assert "checked" in notification_input
+    highlight_input = thread.text.split(
+        'id="suppress_unread_highlight"', 1
+    )[1].split(">", 1)[0]
+    assert "checked" in highlight_input
+    pinned_input = thread.text.split('id="pinned"', 1)[1].split(">", 1)[0]
+    assert "checked" in pinned_input
 
 
 def test_unapproved_accounts_are_excluded_from_participant_selectors(client, db):
@@ -538,6 +597,13 @@ def test_participant_and_shared_admin_access(client, app, db):
     assert response.status_code == 200
     assert "Hello Carol" in response.text
     assert "<h2>Private first</h2>" not in response.text
+    assert '<details class="thread-participants">' in response.text
+    assert "<summary>All participants</summary>" in response.text
+    assert "<details class=\"thread-participants\" open" not in response.text
+    assert (
+        '<p class="conversation-participants thread-participant-full-list">'
+        in response.text
+    )
 
     response = client.post(
         f"/messages/{conversation_id}/reply",
@@ -836,6 +902,56 @@ def test_non_owner_cannot_edit_user_conversation(client, db):
     with db.cursor() as cursor:
         cursor.execute("SELECT subject FROM conversation WHERE id = %s", (conversation_id,))
         assert cursor.fetchone()["subject"] == "Creator only"
+
+
+def test_invited_participant_can_leave_but_owner_cannot(client, db):
+    conversation_id = _insert_conversation(
+        db,
+        owner_account_id=2,
+        subject="Optional membership",
+        participants=[3],
+    )
+
+    _login(client, db, 3)
+    thread = client.get(
+        f"/messages/{conversation_id}",
+        headers={"Accept": "text/html"},
+    )
+    assert thread.status_code == 200
+    assert f'action="/messages/{conversation_id}/leave"' in thread.text
+    assert '<button type="submit">Leave conversation</button>' in thread.text
+    assert '<details class="conversation-options">' in thread.text
+    assert "<summary>Conversation options</summary>" in thread.text
+    assert thread.text.index('class="reply-panel"') < thread.text.index(
+        'class="conversation-options"'
+    )
+
+    response = client.post(f"/messages/{conversation_id}/leave")
+    assert response.status_code == 302
+    assert response.location.endswith("/messages")
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT account_id, role
+            FROM conversation_participant
+            WHERE conversation_id = %s
+            ORDER BY account_id
+            """,
+            (conversation_id,),
+        )
+        assert cursor.fetchall() == [{"account_id": 2, "role": "owner"}]
+
+    assert client.get(f"/messages/{conversation_id}").status_code == 404
+
+    _login(client, db, 2)
+    owner_thread = client.get(
+        f"/messages/{conversation_id}",
+        headers={"Accept": "text/html"},
+    )
+    assert owner_thread.status_code == 200
+    assert f'action="/messages/{conversation_id}/leave"' not in owner_thread.text
+    assert client.post(f"/messages/{conversation_id}/leave").status_code == 403
 
 
 def test_disabling_admin_access_keeps_admin_as_an_ordinary_participant(

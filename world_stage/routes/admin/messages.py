@@ -37,7 +37,12 @@ def messages_inbox(
                latest.sender_kind AS latest_sender_kind,
                latest.sender_username AS latest_sender_username,
                unread.unread_count,
-               current_participant.role AS current_participant_role
+               current_participant.role AS current_participant_role,
+               COALESCE(
+                   current_participant.suppress_unread_highlight,
+                   false
+               ) AS suppress_unread_highlight,
+               COALESCE(current_participant.pinned, false) AS pinned
         FROM conversation
         LEFT JOIN conversation_participant AS current_participant
           ON current_participant.conversation_id = conversation.id
@@ -74,7 +79,8 @@ def messages_inbox(
             LIMIT 1
         ) AS latest ON true
         WHERE conversation.admin_accessible
-        ORDER BY COALESCE(latest.created_at, conversation.created_at) DESC,
+        ORDER BY COALESCE(current_participant.pinned, false) DESC,
+                 COALESCE(latest.created_at, conversation.created_at) DESC,
                  conversation.id DESC
         LIMIT %s OFFSET %s
         """,

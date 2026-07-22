@@ -117,6 +117,8 @@ def _conversation_for_user(
                owner.username AS owner_username,
                current_participant.role AS participant_role,
                current_participant.email_notifications,
+               current_participant.suppress_unread_highlight,
+               current_participant.pinned,
                current_participant.account_id IS NOT NULL AS is_participant
         FROM conversation
         LEFT JOIN conversation_participant AS current_participant
@@ -154,6 +156,11 @@ def _can_edit_conversation(
     return conversation["participant_role"] == "owner" or (
         conversation["created_by_admin"] and permissions.can_view_restricted
     )
+
+
+def _can_leave_conversation(conversation: dict) -> bool:
+    """Only invited participants can leave; owners and admin actors cannot."""
+    return conversation["participant_role"] == "participant"
 
 
 def _conversation_participants(conversation_id: int, user_id: int) -> list[dict]:
@@ -299,13 +306,16 @@ def inbox(user: tuple[int, str] | None, permissions: UserPermissions):
                latest.sender_kind AS latest_sender_kind,
                latest.sender_username AS latest_sender_username,
                unread.unread_count,
-               EXISTS (
-                   SELECT 1
-                   FROM conversation_participant mine
-                   WHERE mine.conversation_id = conversation.id
-                     AND mine.account_id = %s
-               ) AS is_participant
+               current_participant.account_id IS NOT NULL AS is_participant,
+               COALESCE(
+                   current_participant.suppress_unread_highlight,
+                   false
+               ) AS suppress_unread_highlight,
+               COALESCE(current_participant.pinned, false) AS pinned
         FROM conversation
+        LEFT JOIN conversation_participant AS current_participant
+          ON current_participant.conversation_id = conversation.id
+         AND current_participant.account_id = %s
         LEFT JOIN conversation_read_state
           ON conversation_read_state.conversation_id = conversation.id
          AND conversation_read_state.account_id = %s
@@ -335,19 +345,14 @@ def inbox(user: tuple[int, str] | None, permissions: UserPermissions):
             ORDER BY message.created_at DESC, message.id DESC
             LIMIT 1
         ) AS latest ON true
-        WHERE EXISTS (
-                  SELECT 1
-                  FROM conversation_participant mine
-                  WHERE mine.conversation_id = conversation.id
-                    AND mine.account_id = %s
-              )
+        WHERE current_participant.account_id IS NOT NULL
            OR (conversation.admin_accessible AND %s)
-        ORDER BY COALESCE(latest.created_at, conversation.created_at) DESC,
+        ORDER BY COALESCE(current_participant.pinned, false) DESC,
+                 COALESCE(latest.created_at, conversation.created_at) DESC,
                  conversation.id DESC
         LIMIT %s OFFSET %s
         """,
         (
-            user_id,
             user_id,
             user_id,
             user_id,
@@ -644,6 +649,7 @@ def thread(
         messages=messages,
         can_reply=can_reply,
         can_edit=_can_edit_conversation(conversation, user_id, permissions),
+        can_leave=_can_leave_conversation(conversation),
         is_admin=permissions.can_view_restricted,
         page=page,
         has_older=has_older,
@@ -671,7 +677,7 @@ def notification_preferences(
         return (
             render_template(
                 "error.html",
-                error="Only conversation participants can change email notifications",
+                error="Only conversation participants can change notification preferences",
             ),
             403,
         )
@@ -682,18 +688,89 @@ def notification_preferences(
         "yes",
         "on",
     }
+    suppress_unread_highlight = request.form.get(
+        "suppress_unread_highlight", ""
+    ).lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    pinned = request.form.get("pinned", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
         """
         UPDATE conversation_participant
-        SET email_notifications = %s
+        SET email_notifications = %s,
+            suppress_unread_highlight = %s,
+            pinned = %s
         WHERE conversation_id = %s AND account_id = %s
         """,
-        (email_notifications, conversation_id, user_id),
+        (
+            email_notifications,
+            suppress_unread_highlight,
+            pinned,
+            conversation_id,
+            user_id,
+        ),
     )
     db.commit()
     return redirect(url_for("messages.thread", conversation_id=conversation_id))
+
+
+@bp.post("/<int:conversation_id>/leave")
+@with_auth
+def leave(
+    conversation_id: int,
+    user: tuple[int, str] | None,
+    permissions: UserPermissions,
+):
+    auth_error = _login_required(user)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    user_id, _username = user
+    conversation = _conversation_for_user(conversation_id, user_id, permissions)
+    if conversation is None:
+        return render_template("error.html", error="Conversation not found"), 404
+    if not _can_leave_conversation(conversation):
+        return (
+            render_template(
+                "error.html",
+                error="Only invited participants can leave this conversation",
+            ),
+            403,
+        )
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        DELETE FROM conversation_participant
+        WHERE conversation_id = %s
+          AND account_id = %s
+          AND role = 'participant'
+        RETURNING account_id
+        """,
+        (conversation_id, user_id),
+    )
+    if cursor.fetchone() is None:
+        db.rollback()
+        return (
+            render_template(
+                "error.html",
+                error="You are no longer an invited participant",
+            ),
+            403,
+        )
+    db.commit()
+    return redirect(url_for("messages.inbox"))
 
 
 @bp.post("/<int:conversation_id>/reply")
@@ -726,6 +803,7 @@ def reply(
                 messages=messages,
                 can_reply=True,
                 can_edit=_can_edit_conversation(conversation, user_id, permissions),
+                can_leave=_can_leave_conversation(conversation),
                 is_admin=permissions.can_view_restricted,
                 error=error,
                 reply_body=body,

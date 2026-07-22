@@ -15,14 +15,15 @@
 {% endblock %}
 {% block content %}
 <div class="thread-heading">
-    <div>
-        <p class="conversation-participants">
+    <details class="thread-participants">
+        <summary>All participants</summary>
+        <p class="conversation-participants thread-participant-full-list">
             <i class="ph-fill ph-users"></i>
             {% for participant in participants %}
                 {{ participant.username }}{% if participant.is_current_user %} (you){% endif %}{% if participant.role != 'participant' %} <small>[{{ participant.role }}]</small>{% endif %}{% if not loop.last %}, {% endif %}
             {% endfor %}
         </p>
-    </div>
+    </details>
     <div class="thread-badges">
         {% if conversation.system_conversation %}
             <span class="message-badge system">System notification</span>
@@ -33,21 +34,6 @@
         {% endif %}
     </div>
 </div>
-
-{% if conversation.is_participant %}
-<details class="notification-settings">
-    <summary>Email notifications: {{ 'on' if conversation.email_notifications else 'off' }}</summary>
-    <form method="POST" action="{{ url_for('messages.notification_preferences', conversation_id=conversation.id) }}">
-        <fieldset class="nongrid">
-            <legend>Email notifications</legend>
-            <input id="email_notifications" name="email_notifications" type="checkbox"
-                   {% if conversation.email_notifications %}checked{% endif %}>
-            <label for="email_notifications">Email me when this conversation receives new messages</label>
-        </fieldset>
-        <div class="buttons"><button type="submit">Save preference</button></div>
-    </form>
-</details>
-{% endif %}
 
 {% if has_older %}
 <nav class="message-pagination"><a href="{{ url_for('messages.thread', conversation_id=conversation.id, page=page+1) }}">View older messages</a></nav>
@@ -103,5 +89,46 @@
     <i class="ph-fill ph-lock"></i>
     This is a system notification and cannot be replied to.
 </div>
+{% endif %}
+
+{% if conversation.is_participant %}
+<details class="conversation-options constrained">
+    <summary>Conversation options</summary>
+    <form method="POST" action="{{ url_for('messages.notification_preferences', conversation_id=conversation.id) }}">
+        <fieldset class="nongrid">
+            <legend>Notifications</legend>
+            <div class="span-fieldset-left">
+                <div>
+                    <input id="suppress_unread_highlight"
+                        name="suppress_unread_highlight" type="checkbox"
+                        {% if conversation.suppress_unread_highlight %}checked{% endif %}>
+                    <label for="suppress_unread_highlight">Website</label>
+                </div>
+                <div>
+                    <input id="email_notifications" name="email_notifications" type="checkbox"
+                        {% if conversation.email_notifications %}checked{% endif %}>
+                    <label for="email_notifications">Email</label>
+                </div>
+            </div>
+        </fieldset>
+        <fieldset class="nongrid">
+            <legend>Inbox</legend>
+            <div>
+                <input id="pinned" name="pinned" type="checkbox"
+                       {% if conversation.pinned %}checked{% endif %}>
+                <label for="pinned">Pin this conversation</label>
+            </div>
+        </fieldset>
+        <div class="buttons"><button type="submit">Save preference</button></div>
+    </form>
+    {% if can_leave %}
+    <hr>
+    <form method="POST"
+          action="{{ url_for('messages.leave', conversation_id=conversation.id) }}"
+          onsubmit="return confirm('Leave this conversation? You will lose access to its messages.');">
+        <div class="buttons"><button type="submit">Leave conversation</button></div>
+    </form>
+    {% endif %}
+</details>
 {% endif %}
 {% endblock %}

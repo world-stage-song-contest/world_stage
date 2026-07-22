@@ -12,7 +12,7 @@
 {% if conversations %}
 <div class="conversation-list">
     {% for conversation in conversations %}
-    <a class="conversation-row{% if conversation.unread_count %} unread{% endif %}" href="{{ url_for('messages.thread', conversation_id=conversation.id) }}">
+    <a class="conversation-row{% if conversation.unread_count and not conversation.suppress_unread_highlight %} unread{% endif %}" href="{{ url_for('messages.thread', conversation_id=conversation.id) }}">
         <div class="conversation-main">
             <div class="conversation-title-row">
                 <h3>{{ conversation.subject }}</h3>
@@ -20,6 +20,9 @@
                     <span class="message-badge system">System</span>
                 {% elif conversation.admin_accessible %}
                     <span class="message-badge admin">Admin accessible</span>
+                {% endif %}
+                {% if conversation.pinned %}
+                    <span class="message-badge private"><i class="ph-fill ph-push-pin"></i> Pinned</span>
                 {% endif %}
                 {% if conversation.unread_count %}
                     <span class="message-badge unread">{{ conversation.unread_count }} unread</span>

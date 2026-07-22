@@ -82,7 +82,12 @@
 }
 
 .conversation-participants {
+    display: -webkit-box;
     margin: 0.35rem 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .conversation-preview,
@@ -210,6 +215,24 @@
     padding-bottom: 1rem;
 }
 
+.thread-participants {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.thread-participants > summary {
+    cursor: pointer;
+}
+
+.thread-participant-full-list {
+    border-left: 2px solid var(--border-ui);
+    display: block;
+    margin: 0.6rem 0 0 0.25rem;
+    overflow: visible;
+    padding-left: 0.75rem;
+    -webkit-line-clamp: unset;
+}
+
 .thread-badges {
     flex: 0 0 auto;
 }
@@ -322,17 +345,17 @@
     margin-top: 1.5rem;
 }
 
-.notification-settings {
-    margin: 0 auto 1.5rem;
+.conversation-options {
+    margin-top: 1.5rem;
     max-width: 850px;
 }
 
-.notification-settings > summary {
+.conversation-options > summary {
     cursor: pointer;
 }
 
-.notification-settings form {
-    margin-top: 0.75rem;
+.conversation-options > form {
+    margin-top: 1rem;
 }
 
 .system-reply-notice {
