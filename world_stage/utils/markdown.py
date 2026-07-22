@@ -1,8 +1,218 @@
 import re
 from functools import lru_cache
+from html import escape
 
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline import StateInline
+
+BBCODE_COLOURS = frozenset({"red", "green", "blue", "yellow", "magenta", "cyan", "white", "black"})
+
+FONT_OPEN_TAG_RE = re.compile(
+    r"""\[font(?P<attributes>(?:\s+[A-Za-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s\]]+))+\s*)\]"""
+)
+FONT_ATTRIBUTE_RE = re.compile(r"""\s+([A-Za-z]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s\]]+))""")
+FONT_SIZE_VALUES = {
+    "xxx-small": "0.5rem",
+    "xx-small": "xx-small",
+    "x-small": "x-small",
+    "small": "small",
+    "medium": "medium",
+    "large": "large",
+    "x-large": "x-large",
+    "xx-large": "xx-large",
+    "xxx-large": "xxx-large",
+}
+FONT_SIZE_NUMBERS = {
+    str(number): size for number, size in enumerate(FONT_SIZE_VALUES.values(), start=1)
+}
+FONT_FAMILIES = frozenset(
+    {
+        "serif",
+        "sans-serif",
+        "monospace",
+        "cursive",
+        "fantasy",
+        "system-ui",
+        "ui-serif",
+        "ui-sans-serif",
+        "ui-monospace",
+        "ui-rounded",
+        "math",
+        "fangsong",
+    }
+)
+FONT_WEIGHT_ALIASES = {
+    "thin": "100",
+    "extra-light": "100",
+    "ultra-light": "200",
+    "light": "300",
+    "normal": "400",
+    "regular": "400",
+    "medium": "500",
+    "semi-bold": "600",
+    "demi-bold": "600",
+    "bold": "700",
+    "extra-bold": "800",
+    "ultra-bold": "800",
+    "black": "900",
+    "heavy": "900",
+    "extra-black": "950",
+    "ultra-black": "950",
+}
+FONT_STYLES = frozenset({"normal", "italic", "oblique"})
+
+
+def _normalise_font_colour(value: str, allowed_colours: set[str]) -> str | None:
+    value = value.lower()
+    if value in allowed_colours:
+        return value
+
+    match = re.fullmatch(r"#?([0-9a-f]{3}|[0-9a-f]{6})", value)
+    if match:
+        return f"#{match.group(1)}"
+    return None
+
+
+def _normalise_font_attributes(
+    attributes_text: str, allowed_colours: set[str]
+) -> dict[str, str] | None:
+    attributes = {}
+    pos = 0
+    while pos < len(attributes_text):
+        match = FONT_ATTRIBUTE_RE.match(attributes_text, pos)
+        if not match:
+            if attributes_text[pos:].isspace():
+                break
+            return None
+
+        name = match.group(1).lower()
+        value = next(group for group in match.groups()[1:] if group is not None).lower()
+        if name in attributes or name not in {"fg", "bg", "size", "family", "weight", "style"}:
+            return None
+
+        if name in {"fg", "bg"}:
+            normalised = _normalise_font_colour(value, allowed_colours)
+        elif name == "size":
+            normalised = FONT_SIZE_NUMBERS.get(value, FONT_SIZE_VALUES.get(value))
+        elif name == "family":
+            normalised = value if value in FONT_FAMILIES else None
+        elif name == "weight":
+            if value in FONT_WEIGHT_ALIASES:
+                normalised = FONT_WEIGHT_ALIASES[value]
+            elif value.isascii() and value.isdecimal() and 1 <= int(value) <= 1000:
+                normalised = str(int(value))
+            else:
+                normalised = None
+        else:
+            normalised = value if value in FONT_STYLES else None
+
+        if normalised is None:
+            return None
+        attributes[name] = normalised
+        pos = match.end()
+
+    return attributes or None
+
+
+def _parse_font_open_tag(
+    src: str, pos: int, allowed_colours: set[str], limit: int | None = None
+) -> tuple[int, dict[str, str]] | None:
+    match = FONT_OPEN_TAG_RE.match(src, pos, len(src) if limit is None else limit)
+    if not match:
+        return None
+    attributes = _normalise_font_attributes(match.group("attributes"), allowed_colours)
+    if attributes is None:
+        return None
+    return match.end(), attributes
+
+
+def _hex_relative_luminance(value: str) -> float:
+    digits = value.removeprefix("#")
+    if len(digits) == 3:
+        digits = "".join(character * 2 for character in digits)
+
+    channels = [int(digits[index : index + 2], 16) / 255 for index in (0, 2, 4)]
+    linear = [
+        channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+        for channel in channels
+    ]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _font_colour_css(value: str) -> str:
+    return value if value.startswith("#") else f"var(--{value})"
+
+
+def _font_background_foreground(value: str) -> str:
+    if not value.startswith("#"):
+        return f"var(--on-{value})"
+
+    luminance = _hex_relative_luminance(value)
+    black_contrast = (luminance + 0.05) / 0.05
+    white_contrast = 1.05 / (luminance + 0.05)
+    return "var(--black)" if black_contrast >= white_contrast else "var(--white)"
+
+
+def _font_style(attributes: dict[str, str]) -> str:
+    declarations = []
+    if foreground := attributes.get("fg"):
+        declarations.append(("color", _font_colour_css(foreground)))
+    if background := attributes.get("bg"):
+        declarations.append(("background-color", _font_colour_css(background)))
+        if "fg" not in attributes:
+            declarations.append(("color", _font_background_foreground(background)))
+    if size := attributes.get("size"):
+        declarations.append(("font-size", size))
+    if family := attributes.get("family"):
+        declarations.append(("font-family", family))
+    if weight := attributes.get("weight"):
+        declarations.append(("font-weight", weight))
+    if style := attributes.get("style"):
+        declarations.append(("font-style", style))
+    return "; ".join(f"{name}: {value}" for name, value in declarations)
+
+
+def _find_font_close(src: str, start: int, allowed_colours: set[str], limit: int) -> int | None:
+    close_tag = "[/font]"
+    depth = 1
+    pos = start
+    while pos < limit:
+        next_open = src.find("[font", pos, limit)
+        next_close = src.find(close_tag, pos, limit)
+        if next_close == -1:
+            return None
+        if next_open != -1 and next_open < next_close:
+            parsed = _parse_font_open_tag(src, next_open, allowed_colours, limit)
+            if parsed:
+                depth += 1
+                pos = parsed[0]
+            else:
+                pos = next_open + len("[font")
+            continue
+
+        depth -= 1
+        if depth == 0:
+            return next_close
+        pos = next_close + len(close_tag)
+    return None
+
+
+def strip_font_tags(value: str, allowed_colours: set[str] = BBCODE_COLOURS) -> str:
+    """Remove valid font tags from a plain-text formatting preview."""
+    result = []
+    pos = 0
+    close_tag = "[/font]"
+    while pos < len(value):
+        if value.startswith(close_tag, pos):
+            pos += len(close_tag)
+            continue
+        parsed = _parse_font_open_tag(value, pos, allowed_colours)
+        if parsed:
+            pos = parsed[0]
+            continue
+        result.append(value[pos])
+        pos += 1
+    return "".join(result)
 
 
 def footnote_plugin(md: MarkdownIt):
@@ -47,6 +257,7 @@ def footnote_plugin(md: MarkdownIt):
 
 
 def make_bbcode_plugin(allowed_colours):
+    allowed_colours = set(allowed_colours)
     tags = {
         "b": "strong",
         "i": "em",
@@ -73,6 +284,7 @@ def make_bbcode_plugin(allowed_colours):
         "pre": "[/pre]",
         "c": "[/c]",
         "bg": "[/bg]",
+        "font": "[/font]",
     }
 
     def bbcode_plugin(md: MarkdownIt):
@@ -170,6 +382,29 @@ def make_bbcode_plugin(allowed_colours):
                 state.posMax = old_max
                 return True
 
+            parsed_font = _parse_font_open_tag(src, pos, allowed_colours, state.posMax)
+            if parsed_font:
+                open_end, attributes = parsed_font
+                close_tag = close_re["font"]
+                end_pos = _find_font_close(src, open_end, allowed_colours, state.posMax)
+                if end_pos is None:
+                    return False
+                if silent:
+                    return True
+
+                old_max = state.posMax
+                state.pos = open_end
+                state.posMax = end_pos
+
+                token = state.push("bb_font_open", "span", 1)
+                token.attrs = {"style": _font_style(attributes)}
+                state.md.inline.tokenize(state)
+                state.push("bb_font_close", "span", -1)
+
+                state.pos = end_pos + len(close_tag)
+                state.posMax = old_max
+                return True
+
             return False
 
         md.inline.ruler.before("emphasis", "bbcode_all", tokenizer)
@@ -208,6 +443,13 @@ def make_bbcode_plugin(allowed_colours):
         md.add_render_rule("bb_colour_close", simple_close("span"))
         md.add_render_rule("bb_background_colour_open", render_colour_open)
         md.add_render_rule("bb_background_colour_close", simple_close("span"))
+
+        def render_font_open(self, tokens, idx, opts, env):
+            style = escape(tokens[idx].attrs["style"], quote=True)
+            return f'<span style="{style}">'
+
+        md.add_render_rule("bb_font_open", render_font_open)
+        md.add_render_rule("bb_font_close", simple_close("span"))
 
     return bbcode_plugin
 
@@ -263,12 +505,11 @@ def make_entity_plugin(entities=None):
 
 @lru_cache(maxsize=1)
 def get_markdown_parser():
-    colours = {"red", "green", "blue", "yellow", "magenta", "cyan", "white", "black"}
     md = (
         MarkdownIt("zero")
         .enable(["emphasis"])
         .use(footnote_plugin)
-        .use(make_bbcode_plugin(colours))
+        .use(make_bbcode_plugin(BBCODE_COLOURS))
         .use(make_entity_plugin())
     )
     return md

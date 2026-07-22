@@ -3,6 +3,7 @@ from collections.abc import Iterable
 
 from .db import get_db
 from .utils import UserPermissions
+from .utils.markdown import strip_font_tags
 
 MESSAGE_TAG_RE = re.compile(
     r"\[/?(?:b|i|u|s|o|sm|xl|pre|code|c(?:=[A-Za-z]+)?|bg(?:=[A-Za-z]+)?)\]",
@@ -12,7 +13,7 @@ MESSAGE_TAG_RE = re.compile(
 
 def message_preview(value: str) -> str:
     """Remove supported formatting tags from a plain-text message preview."""
-    return MESSAGE_TAG_RE.sub("", value)
+    return strip_font_tags(MESSAGE_TAG_RE.sub("", value))
 
 
 def has_unread_messages(user_id: int, permissions: UserPermissions) -> bool:

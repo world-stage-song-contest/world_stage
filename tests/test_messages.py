@@ -1192,7 +1192,9 @@ def test_system_conversation_is_formatted_and_cannot_be_replied_to(client, db):
                 "Use [code]<safe>[/code]\n[pre]one\n  two[/pre]\n[o]overlined[/o]"
                 "\n[bg=yellow][b]highlighted[/b][/bg]"
                 "\n[c=white][bg=black]contrast[/bg][/c]"
-                "\n[c=black][bg=white]inverse[/bg][/c]",
+                "\n[c=black][bg=white]inverse[/bg][/c]"
+                "\n[font fg=#123 bg='fff' size=1 family=serif weight=bold "
+                "style=italic]font text[/font]",
             ),
         )
     db.commit()
@@ -1217,6 +1219,10 @@ def test_system_conversation_is_formatted_and_cannot_be_replied_to(client, db):
     assert (
         '<span class="colour-black"><span class="background-colour-white">'
         "inverse</span></span>"
+    ) in response.text
+    assert (
+        '<span style="color: #123; background-color: #fff; font-size: 0.5rem; '
+        'font-family: serif; font-weight: 700; font-style: italic">font text</span>'
     ) in response.text
     assert "cannot be replied to" in response.text
 

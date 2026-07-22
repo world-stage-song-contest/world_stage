@@ -36,6 +36,81 @@
                         <li><code class="colour-black background-colour-white">black</code> | <code class="background-colour-black colour-white">black</code></li>
                     </ul>
                 </li>
+                <li>
+                    <div>
+                        General font formatting
+                        <code>[font fg=&lt;colour> bg=&lt;colour> size=&lt;size> family=&lt;font-family> weight=&lt;weight> style=&lt;style>]formatted text[/font]</code>.
+                    </div>
+                    <details>
+                        <summary>General font formatting syntax</summary>
+                        <div>
+                            Values may be bare or enclosed in single or double quotes. Attributes may be omitted or given in any order.
+                        </div>
+                        <ul>
+                            <li>
+                                <code>fg</code> and <code>bg</code>: one of the colours above, or a three- or six-digit hexadecimal colour, with an optional <code>#</code> preceeding it.
+                            </li>
+                            <li>
+                                <code>size</code>: numbers 1-9 or the following keywords:
+                                <details>
+                                    <summary>Keywords</summary>
+                                    <ol>
+                                        <li><code>xxx-small</code></li>
+                                        <li><code>xx-small</code></li>
+                                        <li><code>x-small</code></li>
+                                        <li><code>small</code></li>
+                                        <li><code>medium</code></li>
+                                        <li><code>large</code></li>
+                                        <li><code>x-large</code></li>
+                                        <li><code>xx-large</code></li>
+                                        <li><code>xxx-large</code></li>
+                                    </ol>
+                                </details>
+                            </li>
+                            <li>
+                                <code>family</code>: one of the following keywords:
+                                <details>
+                                    <summary>Keywords</summary>
+                                    <ul>
+                                        <li><code>serif</code></li>
+                                        <li><code>sans-serif</code></li>
+                                        <li><code>monospace</code></li>
+                                        <li><code>cursive</code></li>
+                                        <li><code>fantasy</code></li>
+                                        <li><code>system-ui</code></li>
+                                        <li><code>ui-serif</code></li>
+                                        <li><code>ui-sans-serif</code></li>
+                                        <li><code>ui-monospace</code></li>
+                                        <li><code>ui-rounded</code></li>
+                                        <li><code>math</code></li>
+                                        <li><code>fangsong</code></li>
+                                    </ul>
+                                </details>
+                            </li>
+                            <li>
+                                <code>weight</code>: a number from 1 to 1000 or one of the following keywords:
+                                <details>
+                                    <summary>Keywords</summary>
+                                    <ul>
+                                        <li><code>thin</code>/<code>extra-light</code> = 100</li>
+                                        <li><code>ultra-light</code> = 200</li>
+                                        <li><code>light</code> = 300</li>
+                                        <li><code>normal</code>/<code>regular</code> = 400</li>
+                                        <li><code>medium</code> = 500</li>
+                                        <li><code>semi-bold</code>/<code>demi-bold</code> = 600</li>
+                                        <li><code>bold</code> = 700</li>
+                                        <li><code>extra-bold</code>/<code>ultra-bold</code> = 800</li>
+                                        <li><code>black</code>/<code>heavy</code> = 900</li>
+                                        <li><code>extra-black</code>/<code>ultra-black</code> = 950</li>
+                                    </ul>
+                                </details>
+                            </li>
+                            <li>
+                                <code>style</code>: <code>normal</code>, <code>italic</code>, or <code>oblique</code>.
+                            </li>
+                        </ul>
+                    </details>
+                </li>
             </ul>
             {% if include_footnotes %}
             <p>

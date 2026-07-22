@@ -1,6 +1,6 @@
 [project]
 name = "world-stage"
-version = "3.17.1"
+version = "3.17.2"
 description = "Voting website for World Stage."
 requires-python = ">= 3.12"
 dependencies = [
@@ -20,6 +20,7 @@ exclude = ["world_stage/files/**", "world_stage/static/**"]
 
 [dependency-groups]
 dev = [
+    "build",
     "pyright>=1.1.408",
     "pytest>=8.0",
     "ruff>=0.5",
