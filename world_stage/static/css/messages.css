@@ -88,6 +88,7 @@
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
 .conversation-preview,
@@ -98,6 +99,7 @@
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     white-space: pre-line;
 }
 
@@ -231,6 +233,7 @@
     overflow: visible;
     padding-left: 0.75rem;
     -webkit-line-clamp: unset;
+    line-clamp: unset;
 }
 
 .thread-badges {

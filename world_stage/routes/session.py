@@ -4,12 +4,27 @@ import os
 import unicodedata
 import uuid
 
-from flask import Blueprint, make_response, request
+from flask import Blueprint, Response, make_response, redirect, request, url_for
 
 from ..db import get_db
-from ..utils import render_template
+from ..utils import get_user_id_from_session, render_template
 
 bp = Blueprint("session", __name__, url_prefix="/")
+
+
+def _existing_session_response() -> Response | None:
+    session_id = request.cookies.get("session")
+    if not session_id:
+        return None
+
+    if get_user_id_from_session(session_id):
+        return make_response(
+            render_template("session/login_success.html", state="already_logged_in")
+        )
+
+    response = redirect(url_for("session.login"))
+    response.delete_cookie("session")
+    return response
 
 
 def hash_password(password: str) -> tuple[bytes, bytes]:
@@ -45,8 +60,8 @@ def validate_password(password: str) -> tuple[bool, str]:
 
 @bp.get("/login")
 def login():
-    if request.cookies.get("session"):
-        return render_template("session/login_success.html", state="already_logged_in")
+    if response := _existing_session_response():
+        return response
 
     username = request.cookies.get("username") or ""
     username = username.strip()
@@ -65,8 +80,8 @@ def login():
 
 @bp.post("/login")
 def login_post():
-    if request.cookies.get("session"):
-        return render_template("session/login_success.html", state="already_logged_in")
+    if response := _existing_session_response():
+        return response
 
     username = request.form.get("username", "")
     username = username.strip()
@@ -208,16 +223,16 @@ def sign_up_post():
 
     db = get_db()
     cursor = db.cursor()
-    cursor.execute(
-        "SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,)
-    )
+    cursor.execute("SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,))
     user = cursor.fetchone()
     if user:
         return render_template(
             "session/request_account.html",
-            message=("Your account already exists as you have either voted or "
-                     "submitted entries before. Instead of signing up, please "
-                     "<a href='/setpassword'>set your password</a>."),
+            message=(
+                "Your account already exists as you have either voted or "
+                "submitted entries before. Instead of signing up, please "
+                "<a href='/setpassword'>set your password</a>."
+            ),
         )
 
     hashed, salt = hash_password(password)

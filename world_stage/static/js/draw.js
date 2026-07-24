@@ -313,26 +313,104 @@ async function getShowSlot(selected, currentShow) {
 }
 
 let clicked = false;
+let currentPotBlock = null;
+
+function potSize(pot) {
+    return pot.querySelectorAll('.pot-item').length;
+}
+
+function showElements() {
+    return [...document.querySelectorAll('.show')];
+}
+
+function activateShow(show) {
+    document.querySelector('.show.active1')?.classList.remove('active1');
+    show.classList.add('active1');
+    show.scrollIntoView({ block: "nearest", inline: "center" });
+}
+
+function resetShowPointer() {
+    const firstShow = showElements()[0];
+    if (firstShow) activateShow(firstShow);
+}
+
+function activatePot(pot) {
+    document.querySelector('.pot.active1')?.classList.remove('active1');
+    pot.classList.add('active1');
+    // A pot always starts at the first show, including when the same pot
+    // begins another internal allocation round.
+    resetShowPointer();
+}
+
+function nextPotForBlock(currentPot) {
+    const pots = [...document.querySelectorAll('.pot')];
+    if (potSize(currentPot) > 0) return currentPot;
+
+    // Allocation rounds are an implementation detail. Presentation always
+    // exhausts the current pot before moving to the next pot in DOM order.
+    const currentIndex = pots.indexOf(currentPot);
+    for (let offset = 1; offset < pots.length; offset++) {
+        const candidate = pots[(currentIndex + offset) % pots.length];
+        if (potSize(candidate) > 0) return candidate;
+    }
+    return null;
+}
+
+function initialPotForBlock() {
+    return [...document.querySelectorAll('.pot')].find(pot => potSize(pot) > 0) ?? null;
+}
+
+function initializePotBlock() {
+    if (currentPotBlock != null) return;
+    currentPotBlock = initialPotForBlock();
+    if (currentPotBlock) activatePot(currentPotBlock);
+}
+
+function showWithEligibleEntry(pot, startingShow) {
+    const allShows = showElements();
+    const start = allShows.indexOf(startingShow);
+    for (let offset = 0; offset < allShows.length; offset++) {
+        const show = allShows[(start + offset + allShows.length) % allShows.length];
+        const name = show.querySelector('.show-countries').dataset.name;
+        if (pot.querySelector(`.pot-item[data-show='${name}']`)) return show;
+    }
+    return null;
+}
 
 async function next() {
     if (clicked) return;
     clicked = true;
     if (shows == null) drawShows();
 
-    const currentPotElement = document.querySelector('.pot.active1');
+    initializePotBlock();
+    const currentPotElement = currentPotBlock;
+    if (currentPotElement == null) {
+        clicked = false;
+        return;
+    }
+
     const currentPot = currentPotElement.querySelector('.pot-container');
-    const currentShowElement = document.querySelector('.show.active1');
-    const currentShow = currentShowElement.querySelector('.show-countries');
+    let currentShowElement = document.querySelector('.show.active1');
 
     try {
         let selected;
         if (multiDraw) {
+            const eligibleShow = showWithEligibleEntry(currentPot, currentShowElement);
+            if (eligibleShow == null) {
+                throw new Error("Current pot has no entries assigned to a show");
+            }
+            if (eligibleShow !== currentShowElement) {
+                activateShow(eligibleShow);
+                currentShowElement = eligibleShow;
+            }
+            const currentShow = currentShowElement.querySelector('.show-countries');
             const allCountries = [...currentPot.querySelectorAll('.pot-item')];
             const eligibleCountries = [...currentPot.querySelectorAll(`.pot-item[data-show='${currentShow.dataset.name}']`)];
             selected = await selectCountryFromPot(allCountries, eligibleCountries);
         } else {
             selected = document.querySelector(".pot-item:first-child");
         }
+        const currentShow = currentShowElement.querySelector('.show-countries');
         const showSlot = await getShowSlot(selected, currentShow);
         showSlot.classList.remove("transparent");
 
@@ -342,24 +420,26 @@ async function next() {
         showSlot.classList.remove("active2");
     } catch (e) {
         console.log(e);
+        clicked = false;
+        return;
     }
 
     const [nextShow, looped] = nextSibling(currentShowElement);
-    currentShowElement.classList.remove("active1");
-    nextShow.classList.add("active1");
-    // Bring the new active show into view if the #shows container has
-    // overflowed off-screen — uses the container's `scroll-behavior:
-    // smooth` so the scroll animates rather than jumping.
-    nextShow.scrollIntoView({ block: "nearest", inline: "center" });
-
-    if (looped) {
-        const [nextPot,] = nextSibling(currentPotElement);
-        currentPotElement.classList.remove("active1");
-        nextPot.classList.add("active1");
-    }
-
-    if (currentPotElement.querySelectorAll('.item').length == 0) {
-        currentPotElement.remove();
+    const potIsEmpty = potSize(currentPotElement) === 0;
+    if (potIsEmpty || looped) {
+        const nextPot = nextPotForBlock(currentPotElement);
+        if (potIsEmpty) {
+            currentPotElement.remove();
+        }
+        if (nextPot) {
+            activatePot(nextPot);
+            currentPotBlock = nextPot;
+        } else {
+            currentShowElement.classList.remove("active1");
+            currentPotBlock = null;
+        }
+    } else {
+        activateShow(nextShow);
     }
 
     clicked = false;
@@ -391,8 +471,10 @@ function sizePotsToWidestCountry() {
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', sizePotsToWidestCountry);
+    document.addEventListener('DOMContentLoaded', initializePotBlock);
 } else {
     sizePotsToWidestCountry();
+    initializePotBlock();
 }
 // Web fonts can change text width after first paint — re-measure once
 // they're ready so the uniform width still fits the longest name.

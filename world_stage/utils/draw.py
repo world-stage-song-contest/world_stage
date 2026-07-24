@@ -46,12 +46,18 @@ def _ceiling_by_key(entries: list[DrawEntry], key: str, n_shows: int) -> dict[An
     return {tag: ceil(count / n_shows) for tag, count in counts.items()}
 
 
-def _can_place_regular(show: ShowState, entry: DrawEntry, balance_ceils: dict[str, dict] | None):
+def _can_place_regular(
+    show: ShowState,
+    entry: DrawEntry,
+    balance_ceils: dict[str, dict] | None,
+    *,
+    check_pot: bool = True,
+):
     if len(show.entries) >= show.limit:
         return False
     if entry.submitter in show.submitters:
         return False
-    if entry.pot in show.pots:
+    if check_pot and entry.pot in show.pots:
         return False
     if entry.code in show.codes:
         return False
@@ -95,6 +101,8 @@ def _regular_options(
     shows: list[ShowState],
     rng: random.Random,
     balance_ceils: dict[str, dict] | None,
+    *,
+    check_pot: bool = True,
 ) -> list[list[tuple[ShowState, DrawEntry]]]:
     entries = pot[:]
     rng.shuffle(entries)
@@ -109,7 +117,8 @@ def _regular_options(
         candidates = [
             show
             for show in shows
-            if show.name not in used_shows and _can_place_regular(show, entry, balance_ceils)
+            if show.name not in used_shows
+            and _can_place_regular(show, entry, balance_ceils, check_pot=check_pot)
         ]
         rng.shuffle(candidates)
         candidates.sort(key=lambda show: show.limit - len(show.entries), reverse=True)
@@ -122,6 +131,71 @@ def _regular_options(
 
     visit(0, set(), [])
     return options
+
+
+def _pot_rounds(
+    pots: list[list[DrawEntry]], n_shows: int, rng: random.Random
+) -> tuple[list[list[DrawEntry]], list[list[DrawEntry]]]:
+    """Split pots into complete rounds and final, incomplete rounds.
+
+    Complete rounds are interleaved by round number: every pot supplies one
+    entry to every show before an oversized pot supplies its next complete
+    round.  Leftovers retain pot order for the balancing pass.
+    """
+    shuffled_pots = [pot[:] for pot in pots]
+    for pot in shuffled_pots:
+        rng.shuffle(pot)
+    complete: list[list[DrawEntry]] = []
+    max_rounds = max((len(pot) // n_shows for pot in shuffled_pots), default=0)
+    for round_index in range(max_rounds):
+        start = round_index * n_shows
+        for pot in shuffled_pots:
+            if len(pot) >= start + n_shows:
+                complete.append(pot[start : start + n_shows])
+
+    leftovers = [
+        pot[(len(pot) // n_shows) * n_shows :] for pot in shuffled_pots if len(pot) % n_shows
+    ]
+    return complete, leftovers
+
+
+def _assign_pot_rounds(
+    pots: list[list[DrawEntry]],
+    shows: list[ShowState],
+    rng: random.Random,
+    balance_ceils: dict[str, dict] | None,
+):
+    complete, leftovers = _pot_rounds(pots, len(shows), rng)
+    # The first leftover pot is distributed normally. Subsequent leftover
+    # pots prefer shows which currently contain fewer entries.
+    rounds = [(entries, False) for entries in complete]
+    rounds.extend((entries, index > 0) for index, entries in enumerate(leftovers))
+
+    def option_score(option: list[tuple[ShowState, DrawEntry]], prioritize_short: bool) -> tuple:
+        if not prioritize_short:
+            return (0,)
+        sizes = sorted(len(show.entries) for show, _entry in option)
+        return (sum(sizes), sizes)
+
+    def visit(index: int) -> bool:
+        if index == len(rounds):
+            return True
+
+        entries, prioritize_short = rounds[index]
+        options = _regular_options(entries, shows, rng, balance_ceils, check_pot=False)
+        rng.shuffle(options)
+        options.sort(key=lambda option: option_score(option, prioritize_short))
+        for option in options:
+            for show, entry in option:
+                _place(show, entry, track_pot=False)
+            if visit(index + 1):
+                return True
+            for show, entry in reversed(option):
+                _remove(show, entry, track_pot=False)
+        return False
+
+    if not visit(0):
+        raise ValueError("Cannot allocate pots without semifinal conflicts")
 
 
 def _assign_regular(
@@ -178,9 +252,7 @@ def _assign_single_pot(entries: list[DrawEntry], shows: list[ShowState], rng: ra
 
     def score(show: ShowState, entry: DrawEntry):
         balance_count = sum(
-            show.balance_counts[key][entry.tag(key)]
-            for key in BALANCE_KEYS
-            if entry.tag(key)
+            show.balance_counts[key][entry.tag(key)] for key in BALANCE_KEYS if entry.tag(key)
         )
         return (
             Counter(e.code for e in show.entries)[entry.code] * 1_000_000
@@ -292,19 +364,16 @@ def draw_semifinals(
         for name, limit in zip(show_names, show_limits, strict=True)
     ]
     draw_pots = [
-        [DrawEntry(data=dict(entry), pot=pot) for entry in entries]
-        for pot, entries in pots.items()
+        [DrawEntry(data=dict(entry), pot=pot) for entry in entries] for pot, entries in pots.items()
     ]
 
     if single_pot:
         _assign_single_pot([entry for pot in draw_pots for entry in pot], shows, rng)
     else:
-        if any(len(pot) > len(shows) for pot in draw_pots):
-            raise ValueError("A pot has more entries than there are semifinal shows")
         all_entries = [entry for pot in draw_pots for entry in pot]
         balance_ceils = {key: _ceiling_by_key(all_entries, key, len(shows)) for key in BALANCE_KEYS}
         try:
-            _assign_regular(draw_pots, shows, rng, balance_ceils)
+            _assign_pot_rounds(draw_pots, shows, rng, balance_ceils)
         except ValueError:
             for show in shows:
                 show.entries.clear()
@@ -312,7 +381,7 @@ def draw_semifinals(
                 show.pots.clear()
                 show.codes.clear()
                 show.balance_counts = {key: Counter() for key in BALANCE_KEYS}
-            _assign_regular(draw_pots, shows, rng, None)
+            _assign_pot_rounds(draw_pots, shows, rng, None)
 
     for show in shows:
         if len(show.entries) != show.limit:
@@ -328,9 +397,6 @@ def draw_semifinals(
 
 def draw_running_order(entries: list[dict], seed: int | str) -> list[dict]:
     rng = random.Random(seed)
-    draw_entries = [
-        DrawEntry(data=dict(entry), pot=entry.get("pot") or 0)
-        for entry in entries
-    ]
+    draw_entries = [DrawEntry(data=dict(entry), pot=entry.get("pot") or 0) for entry in entries]
     rng.shuffle(draw_entries)
     return [entry.data for entry in spread_running_order(draw_entries, rng)]

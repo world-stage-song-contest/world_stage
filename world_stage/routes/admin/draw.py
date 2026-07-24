@@ -59,9 +59,7 @@ def _render_draw(year_id: int, label: str):
     shows = get_year_shows(year_id, pattern="sf")
     count = len(shows)
     if count == 0:
-        return render_template(
-            "error.html", error=f"No semifinal shows found for {label}"
-        ), 404
+        return render_template("error.html", error=f"No semifinal shows found for {label}"), 404
     per = semifinalists // count
     songs = [per] * count
     deficit = semifinalists - per * count
@@ -69,10 +67,7 @@ def _render_draw(year_id: int, label: str):
     # the extra to even-numbered semis first (2, 4, ...) so odd-numbered
     # semis (1, 3, ...) have priority to be the short ones. Shows are
     # 0-indexed here, so even-numbered semis are the odd indices.
-    long_order = (
-        [i for i in range(count) if i % 2 == 1]
-        + [i for i in range(count) if i % 2 == 0]
-    )
+    long_order = [i for i in range(count) if i % 2 == 1] + [i for i in range(count) if i % 2 == 0]
     for i in long_order[:deficit]:
         songs[i] += 1
 
@@ -126,6 +121,23 @@ def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -
     if year < 0:
         return None
 
+    show_count = len(get_year_shows(year, pattern="sf"))
+    if show_count == 0:
+        return f"No semifinal shows found for {year}"
+    cursor.execute(
+        """
+        SELECT country.pot, COUNT(*) AS entries
+        FROM song
+        JOIN country ON song.country_id = country.id
+        WHERE song.year_id = %s
+          AND NOT song.is_placeholder
+          AND country.pot IS NOT NULL
+        GROUP BY country.pot
+        """,
+        (year,),
+    )
+    pot_limits = {row["pot"]: math.ceil(row["entries"] / show_count) for row in cursor.fetchall()}
+
     for show, ro in data.items():
         if not ro:
             continue
@@ -144,14 +156,14 @@ def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -
         if missing:
             return f"Song {missing[0]} not found in year {year}"
 
-        seen: dict[int, int] = {}
+        seen: dict[int, int] = defaultdict(int)
         for song_id in ro:
             pot = pot_by_song[song_id]
             if pot is None:
                 return f"Song {song_id} has no pot"
-            if pot in seen:
+            seen[pot] += 1
+            if seen[pot] > pot_limits.get(pot, 0):
                 return f"Show {show} contains multiple entries from pot {pot}"
-            seen[pot] = song_id
 
     return None
 
