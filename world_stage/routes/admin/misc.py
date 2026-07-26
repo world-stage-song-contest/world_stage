@@ -44,9 +44,11 @@ def fuckup_db_post():
     subprocess.run(current_app.config.get("BACKUP_SCRIPT", os.environ.get("BACKUP_SCRIPT", "")))
 
     try:
-        cursor.execute("SET ROLE dml_only_role")
+        # Keep the restricted role scoped to this transaction.  A session-level
+        # SET ROLE can otherwise survive commit and leak through the connection
+        # pool into an unrelated request.
+        cursor.execute("SET LOCAL ROLE dml_only_role")
         cursor.execute(query)  # type: ignore
-        db.commit()
 
         rows = []
         headers = []
@@ -56,7 +58,7 @@ def fuckup_db_post():
                 [description[0] for description in cursor.description] if cursor.description else []
             )
 
-        cursor.execute("RESET ROLE")
+        db.commit()
     except psycopg.Error as e:
         db.rollback()
         return render_template(
