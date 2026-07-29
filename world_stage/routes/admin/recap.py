@@ -116,6 +116,7 @@ WITH song_data AS (
            show.year_id || short_name AS show, running_order AS ro,
            LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
+           snippet2_start, snippet2_end,
            poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
@@ -132,7 +133,8 @@ WITH song_data AS (
     ORDER BY song.id, show.id
 )
 SELECT year, submitter, show, ro, cc, country,
-       artist, title, media_link, snippet_start, snippet_end, language,
+       artist, title, media_link, snippet_start, snippet_end,
+       snippet2_start, snippet2_end, language,
        type, image_link, _changed_at
 FROM song_data
 ORDER BY show_id, ro
@@ -144,6 +146,7 @@ WITH song_data AS (
            song.year_id AS show, UPPER(country.id) AS ro,
            LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
+           snippet2_start, snippet2_end,
            poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
@@ -158,7 +161,8 @@ WITH song_data AS (
     ORDER BY LOWER(country.id)
 )
 SELECT year, submitter, show, ro, cc, country,
-       artist, title, media_link, snippet_start, snippet_end, language,
+       artist, title, media_link, snippet_start, snippet_end,
+       snippet2_start, snippet2_end, language,
        type, image_link, _changed_at
 FROM song_data
 ORDER BY country
@@ -171,6 +175,7 @@ WITH song_data AS (
            MOD(song.year_id, 100) AS ro,
            LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
+           snippet2_start, snippet2_end,
            poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
@@ -187,7 +192,8 @@ WITH song_data AS (
     ORDER BY song.year_id
 )
 SELECT year, submitter, show, ro, cc, country,
-       artist, title, media_link, snippet_start, snippet_end, language,
+       artist, title, media_link, snippet_start, snippet_end,
+       snippet2_start, snippet2_end, language,
        type, image_link, _changed_at
 FROM song_data
 ORDER BY year
@@ -200,6 +206,7 @@ WITH song_data AS (
            MOD(song.year_id, 100) AS ro,
            LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
+           snippet2_start, snippet2_end,
            poster_link AS image_link,
            (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
             FROM song_language sl
@@ -216,7 +223,8 @@ WITH song_data AS (
     ORDER BY song.year_id, country
 )
 SELECT year, submitter, show, ro, cc, country,
-       artist, title, media_link, snippet_start, snippet_end, language,
+       artist, title, media_link, snippet_start, snippet_end,
+       snippet2_start, snippet2_end, language,
        type, image_link, _changed_at
 FROM song_data
 ORDER BY year, country
@@ -255,6 +263,12 @@ def get_recap_data(
             if row["snippet_start"] is None and row["snippet_end"] is None:
                 row["snippet_start"] = _DEFAULT_SNIPPET_START
                 row["snippet_end"] = _DEFAULT_SNIPPET_END
+            if row["snippet2_start"] is None and row["snippet2_end"] is None:
+                row["snippet2_start"] = row["snippet_start"]
+                if row["snippet2_start"] is not None:
+                    row["snippet2_end"] = row["snippet2_start"] + 10
+            elif row["snippet2_start"] is not None and row["snippet2_end"] is None:
+                row["snippet2_end"] = row["snippet2_start"] + 10
             if not include_change_metadata:
                 row.pop("_changed_at", None)
         return data
@@ -366,9 +380,7 @@ def get_cytube_playlist(form_data: list[str]) -> str | None:
         cc = song["cc"]
         is_host = song.get("is_host", False)
         postcard_name = f"[HOST] {song['country']}" if is_host else ""
-        song_name = (
-            f"[HOST] {song['artist'] or ''} - {song['title'] or ''}" if is_host else ""
-        )
+        song_name = f"[HOST] {song['artist'] or ''} - {song['title'] or ''}" if is_host else ""
         writer.writerow((postcard_name, f"{_MEDIA_URL}/postcards/{cc}.mov"))
         writer.writerow((song_name, f"{_MEDIA_URL}/ws{year}{cc}.json"))
 

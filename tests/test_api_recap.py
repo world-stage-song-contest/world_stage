@@ -50,6 +50,8 @@ def test_recap_api_returns_recap_data(client, db):
             "title": "API Song",
             "snippet_start": 50,
             "snippet_end": 70,
+            "snippet2_start": 50,
+            "snippet2_end": 60,
             "type": "video",
         }
     ]
@@ -88,6 +90,64 @@ def test_recap_api_does_not_default_end_when_start_is_configured(client, db):
     assert response.status_code == 200
     assert _result(response)[0]["snippet_start"] == 12
     assert "snippet_end" not in _result(response)[0]
+
+
+def test_recap_api_preserves_second_snippet_times(client, db):
+    song_id = _seed_recap_data(db, show_name="Second API Recap", short_name="second")
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE song
+            SET snippet2_start = 80, snippet2_end = 88
+            WHERE id = %s
+            """,
+            (song_id,),
+        )
+    db.commit()
+
+    response = client.get(
+        "/api/recap",
+        query_string={"type": "show", "show": "2025-second"},
+    )
+
+    assert response.status_code == 200
+    assert _result(response)[0]["snippet2_start"] == 80
+    assert _result(response)[0]["snippet2_end"] == 88
+
+
+def test_recap_api_derives_second_snippet_end(client, db):
+    song_id = _seed_recap_data(db, show_name="Derived API Recap", short_name="derived")
+    with db.cursor() as cur:
+        cur.execute("UPDATE song SET snippet2_start = 80 WHERE id = %s", (song_id,))
+    db.commit()
+
+    response = client.get(
+        "/api/recap",
+        query_string={"type": "show", "show": "2025-derived"},
+    )
+
+    assert response.status_code == 200
+    assert _result(response)[0]["snippet2_start"] == 80
+    assert _result(response)[0]["snippet2_end"] == 90
+
+
+def test_recap_api_derives_second_snippet_from_first(client, db):
+    song_id = _seed_recap_data(db, show_name="Fallback API Recap", short_name="fallback")
+    with db.cursor() as cur:
+        cur.execute(
+            "UPDATE song SET snippet_start = 12, snippet_end = 20 WHERE id = %s",
+            (song_id,),
+        )
+    db.commit()
+
+    response = client.get(
+        "/api/recap",
+        query_string={"type": "show", "show": "2025-fallback"},
+    )
+
+    assert response.status_code == 200
+    assert _result(response)[0]["snippet2_start"] == 12
+    assert _result(response)[0]["snippet2_end"] == 22
 
 
 def test_recap_api_is_public(client, db):
@@ -216,9 +276,7 @@ def test_recap_api_excludes_specials_unless_requested(client, db):
         )
     db.commit()
 
-    default_response = client.get(
-        "/api/recap", query_string={"type": "country", "show": "US"}
-    )
+    default_response = client.get("/api/recap", query_string={"type": "country", "show": "US"})
     explicit_false_response = client.get(
         "/api/recap",
         query_string={"type": "country", "show": "US", "specials": "false"},

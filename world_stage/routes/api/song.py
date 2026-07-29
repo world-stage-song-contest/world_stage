@@ -36,6 +36,7 @@ bp = Blueprint("song", __name__, url_prefix="/song")
 # ── Constants ────────────────────────────────────────────────────────
 ENGLISH_LANG_ID = 20
 MAX_SNIPPET_DURATION = 20
+MAX_SNIPPET2_DURATION = 10
 MAX_USER_SUBMISSIONS = 2
 MAX_USER_SUBMISSIONS_SPECIAL = 1
 MAX_YEAR_SUBMISSIONS = 73
@@ -49,6 +50,8 @@ MUTABLE_TEXT_FIELDS = (
     "vtt_link",
     "snippet_start",
     "snippet_end",
+    "snippet2_start",
+    "snippet2_end",
     "translated_lyrics",
     "romanized_lyrics",
     "native_lyrics",
@@ -83,6 +86,24 @@ def _normalize_text(value) -> str | None:
 def _form_bool(value: str | None) -> bool:
     """Interpret a form-encoded boolean (on/off, true/false, 1/0)."""
     return value in ("on", "true", "1", "yes")
+
+
+def _snippet_duration_error(
+    values: dict, start_field: str, end_field: str, maximum: int, label: str
+) -> str | None:
+    start = values.get(start_field)
+    end = values.get(end_field)
+    if start is None or end is None:
+        return None
+    start_seconds = start if isinstance(start, int) else parse_seconds(start)
+    end_seconds = end if isinstance(end, int) else parse_seconds(end)
+    if (
+        start_seconds is not None
+        and end_seconds is not None
+        and end_seconds - start_seconds > maximum
+    ):
+        return f"{label} duration ({end_seconds - start_seconds}s) exceeds maximum ({maximum}s)"
+    return None
 
 
 def _get_request_data() -> tuple[dict | None, bool]:
@@ -195,8 +216,18 @@ def _song_row_to_json(
         "duration": row["duration"],
         "poster_link": row["poster_link"],
         "vtt_link": row["vtt_link"],
-        "snippet_start": format_seconds(row["snippet_start"]) if row["snippet_start"] else None,
-        "snippet_end": format_seconds(row["snippet_end"]) if row["snippet_end"] else None,
+        "snippet_start": (
+            format_seconds(row["snippet_start"]) if row["snippet_start"] is not None else None
+        ),
+        "snippet_end": (
+            format_seconds(row["snippet_end"]) if row["snippet_end"] is not None else None
+        ),
+        "snippet2_start": (
+            format_seconds(row["snippet2_start"]) if row["snippet2_start"] is not None else None
+        ),
+        "snippet2_end": (
+            format_seconds(row["snippet2_end"]) if row["snippet2_end"] is not None else None
+        ),
         "translated_lyrics": row["translated_lyrics"],
         "romanized_lyrics": row["romanized_lyrics"],
         "native_lyrics": row["native_lyrics"],
@@ -220,6 +251,7 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
                song.title_language_id, song.native_language_id,
                song.video_link, song.poster_link, song.vtt_link,
                song.snippet_start, song.snippet_end,
+               song.snippet2_start, song.snippet2_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
                song.submitter_id, account.username, song.entry_number,
@@ -288,9 +320,7 @@ def _fetch_song_key_signatures(cursor, song_id: int) -> list[dict]:
 # Canonical tonic spellings. Enharmonic pairs collapse to their flat
 # form (Db, Eb, Ab, Bb) except for F#/Gb, which collapses to the sharp
 # form for historical/notation reasons.
-_TONIC_CANONICAL = frozenset(
-    {"C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"}
-)
+_TONIC_CANONICAL = frozenset({"C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"})
 _TONIC_ALIASES = {
     "C#": "Db",
     "D#": "Eb",
@@ -648,9 +678,7 @@ def get_song(id: int):
     key_signatures = _fetch_song_key_signatures(cursor, id)
     time_signatures = _fetch_song_time_signatures(cursor, id)
     subgenres = _fetch_song_subgenres(cursor, id)
-    return resp(
-        _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
-    )
+    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures, subgenres))
 
 
 # ── GET /api/song/<cc>/<year> ─────────────────────────────────────────
@@ -669,6 +697,7 @@ def _select_song_by_country(cursor, cc: str, year: int, entry_number: int | None
                song.title_language_id, song.native_language_id,
                song.video_link, song.poster_link, song.vtt_link,
                song.snippet_start, song.snippet_end,
+               song.snippet2_start, song.snippet2_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
                song.submitter_id, account.username, song.entry_number,
@@ -746,9 +775,7 @@ def get_song_by_country(cc: str, year: str):
     key_signatures = _fetch_song_key_signatures(cursor, row["id"])
     time_signatures = _fetch_song_time_signatures(cursor, row["id"])
     subgenres = _fetch_song_subgenres(cursor, row["id"])
-    return resp(
-        _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
-    )
+    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures, subgenres))
 
 
 @bp.get("/<cc>/<year>/<int:entry_number>")
@@ -779,9 +806,7 @@ def get_song_by_country_entry(cc: str, year: str, entry_number: int):
     key_signatures = _fetch_song_key_signatures(cursor, row["id"])
     time_signatures = _fetch_song_time_signatures(cursor, row["id"])
     subgenres = _fetch_song_subgenres(cursor, row["id"])
-    return resp(
-        _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
-    )
+    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures, subgenres))
 
 
 # ── POST /api/song ───────────────────────────────────────────────────
@@ -920,6 +945,14 @@ def create_song(auth: tuple):
                     ErrorID.BAD_REQUEST,
                     f"Snippet duration ({e - s}s) exceeds maximum ({MAX_SNIPPET_DURATION}s)",
                 )
+    if message := _snippet_duration_error(
+        text,
+        "snippet2_start",
+        "snippet2_end",
+        MAX_SNIPPET2_DURATION,
+        "Snippet 2",
+    ):
+        return err(ErrorID.BAD_REQUEST, message)
 
     # ── Submitter override (admins only) ─────────────────────────
     submitter_id = user_id
@@ -941,12 +974,12 @@ def create_song(auth: tuple):
         INSERT INTO song (
             year_id, country_id, entry_number, title, native_title, artist, is_placeholder,
             title_language_id, native_language_id, video_link, duration, poster_link, vtt_link,
-            snippet_start, snippet_end, translated_lyrics,
+            snippet_start, snippet_end, snippet2_start, snippet2_end, translated_lyrics,
             romanized_lyrics, native_lyrics, submitter_id,
             notes, sources, admin_approved, modified_at
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP
+            %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP
         )
         RETURNING id
     """,
@@ -966,6 +999,8 @@ def create_song(auth: tuple):
             text["vtt_link"],
             parse_seconds(text["snippet_start"]),
             parse_seconds(text["snippet_end"]),
+            parse_seconds(text["snippet2_start"]),
+            parse_seconds(text["snippet2_end"]),
             text["translated_lyrics"],
             text["romanized_lyrics"],
             text["native_lyrics"],
@@ -1098,6 +1133,14 @@ def replace_song(id: int, auth: tuple):
                     ErrorID.BAD_REQUEST,
                     f"Snippet duration ({e - s}s) exceeds maximum ({MAX_SNIPPET_DURATION}s)",
                 )
+    if message := _snippet_duration_error(
+        text,
+        "snippet2_start",
+        "snippet2_end",
+        MAX_SNIPPET2_DURATION,
+        "Snippet 2",
+    ):
+        return err(ErrorID.BAD_REQUEST, message)
 
     # ── Submitter override (admins only) ─────────────────────────
     submitter_id = user_id if is_claim else row["submitter_id"]
@@ -1121,6 +1164,7 @@ def replace_song(id: int, auth: tuple):
             is_placeholder = %s, title_language_id = %s, native_language_id = %s,
             video_link = %s, duration = %s, poster_link = %s, vtt_link = %s,
             snippet_start = %s, snippet_end = %s,
+            snippet2_start = %s, snippet2_end = %s,
             translated_lyrics = %s, romanized_lyrics = %s, native_lyrics = %s,
             notes = %s, sources = %s,
             admin_approved = %s, submitter_id = %s,
@@ -1140,6 +1184,8 @@ def replace_song(id: int, auth: tuple):
             vtt_link,
             parse_seconds(text["snippet_start"]),
             parse_seconds(text["snippet_end"]),
+            parse_seconds(text["snippet2_start"]),
+            parse_seconds(text["snippet2_end"]),
             text["translated_lyrics"],
             text["romanized_lyrics"],
             text["native_lyrics"],
@@ -1210,7 +1256,7 @@ def update_song(id: int, auth: tuple):
 
     for field in MUTABLE_TEXT_FIELDS:
         if field in data:
-            if field in ("snippet_start", "snippet_end"):
+            if field in ("snippet_start", "snippet_end", "snippet2_start", "snippet2_end"):
                 val = _normalize_text(data[field])
                 sets.append(_assign(field))
                 params.append(parse_seconds(val))
@@ -1303,13 +1349,14 @@ def update_song(id: int, auth: tuple):
     ):
         return err(ErrorID.BAD_REQUEST, "No fields to update")
 
+    merged = dict(row)
+    for field in MUTABLE_TEXT_FIELDS:
+        if field in data:
+            merged[field] = _normalize_text(data[field])
+
     # ── Validation (non-admins) ──────────────────────────────────
     if not permissions.can_view_restricted:
         # Merge current values with incoming changes to validate the final state
-        merged = dict(row)
-        for field in MUTABLE_TEXT_FIELDS:
-            if field in data:
-                merged[field] = _normalize_text(data[field])
         for field, label in REQUIRED_FIELDS.items():
             if not merged.get(field):
                 return err(ErrorID.BAD_REQUEST, f"Missing required field: {label}")
@@ -1324,6 +1371,14 @@ def update_song(id: int, auth: tuple):
                     ErrorID.BAD_REQUEST,
                     f"Snippet duration ({e - s}s) exceeds maximum ({MAX_SNIPPET_DURATION}s)",
                 )
+    if message := _snippet_duration_error(
+        merged,
+        "snippet2_start",
+        "snippet2_end",
+        MAX_SNIPPET2_DURATION,
+        "Snippet 2",
+    ):
+        return err(ErrorID.BAD_REQUEST, message)
 
     # ── Execute ──────────────────────────────────────────────────
     _set_audit_user(cursor, user_id)

@@ -70,6 +70,9 @@
             z-index: 1;
             pointer-events: none;
         }
+        .vjs-progress-holder .recap-marker.recap-marker-second {
+            background: rgba(102, 178, 255, 0.55);
+        }
     </style>
     <script>
         function copyValue(th) {
@@ -157,17 +160,19 @@
         {% endif %}
         {% if song.recap_start_seconds is not none %}
         <tr>
-            <th>Recap start</th>
+            <th>First recap</th>
             <td>
-                <a href="#" class="recap-timestamp" data-seconds="{{ song.recap_start_seconds }}">{{ song.recap_start }}</a>
+                <a href="#" class="recap-timestamp" data-seconds="{{ song.recap_start_seconds }}">{{ song.recap_start }}</a>–<a
+                href="#" class="recap-timestamp" data-seconds="{{ song.recap_end_seconds }}">{{ song.recap_end }}</a>
             </td>
         </tr>
         {% endif %}
-        {% if song.recap_end_seconds is not none %}
+        {% if song.recap2_start_seconds is not none %}
         <tr>
-            <th>Recap end</th>
+            <th>Second recap</th>
             <td>
-                <a href="#" class="recap-timestamp" data-seconds="{{ song.recap_end_seconds }}">{{ song.recap_end }}</a>
+                <a href="#" class="recap-timestamp" data-seconds="{{ song.recap2_start_seconds }}">{{ song.recap2_start }}</a>–<a
+                href="#" class="recap-timestamp" data-seconds="{{ song.recap2_end_seconds }}">{{ song.recap2_end }}</a>
             </td>
         </tr>
         {% endif %}
@@ -392,11 +397,19 @@
 {% set has_recap = song.recap_start_seconds is not none
                   and song.recap_end_seconds is not none
                   and song.recap_end_seconds > song.recap_start_seconds %}
-{% if song.key_signature_timeline or song.time_signature_timeline or has_recap %}
+{% set has_recap2 = song.recap2_start_seconds is not none
+                   and song.recap2_end_seconds is not none
+                   and song.recap2_end_seconds > song.recap2_start_seconds %}
+{% if song.key_signature_timeline or song.time_signature_timeline or has_recap or has_recap2 %}
 <script type="application/json" id="ks-timeline-data">{{ song.key_signature_timeline|tojson }}</script>
 <script type="application/json" id="ts-timeline-data">{{ song.time_signature_timeline|tojson }}</script>
 <script type="application/json" id="recap-data">{{
-    {'start': song.recap_start_seconds, 'end': song.recap_end_seconds}|tojson
+    [
+        {'start': song.recap_start_seconds, 'end': song.recap_end_seconds,
+         'label': 'First', 'is_second': false},
+        {'start': song.recap2_start_seconds, 'end': song.recap2_end_seconds,
+         'label': 'Second', 'is_second': true}
+    ]|tojson
 }}</script>
 <script>
     (function () {
@@ -407,7 +420,7 @@
         const tsTimelineNode = document.getElementById('ts-timeline-data');
         const tsTimeline = tsTimelineNode ? JSON.parse(tsTimelineNode.textContent) : [];
         const recapNode = document.getElementById('recap-data');
-        const recap = recapNode ? JSON.parse(recapNode.textContent) : null;
+        const recaps = recapNode ? JSON.parse(recapNode.textContent) : [];
 
         function renderMarkers(player) {
             const duration = player.duration();
@@ -415,19 +428,22 @@
             const holder = player.el().querySelector('.vjs-progress-holder');
             if (!holder) return;
 
-            // Recap range — appended first so the key markers (z-index
+            // Recap ranges — appended first so the key markers (z-index
             // 2) draw on top of it (z-index 1).
             holder.querySelectorAll('.recap-marker').forEach(m => m.remove());
-            if (recap && recap.start != null && recap.end != null
-                    && recap.end > recap.start && recap.start < duration) {
+            for (const recap of recaps) {
+                if (recap.start == null || recap.end == null
+                        || recap.end <= recap.start || recap.start >= duration) continue;
                 const safeEnd = Math.min(recap.end, duration);
                 const left = (recap.start / duration) * 100;
                 const width = ((safeEnd - recap.start) / duration) * 100;
                 const r = document.createElement('div');
-                r.className = 'recap-marker';
+                r.className = recap.is_second
+                    ? 'recap-marker recap-marker-second'
+                    : 'recap-marker';
                 r.style.left = left + '%';
                 r.style.width = width + '%';
-                r.title = 'Recap snippet';
+                r.title = recap.label + ' recap snippet';
                 holder.appendChild(r);
             }
 

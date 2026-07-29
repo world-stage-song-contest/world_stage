@@ -33,11 +33,11 @@ class Song:
     poster_link: str | None
     vtt_link: str | None
     duration: float | None
-    recap_start: str | None
-    recap_end: str | None
     sources: str | None
     recap_start_seconds: int | None = None
-    recap_end_seconds: int | None = None
+    _recap_end_seconds: int | None = None
+    recap2_start_seconds: int | None = None
+    _recap2_end_seconds: int | None = None
     key_signatures: list[str] = field(default_factory=list)
     key_signature_timeline: list[dict] = field(default_factory=list)
     time_signatures: list[str] = field(default_factory=list)
@@ -45,11 +45,53 @@ class Song:
     subgenres: list[str] = field(default_factory=list)
     hidden: bool = False
 
+    @property
+    def recap_end_seconds(self) -> int | None:
+        if self._recap_end_seconds is not None:
+            return self._recap_end_seconds
+        if self.recap_start_seconds is not None:
+            return self.recap_start_seconds + 20
+        return None
+
+    @property
+    def recap2_end_seconds(self) -> int | None:
+        if self._recap2_end_seconds is not None:
+            return self._recap2_end_seconds
+        if self.recap2_start_seconds is not None:
+            return self.recap2_start_seconds + 10
+        return None
+
+    @property
+    def recap_start(self) -> str | None:
+        if self.recap_start_seconds is None:
+            return None
+        return format_seconds(self.recap_start_seconds)
+
+    @property
+    def recap_end(self) -> str | None:
+        if self.recap_end_seconds is None:
+            return None
+        return format_seconds(self.recap_end_seconds)
+
+    @property
+    def recap2_start(self) -> str | None:
+        if self.recap2_start_seconds is None:
+            return None
+        return format_seconds(self.recap2_start_seconds)
+
+    @property
+    def recap2_end(self) -> str | None:
+        if self.recap2_end_seconds is None:
+            return None
+        return format_seconds(self.recap2_end_seconds)
+
     @classmethod
     def from_row(cls, song: dict) -> Self:
         """Build a Song from an already-hydrated query row without database I/O."""
         recap_start_seconds = song["snippet_start"]
         recap_end_seconds = song["snippet_end"]
+        recap2_start_seconds = song["snippet2_start"]
+        recap2_end_seconds = song["snippet2_end"]
         year = Year(
             id=song["year_id"],
             special_name=song.get("special_name"),
@@ -86,16 +128,10 @@ class Song:
             submitter=song["username"],
             languages=[],
             vote_data=_vote_data_from_row(song),
-            recap_start=(
-                format_seconds(recap_start_seconds)
-                if recap_start_seconds is not None
-                else None
-            ),
-            recap_end=(
-                format_seconds(recap_end_seconds) if recap_end_seconds is not None else None
-            ),
             recap_start_seconds=recap_start_seconds,
-            recap_end_seconds=recap_end_seconds,
+            _recap_end_seconds=recap_end_seconds,
+            recap2_start_seconds=recap2_start_seconds,
+            _recap2_end_seconds=recap2_end_seconds,
         )
 
     @property
@@ -488,6 +524,7 @@ _SONG_COLUMNS: LiteralString = """
     song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
     account.username, song.year_id, song.poster_link,
     song.video_link, song.duration, song.snippet_start, song.snippet_end,
+    song.snippet2_start, song.snippet2_end,
     song.submitter_id, song.notes, song.sources, song.entry_number,
     year.special_name, year.special_short_name, year.status AS year_status,
     title_language.name AS title_language_name,

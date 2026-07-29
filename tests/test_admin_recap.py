@@ -215,5 +215,7 @@ def test_all_recap_data_variants_include_submitter(client, db):
         assert row["submitter"] == "alice"
         assert row["snippet_start"] == 50
         assert row["snippet_end"] == 70
+        assert row["snippet2_start"] == 50
+        assert row["snippet2_end"] == 60
         assert "short_name" not in row
         assert "show_name" not in row

@@ -1,8 +1,6 @@
 """Tests for the /api/song endpoints."""
 
 
-
-
 # ── helpers ─────────────────────────────────────────────────────────
 
 
@@ -214,6 +212,35 @@ class TestCreateSong:
         resp = _create_song(client, bob_headers, snippet_start="1:00", snippet_end="1:15")
         assert resp.status_code == 201
 
+    def test_second_snippet_is_optional(self, client, bob_headers):
+        resp = _create_song(client, bob_headers, snippet2_start="1:00")
+
+        assert resp.status_code == 201
+        assert _result(resp)["snippet2_start"] == "1:00"
+        assert _result(resp)["snippet2_end"] is None
+
+    def test_second_snippet_duration_limit(self, client, bob_headers):
+        resp = _create_song(
+            client,
+            bob_headers,
+            snippet2_start="0:00",
+            snippet2_end="0:11",
+        )
+
+        assert resp.status_code == 400
+
+    def test_valid_second_snippet(self, client, bob_headers):
+        resp = _create_song(
+            client,
+            bob_headers,
+            snippet2_start="1:00",
+            snippet2_end="1:10",
+        )
+
+        assert resp.status_code == 201
+        assert _result(resp)["snippet2_start"] == "1:00"
+        assert _result(resp)["snippet2_end"] == "1:10"
+
 
 # ── PATCH /api/song/<id> ────────────────────────────────────────────
 
@@ -328,25 +355,25 @@ class TestSongDuration:
             cur.execute("SELECT duration FROM song WHERE id = %s", (song_id,))
             return cur.fetchone()["duration"]
 
-    def test_create_with_media_link_probes_duration(
-        self, client, db, bob_headers, monkeypatch
-    ):
+    def test_create_with_media_link_probes_duration(self, client, db, bob_headers, monkeypatch):
         monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 187.5)
         song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
         assert self._stored_duration(db, song_id) == 187.5
 
-    def test_create_with_external_link_does_not_probe(
-        self, client, db, bob_headers, monkeypatch
-    ):
+    def test_create_with_external_link_does_not_probe(self, client, db, bob_headers, monkeypatch):
         def boom(url):
             raise AssertionError("probe_duration must not be called")
 
         monkeypatch.setattr("world_stage.media.probe_duration", boom)
-        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com/x"))["id"]
+        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com/x"))[
+            "id"
+        ]
         assert self._stored_duration(db, song_id) is None
 
     def test_patch_to_media_link_sets_duration(self, client, db, bob_headers, monkeypatch):
-        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com/x"))["id"]
+        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com/x"))[
+            "id"
+        ]
 
         monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 203.0)
         resp = client.patch(
@@ -355,9 +382,7 @@ class TestSongDuration:
         assert resp.status_code == 200
         assert self._stored_duration(db, song_id) == 203.0
 
-    def test_patch_to_external_link_clears_duration(
-        self, client, db, bob_headers, monkeypatch
-    ):
+    def test_patch_to_external_link_clears_duration(self, client, db, bob_headers, monkeypatch):
         monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 203.0)
         song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
 
@@ -554,6 +579,19 @@ class TestReplaceSong:
         song_id = _result(_create_song(client, bob_headers))["id"]
 
         resp = _put_song(client, bob_headers, song_id, snippet_start="0:00", snippet_end="0:30")
+        assert resp.status_code == 400
+
+    def test_second_snippet_duration_limit(self, client, bob_headers):
+        song_id = _result(_create_song(client, bob_headers))["id"]
+
+        resp = _put_song(
+            client,
+            bob_headers,
+            song_id,
+            snippet2_start="0:00",
+            snippet2_end="0:11",
+        )
+
         assert resp.status_code == 400
 
 

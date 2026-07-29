@@ -58,9 +58,7 @@ def get_genre_options() -> list[dict]:
                 "name": r["genre_name"],
                 "subgenres": [],
             }
-        grouped[gid]["subgenres"].append(
-            {"id": r["subgenre_id"], "name": r["subgenre_name"]}
-        )
+        grouped[gid]["subgenres"].append({"id": r["subgenre_id"], "name": r["subgenre_name"]})
     return list(grouped.values())
 
 
@@ -266,7 +264,8 @@ def get_country_data(year: int, country: str):
                 """
                 SELECT id, title, native_title, artist, is_placeholder,
                        title_language_id, native_language_id, video_link, poster_link,
-                       vtt_link, snippet_start, snippet_end, translated_lyrics,
+                       vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
+                       translated_lyrics,
                        romanized_lyrics, native_lyrics, notes, submitter_id,
                        sources, admin_approved, entry_number
                 FROM song
@@ -281,7 +280,8 @@ def get_country_data(year: int, country: str):
                 """
                 SELECT id, title, native_title, artist, is_placeholder,
                        title_language_id, native_language_id, video_link, poster_link,
-                       vtt_link, snippet_start, snippet_end, translated_lyrics,
+                       vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
+                       translated_lyrics,
                        romanized_lyrics, native_lyrics, notes, submitter_id,
                        sources, admin_approved, entry_number
                 FROM song
@@ -296,7 +296,8 @@ def get_country_data(year: int, country: str):
             """
             SELECT id, title, native_title, artist, is_placeholder,
                    title_language_id, native_language_id, video_link, poster_link,
-                   vtt_link, snippet_start, snippet_end, translated_lyrics,
+                   vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
+                   translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
                    sources, admin_approved, entry_number
             FROM song
@@ -397,8 +398,18 @@ def get_country_data(year: int, country: str):
         "video_link": row["video_link"],
         "poster_link": row["poster_link"],
         "vtt_link": row["vtt_link"],
-        "snippet_start": format_seconds(row["snippet_start"] or None),
-        "snippet_end": format_seconds(row["snippet_end"] or None),
+        "snippet_start": (
+            format_seconds(row["snippet_start"]) if row["snippet_start"] is not None else None
+        ),
+        "snippet_end": (
+            format_seconds(row["snippet_end"]) if row["snippet_end"] is not None else None
+        ),
+        "snippet2_start": (
+            format_seconds(row["snippet2_start"]) if row["snippet2_start"] is not None else None
+        ),
+        "snippet2_end": (
+            format_seconds(row["snippet2_end"]) if row["snippet2_end"] is not None else None
+        ),
         "translated_lyrics": row["translated_lyrics"],
         "romanized_lyrics": row["romanized_lyrics"],
         "native_lyrics": row["native_lyrics"],

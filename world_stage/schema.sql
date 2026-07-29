@@ -200,6 +200,8 @@ CREATE TABLE IF NOT EXISTS song (
     video_link text,
     snippet_start integer,
     snippet_end integer,
+    snippet2_start integer,
+    snippet2_end integer,
     is_placeholder boolean,
     title_language_id bigint,
     native_language_id bigint,
@@ -210,6 +212,11 @@ CREATE TABLE IF NOT EXISTS song (
     vtt_link text,
     duration double precision,
     entry_number integer NOT NULL DEFAULT 1,
+    CONSTRAINT song_snippet2_max_duration CHECK (
+        snippet2_start IS NULL
+        OR snippet2_end IS NULL
+        OR snippet2_end - snippet2_start <= 10
+    ),
     CONSTRAINT song_year_country_entry_key UNIQUE (year_id, country_id, entry_number)
 );
 

@@ -57,6 +57,10 @@
             <dd>The start time of the recap snippet. This is the time in the video where the recap starts.</dd>
             <dt><strong>Recap snippet end</strong></dt>
             <dd>The end time of the recap snippet. This is the time in the video where the recap ends. Must be at most 20 seconds after the start.</dd>
+            <dt><strong>Second recap snippet start</strong></dt>
+            <dd>The optional start time of a second recap snippet.</dd>
+            <dt><strong>Second recap snippet end</strong></dt>
+            <dd>The optional end time of the second recap snippet. Must be at most 10 seconds after its start.</dd>
             <dt><strong>English lyrics</strong></dt>
             <dd>The English lyrics of the song.</dd>
             <dt><strong>Native lyrics (Latin alphabet)</strong></dt>
@@ -251,6 +255,16 @@
         <div>
         <input class="time-input" id="snippet_end" name="snippet_end" placeholder="0:00"
                maxlength="4" size="4" value="{{ data.snippet_end }}" pattern="\d:\d{2}">
+        </div>
+        <label for="snippet2_start">Second recap snippet start</label>
+        <div>
+        <input class="time-input" id="snippet2_start" name="snippet2_start" placeholder="0:00"
+               maxlength="4" size="4" value="{{ data.snippet2_start }}" pattern="\d:\d{2}">
+        </div>
+        <label for="snippet2_end">Second recap snippet end</label>
+        <div>
+        <input class="time-input" id="snippet2_end" name="snippet2_end" placeholder="0:00"
+               maxlength="4" size="4" value="{{ data.snippet2_end }}" pattern="\d:\d{2}">
         </div>
     </fieldset>
 

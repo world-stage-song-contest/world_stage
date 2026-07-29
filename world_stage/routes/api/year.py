@@ -102,6 +102,7 @@ def songs(id: int):
                song.title_language_id, song.native_language_id,
                song.video_link, song.poster_link, song.vtt_link,
                song.snippet_start, song.snippet_end,
+               song.snippet2_start, song.snippet2_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
                song.notes, song.sources, song.admin_approved,
                song.submitter_id, account.username, song.entry_number,

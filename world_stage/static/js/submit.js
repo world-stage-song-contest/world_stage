@@ -113,6 +113,8 @@ function collectFormData() {
         video_link: form.video_link.value || null,
         snippet_start: form.snippet_start.value || null,
         snippet_end: form.snippet_end.value || null,
+        snippet2_start: form.snippet2_start.value || null,
+        snippet2_end: form.snippet2_end.value || null,
         translated_lyrics: form.translated_lyrics.value || null,
         romanized_lyrics: form.romanized_lyrics.value || null,
         native_lyrics: form.native_lyrics.value || null,
