@@ -88,7 +88,7 @@
 {% block onload%}onLoad(){% endblock %}
 {% block content %}
 
-{% if can_edit or can_update_duration %}
+{% if can_edit or can_update_duration or (song.video_link and song.video_link != 'N/A') %}
 <div>
     {% if can_edit %}
     {% if special %}
@@ -235,6 +235,15 @@
 <div id="video-player-container" class="video">
     {{ embed|safe }}
 </div>
+
+{% if song.video_link and song.video_link != 'N/A' %}
+<a class="button" href="{{ song.video_link }}{{ '&' if '?' in song.video_link else '?' }}download=1" download>
+    <button class="semi-big">
+        <i class="ph ph-download-simple" aria-hidden="true"></i>
+        Download
+    </button>
+</a>
+{% endif %}
 
 <script>
     function seekKeySignature(seconds) {

@@ -634,6 +634,10 @@ button.big {
     font-size: xx-large;
 }
 
+button.semi-big {
+    font-size: large;
+}
+
 .banner {
     width: 100%;
     box-sizing: border-box;

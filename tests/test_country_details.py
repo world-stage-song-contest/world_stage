@@ -24,3 +24,44 @@ def test_details_page_shows_both_recap_snippets(client, db):
     assert "'recap-marker recap-marker-second'" in response.text
     assert 'data-seconds="90">1:30</a>' in response.text
     assert 'data-seconds="100">1:40</a>' in response.text
+
+
+def test_details_page_offers_direct_download(client, db):
+    media_url = "https://media.world-stage.org/song.mp4?version=2"
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO song (
+                country_id, year_id, title, artist, is_placeholder, video_link
+            )
+            VALUES ('US', 2025, 'Downloadable', 'Test Artist', false, %s)
+            """,
+            (media_url,),
+        )
+    db.commit()
+
+    response = client.get("/country/us/2025", headers={"Accept": "text/html"})
+
+    assert response.status_code == 200
+    assert f'href="{media_url}&amp;download=1" download' in response.text
+    assert "Download" in response.text
+
+
+def test_details_page_does_not_offer_download_without_media(client, db):
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO song (
+                country_id, year_id, title, artist, is_placeholder, video_link
+            )
+            VALUES (
+                'US', 2025, 'Missing', 'Test Artist', false, NULL
+            )
+            """
+        )
+    db.commit()
+
+    response = client.get("/country/us/2025", headers={"Accept": "text/html"})
+
+    assert response.status_code == 200
+    assert "download=1" not in response.text
