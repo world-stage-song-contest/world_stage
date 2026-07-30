@@ -134,7 +134,7 @@
 
 <div id="play-layout">
     <div id="player-wrap">
-        <video id="player-video" class="video-js vjs-default-skin" controls preload="auto" playsinline muted></video>
+        <video id="player-video" class="video-js vjs-default-skin" controls preload="auto" playsinline muted crossorigin="anonymous"></video>
     </div>
     <div id="playlist-wrap">
         <ul id="custom-playlist"></ul>
@@ -183,6 +183,7 @@
     // working entry-details page, which also uses a <source> child.
     const player = videojs('player-video', {
         fluid: true,
+        aspectRatio: '16:9',
     });
 
     let currentIndex = -1;
@@ -225,6 +226,25 @@
 
         // Update poster via video.js so its overlay stays in sync.
         player.poster(entry.poster || '');
+
+        // Replace the previous entry's subtitles with this entry's
+        // track. Remote tracks are not cleared when the media source
+        // changes, so leaving the old one attached would show captions
+        // from the wrong song.
+        const remote = player.remoteTextTracks();
+        for (let i = remote.length - 1; i >= 0; i--) {
+            player.removeRemoteTextTrack(remote[i]);
+        }
+        if (entry.vtt) {
+            const trackEl = player.addRemoteTextTrack({
+                kind: 'subtitles',
+                src: entry.vtt,
+                srclang: 'en',
+                label: 'Subtitles',
+                default: true,
+            }, true);
+            if (trackEl && trackEl.track) trackEl.track.mode = 'showing';
+        }
 
         videoEl.load();
         setActive(index);

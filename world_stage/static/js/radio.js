@@ -223,6 +223,7 @@
             const trackEl = player.addRemoteTextTrack({
                 kind: 'subtitles',
                 src: song.vtt,
+                srclang: 'en',
                 label: 'Subtitles',
                 default: true,
             }, true);

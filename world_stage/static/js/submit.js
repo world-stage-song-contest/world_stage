@@ -143,6 +143,11 @@ function collectFormData() {
         data.poster_link = posterLink.value || null;
     }
 
+    const vttLink = document.getElementById('vtt_link');
+    if (vttLink) {
+        data.vtt_link = vttLink.value || null;
+    }
+
     return data;
 }
 

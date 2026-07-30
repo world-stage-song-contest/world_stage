@@ -142,6 +142,44 @@ def test_flag_images_are_not_selectable_or_draggable(client):
     assert b"-webkit-user-drag: none" in stylesheet.data
 
 
+def test_show_player_keeps_a_fixed_16_by_9_aspect_ratio():
+    template = (
+        Path(__file__).parents[1] / "world_stage/templates/year/play.html"
+    ).read_text()
+
+    assert "aspectRatio: '16:9'" in template
+
+
+def test_show_player_swaps_subtitles_with_each_entry():
+    template = (
+        Path(__file__).parents[1] / "world_stage/templates/year/play.html"
+    ).read_text()
+
+    assert 'crossorigin="anonymous"' in template
+    assert "player.removeRemoteTextTrack(remote[i]);" in template
+    assert "src: entry.vtt" in template
+    assert "trackEl.track.mode = 'showing'" in template
+
+
+def test_radio_player_supports_cross_origin_subtitles():
+    root = Path(__file__).parents[1] / "world_stage"
+    template = (root / "templates/radio.html").read_text()
+    script = (root / "static/js/radio.js").read_text()
+
+    assert 'crossorigin="anonymous"' in template
+    assert "src: song.vtt" in script
+    assert "srclang: 'en'" in script
+    assert "trackEl.track.mode = 'showing'" in script
+
+
+def test_admin_submission_serializes_subtitle_url():
+    script = (
+        Path(__file__).parents[1] / "world_stage/static/js/submit.js"
+    ).read_text()
+
+    assert "data.vtt_link = vttLink.value || null;" in script
+
+
 def test_flag_url_selects_small_assets_and_falls_back_to_regular(tmp_path: Path):
     catalogue_path = tmp_path / "flags.sqlite"
     with sqlite3.connect(catalogue_path) as catalogue:

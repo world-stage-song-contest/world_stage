@@ -522,7 +522,7 @@ _SONG_COLUMNS: LiteralString = """
     country.is_participating, country.cc3, an.flag_variant,
     song.is_placeholder, song.native_language_id, song.title_language_id,
     song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-    account.username, song.year_id, song.poster_link,
+    account.username, song.year_id, song.poster_link, song.vtt_link,
     song.video_link, song.duration, song.snippet_start, song.snippet_end,
     song.snippet2_start, song.snippet2_end,
     song.submitter_id, song.notes, song.sources, song.entry_number,

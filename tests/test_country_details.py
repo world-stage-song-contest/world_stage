@@ -65,3 +65,29 @@ def test_details_page_does_not_offer_download_without_media(client, db):
 
     assert response.status_code == 200
     assert "download=1" not in response.text
+
+
+def test_details_page_attaches_subtitles_to_direct_media(client, db):
+    media_url = "https://media.world-stage.org/song.mp4"
+    vtt_url = "https://media.world-stage.org/song.vtt"
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO song (
+                country_id, year_id, title, artist, is_placeholder,
+                video_link, vtt_link
+            )
+            VALUES ('US', 2025, 'Captioned', 'Test Artist', false, %s, %s)
+            """,
+            (media_url, vtt_url),
+        )
+    db.commit()
+
+    response = client.get("/country/us/2025", headers={"Accept": "text/html"})
+
+    assert response.status_code == 200
+    assert 'crossorigin="anonymous"' in response.text
+    assert (
+        f'<track kind="subtitles" src="{vtt_url}" srclang="en" '
+        'label="Subtitles" default>'
+    ) in response.text

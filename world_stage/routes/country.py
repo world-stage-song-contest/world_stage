@@ -1,3 +1,4 @@
+import html
 import re
 from collections import Counter, defaultdict
 from decimal import Decimal
@@ -394,7 +395,7 @@ mime_types = {
 }
 
 
-def generate_iframe(url: str, img_url: str | None):
+def generate_iframe(url: str, img_url: str | None, vtt_url: str | None = None):
     if "youtu.be" in url:
         video_id = url.split("/")[-1]
         return (f'<iframe src="https://www.youtube.com/embed/{video_id}"'
@@ -418,13 +419,22 @@ def generate_iframe(url: str, img_url: str | None):
         poster = ""
         if mime_type.startswith("audio"):
             poster = f'poster="{img_url}"'
+        subtitles = ""
+        if vtt_url:
+            escaped_vtt_url = html.escape(vtt_url, quote=True)
+            subtitles = (
+                f'<track kind="subtitles" src="{escaped_vtt_url}" srclang="en" '
+                'label="Subtitles" default>'
+            )
         return f'''<video id="video-player"
                     class="video-js vjs-fill"
                     controls
+                    crossorigin="anonymous"
                     {poster}
                     preload="metadata"
                     data-setup='{{"responsive": true}}'>
         <source src="{url}" type="{mime_type}">
+        {subtitles}
         This media format isn't supported for direct playback by your browser.
         <a href="{url}" target="_blank">Watch the video here</a>.
         </video>'''
@@ -448,7 +458,7 @@ def details(code: str, year: int, user: tuple[int, str] | None, permissions: Use
     url = song.video_link
     embed = ""
     if url and url != "N/A":
-        embed = generate_iframe(url, song.poster_link)
+        embed = generate_iframe(url, song.poster_link, song.vtt_link)
     name = get_country_name(code.upper())
 
     user_id = user[0] if user else None
@@ -545,7 +555,7 @@ def _render_song_details(
     url = song.video_link
     embed = ""
     if url and url != "N/A":
-        embed = generate_iframe(url, song.poster_link)
+        embed = generate_iframe(url, song.poster_link, song.vtt_link)
 
     user_id = user[0] if user else None
     can_edit = permissions.can_edit or user_id == song.submitter_id
