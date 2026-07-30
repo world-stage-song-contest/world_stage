@@ -78,6 +78,10 @@ td.header-like {
 .second          { background: var(--result-silver); }
 .third           { background: var(--result-bronze); }
 .last            { background: var(--result-last); }
+.uncoloured      {
+    background: var(--background1);
+    color: var(--foreground1);
+}
 
 td, th {
     transition: opacity 2s;

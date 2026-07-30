@@ -68,8 +68,9 @@
          'second' if place == 2 else
          'third'  if place == 3 else ''
        ) ~ (' last' if is_last else '') %}
-    <td class="number {{ cat_class }} place-cell {{ place_class }}">{{ place }}</td>
-    <td class="number {{ cat_class }} pts-cell   {{ place_class }}">{{ entry.pts }}</td>
+    {% set cell_class = place_class or 'uncoloured' %}
+    <td class="number {{ cat_class }} place-cell {{ cell_class }}">{{ place }}</td>
+    <td class="number {{ cat_class }} pts-cell   {{ cell_class }}">{{ entry.pts }}</td>
   {% else %}
     <td class="number {{ cat_class }} place-cell no-entry"></td>
     <td class="number {{ cat_class }} pts-cell   no-entry"></td>
