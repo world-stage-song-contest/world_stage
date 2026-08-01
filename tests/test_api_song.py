@@ -273,6 +273,32 @@ class TestUpdateSong:
         assert data["artist"] == "New Artist"
         assert data["notes"] == "Some notes"
 
+    def test_logs_second_snippet_changes(self, client, db, bob_headers):
+        song_id = _result(_create_song(client, bob_headers))["id"]
+
+        resp = client.patch(
+            f"/api/song/{song_id}",
+            json={"snippet2_start": "1:00", "snippet2_end": "1:10"},
+            headers=bob_headers,
+        )
+
+        assert resp.status_code == 200
+        with db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT changed_by, changed_fields
+                FROM song_audit_log
+                WHERE song_id = %s AND event_type = 'song_modification'
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (song_id,),
+            )
+            audit = cur.fetchone()
+        assert audit["changed_by"] == 2
+        assert audit["changed_fields"]["snippet2_start"] == {"old": None, "new": "60"}
+        assert audit["changed_fields"]["snippet2_end"] == {"old": None, "new": "70"}
+
     def test_updates_languages(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers, languages=[20]))["id"]
 

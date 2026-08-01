@@ -1665,6 +1665,16 @@ BEGIN
     jsonb_build_object('old', OLD.snippet_end::text, 'new', NEW.snippet_end::text));
     END IF;
 
+    IF OLD.snippet2_start IS DISTINCT FROM NEW.snippet2_start THEN
+    v_changed := v_changed || jsonb_build_object('snippet2_start',
+    jsonb_build_object('old', OLD.snippet2_start::text, 'new', NEW.snippet2_start::text));
+    END IF;
+
+    IF OLD.snippet2_end IS DISTINCT FROM NEW.snippet2_end THEN
+    v_changed := v_changed || jsonb_build_object('snippet2_end',
+    jsonb_build_object('old', OLD.snippet2_end::text, 'new', NEW.snippet2_end::text));
+    END IF;
+
     IF OLD.translated_lyrics IS DISTINCT FROM NEW.translated_lyrics THEN
     v_changed := v_changed || jsonb_build_object('translated_lyrics',
     jsonb_build_object('old', OLD.translated_lyrics, 'new', NEW.translated_lyrics));
