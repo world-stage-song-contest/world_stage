@@ -206,7 +206,9 @@ def get_year_countries(
 
     cursor.execute(
         f"""
-        SELECT country.id AS cc, country.name, country.pot, song.submitter_id AS submitter FROM song
+        SELECT country.id AS cc, country.name, country.pot,
+               song.submitter_id AS submitter
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id {add}
         WHERE song.year_id = %s

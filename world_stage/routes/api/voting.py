@@ -59,7 +59,7 @@ def _show_songs(cursor, show_id: int) -> list[dict]:
                song.title, song.native_title, song.artist, song.submitter_id,
                song_show.running_order
         FROM song_show
-        JOIN song ON song.id = song_show.song_id
+        JOIN current_song AS song ON song.id = song_show.song_id
         JOIN country ON country.id = song.country_id
         WHERE song_show.show_id = %s
         ORDER BY song_show.running_order, song_show.id
@@ -73,7 +73,7 @@ def _voter_countries(cursor, user_id: int, year: int) -> list[dict]:
     cursor.execute(
         """
         SELECT DISTINCT country.id, country.name, country.cc3
-        FROM song
+        FROM current_song AS song
         JOIN country ON country.id = song.country_id
         WHERE song.submitter_id = %s AND song.year_id = %s
         ORDER BY country.name

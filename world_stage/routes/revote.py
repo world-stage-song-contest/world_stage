@@ -116,7 +116,7 @@ def _ballot_selection(cursor, ballot: dict | None) -> dict[int, dict[str, Any]]:
         """
         SELECT vote.song_id, vote.score, country.id AS cc
         FROM vote
-        JOIN song ON vote.song_id = song.id
+        JOIN current_song AS song ON vote.song_id = song.id
         JOIN country ON song.country_id = country.id
         WHERE vote.vote_set_id = %s
         """,
@@ -282,7 +282,7 @@ def song_votes(year: str, show: str, song_id: int):
         """
         SELECT song.id, song.title, song.artist, song.country_id,
                country.name AS country_name
-        FROM song
+        FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
         JOIN country ON country.id = song.country_id
         WHERE song_show.show_id = %s AND song.id = %s
@@ -469,7 +469,7 @@ def results(year: str, show: str):
                 """
                 SELECT s.id AS song_id, SUM(rule.score_cap)::integer AS score_cap
                 FROM song_show ss
-                JOIN song s ON s.id = ss.song_id
+                JOIN current_song s ON s.id = ss.song_id
                 JOIN vote_set vs
                   ON vs.show_id = ss.show_id
                  AND vs.result_mode = 'revote'

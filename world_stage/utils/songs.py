@@ -18,6 +18,7 @@ class Song:
     year: Year
     entry_number: int
     placeholder: bool
+    approval_status: str
     languages: list[Language]
     vote_data: VoteData | None
     submitter: str | None
@@ -115,6 +116,7 @@ class Song:
                 flag_variant=song.get("flag_variant"),
             ),
             placeholder=bool(song["is_placeholder"]),
+            approval_status=song["approval_status"],
             year=year,
             entry_number=song["entry_number"],
             title_lang=_language_from_row(song, "title_language"),
@@ -490,10 +492,12 @@ def get_song_languages(song_id: int) -> list[Language]:
         """
         SELECT language.name, language.tag, language.extlang, language.region, language.subvariant,
                language.suppress_script
-        FROM song_language
-        JOIN language ON song_language.language_id = language.id
-        WHERE song_id = %s
-        ORDER BY priority
+        FROM current_song AS song
+        JOIN language_set_language AS member
+          ON member.language_set_id = song.language_set_id
+        JOIN language ON member.language_id = language.id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -511,13 +515,15 @@ def get_languages_for_songs(song_ids: list[int]) -> dict[int, list[Language]]:
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT song_language.song_id,
+        SELECT song.id AS song_id,
                language.name, language.tag, language.extlang,
                language.region, language.subvariant, language.suppress_script
-        FROM song_language
-        JOIN language ON song_language.language_id = language.id
-        WHERE song_language.song_id = ANY(%s)
-        ORDER BY song_language.song_id, song_language.priority
+        FROM current_song AS song
+        JOIN language_set_language AS member
+          ON member.language_set_id = song.language_set_id
+        JOIN language ON member.language_id = language.id
+        WHERE song.id = ANY(%s)
+        ORDER BY song.id, member.priority
     """,
         (song_ids,),
     )
@@ -536,7 +542,8 @@ _SONG_COLUMNS: LiteralString = """
     song.id, song.title, song.artist, song.native_title,
     song.country_id, COALESCE(an.name, country.name) AS name,
     country.is_participating, country.cc3, an.flag_variant,
-    song.is_placeholder, song.native_language_id, song.title_language_id,
+    song.is_placeholder, song.approval_status,
+    song.native_language_id, song.title_language_id,
     song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
     account.username, song.year_id, song.poster_link, song.vtt_link,
     song.video_link, song.duration, song.snippet_start, song.snippet_end,
@@ -557,7 +564,7 @@ _SONG_COLUMNS: LiteralString = """
     native_language.suppress_script AS native_language_suppress_script"""
 
 _SONG_JOINS: LiteralString = """
-FROM song
+FROM current_song AS song
 JOIN country ON song.country_id = country.id
 LEFT JOIN year ON year.id = song.year_id
 LEFT OUTER JOIN account ON song.submitter_id = account.id

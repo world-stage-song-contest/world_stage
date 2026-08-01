@@ -22,57 +22,45 @@ def _clean_radio_slots(db):
 
 def _add_radio_songs(db):
     with db.cursor() as cursor:
-        cursor.executemany(
-            """
-            INSERT INTO song (
-                submitter_id,
-                country_id,
-                year_id,
-                title,
-                artist,
-                video_link,
-                duration,
-                is_placeholder,
-                entry_number
+        for country, title, link, duration in [
+            ("US", "Song US", "https://media.world-stage.org/us.mp4", 100.0),
+            ("ES", "Song ES", "https://media.world-stage.org/es.m4a", 200.0),
+            ("FR", "Song FR", "https://media.world-stage.org/fr.mov", 301.0),
+        ]:
+            cursor.execute(
+                """INSERT INTO song (country_id, year_id, entry_number)
+                   VALUES (%s, 2024, 1) RETURNING id""",
+                (country,),
             )
-            VALUES (1, %s, 2024, %s, 'Artist', %s, %s, false, 1)
-            """,
-            [
-                ("US", "Song US", "https://media.world-stage.org/us.mp4", 100.0),
-                ("ES", "Song ES", "https://media.world-stage.org/es.m4a", 200.0),
-                ("FR", "Song FR", "https://media.world-stage.org/fr.mov", 301.0),
-            ],
-        )
+            cursor.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist, video_link,
+                       duration
+                   ) VALUES (%s, 1, %s, 'Artist', %s, %s)""",
+                (cursor.fetchone()["id"], title, link, duration),
+            )
     db.commit()
 
 
 def _add_many_radio_songs(db, count=60):
     with db.cursor() as cursor:
-        cursor.executemany(
-            """
-            INSERT INTO song (
-                submitter_id,
-                country_id,
-                year_id,
-                title,
-                artist,
-                video_link,
-                duration,
-                is_placeholder,
-                entry_number
+        for entry_number in range(1, count + 1):
+            cursor.execute(
+                """INSERT INTO song (country_id, year_id, entry_number)
+                   VALUES ('US', 2024, %s) RETURNING id""",
+                (entry_number,),
             )
-            VALUES (1, 'US', 2024, %s, 'Artist', %s, %s, false, %s)
-            """,
-            [
+            cursor.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist, video_link,
+                       duration
+                   ) VALUES (%s, 1, %s, 'Artist', %s, %s)""",
                 (
-                    f"Song {entry_number}",
+                    cursor.fetchone()["id"], f"Song {entry_number}",
                     f"https://media.world-stage.org/song-{entry_number}.mp4",
                     float(90 + entry_number),
-                    entry_number,
-                )
-                for entry_number in range(1, count + 1)
-            ],
-        )
+                ),
+            )
     db.commit()
 
 
@@ -294,15 +282,13 @@ def test_slot_snapshot_survives_catalog_update_and_deletion(db):
     assert scheduled is not None
 
     with db.cursor() as cursor:
-        cursor.execute(
-            """
-            UPDATE song
-            SET title = 'Changed', artist = 'Changed', duration = 999
-            WHERE id = %s
-            """,
-            (scheduled["source_song_id"],),
+        from world_stage.utils.song_revisions import create_song_revision, withdraw_song
+        create_song_revision(
+            cursor, scheduled["source_song_id"],
+            {"title": "Changed", "artist": "Changed", "duration": 999},
+            changed_by=None,
         )
-        cursor.execute("DELETE FROM song WHERE id = %s", (scheduled["source_song_id"],))
+        withdraw_song(cursor, scheduled["source_song_id"], changed_by=None)
     db.commit()
 
     with db.cursor() as cursor:

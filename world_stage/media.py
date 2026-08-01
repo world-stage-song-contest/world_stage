@@ -16,6 +16,7 @@ from flask import Flask
 from flask.cli import with_appcontext
 
 from .db import get_db
+from .utils.song_revisions import create_song_revision
 
 MEDIA_HOST = "media.world-stage.org"
 
@@ -72,7 +73,10 @@ def duration_for_link(
 
 @click.command("backfill-durations")
 @click.option("--workers", default=8, show_default=True, help="Concurrent probes.")
-@click.option("--all", "reprobe_all", is_flag=True, help="Re-probe songs that already have a duration.")
+@click.option(
+    "--all", "reprobe_all", is_flag=True,
+    help="Re-probe songs that already have a duration.",
+)
 @with_appcontext
 def backfill_durations_command(workers: int, reprobe_all: bool):
     """Probe and store durations for songs hosted on media.world-stage.org."""
@@ -82,7 +86,7 @@ def backfill_durations_command(workers: int, reprobe_all: bool):
     cursor.execute(
         f"""
         SELECT id, video_link
-        FROM song
+        FROM current_song AS song
         WHERE video_link LIKE %s {where}
         ORDER BY id
         """,
@@ -97,14 +101,16 @@ def backfill_durations_command(workers: int, reprobe_all: bool):
     failed = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
         durations = pool.map(lambda s: probe_duration(s["video_link"]), songs)
-        for i, (song, duration) in enumerate(zip(songs, durations), 1):
+        for i, (song, duration) in enumerate(zip(songs, durations, strict=True), 1):
             if duration is None:
                 failed += 1
                 click.echo(f"  FAILED {song['video_link']}")
             else:
-                cursor.execute(
-                    "UPDATE song SET duration = %s WHERE id = %s",
-                    (duration, song["id"]),
+                create_song_revision(
+                    cursor,
+                    song["id"],
+                    {"duration": duration},
+                    changed_by=None,
                 )
             if i % 100 == 0:
                 db.commit()

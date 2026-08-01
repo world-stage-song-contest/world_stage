@@ -269,7 +269,10 @@ def submission_context():
         else:
             years["closed"].append(row["id"])
 
-    cursor.execute("SELECT COUNT(*) AS c FROM song WHERE year_id = ANY(%s)", (years["open"],))
+    cursor.execute(
+        "SELECT COUNT(*) AS c FROM current_song AS song WHERE year_id = ANY(%s)",
+        (years["open"],),
+    )
     open_song_count = fetchone(cursor)["c"] if years["open"] else 0
 
     return resp(

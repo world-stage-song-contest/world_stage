@@ -38,16 +38,19 @@ def draw_setup(db, client):
         for cc, submitter in (("US", 1), ("ES", 2), ("FR", 3), ("DE", 1)):
             cur.execute(
                 """
-                INSERT INTO song (
-                    submitter_id, country_id, year_id, title, artist,
-                    is_placeholder, admin_approved
-                )
-                VALUES (%s, %s, 2025, %s, 'Artist', false, true)
+                INSERT INTO song (country_id, year_id)
+                VALUES (%s, 2025)
                 RETURNING id
                 """,
-                (submitter, cc, f"{cc} Song"),
+                (cc,),
             )
             song_ids[cc] = cur.fetchone()["id"]
+            cur.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist
+                   ) VALUES (%s, %s, %s, 'Artist')""",
+                (song_ids[cc], submitter, f"{cc} Song"),
+            )
 
     db.commit()
     client.set_cookie("session", session_id)

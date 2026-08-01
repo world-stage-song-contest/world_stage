@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% macro render_comment_items(comments) %}
+{% for comment in comments %}
+<div class="verification-comment">
+    <div class="verification-comment-body">{{ comment.body }}</div>
+    <div class="verification-comment-attribution">&ndash; <strong>{{ comment.author_username }}</strong>, <time datetime="{{ comment.created_at.isoformat() }}">{{ comment.created_at.strftime('%Y-%m-%d %H:%M') }}</time></div>
+</div>
+{% endfor %}
+{% endmacro %}
+{% macro render_comments(comments, entry, dialog_key) %}
+<div class="verification-comment-list">
+    {{ render_comment_items(comments) }}
+</div>
+<button type="button" class="verification-dialog-open" data-dialog="comments-dialog-{{ dialog_key }}">View all comments</button>
+<dialog id="comments-dialog-{{ dialog_key }}" class="verification-dialog">
+    <button type="button" class="verification-dialog-close" aria-label="Close">[X]</button>
+    <h3>Moderator comments</h3>
+    <p>
+        <strong>{{ entry.country_name or entry.country_id }}</strong><br>
+        {{ entry.artist or 'Unknown artist' }}<br>
+        <em>{{ entry.title or 'Untitled' }}</em>
+    </p>
+    <div class="verification-comment-list verification-comment-list-full">
+        {{ render_comment_items(comments) }}
+    </div>
+</dialog>
+{% endmacro %}
+{% macro render_sources(entry, dialog_key) %}
+<td class="verification-sources">
+    <div class="verification-source-content">{% if entry.sources %}{{ entry.sources|urlize_decoded }}{% else %}<em>No sources specified</em>{% endif %}</div>
+    {% if entry.sources %}
+    <button type="button" class="verification-dialog-open" data-dialog="source-dialog-{{ dialog_key }}">View full sources</button>
+    <dialog id="source-dialog-{{ dialog_key }}" class="verification-dialog verification-dialog-wide">
+        <button type="button" class="verification-dialog-close" aria-label="Close">[X]</button>
+        <h3>Sources</h3>
+        <p>
+            <strong>{{ entry.country_name or entry.country_id }}</strong><br>
+            {{ entry.artist or 'Unknown artist' }}<br>
+            <em>{{ entry.title or 'Untitled' }}</em>
+        </p>
+        <div class="verification-source-full">{{ entry.sources|urlize_decoded }}</div>
+    </dialog>
+    {% endif %}
+</td>
+{% endmacro %}
+{% macro render_historical_entry(entry, year) %}
+<tr id="historical-song-{{ entry.id }}" class="withdrawn-or-replaced">
+    <td class="verification-entry">
+        <strong class="country">{{ flag(entry.country_id, 21, entry.country_name or entry.country_id) }}{{ entry.country_name or entry.country_id }}</strong>
+        {% if entry.entry_number and entry.entry_number > 1 %} (entry {{ entry.entry_number }}){% endif %}
+        <br>
+        {{ entry.artist or 'Unknown artist' }}
+        <br>
+        <em>{{ entry.title or 'Untitled' }}</em>
+        <br>
+        <small>Submitted by {{ entry.submitter_username or 'Unknown user' }}</small>
+        <br><em>{{ 'Withdrawn' if entry.song_deleted else 'Replaced' }}</em>
+        {% if not entry.song_deleted and entry.comments %}
+            {% if year.special_short_name %}
+            <form method="post" action="{{ url_for('admin.merge_replaced_song_special', short_name=year.special_short_name, version_id=entry.id) }}">
+            {% else %}
+            <form method="post" action="{{ url_for('admin.merge_replaced_song', year=year.id, version_id=entry.id) }}">
+            {% endif %}
+                <button type="submit" title="Treat the current artist and title as a correction to this song">Merge</button>
+            </form>
+        {% endif %}
+    </td>
+    {{ render_sources(entry, 'historical-' ~ entry.id) }}
+    <td class="verification-status"><strong>{{ entry.approval_status|replace('-', ' ')|title }}</strong></td>
+    <td class="verification-comments">
+        {% if entry.comments %}{{ render_comments(entry.comments, entry, 'historical-' ~ entry.id) }}{% else %}<p><em>No comments.</em></p>{% endif %}
+    </td>
+</tr>
+{% endmacro %}
+{% block title %}Verifications: {{ year.special_name or year.id }}{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="{{ static('css/verifications.css') }}">
+    <script src="{{ static('js/verifications.js') }}"></script>
+{% endblock %}
+{% block onload %}initializeVerifications(){% endblock %}
+{% block content %}
+
+{% if year.special_short_name %}
+    {% set manage_url = url_for('admin.manage_special', short_name=year.special_short_name) %}
+{% else %}
+    {% set manage_url = url_for('admin.manage', year=year.id) %}
+{% endif %}
+
+{% if songs or deleted_entries %}
+<div class="verification-table-wrapper">
+    <table class="verification-table">
+        <thead>
+            <tr>
+                <th>Entry</th>
+                <th>Sources</th>
+                <th>Verified</th>
+                <th>Moderator comments</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for song in songs %}
+            {% for entry in historical_entries_by_song.get(song.id, []) %}
+                {{ render_historical_entry(entry, year) }}
+            {% endfor %}
+            <tr id="song-{{ song.id }}"{% if song.is_placeholder %} class="placeholder"{% endif %}>
+                <td class="verification-entry">
+                    <strong class="country">{{ flag(song.country_id, 21, song.country_name) }} {{ song.country_name }}</strong>
+                    {% if song.entry_number and song.entry_number > 1 %} (entry {{ song.entry_number }}){% endif %}
+                    <br>
+                    {{ song.artist or 'Unknown artist' }}
+                    <br>
+                    <em>{{ song.title or 'Untitled' }}</em>
+                    <br>
+                    <small>Submitter: {{ song.submitter_username or 'Unknown user' }}</small>
+                </td>
+                {{ render_sources(song, 'song-' ~ song.id) }}
+                <td class="verification-status">
+                    {% if song.approval_status == 'pending' %}
+                    <strong>Pending</strong>
+                    {% elif song.approval_status == 'accepted' %}
+                    <strong>Accepted</strong>
+                    {% elif song.approval_status == 'rejected' %}
+                    <strong>Rejected</strong>
+                    {% else %}
+                    <strong>More information</strong>
+                    {% endif %}
+
+                    {% if year.special_short_name %}
+                    <form class="verification-status-form" method="post" action="{{ url_for('admin.set_verification_status_special', short_name=year.special_short_name, song_id=song.id) }}">
+                    {% else %}
+                    <form class="verification-status-form" method="post" action="{{ url_for('admin.set_verification_status', year=year.id, song_id=song.id) }}">
+                    {% endif %}
+                        <div>
+                            <select id="status-{{ song.id }}" name="status" aria-label="Status">
+                                <option value="pending" {% if song.approval_status == 'pending' %}selected{% endif %}>Pending</option>
+                                <option value="accepted" {% if song.approval_status == 'accepted' %}selected{% endif %}>Accepted</option>
+                                <option value="rejected" {% if song.approval_status == 'rejected' %}selected{% endif %}>Rejected</option>
+                                <option value="more-info" {% if song.approval_status == 'more-info' %}selected{% endif %}>Information</option>
+                            </select>
+                        </div><div>
+                            <button type="submit">Save</button>
+                        </div>
+                        <dialog class="verification-dialog verification-status-dialog">
+                            <button type="button" class="verification-dialog-close" aria-label="Close">[X]</button>
+                            <h3>Message to submitter</h3>
+                            <p>
+                                <strong>{{ song.country_name }}</strong><br>
+                                {{ song.artist or 'Unknown artist' }}<br>
+                                <em>{{ song.title or 'Untitled' }}</em>
+                            </p>
+                            <p class="verification-dialog-prompt"></p>
+                            <label for="message-{{ song.id }}">Explain the decision</label>
+                            <textarea id="message-{{ song.id }}" name="message" rows="6" maxlength="5000"></textarea>
+                            <small>You may use standard formatting here</small>
+                            <div class="verification-dialog-actions">
+                                <button type="submit">Send message and save</button>
+                            </div>
+                        </dialog>
+                    </form>
+                </td>
+                <td class="verification-comments">
+                    {% set comments = comments_by_song.get(song.id, []) %}
+                    {% if comments %}
+                    {{ render_comments(comments, song, 'song-' ~ song.id) }}
+                    <hr>
+                    {% endif %}
+
+                    {% if year.special_short_name %}
+                    <form method="post" action="{{ url_for('admin.add_verification_comment_special', short_name=year.special_short_name, song_id=song.id) }}">
+                    {% else %}
+                    <form method="post" action="{{ url_for('admin.add_verification_comment', year=year.id, song_id=song.id) }}">
+                    {% endif %}
+                        <textarea id="comment-{{ song.id }}" name="comment" rows="3" maxlength="2000"
+                                  required aria-label="Comment"></textarea>
+                        <button type="submit">Add comment</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            {% for entry in deleted_entries %}
+                {{ render_historical_entry(entry, year) }}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p>There are no entries for this year.</p>
+{% endif %}
+{% endblock %}

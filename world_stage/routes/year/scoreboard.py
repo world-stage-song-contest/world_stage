@@ -86,7 +86,7 @@ def special_scores(short_name: str, show: str, permissions: UserPermissions):
         SELECT song_id, score AS pts, username FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
-        JOIN song ON vote.song_id = song.id
+        JOIN current_song AS song ON vote.song_id = song.id
         WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY vote_set.created_at
     """,
@@ -110,7 +110,7 @@ def special_scores(short_name: str, show: str, permissions: UserPermissions):
     for voter_username in vote_order:
         cursor.execute(
             """
-            SELECT song.id FROM song
+            SELECT song.id FROM current_song AS song
             JOIN account ON song.submitter_id = account.id
             JOIN song_show ON song.id = song_show.song_id
             WHERE account.username = %s AND song_show.show_id = %s
@@ -198,7 +198,7 @@ def scores(year: int, show: str, permissions: UserPermissions):
         SELECT song_id, score AS pts, username FROM vote
         JOIN vote_set ON vote.vote_set_id = vote_set.id
         JOIN account ON vote_set.voter_id = account.id
-        JOIN song ON vote.song_id = song.id
+        JOIN current_song AS song ON vote.song_id = song.id
         WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
         ORDER BY vote_set.created_at
     """,
@@ -222,7 +222,7 @@ def scores(year: int, show: str, permissions: UserPermissions):
     for voter_username in vote_order:
         cursor.execute(
             """
-            SELECT song.id FROM song
+            SELECT song.id FROM current_song AS song
             JOIN account ON song.submitter_id = account.id
             JOIN song_show ON song.id = song_show.song_id
             WHERE account.username = %s AND song_show.show_id = %s

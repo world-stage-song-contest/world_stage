@@ -920,10 +920,10 @@ def test_invited_participant_can_leave_but_owner_cannot(client, db):
     assert thread.status_code == 200
     assert f'action="/messages/{conversation_id}/leave"' in thread.text
     assert '<button type="submit">Leave conversation</button>' in thread.text
-    assert '<details class="conversation-options">' in thread.text
+    assert '<details class="conversation-options constrained">' in thread.text
     assert "<summary>Conversation options</summary>" in thread.text
     assert thread.text.index('class="reply-panel"') < thread.text.index(
-        'class="conversation-options"'
+        'class="conversation-options constrained"'
     )
 
     response = client.post(f"/messages/{conversation_id}/leave")

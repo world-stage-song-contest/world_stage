@@ -1,34 +1,44 @@
 {% extends "base.html" %}
 {% block title %}Song audit log{% endblock %}
 {% block headercontents %}
+    <script src="{{ static('js/admin_changes.js') }}"></script>
     <style>
         .event-badge {
             display: inline-block;
+            margin: 0.1em;
             padding: 0.15em 0.5em;
             border-radius: 3px;
             font-size: 0.85em;
             font-weight: bold;
             white-space: nowrap;
         }
-        .event-create           { background: var(--audit-create-bg); color: var(--audit-create-fg); }
-        .event-song_modification      { background: var(--audit-modification-bg); color: var(--audit-modification-fg); }
-        .event-song_replacement { background: var(--audit-replacement-bg); color: var(--audit-replacement-fg); }
-        .event-placeholder_on  { background: var(--audit-placeholder-on-bg); color: var(--audit-placeholder-on-fg); }
-        .event-placeholder_off { background: var(--audit-placeholder-off-bg); color: var(--audit-placeholder-off-fg); }
-        .event-ownership_change { background: var(--audit-ownership-bg); color: var(--audit-ownership-fg); }
-        .event-delete          { background: var(--audit-delete-bg); color: var(--audit-delete-fg); }
-        td.changed-fields    { font-size: 0.85em; max-width: 28em; word-break: break-word; }
-        .arrow { margin: 0 0.3em; color: var(--audit-arrow); }
+        .event-creation { background: var(--audit-create-bg); color: var(--audit-create-fg); }
+        .event-deletion { background: var(--audit-delete-bg); color: var(--audit-delete-fg); }
+        .event-replacement { background: var(--audit-replacement-bg); color: var(--audit-replacement-fg); }
+        .event-modification, .event-status_change {
+            background: var(--audit-modification-bg);
+            color: var(--audit-modification-fg);
+        }
+        .event-placeholder {
+            background: var(--audit-placeholder-on-bg);
+            color: var(--audit-placeholder-on-fg);
+        }
+        td.changed-fields { font-size: 0.85em; max-width: 28em; word-break: break-word; }
+        .change-details > div + div { margin-top: 0.2em; }
 
         .filter-form {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 0.75em;
             margin-bottom: 1em;
-            padding: 0.5em;
+            padding: 0.75em;
             background: var(--background3);
             border: 1px solid var(--border-ui);
+        }
+        .filter-form fieldset {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5em 1em;
+            margin: 0 0 0.75em;
+            padding: 0.5em;
+            border: 1px solid var(--border-subtle);
         }
         .filter-form label {
             display: inline-flex;
@@ -37,6 +47,58 @@
             cursor: pointer;
             font-size: 0.9em;
         }
+        .audit-filter-list {
+            display: grid;
+            grid-template-columns:
+                max-content max-content max-content
+                minmax(0, 1fr) minmax(0, 1fr) max-content;
+            gap: 0.5em;
+            width: 100%;
+        }
+        .audit-filter-row {
+            display: grid;
+            grid-template-columns: subgrid;
+            grid-column: 1 / -1;
+            align-items: center;
+            width: 100%;
+        }
+        .audit-filter-row select,
+        .audit-filter-row input { min-width: 0; }
+        .audit-filter-join {
+            justify-self: stretch;
+            width: 100%;
+        }
+        .audit-filter-not,
+        .audit-filter-field {
+            justify-self: start;
+            width: auto;
+            max-width: 100%;
+        }
+        .audit-filter-from-container,
+        .audit-filter-to-container {
+            display: flex;
+            gap: 0.35em;
+            min-width: 0;
+        }
+        .audit-filter-from-container > *,
+        .audit-filter-to-container > * {
+            box-sizing: border-box;
+            min-width: 0;
+        }
+        .audit-filter-from-container > .audit-filter-from,
+        .audit-filter-to-container > .audit-filter-to { flex: 1; }
+        .audit-filter-from-container > [class$="-operator"],
+        .audit-filter-to-container > [class$="-operator"] { flex: 0 0 auto; }
+        .audit-filter-from-container > .audit-filter-sensitivity,
+        .audit-filter-to-container > .audit-filter-sensitivity {
+            flex: 0 0 auto;
+        }
+        @media (max-width: 42rem) {
+            .audit-filter-list { grid-template-columns: 1fr 1fr; }
+            .audit-filter-from-container,
+            .audit-filter-to-container { display: flex; }
+        }
+        .filter-actions { display: flex; align-items: center; gap: 1em; }
         .pagination {
             display: flex;
             align-items: center;
@@ -44,37 +106,61 @@
             margin-top: 0.75em;
             font-size: 0.9em;
         }
-        .pagination a, .pagination span.current {
+        .pagination a {
             padding: 0.2em 0.6em;
             border: 1px solid var(--border-subtle);
             text-decoration: none;
         }
-        .pagination span.current {
-            background: var(--foreground2);
-            color: var(--background2);
-            font-weight: bold;
-        }
     </style>
 {% endblock %}
+{% block onload %}initializeAuditFilters(){% endblock %}
 {% block content %}
-<h2>Song audit log <small style="font-weight:normal;font-size:0.65em">({{ total }} entries)</small></h2>
 
 <form method="get" action="{{ url_for('admin.changes') }}" class="filter-form">
-    <strong>Filter:</strong>
-    {% for et in all_event_types %}
-    <label>
-        <input type="checkbox" name="events" value="{{ et }}"
-               {{ 'checked' if et in selected_events else '' }}>
-        {{ et | replace('_', ' ') }}
-    </label>
-    {% endfor %}
-    <button type="submit">Apply</button>
+    <fieldset>
+        <legend>Event categories</legend>
+        {% for value, label in event_categories.items() %}
+        <label>
+            <input type="checkbox" name="events" value="{{ value }}"
+                   {{ 'checked' if value in selected_events else '' }}>
+            {{ label }}
+        </label>
+        {% endfor %}
+    </fieldset>
+
+    <fieldset>
+        <legend>Timespan</legend>
+        <label>
+            From
+            <input type="datetime-local" name="from_time" value="{{ from_time }}">
+        </label>
+        <label>
+            To
+            <input type="datetime-local" name="to_time" value="{{ to_time }}">
+        </label>
+    </fieldset>
+
+    <fieldset>
+        <legend>Field filters</legend>
+        <div id="audit-filter-list" class="audit-filter-list"
+             data-fields="{{ filter_fields|tojson|forceescape }}"
+             data-filters="{{ selected_filters|tojson|forceescape }}"></div>
+        <button type="button" id="add-audit-filter">Add filter</button>
+        <input type="hidden" name="filters" id="audit-filters-json"
+               value="{{ serialized_filters }}">
+    </fieldset>
+
+    <div class="filter-actions">
+        <button type="submit">Apply</button>
+        <button type="button" id="reset-audit-filters"
+                data-url="{{ url_for('admin.changes') }}">Reset</button>
+    </div>
 </form>
 
 <table>
     <thead>
         <tr>
-            <th>Event</th>
+            <th>Categories</th>
             <th>When</th>
             <th>By</th>
             <th>Country</th>
@@ -88,9 +174,11 @@
     {% for entry in changes %}
         <tr>
             <td>
-                <span class="event-badge event-{{ entry.event_type }}">
-                    {{ entry.event_type | replace('_', ' ') }}
+                {% for category in entry.event_categories %}
+                <span class="event-badge event-{{ category }}">
+                    {{ event_categories[category] }}
                 </span>
+                {% endfor %}
             </td>
             <td style="white-space:nowrap">{{ entry.changed_at.strftime('%Y-%m-%d %H:%M') }}</td>
             <td>{{ entry.changed_by_username or '—' }}</td>
@@ -109,44 +197,30 @@
             </td>
             <td>{{ entry.song_artist or '—' }}</td>
             <td>{{ entry.song_title or '—' }}</td>
-            <td class="changed-fields">
-                {% if entry.event_type == 'song_replacement' and entry.changed_fields %}
-                    {% if entry.changed_fields.title.old != entry.changed_fields.title.new %}
-                        Title: {{ entry.changed_fields.title.old or '' }}<span class="arrow">→</span>{{ entry.changed_fields.title.new or '' }}<br>
-                    {% endif %}
-                    {% if entry.changed_fields.artist.old != entry.changed_fields.artist.new %}
-                        Artist: {{ entry.changed_fields.artist.old or '' }}<span class="arrow">→</span>{{ entry.changed_fields.artist.new or '' }}
-                    {% endif %}
-                {% elif entry.event_type == 'ownership_change' and entry.changed_fields %}
-                    Submitter: {{ username_map.get(entry.changed_fields.submitter_id.old, '—') }}<span class="arrow">→</span>{{ username_map.get(entry.changed_fields.submitter_id.new, '—') }}
-                {% elif entry.event_type == 'song_modification' and entry.changed_fields %}
-                    {{ entry.changed_fields.keys() | join(', ') }}
-                {% endif %}
+            <td class="changed-fields change-details">
+                {% for detail in entry.change_details %}<div>{{ detail }}</div>{% else %}—{% endfor %}
             </td>
         </tr>
     {% endfor %}
     {% if not changes %}
-        <tr><td colspan="8" style="text-align:center;padding:1em">No entries yet.</td></tr>
+        <tr><td colspan="8" style="text-align:center;padding:1em">No entries found.</td></tr>
     {% endif %}
     </tbody>
 </table>
 
-{% if total_pages > 1 %}
+{% set filter_args = {
+    'events': selected_events,
+    'filters': serialized_filters,
+    'from_time': from_time,
+    'to_time': to_time
+} %}
+{% if before or next_before %}
 <nav class="pagination">
-    {% if page > 1 %}
-        <a href="{{ url_for('admin.changes', page=page-1, events=selected_events) }}">← Prev</a>
+    {% if before %}
+        <a href="{{ url_for('admin.changes', **filter_args) }}">← Newest</a>
     {% endif %}
-    {% for p in range(1, total_pages + 1) %}
-        {% if p == page %}
-            <span class="current">{{ p }}</span>
-        {% elif p <= 3 or p > total_pages - 3 or (p >= page - 2 and p <= page + 2) %}
-            <a href="{{ url_for('admin.changes', page=p, events=selected_events) }}">{{ p }}</a>
-        {% elif p == 4 or p == total_pages - 3 %}
-            <span>…</span>
-        {% endif %}
-    {% endfor %}
-    {% if page < total_pages %}
-        <a href="{{ url_for('admin.changes', page=page+1, events=selected_events) }}">Next →</a>
+    {% if next_before %}
+        <a href="{{ url_for('admin.changes', before=next_before, **filter_args) }}">Older →</a>
     {% endif %}
 </nav>
 {% endif %}

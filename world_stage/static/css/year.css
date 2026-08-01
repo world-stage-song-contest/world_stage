@@ -40,6 +40,16 @@
     width: fit-content;
 }
 
+/* These reuse the theme-aware audit backgrounds: both remain subtle enough
+   for normal table text while switching to dark surfaces in dark mode. */
+.songs-table tr.verification-accepted {
+    background-color: var(--audit-create-bg);
+}
+
+.songs-table tr.verification-rejected {
+    background-color: var(--audit-delete-bg);
+}
+
 tr {
     transition: opacity 2s;
 }

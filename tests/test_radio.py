@@ -1,6 +1,7 @@
 """Tests for the database-backed /radio endpoints."""
 
 from world_stage import create_app
+from world_stage.utils.song_revisions import set_song_status
 
 
 def _add_song(
@@ -19,12 +20,20 @@ def _add_song(
     with db.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO song (submitter_id, country_id, year_id, title, artist,
-                video_link, duration, is_placeholder, entry_number, poster_link, vtt_link)
-            VALUES (1, %s, %s, %s, 'Artist', %s, %s, %s, %s, %s, %s)
+            INSERT INTO song (country_id, year_id, entry_number)
+            VALUES (%s, %s, %s) RETURNING id
             """,
-            (cc, year, title, link, duration, placeholder, entry, poster, vtt),
+            (cc, year, entry),
         )
+        song_id = cur.fetchone()["id"]
+        cur.execute(
+            """INSERT INTO song_data (
+                   song_id, submitter_id, title, artist, video_link, duration,
+                   poster_link, vtt_link
+               ) VALUES (%s, 1, %s, 'Artist', %s, %s, %s, %s)""",
+            (song_id, title, link, duration, poster, vtt),
+        )
+        set_song_status(cur, song_id, changed_by=1, is_placeholder=placeholder)
     db.commit()
 
 

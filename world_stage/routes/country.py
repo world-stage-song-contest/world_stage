@@ -20,9 +20,11 @@ from ..utils import (
     get_special_songs_for_country,
     render_template,
     require_permissions,
+    require_user,
     resolve_country_code,
     with_auth,
 )
+from ..utils.song_revisions import create_song_revision
 
 bp = Blueprint("country", __name__, url_prefix="/country")
 
@@ -512,10 +514,15 @@ def details(code: str, year: int, user: tuple[int, str] | None, permissions: Use
 
 @bp.post("/duration/<int:song_id>")
 @require_permissions(lambda p: p.can_edit)
-def update_duration(song_id: int, permissions: UserPermissions):
+@require_user()
+def update_duration(
+    song_id: int,
+    permissions: UserPermissions,
+    user: tuple[int, str],
+):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT video_link FROM song WHERE id = %s", (song_id,))
+    cursor.execute("SELECT video_link FROM current_song AS song WHERE id = %s", (song_id,))
     row = cursor.fetchone()
     if not row:
         return render_template("error.html", error=f"Song {song_id} not found"), 404
@@ -526,7 +533,12 @@ def update_duration(song_id: int, permissions: UserPermissions):
             "error.html", error="Could not read the duration from the media file"
         ), 502
 
-    cursor.execute("UPDATE song SET duration = %s WHERE id = %s", (duration, song_id))
+    create_song_revision(
+        cursor,
+        song_id,
+        {"duration": duration},
+        changed_by=user[0],
+    )
     db.commit()
     return redirect(request.referrer or url_for("country.index"))
 

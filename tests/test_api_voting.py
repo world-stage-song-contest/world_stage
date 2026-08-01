@@ -89,15 +89,20 @@ def _seed_show_and_songs(db):
         ):
             cursor.execute(
                 """
-                INSERT INTO song (
-                    country_id, year_id, submitter_id, title, artist, is_placeholder, entry_number
-                )
-                VALUES (%s, 2025, %s, %s, 'Artist', false, %s)
+                INSERT INTO song (country_id, year_id, entry_number)
+                VALUES (%s, 2025, %s)
                 RETURNING id
                 """,
-                (country_id, submitter_id, title, entry_number),
+                (country_id, entry_number),
             )
-            song_ids.append(cursor.fetchone()["id"])
+            song_id = cursor.fetchone()["id"]
+            song_ids.append(song_id)
+            cursor.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist
+                   ) VALUES (%s, %s, %s, 'Artist')""",
+                (song_id, submitter_id, title),
+            )
         cursor.executemany(
             "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
             [
@@ -202,18 +207,19 @@ def test_show_results_are_rebuilt_once_after_a_complete_ballot(db):
 def test_show_song_loading_batches_languages_and_vote_data(app, db):
     song_ids = _seed_show_and_songs(db)
     with db.cursor() as cursor:
-        cursor.execute(
-            """
-            UPDATE song
-            SET title_language_id = 20, native_language_id = 20
-            WHERE id = ANY(%s)
-            """,
-            (song_ids,),
-        )
-        cursor.executemany(
-            "INSERT INTO song_language (song_id, language_id, priority) VALUES (%s, %s, 0)",
-            [(song_id, 20) for song_id in song_ids],
-        )
+        from world_stage.routes.api.song import _get_or_create_language_set
+        from world_stage.utils.song_revisions import create_song_revision
+        language_set_id = _get_or_create_language_set(cursor, [20])
+        for song_id in song_ids:
+            create_song_revision(
+                cursor, song_id,
+                {
+                    "title_language_id": 20,
+                    "native_language_id": 20,
+                    "language_set_id": language_set_id,
+                },
+                changed_by=None,
+            )
         cursor.execute(
             """
             INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
@@ -283,9 +289,14 @@ def test_show_song_loading_uses_materialized_results_without_ballots(app, db):
 def test_winner_loading_hydrates_only_the_materialized_winner(app, db):
     song_ids = _seed_show_and_songs(db)
     with db.cursor() as cursor:
-        cursor.execute(
-            "INSERT INTO song_language (song_id, language_id, priority) VALUES (%s, 20, 0)",
-            (song_ids[1],),
+        from world_stage.routes.api.song import _get_or_create_language_set
+        from world_stage.utils.song_revisions import create_song_revision
+        language_set_id = _get_or_create_language_set(cursor, [20])
+        create_song_revision(
+            cursor,
+            song_ids[1],
+            {"language_set_id": language_set_id},
+            changed_by=None,
         )
         cursor.execute(
             """
@@ -520,9 +531,9 @@ class TestVotingApi:
                 """,
                 (song_ids[0],),
             )
-            cursor.execute(
-                "UPDATE song SET submitter_id = 2 WHERE id = %s",
-                (song_ids[1],),
+            from world_stage.utils.song_revisions import create_song_revision
+            create_song_revision(
+                cursor, song_ids[1], {"submitter_id": 2}, changed_by=None
             )
         db.commit()
 

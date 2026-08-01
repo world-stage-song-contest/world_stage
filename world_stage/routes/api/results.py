@@ -59,7 +59,7 @@ def _draw_entries(cursor, show_id: int) -> list[dict]:
                song.title, song.native_title, song.artist, song.entry_number,
                song_show.running_order
         FROM song_show
-        JOIN song ON song.id = song_show.song_id
+        JOIN current_song AS song ON song.id = song_show.song_id
         JOIN country ON country.id = song.country_id
         WHERE song_show.show_id = %s
         ORDER BY song_show.running_order, song_show.id
@@ -88,7 +88,7 @@ def _result_entries(cursor, show_id: int) -> list[dict]:
                country_show_results.max_pts, country_show_results.total_voters,
                COALESCE(song_show.penalty, 0) AS penalty
         FROM country_show_results
-        JOIN song ON song.id = country_show_results.song_id
+        JOIN current_song AS song ON song.id = country_show_results.song_id
         LEFT JOIN song_show
           ON song_show.song_id = country_show_results.song_id
          AND song_show.show_id = country_show_results.show_id

@@ -7,6 +7,7 @@ from . import (  # noqa: F401 — importing the modules registers their routes o
     misc,
     move,
     recap,
+    verifications,
 )
 from .common import bp
 

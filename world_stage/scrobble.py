@@ -268,7 +268,8 @@ def send_to_all(user_id, *, artist, track, timestamp=None, duration=None, album=
                 )
             else:
                 ok = scrobble(
-                    account["service"], account["session_key"], artist, track, timestamp, album, duration
+                    account["service"], account["session_key"], artist, track,
+                    timestamp, album, duration,
                 )
         return account["id"] if (ok and timestamp is not None) else None
 

@@ -32,13 +32,19 @@ def test_revote_keeps_official_results_unchanged(client, db):
         for country, title in (("US", "Original winner"), ("ES", "Revote winner")):
             cursor.execute(
                 """
-                INSERT INTO song (country_id, year_id, title, artist, is_placeholder)
-                VALUES (%s, 2024, %s, 'Artist', false)
+                INSERT INTO song (country_id, year_id)
+                VALUES (%s, 2024)
                 RETURNING id
                 """,
-                (country, title),
+                (country,),
             )
-            song_ids.append(cursor.fetchone()["id"])
+            song_id = cursor.fetchone()["id"]
+            song_ids.append(song_id)
+            cursor.execute(
+                """INSERT INTO song_data (song_id, title, artist)
+                   VALUES (%s, %s, 'Artist')""",
+                (song_id, title),
+            )
         cursor.executemany(
             "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
             [(song_id, show_id, position) for position, song_id in enumerate(song_ids, start=1)],
@@ -242,7 +248,10 @@ def test_revote_keeps_official_results_unchanged(client, db):
         assert cursor.fetchone()["count"] == 1
 
     with db.cursor() as cursor:
-        cursor.execute("UPDATE song SET submitter_id = 3 WHERE id = %s", (song_ids[0],))
+        from world_stage.utils.song_revisions import create_song_revision
+        create_song_revision(
+            cursor, song_ids[0], {"submitter_id": 3}, changed_by=None
+        )
     db.commit()
 
     response = client.get("/revote/2024/rv/vote", headers={"Accept": "text/html"})

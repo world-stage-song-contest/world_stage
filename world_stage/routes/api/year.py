@@ -66,7 +66,7 @@ SELECT year.id, year.status, year.host_id, country.name, country.cc3,
        COUNT(song.is_placeholder) FILTER(WHERE song.is_placeholder = true) AS placeholders
 FROM year
 LEFT OUTER JOIN country ON year.host_id = country.id
-JOIN song ON song.year_id = year.id
+JOIN current_song AS song ON song.year_id = year.id
 WHERE year.id = %s
 GROUP BY year.id, country.id
 ORDER BY year.id
@@ -104,10 +104,10 @@ def songs(id: int):
                song.snippet_start, song.snippet_end,
                song.snippet2_start, song.snippet2_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
-               song.notes, song.sources, song.admin_approved,
+               song.notes, song.sources,
                song.submitter_id, account.username, song.entry_number,
                song.duration, year.special_short_name
-        FROM song
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         LEFT JOIN year ON year.id = song.year_id
         LEFT JOIN account ON song.submitter_id = account.id

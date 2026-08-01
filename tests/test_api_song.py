@@ -55,6 +55,45 @@ class TestGetSongById:
         assert langs[0]["id"] == 20
         assert langs[1]["id"] == 30
 
+    def test_reuses_identical_ordered_language_sets(
+        self, client, db, alice_headers
+    ):
+        first = _result(
+            _create_song(client, alice_headers, country="US", languages=[20, 30])
+        )
+        second = _result(
+            _create_song(client, alice_headers, country="ES", languages=[20, 30])
+        )
+
+        with db.cursor() as cursor:
+            cursor.execute(
+                """SELECT language_set_id FROM current_song
+                   WHERE id = ANY(%s) ORDER BY id""",
+                ([first["id"], second["id"]],),
+            )
+            set_ids = [row["language_set_id"] for row in cursor]
+            cursor.execute(
+                """SELECT COUNT(*) AS count FROM language_set
+                   WHERE language_ids = %s::bigint[]""",
+                ([20, 30],),
+            )
+            assert cursor.fetchone()["count"] == 1
+        assert set_ids[0] == set_ids[1]
+
+    def test_language_order_defines_distinct_sets(self, client, db, alice_headers):
+        _create_song(client, alice_headers, country="US", languages=[20, 30])
+        _create_song(client, alice_headers, country="ES", languages=[30, 20])
+
+        with db.cursor() as cursor:
+            cursor.execute(
+                """SELECT language_ids FROM language_set
+                   WHERE language_ids IN (%s::bigint[], %s::bigint[])""",
+                ([20, 30], [30, 20]),
+            )
+            assert {tuple(row["language_ids"]) for row in cursor} == {
+                (20, 30), (30, 20)
+            }
+
     def test_not_found(self, client):
         resp = client.get("/api/song/999999")
         assert resp.status_code == 404
@@ -96,12 +135,29 @@ class TestGetSongByCountryYear:
 
 
 class TestCreateSong:
-    def test_creates_song(self, client, bob_headers):
+    def test_creates_song(self, client, db, bob_headers):
         resp = _create_song(client, bob_headers)
         assert resp.status_code == 201
         data = _result(resp)
         assert data["title"] == "Test Song"
         assert data["submitter_id"] == 2  # bob
+        assert "approval_status" not in data
+        assert "admin_approved" not in data
+        with db.cursor() as cursor:
+            cursor.execute(
+                "SELECT changed_by FROM current_song WHERE id = %s",
+                (data["id"],),
+            )
+            assert cursor.fetchone()["changed_by"] == 2
+
+    def test_create_cannot_set_approval_status(self, client, db, alice_headers):
+        resp = _create_song(client, alice_headers, approval_status="accepted")
+        assert resp.status_code == 201
+        data = _result(resp)
+        assert "approval_status" not in data
+        with db.cursor() as cursor:
+            cursor.execute("SELECT approval_status FROM current_song WHERE id = %s", (data["id"],))
+            assert cursor.fetchone()["approval_status"] == "pending"
 
     def test_returns_location_header(self, client, bob_headers):
         resp = _create_song(client, bob_headers)
@@ -124,10 +180,13 @@ class TestCreateSong:
         )
         assert resp.status_code == 401
 
-    def test_rejects_duplicate(self, client, bob_headers):
-        _create_song(client, bob_headers, country="US")
+    def test_assigns_next_entry_number_for_same_country(self, client, bob_headers):
+        first = _create_song(client, bob_headers, country="US")
         resp = _create_song(client, bob_headers, country="US")
-        assert resp.status_code == 409
+        assert first.status_code == 201
+        assert resp.status_code == 201
+        assert _result(first)["entry_number"] == 1
+        assert _result(resp)["entry_number"] == 2
 
     def test_requires_year_and_country(self, client, bob_headers):
         resp = client.post("/api/song", json={"title": "X"}, headers=bob_headers)
@@ -149,9 +208,9 @@ class TestCreateSong:
         resp = _create_song(client, bob_headers, sources="")
         assert resp.status_code == 400
 
-    def test_admin_can_skip_required_fields(self, client, alice_headers):
+    def test_admin_cannot_skip_artist_and_title(self, client, alice_headers):
         resp = _create_song(client, alice_headers, title="", artist="", sources="")
-        assert resp.status_code == 201
+        assert resp.status_code == 400
 
     def test_admin_can_set_submitter_id(self, client, alice_headers):
         resp = _create_song(client, alice_headers, submitter_id=2)
@@ -273,6 +332,31 @@ class TestUpdateSong:
         assert data["artist"] == "New Artist"
         assert data["notes"] == "Some notes"
 
+    def test_placeholder_change_only_appends_song_status(
+        self, client, db, bob_headers
+    ):
+        song_id = _result(_create_song(client, bob_headers))["id"]
+
+        response = client.patch(
+            f"/api/song/{song_id}",
+            json={"is_placeholder": True},
+            headers=bob_headers,
+        )
+
+        assert response.status_code == 200
+        assert _result(response)["is_placeholder"] is True
+        with db.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) AS count FROM song_data WHERE song_id = %s",
+                (song_id,),
+            )
+            assert cursor.fetchone()["count"] == 1
+            cursor.execute(
+                "SELECT COUNT(*) AS count FROM song_status WHERE song_id = %s",
+                (song_id,),
+            )
+            assert cursor.fetchone()["count"] == 2
+
     def test_logs_second_snippet_changes(self, client, db, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
@@ -287,7 +371,7 @@ class TestUpdateSong:
             cur.execute(
                 """
                 SELECT changed_by, changed_fields
-                FROM song_audit_log
+                FROM song_change
                 WHERE song_id = %s AND event_type = 'song_modification'
                 ORDER BY id DESC
                 LIMIT 1
@@ -296,8 +380,8 @@ class TestUpdateSong:
             )
             audit = cur.fetchone()
         assert audit["changed_by"] == 2
-        assert audit["changed_fields"]["snippet2_start"] == {"old": None, "new": "60"}
-        assert audit["changed_fields"]["snippet2_end"] == {"old": None, "new": "70"}
+        assert audit["changed_fields"]["snippet2_start"] == {"old": None, "new": 60}
+        assert audit["changed_fields"]["snippet2_end"] == {"old": None, "new": 70}
 
     def test_updates_languages(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers, languages=[20]))["id"]
@@ -308,6 +392,31 @@ class TestUpdateSong:
         assert resp.status_code == 200
         langs = _result(resp)["languages"]
         assert [lang["id"] for lang in langs] == [30, 40]
+
+    def test_language_change_is_stored_on_the_new_revision(
+        self, client, db, bob_headers
+    ):
+        song_id = _result(
+            _create_song(client, bob_headers, languages=[20])
+        )["id"]
+
+        response = client.patch(
+            f"/api/song/{song_id}", json={"languages": [30, 40]},
+            headers=bob_headers,
+        )
+        assert response.status_code == 200
+
+        with db.cursor() as cursor:
+            cursor.execute(
+                """SELECT language_set.language_ids
+                   FROM song_data
+                   JOIN language_set
+                     ON language_set.id = song_data.language_set_id
+                   WHERE song_data.song_id = %s
+                   ORDER BY song_data.created_at, song_data.id""",
+                (song_id,),
+            )
+            assert [row["language_ids"] for row in cursor] == [[20], [30, 40]]
 
     def test_requires_auth(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
@@ -346,22 +455,21 @@ class TestUpdateSong:
         resp = client.patch(f"/api/song/{song_id}", json={}, headers=bob_headers)
         assert resp.status_code == 400
 
-    def test_admin_approved_only_by_admin(self, client, bob_headers, alice_headers):
+    def test_patch_cannot_set_approval_status(
+        self, client, db, bob_headers, alice_headers
+    ):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        # bob can't set admin_approved
         resp = client.patch(
-            f"/api/song/{song_id}", json={"admin_approved": True, "title": "T"}, headers=bob_headers
+            f"/api/song/{song_id}",
+            json={"approval_status": "accepted", "title": "T"},
+            headers=alice_headers,
         )
         assert resp.status_code == 200
-        assert _result(resp)["admin_approved"] is False
-
-        # alice can
-        resp = client.patch(
-            f"/api/song/{song_id}", json={"admin_approved": True}, headers=alice_headers
-        )
-        assert resp.status_code == 200
-        assert _result(resp)["admin_approved"] is True
+        assert "approval_status" not in _result(resp)
+        with db.cursor() as cursor:
+            cursor.execute("SELECT approval_status FROM current_song WHERE id = %s", (song_id,))
+            assert cursor.fetchone()["approval_status"] == "pending"
 
     def test_clears_nullable_field(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers, video_link="http://example.com"))["id"]
@@ -378,7 +486,7 @@ class TestSongDuration:
 
     def _stored_duration(self, db, song_id):
         with db.cursor() as cur:
-            cur.execute("SELECT duration FROM song WHERE id = %s", (song_id,))
+            cur.execute("SELECT duration FROM current_song WHERE id = %s", (song_id,))
             return cur.fetchone()["duration"]
 
     def test_create_with_media_link_probes_duration(self, client, db, bob_headers, monkeypatch):
@@ -440,14 +548,18 @@ class TestSongDuration:
         with db.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO song (submitter_id, country_id, year_id, title, artist,
-                    video_link, is_placeholder)
-                VALUES (1, 'US', 2024, 'Backfill me', 'Artist', %s, false)
+                INSERT INTO song (country_id, year_id)
+                VALUES ('US', 2024)
                 RETURNING id
                 """,
-                (self.MEDIA_LINK,),
             )
             song_id = cur.fetchone()["id"]
+            cur.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist, video_link
+                   ) VALUES (%s, 1, 'Backfill me', 'Artist', %s)""",
+                (song_id, self.MEDIA_LINK),
+            )
         db.commit()
 
         monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 154.2)
@@ -486,7 +598,7 @@ def _put_song(client, headers, song_id, **overrides):
 
 
 class TestReplaceSong:
-    def test_replaces_all_fields(self, client, bob_headers):
+    def test_replaces_all_fields(self, client, db, bob_headers):
         song_id = _result(
             _create_song(client, bob_headers, notes="old notes", video_link="http://old.com")
         )["id"]
@@ -509,6 +621,12 @@ class TestReplaceSong:
         # Fields not included in PUT body are cleared
         assert data["notes"] is None
         assert data["video_link"] is None
+        with db.cursor() as cursor:
+            cursor.execute(
+                "SELECT changed_by FROM current_song WHERE id = %s",
+                (song_id,),
+            )
+            assert cursor.fetchone()["changed_by"] == 2
 
     def test_requires_auth(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
@@ -559,11 +677,11 @@ class TestReplaceSong:
         resp = _put_song(client, bob_headers, song_id, title="")
         assert resp.status_code == 400
 
-    def test_admin_can_clear_required(self, client, alice_headers):
+    def test_admin_cannot_clear_artist_and_title(self, client, alice_headers):
         song_id = _result(_create_song(client, alice_headers))["id"]
 
         resp = _put_song(client, alice_headers, song_id, title="", artist="", sources="")
-        assert resp.status_code == 200
+        assert resp.status_code == 400
 
     def test_replaces_languages(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers, languages=[20, 30]))["id"]
@@ -588,18 +706,15 @@ class TestReplaceSong:
         assert resp.status_code == 200
         assert _result(resp)["submitter_id"] == 3
 
-    def test_admin_approved_only_by_admin(self, client, bob_headers, alice_headers):
+    def test_put_cannot_set_approval_status(self, client, db, bob_headers, alice_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
-        # bob can't set admin_approved
-        resp = _put_song(client, bob_headers, song_id, admin_approved=True)
+        resp = _put_song(client, alice_headers, song_id, approval_status="accepted")
         assert resp.status_code == 200
-        assert _result(resp)["admin_approved"] is False
-
-        # alice can
-        resp = _put_song(client, alice_headers, song_id, admin_approved=True)
-        assert resp.status_code == 200
-        assert _result(resp)["admin_approved"] is True
+        assert "approval_status" not in _result(resp)
+        with db.cursor() as cursor:
+            cursor.execute("SELECT approval_status FROM current_song WHERE id = %s", (song_id,))
+            assert cursor.fetchone()["approval_status"] == "pending"
 
     def test_snippet_duration_limit(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
@@ -625,7 +740,7 @@ class TestReplaceSong:
 
 
 class TestDeleteSong:
-    def test_deletes_song(self, client, bob_headers):
+    def test_deletes_song(self, client, db, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 
         resp = client.delete(f"/api/song/{song_id}", headers=bob_headers)
@@ -635,6 +750,17 @@ class TestDeleteSong:
         # Verify it's gone
         resp = client.get(f"/api/song/{song_id}")
         assert resp.status_code == 404
+        with db.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT changed_by
+                FROM song_data
+                WHERE country_id = 'US' AND year_id = 2025
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """
+            )
+            assert cursor.fetchone()["changed_by"] == 2
 
     def test_returns_204_for_nonexistent(self, client, alice_headers):
         resp = client.delete("/api/song/999999", headers=alice_headers)
@@ -671,13 +797,18 @@ class TestDeleteSong:
         with db.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO song (submitter_id, country_id, year_id, title, artist, is_placeholder)
-                VALUES (%s, 'US', 2024, 'Closed Song', 'Artist', false)
+                INSERT INTO song (country_id, year_id)
+                VALUES ('US', 2024)
                 RETURNING id
                 """,
-                (submitter_id,),
             )
             song_id = cur.fetchone()["id"]
+            cur.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist
+                   ) VALUES (%s, %s, 'Closed Song', 'Artist')""",
+                (song_id, submitter_id),
+            )
         db.commit()
         return song_id
 

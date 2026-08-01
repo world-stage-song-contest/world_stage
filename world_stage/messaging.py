@@ -81,6 +81,27 @@ def has_unread_admin_messages(user_id: int) -> bool:
     return bool(row and row["has_unread"])
 
 
+def banner_conversations(user_id: int) -> list[dict]:
+    """Return metadata-designated conversations visible as home-page banners."""
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT conversation.id, conversation.subject
+        FROM conversation
+        JOIN conversation_participant
+          ON conversation_participant.conversation_id = conversation.id
+         AND conversation_participant.account_id = %s
+        WHERE conversation.metadata @> jsonb_build_object(
+            'banner', true,
+            'submitter_id', %s::bigint
+        )
+        ORDER BY conversation.created_at DESC, conversation.id DESC
+        """,
+        (user_id, user_id),
+    )
+    return cursor.fetchall()
+
+
 def mark_conversation_read(
     conversation_id: int,
     user_id: int,

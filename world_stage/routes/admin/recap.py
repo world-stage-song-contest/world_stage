@@ -118,14 +118,14 @@ WITH song_data AS (
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
            poster_link AS image_link,
-           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
-            FROM song_language sl
-            JOIN language l ON sl.language_id = l.id
-            WHERE sl.song_id = song.id) AS language,
-           (SELECT MAX(changed_at) FROM song_audit_log WHERE song_id = song.id) AS _changed_at,
+           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ' ORDER BY member.priority)
+            FROM language_set_language AS member
+            JOIN language l ON member.language_id = l.id
+            WHERE member.language_set_id = song.language_set_id) AS language,
+           song.created_at AS _changed_at,
            CASE WHEN poster_link IS NULL THEN 'video' ELSE 'audio' END AS type
     FROM song_show
-    JOIN song ON song_show.song_id = song.id
+    JOIN current_song AS song ON song_show.song_id = song.id
     JOIN show ON song_show.show_id = show.id
     JOIN country ON song.country_id = country.id
     LEFT JOIN account ON song.submitter_id = account.id
@@ -148,13 +148,13 @@ WITH song_data AS (
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
            poster_link AS image_link,
-           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
-            FROM song_language sl
-            JOIN language l ON sl.language_id = l.id
-            WHERE sl.song_id = song.id) AS language,
-           (SELECT MAX(changed_at) FROM song_audit_log WHERE song_id = song.id) AS _changed_at,
+           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ' ORDER BY member.priority)
+            FROM language_set_language AS member
+            JOIN language l ON member.language_id = l.id
+            WHERE member.language_set_id = song.language_set_id) AS language,
+           song.created_at AS _changed_at,
            CASE WHEN poster_link IS NULL THEN 'video' ELSE 'audio' END AS type
-    FROM song
+    FROM current_song AS song
     JOIN country ON song.country_id = country.id
     LEFT JOIN account ON song.submitter_id = account.id
     WHERE song.year_id = ANY(%s) AND (%s OR (song.year_id < 0) = %s)
@@ -177,13 +177,13 @@ WITH song_data AS (
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
            poster_link AS image_link,
-           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
-            FROM song_language sl
-            JOIN language l ON sl.language_id = l.id
-            WHERE sl.song_id = song.id) AS language,
-           (SELECT MAX(changed_at) FROM song_audit_log WHERE song_id = song.id) AS _changed_at,
+           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ' ORDER BY member.priority)
+            FROM language_set_language AS member
+            JOIN language l ON member.language_id = l.id
+            WHERE member.language_set_id = song.language_set_id) AS language,
+           song.created_at AS _changed_at,
            CASE WHEN poster_link IS NULL THEN 'video' ELSE 'audio' END AS type
-    FROM song
+    FROM current_song AS song
     JOIN country ON song.country_id = country.id
     JOIN year ON song.year_id = year.id
     LEFT JOIN account ON song.submitter_id = account.id
@@ -208,13 +208,13 @@ WITH song_data AS (
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
            poster_link AS image_link,
-           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ')
-            FROM song_language sl
-            JOIN language l ON sl.language_id = l.id
-            WHERE sl.song_id = song.id) AS language,
-           (SELECT MAX(changed_at) FROM song_audit_log WHERE song_id = song.id) AS _changed_at,
+           (SELECT STRING_AGG(COALESCE(l.code3, l.tag), ', ' ORDER BY member.priority)
+            FROM language_set_language AS member
+            JOIN language l ON member.language_id = l.id
+            WHERE member.language_set_id = song.language_set_id) AS language,
+           song.created_at AS _changed_at,
            CASE WHEN poster_link IS NULL THEN 'video' ELSE 'audio' END AS type
-    FROM song
+    FROM current_song AS song
     JOIN country ON song.country_id = country.id
     JOIN year ON song.year_id = year.id
     JOIN account ON song.submitter_id = account.id
@@ -339,7 +339,7 @@ def get_cytube_playlist(form_data: list[str]) -> str | None:
         """
         SELECT LOWER(country.id) AS cc, country.name AS country, song.artist, song.title
         FROM song_show
-        JOIN song ON song_show.song_id = song.id
+        JOIN current_song AS song ON song_show.song_id = song.id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s
         ORDER BY song_show.running_order
@@ -356,7 +356,7 @@ def get_cytube_playlist(form_data: list[str]) -> str | None:
             SELECT LOWER(country.id) AS cc, country.name AS country, song.artist, song.title
             FROM year
             JOIN country ON year.host_id = country.id
-            JOIN song ON song.year_id = year.id AND song.country_id = year.host_id
+            JOIN current_song AS song ON song.year_id = year.id AND song.country_id = year.host_id
             WHERE year.id = %s
             ORDER BY song.entry_number
             LIMIT 1

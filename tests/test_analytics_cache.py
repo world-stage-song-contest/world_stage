@@ -60,15 +60,19 @@ def test_bias_caches_refresh_on_publication_revotes_and_metadata_changes(db):
         ):
             cursor.execute(
                 """
-                INSERT INTO song (
-                    submitter_id, country_id, year_id, title, artist, is_placeholder
-                )
-                VALUES (%s, %s, 2024, %s, 'Artist', false)
+                INSERT INTO song (country_id, year_id)
+                VALUES (%s, 2024)
                 RETURNING id
                 """,
-                (submitter_id, country_id, title),
+                (country_id,),
             )
             song_ids[submitter_id] = cursor.fetchone()["id"]
+            cursor.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist
+                   ) VALUES (%s, %s, %s, 'Artist')""",
+                (song_ids[submitter_id], submitter_id, title),
+            )
         cursor.executemany(
             "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
             [

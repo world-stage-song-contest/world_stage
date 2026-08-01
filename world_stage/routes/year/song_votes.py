@@ -43,7 +43,7 @@ def special_song_votes_disambig(short_name: str, show: str, country_code: str):
         """
         SELECT song.id, song.title, song.native_title, song.artist,
                song.entry_number, country.name AS country_name
-        FROM song
+        FROM current_song AS song
         JOIN song_show ON song.id = song_show.song_id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s AND song.country_id = UPPER(%s)
@@ -127,7 +127,7 @@ def special_song_votes(
         SELECT song.id, song.title, song.artist, song.country_id,
                country.name AS country_name, country.cc3,
                song_show.running_order, song.entry_number
-        FROM song
+        FROM current_song AS song
         JOIN song_show ON song.id = song_show.song_id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s
@@ -272,7 +272,7 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
         SELECT song.id, song.title, song.artist, song.country_id,
                country.name AS country_name, country.cc3,
                song_show.running_order
-        FROM song
+        FROM current_song AS song
         JOIN song_show ON song.id = song_show.song_id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s AND song.country_id = UPPER(%s)

@@ -24,6 +24,9 @@
         {% if not year.special_short_name %}
         <li><a href="{{ url_for('admin.create_show', year=year.id) }}">Create Show</a></li>
         <li><a href="{{ url_for('admin.set_pots', year=year.id) }}">Set Pots</a></li>
+        <li><a href="{{ url_for('admin.verifications', year=year.id) }}">Verifications</a></li>
+        {% else %}
+        <li><a href="{{ url_for('admin.verifications_special', short_name=year.special_short_name) }}">Verifications</a></li>
         {% endif %}
         {% set has_repechage = shows | selectattr('short_name', 'equalto', 'sc') | list | length > 0 %}
         {% if year.special_short_name %}
@@ -103,8 +106,24 @@
 </table>
 
 <div>
+    <h2>Year settings</h2>
+    {% if not year.special_short_name %}
+    <form method="post" action="{{ url_for('admin.manage_post', year=year.id) }}">
+        <input type="hidden" name="action" value="set_host">
+        <label for="host_id">Host:</label>
+        <select name="host_id" id="host_id">
+            <option value="" {% if year.host_id is none %}selected{% endif %}>No host</option>
+            {% for country in countries %}
+            <option value="{{ country.id }}" {% if country.id == year.host_id %}selected{% endif %}>
+                {{ country.name or country.id }}
+            </option>
+            {% endfor %}
+        </select>
+        <button type="submit">Set Host</button>
+    </form>
+    {% endif %}
     <div>
-        <label for"year_status">Year Status:</label>
+        <label for="year_status">Year Status:</label>
         <select name="year_status" id="year_status">
             {% set statuses = [('open', 'Upcoming'), ('closed', 'Finished'), ('ongoing', 'Ongoing')] %}
             {% for value, label in statuses %}

@@ -31,7 +31,7 @@
 {% block content %}
 {% if is_open %}
 <div class="banner compact">
-    <p>Highlighted songs are placeholders and can be replaced.</p>
+    <p>Placeholders are highlighted in yellow, accepted entries in green, and rejected entries in red.</p>
 </div>
 
 <div>
@@ -110,8 +110,14 @@
             {% set place_class = 'first' if place == 1 else 'second' if place == 2 else 'third' if place == 3 else 'last' if place == n else '' %}
         {% endif %}
         {% set r = results.get(song.id, {}) %}
+        {% set verification_class = '' %}
+        {% if is_open and song.approval_status == 'accepted' %}
+            {% set verification_class = 'verification-accepted' %}
+        {% elif is_open and song.approval_status == 'rejected' %}
+            {% set verification_class = 'verification-rejected' %}
+        {% endif %}
         <tr data-value="{{ loop.index }}"
-            class="{{ "placeholder" if song.placeholder else "finalised" }} {{ place_class }}">
+            class="{{ "placeholder" if song.placeholder else "finalised" }} {{ place_class }} {{ verification_class }}">
             {% if is_closed %}
             <td class="number year-result {{ place_class }}">{{ place or '' }}</td>
             {% endif %}

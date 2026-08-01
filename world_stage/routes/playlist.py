@@ -123,7 +123,7 @@ def year(key: str, permissions: UserPermissions):
     cursor.execute(
         """
         SELECT LOWER(country.id) AS cc, song.video_link
-        FROM song
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         LEFT JOIN alternative_name an
             ON an.country_id = song.country_id
@@ -159,7 +159,7 @@ def country(key: str, permissions: UserPermissions):
     cursor.execute(
         """
         SELECT LOWER(country.id) AS cc, song.video_link
-        FROM song
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         JOIN year ON year.id = song.year_id
         WHERE (country.id = %(cc)s OR country.cc3 = %(cc)s)
@@ -193,7 +193,7 @@ def user(key: str, permissions: UserPermissions):
     cursor.execute(
         """
         SELECT LOWER(country.id) AS cc, song.video_link, account.username
-        FROM song
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         JOIN year ON year.id = song.year_id
         JOIN account ON account.id = song.submitter_id

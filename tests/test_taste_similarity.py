@@ -99,13 +99,19 @@ def test_taste_similarity_revotes_replace_each_voters_official_ballot(client, db
         ):
             cursor.execute(
                 """
-                INSERT INTO song (country_id, year_id, title, artist, is_placeholder)
-                VALUES (%s, 2024, %s, 'Artist', false)
+                INSERT INTO song (country_id, year_id)
+                VALUES (%s, 2024)
                 RETURNING id
                 """,
-                (country, title),
+                (country,),
             )
-            song_ids.append(cursor.fetchone()["id"])
+            song_id = cursor.fetchone()["id"]
+            song_ids.append(song_id)
+            cursor.execute(
+                """INSERT INTO song_data (song_id, title, artist)
+                   VALUES (%s, %s, 'Artist')""",
+                (song_id, title),
+            )
         cursor.executemany(
             "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
             [

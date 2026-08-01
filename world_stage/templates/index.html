@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
+{% for conversation in banner_conversations %}
+<div class="banner long-text verification-message-banner">
+    <strong>{{ conversation.subject }}</strong>
+    <p>A moderator left a message about your song verification. <a href="{{ url_for('messages.thread', conversation_id=conversation.id) }}">View message</a></p>
+</div>
+{% endfor %}
 <div class="cards-container">
     <a href="{{ url_for('member.index') }}" class="card{% if has_unread_messages %} card-attention{% endif %}"
        {% if has_unread_messages %}title="You have unread messages"{% endif %}>

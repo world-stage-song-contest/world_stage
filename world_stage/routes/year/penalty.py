@@ -32,7 +32,7 @@ def _penalty_candidates(year_id: int, show_id: int) -> list[dict]:
                account.username AS submitter,
                song_show.penalty
         FROM song_show
-        JOIN song ON song.id = song_show.song_id
+        JOIN current_song AS song ON song.id = song_show.song_id
         JOIN country ON country.id = song.country_id
         LEFT JOIN account ON account.id = song.submitter_id
         WHERE song_show.show_id = %s

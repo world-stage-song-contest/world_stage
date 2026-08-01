@@ -32,10 +32,10 @@ def _render_draw(year_id: int, label: str):
                song.submitter_id AS submitter,
                country.id AS cc, country.name, country.pot, country.genre,
                sl.language_id AS language
-        FROM song
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
-        LEFT JOIN song_language sl
-               ON sl.song_id = song.id AND sl.priority = 0
+        LEFT JOIN language_set_language sl
+               ON sl.language_set_id = song.language_set_id AND sl.priority = 0
         WHERE song.year_id = %s AND NOT song.is_placeholder
         ORDER BY country.name, song.entry_number
         """,
@@ -127,7 +127,7 @@ def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -
     cursor.execute(
         """
         SELECT country.pot, COUNT(*) AS entries
-        FROM song
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         WHERE song.year_id = %s
           AND NOT song.is_placeholder
@@ -145,7 +145,7 @@ def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -
         cursor.execute(
             """
             SELECT song.id AS song_id, country.pot
-            FROM song
+            FROM current_song AS song
             JOIN country ON song.country_id = country.id
             WHERE song.year_id = %s AND song.id = ANY(%s)
             """,
@@ -192,7 +192,7 @@ def draw_post(year: int):
                 # Verify the song actually belongs to this year before
                 # attaching it to a show — guards against bad client input.
                 cursor.execute(
-                    "SELECT id FROM song WHERE id = %s AND year_id = %s",
+                    "SELECT id FROM current_song AS song WHERE id = %s AND year_id = %s",
                     (song_id, year),
                 )
                 if not cursor.fetchone():
@@ -262,8 +262,11 @@ def draw_final(year: int, show: str):
 
     cursor.execute(
         """
-        SELECT song_id, language_id FROM song_language
-        WHERE song_id = ANY(%s) AND priority = 0
+        SELECT song.id AS song_id, member.language_id
+        FROM current_song AS song
+        JOIN language_set_language AS member
+          ON member.language_set_id = song.language_set_id
+        WHERE song.id = ANY(%s) AND member.priority = 0
         """,
         ([s.id for s in songs],),
     )
@@ -319,7 +322,7 @@ def draw_final_post(year: int, show: str):
 
     for i, song_id in enumerate(ro):
         cursor.execute(
-            "SELECT id FROM song WHERE id = %s AND year_id = %s",
+            "SELECT id FROM current_song AS song WHERE id = %s AND year_id = %s",
             (song_id, year),
         )
         if not cursor.fetchone():

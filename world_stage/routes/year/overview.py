@@ -58,7 +58,9 @@ def special(short_name: str, permissions: UserPermissions):
     songs = get_year_songs(_year, select_languages=True)
 
     cursor.execute(
-        "SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder", (_year,)
+        """SELECT COUNT(*) AS c FROM current_song AS song
+           WHERE year_id = %s AND NOT is_placeholder""",
+        (_year,),
     )
     total_entries = fetchone(cursor)["c"]
     total_placeholders = len(songs) - total_entries
@@ -157,7 +159,9 @@ def year(year: int, permissions: UserPermissions):
         free_countries = cursor.fetchall()
 
     cursor.execute(
-        "SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder", (_year,)
+        """SELECT COUNT(*) AS c FROM current_song AS song
+           WHERE year_id = %s AND NOT is_placeholder""",
+        (_year,),
     )
     total_entries = fetchone(cursor)["c"]
     total_placeholders = len(songs) - total_entries

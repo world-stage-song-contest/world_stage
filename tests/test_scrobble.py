@@ -14,11 +14,18 @@ def _add_song(db, cc, year, title, artist, link, duration):
     with db.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO song (submitter_id, country_id, year_id, title, artist,
-                video_link, duration, is_placeholder, entry_number)
-            VALUES (1, %s, %s, %s, %s, %s, %s, false, 1)
+            INSERT INTO song (country_id, year_id, entry_number)
+            VALUES (%s, %s, 1) RETURNING id
             """,
-            (cc, year, title, artist, link, duration),
+            (cc, year),
+        )
+        song_id = cur.fetchone()["id"]
+        cur.execute(
+            """INSERT INTO song_data (
+                   song_id, submitter_id, title, artist, video_link,
+                   duration
+               ) VALUES (%s, 1, %s, %s, %s, %s)""",
+            (song_id, title, artist, link, duration),
         )
     db.commit()
 
@@ -158,13 +165,11 @@ class TestScrobbleEndpoints:
 
         slot = client.get("/radio/now").get_json()
         with db.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE song
-                SET title = 'Changed Title', artist = 'Changed Artist'
-                WHERE id = %s
-                """,
-                (slot["song"]["id"],),
+            from world_stage.utils.song_revisions import create_song_revision
+            create_song_revision(
+                cur, slot["song"]["id"],
+                {"title": "Changed Title", "artist": "Changed Artist"},
+                changed_by=None,
             )
         db.commit()
 

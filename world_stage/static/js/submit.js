@@ -132,11 +132,6 @@ function collectFormData() {
         data.submitter_id = parseInt(forceSubmitter.value, 10);
     }
 
-    const adminApproved = document.getElementById('admin_approved');
-    if (adminApproved) {
-        data.admin_approved = adminApproved.checked;
-    }
-
     // Cover art (admin)
     const posterLink = document.getElementById('poster_link');
     if (posterLink) {

@@ -183,7 +183,8 @@ class TestYearSongs:
         assert "native_language_id" in song
         assert "duration" in song
         assert "vtt_link" in song
-        assert "admin_approved" in song
+        assert "approval_status" not in song
+        assert "admin_approved" not in song
         assert "key_signatures" in song
         assert "time_signatures" in song
         assert "subgenres" in song

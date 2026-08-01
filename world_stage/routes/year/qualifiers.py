@@ -151,7 +151,7 @@ def qualifiers_scores(year: int, show: str, permissions: UserPermissions):
         """
         SELECT song.id, song.title, song.entry_number, song_show.running_order,
                country.name AS country, country.id AS cc
-        FROM song
+        FROM current_song AS song
         JOIN song_show ON song.id = song_show.song_id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s

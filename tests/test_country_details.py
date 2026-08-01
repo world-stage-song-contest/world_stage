@@ -2,11 +2,12 @@ def test_details_page_shows_both_recap_snippets(client, db):
     with db.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO song (
-                country_id, year_id, title, artist, is_placeholder,
+            WITH inserted AS (
+                INSERT INTO song (country_id, year_id) VALUES ('US', 2025) RETURNING id
+            ) INSERT INTO song_data (
+                song_id, title, artist,
                 snippet_start, snippet_end, snippet2_start, snippet2_end
-            )
-            VALUES ('US', 2025, 'Two Recaps', 'Test Artist', false, 30, 50, 90, 100)
+            ) SELECT id, 'Two Recaps', 'Test Artist', 30, 50, 90, 100 FROM inserted
             """
         )
     db.commit()
@@ -31,10 +32,10 @@ def test_details_page_offers_direct_download(client, db):
     with db.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO song (
-                country_id, year_id, title, artist, is_placeholder, video_link
-            )
-            VALUES ('US', 2025, 'Downloadable', 'Test Artist', false, %s)
+            WITH inserted AS (
+                INSERT INTO song (country_id, year_id) VALUES ('US', 2025) RETURNING id
+            ) INSERT INTO song_data (song_id, title, artist, video_link)
+              SELECT id, 'Downloadable', 'Test Artist', %s FROM inserted
             """,
             (media_url,),
         )
@@ -51,12 +52,10 @@ def test_details_page_does_not_offer_download_without_media(client, db):
     with db.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO song (
-                country_id, year_id, title, artist, is_placeholder, video_link
-            )
-            VALUES (
-                'US', 2025, 'Missing', 'Test Artist', false, NULL
-            )
+            WITH inserted AS (
+                INSERT INTO song (country_id, year_id) VALUES ('US', 2025) RETURNING id
+            ) INSERT INTO song_data (song_id, title, artist, video_link)
+              SELECT id, 'Missing', 'Test Artist', NULL FROM inserted
             """
         )
     db.commit()
@@ -73,11 +72,11 @@ def test_details_page_attaches_subtitles_to_direct_media(client, db):
     with db.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO song (
-                country_id, year_id, title, artist, is_placeholder,
-                video_link, vtt_link
-            )
-            VALUES ('US', 2025, 'Captioned', 'Test Artist', false, %s, %s)
+            WITH inserted AS (
+                INSERT INTO song (country_id, year_id) VALUES ('US', 2025) RETURNING id
+            ) INSERT INTO song_data (
+                song_id, title, artist, video_link, vtt_link
+            ) SELECT id, 'Captioned', 'Test Artist', %s, %s FROM inserted
             """,
             (media_url, vtt_url),
         )

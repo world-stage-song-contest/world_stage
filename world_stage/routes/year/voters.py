@@ -77,7 +77,7 @@ def get_voter_participation(
     cursor.execute(
         """
         SELECT DISTINCT account.username, show.short_name
-        FROM song
+        FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
         JOIN show ON song_show.show_id = show.id
         JOIN account ON song.submitter_id = account.id

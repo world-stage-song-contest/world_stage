@@ -15,6 +15,11 @@ from world_stage.utils import (
     resolve_country_code,
     resp,
 )
+from world_stage.utils.song_revisions import (
+    create_song_revision,
+    set_song_status,
+    withdraw_song,
+)
 
 
 def _resolve_year_token(token) -> int | None:
@@ -68,6 +73,9 @@ REQUIRED_FIELDS = {
     "artist": "Artist",
     "title": "Title",
     "sources": "Sources",
+}
+REQUIRED_IDENTITY_FIELDS = {
+    field: REQUIRED_FIELDS[field] for field in ("artist", "title")
 }
 
 
@@ -143,10 +151,9 @@ def _get_request_data() -> tuple[dict | None, bool]:
                 data["languages"] = lang_ids
 
         # Booleans
-        for field in ("is_placeholder", "admin_approved", "is_translation", "does_match"):
+        for field in ("is_placeholder", "is_translation", "does_match"):
             if field in form:
                 data[field] = _form_bool(form.get(field))
-
         # Scalars
         for field in ("year", "country", "submitter_id", "entry_number"):
             if field in form:
@@ -174,7 +181,36 @@ def _parse_languages(data: dict) -> tuple[list[int], list[str]]:
         return [], ["Each language ID must be an integer"]
     if not ids:
         errors.append("At least one language must be provided")
+    if len(ids) != len(set(ids)):
+        errors.append("Each language may only appear once")
     return ids, errors
+
+
+def _get_or_create_language_set(cursor, language_ids: list[int]) -> int:
+    cursor.execute(
+        """
+        INSERT INTO language_set (language_ids)
+        VALUES (%s)
+        ON CONFLICT (language_ids) DO UPDATE
+        SET language_ids = EXCLUDED.language_ids
+        RETURNING id
+        """,
+        (language_ids,),
+    )
+    language_set_id = cursor.fetchone()["id"]
+    cursor.execute(
+        """
+        INSERT INTO language_set_language (
+            language_set_id, language_id, priority
+        )
+        SELECT %s, member.language_id, member.ordinality - 1
+        FROM unnest(%s::bigint[]) WITH ORDINALITY
+            AS member(language_id, ordinality)
+        ON CONFLICT DO NOTHING
+        """,
+        (language_set_id, language_ids),
+    )
+    return language_set_id
 
 
 def _resolve_language_ids(
@@ -233,7 +269,6 @@ def _song_row_to_json(
         "native_lyrics": row["native_lyrics"],
         "notes": row["notes"],
         "sources": row["sources"],
-        "admin_approved": row["admin_approved"],
         "submitter_id": row["submitter_id"],
         "submitter_name": row.get("username"),
         "languages": languages,
@@ -249,14 +284,16 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
         SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
                song.title, song.native_title, song.artist, song.is_placeholder,
                song.title_language_id, song.native_language_id,
+               song.language_set_id,
                song.video_link, song.poster_link, song.vtt_link,
                song.snippet_start, song.snippet_end,
                song.snippet2_start, song.snippet2_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
-               song.notes, song.sources, song.admin_approved,
+               song.notes, song.sources,
                song.submitter_id, account.username, song.entry_number,
-               song.duration, year.special_short_name
-        FROM song
+               song.duration, song.song_data_id, song.approval_status,
+               year.special_short_name
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         LEFT JOIN year ON year.id = song.year_id
         LEFT JOIN account ON song.submitter_id = account.id
@@ -285,10 +322,12 @@ def _fetch_song_languages(cursor, song_id: int) -> list[dict]:
     cursor.execute(
         """
         SELECT language.id, language.name
-        FROM song_language
-        JOIN language ON song_language.language_id = language.id
-        WHERE song_id = %s
-        ORDER BY priority
+        FROM current_song AS song
+        JOIN language_set_language AS member
+          ON member.language_set_id = song.language_set_id
+        JOIN language ON member.language_id = language.id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -635,13 +674,6 @@ def _replace_song_time_signatures(cursor, song_id: int, rows: list[dict]) -> Non
         )
 
 
-def _set_audit_user(cursor, user_id: int | None) -> None:
-    cursor.execute(
-        "SELECT set_config('app.current_user_id', %s, false)",
-        (str(user_id) if user_id else "",),
-    )
-
-
 def _validate_country(country_code: str) -> tuple[str | None, tuple | None]:
     """Resolve & validate a country code. Returns (resolved_cc, error_response)."""
     cc = resolve_country_code(country_code.upper())
@@ -699,10 +731,10 @@ def _select_song_by_country(cursor, cc: str, year: int, entry_number: int | None
                song.snippet_start, song.snippet_end,
                song.snippet2_start, song.snippet2_end,
                song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
-               song.notes, song.sources, song.admin_approved,
+               song.notes, song.sources,
                song.submitter_id, account.username, song.entry_number,
                song.duration, year.special_short_name
-        FROM song
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         LEFT JOIN year ON year.id = song.year_id
         LEFT JOIN account ON song.submitter_id = account.id
@@ -844,33 +876,20 @@ def create_song(auth: tuple):
         return cc_err
 
     # ── Duplicate / entry_number handling ────────────────────────
-    # Specials allow multiple entries per country; auto-assign the next
-    # entry_number so each entry has a unique (year, country, entry) key.
-    # Regular years enforce one entry per country.
-    if _is_special_year(year):
-        cursor.execute(
-            "SELECT COALESCE(MAX(entry_number), 0) + 1 AS next FROM song "
-            "WHERE year_id = %s AND country_id = %s",
-            (year, cc),
-        )
-        entry_number = fetchone(cursor)["next"]
-    else:
-        cursor.execute(
-            "SELECT id FROM song WHERE year_id = %s AND country_id = %s",
-            (year, cc),
-        )
-        if cursor.fetchone():
-            return err(
-                ErrorID.CONFLICT,
-                f"A song already exists for {cc} in {year}. Use PATCH to update it.",
-            )
-        entry_number = 1
+    # A country may participate more than once. Withdrawn identities continue
+    # to reserve their number, so a later submission is always the next entry.
+    cursor.execute(
+        "SELECT COALESCE(MAX(entry_number), 0) + 1 AS next FROM song "
+        "WHERE year_id = %s AND country_id = %s",
+        (year, cc),
+    )
+    entry_number = fetchone(cursor)["next"]
 
     # ── Submission limits (non-admins) ───────────────────────────
     if not permissions.can_edit:
         if _is_special_year(year):
             cursor.execute(
-                "SELECT COUNT(*) AS c FROM song "
+                "SELECT COUNT(*) AS c FROM current_song "
                 "WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder",
                 (user_id, year),
             )
@@ -881,7 +900,7 @@ def create_song(auth: tuple):
                 )
         else:
             cursor.execute(
-                "SELECT COUNT(*) AS c FROM song "
+                "SELECT COUNT(*) AS c FROM current_song "
                 "WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder",
                 (user_id, year),
             )
@@ -892,7 +911,8 @@ def create_song(auth: tuple):
                 )
 
             cursor.execute(
-                "SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder",
+                """SELECT COUNT(*) AS c FROM current_song AS song
+                   WHERE year_id = %s AND NOT is_placeholder""",
                 (year,),
             )
             if fetchone(cursor)["c"] >= MAX_YEAR_SUBMISSIONS:
@@ -923,14 +943,17 @@ def create_song(auth: tuple):
     is_placeholder = bool(data.get("is_placeholder", False))
     is_translation = bool(data.get("is_translation", False))
     does_match = bool(data.get("does_match", False))
-    admin_approved = bool(data.get("admin_approved", False)) and permissions.can_edit
-
     title_language_id, native_language_id = _resolve_language_ids(
         language_ids,
         is_translation,
         does_match,
         text["native_title"],
     )
+
+    # Artist and title distinguish live songs from deletion sentinels.
+    for field, label in REQUIRED_IDENTITY_FIELDS.items():
+        if not text.get(field):
+            return err(ErrorID.BAD_REQUEST, f"Missing required field: {label}")
 
     # ── Validation (non-admins) ──────────────────────────────────
     if not permissions.can_view_restricted:
@@ -967,56 +990,47 @@ def create_song(auth: tuple):
                 return err(ErrorID.BAD_REQUEST, "submitter_id must be an integer or null")
 
     # ── Insert ───────────────────────────────────────────────────
-    _set_audit_user(cursor, user_id)
+    language_set_id = _get_or_create_language_set(cursor, language_ids)
 
     cursor.execute(
         """
-        INSERT INTO song (
-            year_id, country_id, entry_number, title, native_title, artist, is_placeholder,
-            title_language_id, native_language_id, video_link, duration, poster_link, vtt_link,
-            snippet_start, snippet_end, snippet2_start, snippet2_end, translated_lyrics,
-            romanized_lyrics, native_lyrics, submitter_id,
-            notes, sources, admin_approved, modified_at
-        ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP
-        )
+        INSERT INTO song (year_id, country_id, entry_number)
+        VALUES (%s, %s, %s)
         RETURNING id
     """,
-        (
-            year,
-            cc,
-            entry_number,
-            text["title"],
-            text["native_title"],
-            text["artist"],
-            is_placeholder,
-            title_language_id,
-            native_language_id,
-            text["video_link"],
-            duration_for_link(text["video_link"]),
-            text["poster_link"],
-            text["vtt_link"],
-            parse_seconds(text["snippet_start"]),
-            parse_seconds(text["snippet_end"]),
-            parse_seconds(text["snippet2_start"]),
-            parse_seconds(text["snippet2_end"]),
-            text["translated_lyrics"],
-            text["romanized_lyrics"],
-            text["native_lyrics"],
-            submitter_id,
-            text["notes"],
-            text["sources"],
-            admin_approved,
-        ),
+        (year, cc, entry_number),
     )
     song_id = fetchone(cursor)["id"]
-
-    for i, lang_id in enumerate(language_ids):
-        cursor.execute(
-            "INSERT INTO song_language (song_id, language_id, priority) VALUES (%s, %s, %s)",
-            (song_id, lang_id, i),
+    cursor.execute(
+        """
+        INSERT INTO song_data (
+            song_id, title, native_title, artist,
+            title_language_id, native_language_id, language_set_id,
+            video_link, duration,
+            poster_link, vtt_link, snippet_start, snippet_end,
+            snippet2_start, snippet2_end, translated_lyrics,
+            romanized_lyrics, native_lyrics, submitter_id, notes, sources,
+            changed_by
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
+        """,
+        (
+            song_id, text["title"], text["native_title"], text["artist"],
+            title_language_id, native_language_id, language_set_id,
+            text["video_link"], duration_for_link(text["video_link"]),
+            text["poster_link"], text["vtt_link"],
+            parse_seconds(text["snippet_start"]), parse_seconds(text["snippet_end"]),
+            parse_seconds(text["snippet2_start"]), parse_seconds(text["snippet2_end"]),
+            text["translated_lyrics"], text["romanized_lyrics"],
+            text["native_lyrics"], submitter_id, text["notes"], text["sources"],
+            user_id,
+        ),
+    )
+    set_song_status(
+        cursor, song_id, changed_by=user_id, is_placeholder=is_placeholder
+    )
 
     if key_signatures:
         _replace_song_key_signatures(cursor, song_id, key_signatures)
@@ -1102,14 +1116,12 @@ def replace_song(id: int, auth: tuple):
     is_translation = bool(data.get("is_translation", False))
     does_match = bool(data.get("does_match", False))
 
-    # Admin-only fields: preserve existing values for non-admins so their
-    # edits don't wipe out fields their form never exposes.
+    # Admin-only media fields are preserved for non-admins because their form
+    # doesn't expose them.
     if permissions.can_edit:
-        admin_approved = bool(data.get("admin_approved", False))
         poster_link = text["poster_link"]
         vtt_link = text["vtt_link"]
     else:
-        admin_approved = row["admin_approved"]
         poster_link = row["poster_link"]
         vtt_link = row["vtt_link"]
 
@@ -1119,6 +1131,11 @@ def replace_song(id: int, auth: tuple):
         does_match,
         text["native_title"],
     )
+
+    # Artist and title distinguish live songs from deletion sentinels.
+    for field, label in REQUIRED_IDENTITY_FIELDS.items():
+        if not text.get(field):
+            return err(ErrorID.BAD_REQUEST, f"Missing required field: {label}")
 
     # ── Validation (non-admins) ──────────────────────────────────
     if not permissions.can_view_restricted:
@@ -1155,54 +1172,40 @@ def replace_song(id: int, auth: tuple):
                 return err(ErrorID.BAD_REQUEST, "submitter_id must be an integer or null")
 
     # ── Execute ──────────────────────────────────────────────────
-    _set_audit_user(cursor, user_id)
+    language_set_id = _get_or_create_language_set(cursor, language_ids)
 
-    cursor.execute(
-        """
-        UPDATE song SET
-            title = %s, native_title = %s, artist = %s,
-            is_placeholder = %s, title_language_id = %s, native_language_id = %s,
-            video_link = %s, duration = %s, poster_link = %s, vtt_link = %s,
-            snippet_start = %s, snippet_end = %s,
-            snippet2_start = %s, snippet2_end = %s,
-            translated_lyrics = %s, romanized_lyrics = %s, native_lyrics = %s,
-            notes = %s, sources = %s,
-            admin_approved = %s, submitter_id = %s,
-            modified_at = CURRENT_TIMESTAMP
-        WHERE id = %s
-    """,
-        (
-            text["title"],
-            text["native_title"],
-            text["artist"],
-            is_placeholder,
-            title_language_id,
-            native_language_id,
-            text["video_link"],
-            duration_for_link(text["video_link"], row["video_link"], row["duration"]),
-            poster_link,
-            vtt_link,
-            parse_seconds(text["snippet_start"]),
-            parse_seconds(text["snippet_end"]),
-            parse_seconds(text["snippet2_start"]),
-            parse_seconds(text["snippet2_end"]),
-            text["translated_lyrics"],
-            text["romanized_lyrics"],
-            text["native_lyrics"],
-            text["notes"],
-            text["sources"],
-            admin_approved,
-            submitter_id,
-            id,
+    revision_changes = {
+        "title": text["title"],
+        "native_title": text["native_title"],
+        "artist": text["artist"],
+        "title_language_id": title_language_id,
+        "native_language_id": native_language_id,
+        "language_set_id": language_set_id,
+        "video_link": text["video_link"],
+        "duration": duration_for_link(
+            text["video_link"], row["video_link"], row["duration"]
         ),
-    )
-
-    cursor.execute("DELETE FROM song_language WHERE song_id = %s", (id,))
-    for i, lang_id in enumerate(language_ids):
-        cursor.execute(
-            "INSERT INTO song_language (song_id, language_id, priority) VALUES (%s, %s, %s)",
-            (id, lang_id, i),
-        )
+        "poster_link": poster_link,
+        "vtt_link": vtt_link,
+        "snippet_start": parse_seconds(text["snippet_start"]),
+        "snippet_end": parse_seconds(text["snippet_end"]),
+        "snippet2_start": parse_seconds(text["snippet2_start"]),
+        "snippet2_end": parse_seconds(text["snippet2_end"]),
+        "translated_lyrics": text["translated_lyrics"],
+        "romanized_lyrics": text["romanized_lyrics"],
+        "native_lyrics": text["native_lyrics"],
+        "notes": text["notes"],
+        "sources": text["sources"],
+        "submitter_id": submitter_id,
+    }
+    revision_changes = {
+        field: value
+        for field, value in revision_changes.items()
+        if row[field] != value
+    }
+    if revision_changes:
+        create_song_revision(cursor, id, revision_changes, changed_by=user_id)
+    set_song_status(cursor, id, changed_by=user_id, is_placeholder=is_placeholder)
 
     # PUT is full replacement: absent collection fields mean clear
     # them rather than preserve.
@@ -1272,14 +1275,6 @@ def update_song(id: int, auth: tuple):
             )
         )
 
-    if "is_placeholder" in data:
-        sets.append(_assign("is_placeholder"))
-        params.append(bool(data["is_placeholder"]))
-
-    if "admin_approved" in data and permissions.can_edit:
-        sets.append(_assign("admin_approved"))
-        params.append(bool(data["admin_approved"]))
-
     # ── Language-derived fields ───────────────────────────────────
     language_ids = None
     if "languages" in data:
@@ -1346,6 +1341,7 @@ def update_song(id: int, auth: tuple):
         and key_signatures is None
         and time_signatures is None
         and subgenre_ids is None
+        and "is_placeholder" not in data
     ):
         return err(ErrorID.BAD_REQUEST, "No fields to update")
 
@@ -1353,6 +1349,11 @@ def update_song(id: int, auth: tuple):
     for field in MUTABLE_TEXT_FIELDS:
         if field in data:
             merged[field] = _normalize_text(data[field])
+
+    # Artist and title distinguish live songs from deletion sentinels.
+    for field, label in REQUIRED_IDENTITY_FIELDS.items():
+        if not merged.get(field):
+            return err(ErrorID.BAD_REQUEST, f"Missing required field: {label}")
 
     # ── Validation (non-admins) ──────────────────────────────────
     if not permissions.can_view_restricted:
@@ -1381,25 +1382,41 @@ def update_song(id: int, auth: tuple):
         return err(ErrorID.BAD_REQUEST, message)
 
     # ── Execute ──────────────────────────────────────────────────
-    _set_audit_user(cursor, user_id)
-
     if sets:
-        sets.append(sql.SQL("modified_at = CURRENT_TIMESTAMP"))
-        params.append(id)
-        cursor.execute(
-            sql.SQL("UPDATE song SET {clauses} WHERE id = %s").format(
-                clauses=sql.SQL(", ").join(sets),
-            ),
-            params,
-        )
-
-    if language_ids is not None:
-        cursor.execute("DELETE FROM song_language WHERE song_id = %s", (id,))
-        for i, lang_id in enumerate(language_ids):
-            cursor.execute(
-                "INSERT INTO song_language (song_id, language_id, priority) VALUES (%s, %s, %s)",
-                (id, lang_id, i),
+        changes = {}
+        for field in MUTABLE_TEXT_FIELDS:
+            if field in data:
+                value = _normalize_text(data[field])
+                if field in (
+                    "snippet_start", "snippet_end", "snippet2_start", "snippet2_end"
+                ):
+                    value = parse_seconds(value)
+                changes[field] = value
+        if "video_link" in data:
+            changes["duration"] = duration_for_link(
+                changes["video_link"], row["video_link"], row["duration"]
             )
+        if language_ids is not None or "is_translation" in data or "does_match" in data:
+            changes["title_language_id"] = title_language_id
+            changes["native_language_id"] = native_language_id
+        if language_ids is not None:
+            changes["language_set_id"] = _get_or_create_language_set(
+                cursor, language_ids
+            )
+        if "submitter_id" in data and permissions.can_edit:
+            raw_submitter = data["submitter_id"]
+            changes["submitter_id"] = (
+                None if raw_submitter is None else int(raw_submitter)
+            )
+        create_song_revision(cursor, id, changes, changed_by=user_id)
+
+    if "is_placeholder" in data:
+        set_song_status(
+            cursor,
+            id,
+            changed_by=user_id,
+            is_placeholder=bool(data["is_placeholder"]),
+        )
 
     if key_signatures is not None:
         _replace_song_key_signatures(cursor, id, key_signatures)
@@ -1434,8 +1451,8 @@ def delete_song(id: int, auth: tuple):
 
     cursor.execute(
         """
-        SELECT song.id, song.submitter_id, year.status
-        FROM song
+        SELECT song.id, song.submitter_id, song.is_placeholder, year.status
+        FROM current_song AS song
         JOIN year ON song.year_id = year.id
         WHERE song.id = %s
     """,
@@ -1452,13 +1469,13 @@ def delete_song(id: int, auth: tuple):
     if not permissions.can_edit and row["submitter_id"] != user_id:
         return err(ErrorID.FORBIDDEN, "You can only delete your own submissions")
 
-    _set_audit_user(cursor, user_id)
-
-    cursor.execute("DELETE FROM song_language WHERE song_id = %s", (id,))
-    cursor.execute("DELETE FROM song_key_signature WHERE song_id = %s", (id,))
-    cursor.execute("DELETE FROM song_time_signature WHERE song_id = %s", (id,))
-    cursor.execute("DELETE FROM song_subgenre WHERE song_id = %s", (id,))
-    cursor.execute("DELETE FROM song WHERE id = %s", (id,))
+    if row["is_placeholder"]:
+        withdraw_song(cursor, id, changed_by=user_id)
+        cursor.execute("DELETE FROM song_key_signature WHERE song_id = %s", (id,))
+        cursor.execute("DELETE FROM song_time_signature WHERE song_id = %s", (id,))
+        cursor.execute("DELETE FROM song_subgenre WHERE song_id = %s", (id,))
+    else:
+        withdraw_song(cursor, id, changed_by=user_id)
     db.commit()
 
     return "", 204

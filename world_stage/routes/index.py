@@ -11,7 +11,11 @@ from ..avatar import (
     normalize_avatar,
 )
 from ..db import get_db
-from ..messaging import has_unread_admin_messages, has_unread_messages
+from ..messaging import (
+    banner_conversations,
+    has_unread_admin_messages,
+    has_unread_messages,
+)
 from ..utils import (
     UserPermissions,
     create_cookie,
@@ -39,6 +43,7 @@ def home(user: tuple[int, str] | None, permissions: UserPermissions):
     has_pending_vote = False
     has_unread = False
     has_admin_unread = False
+    banners = []
     if user:
         user_id = user[0]
         db = get_db()
@@ -57,6 +62,7 @@ def home(user: tuple[int, str] | None, permissions: UserPermissions):
         )
         has_pending_vote = cursor.fetchone() is not None
         has_unread = has_unread_messages(user_id, permissions)
+        banners = banner_conversations(user_id)
         if permissions.can_view_restricted:
             has_admin_unread = has_unread_admin_messages(user_id)
 
@@ -67,6 +73,7 @@ def home(user: tuple[int, str] | None, permissions: UserPermissions):
         has_pending_vote=has_pending_vote,
         has_unread_messages=has_unread,
         has_unread_admin_messages=has_admin_unread,
+        banner_conversations=banners,
         is_admin=is_admin,
     )
 

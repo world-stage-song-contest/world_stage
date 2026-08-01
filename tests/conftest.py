@@ -109,6 +109,12 @@ def _seeded_db(_test_db):
             ON CONFLICT DO NOTHING
         """)
 
+        cur.execute("""
+            INSERT INTO song_approval_status (name)
+            VALUES ('pending'), ('accepted'), ('rejected'), ('more-info')
+            ON CONFLICT DO NOTHING
+        """)
+
         # Versioned voting rules are reference data. A schema-only copy of a
         # migrated source database contains their table and triggers but not
         # these rows, while its copied migration ledger marks the seed
@@ -263,11 +269,14 @@ def _clean_songs(_seeded_db):
         cur.execute("DELETE FROM country_show_results")
         cur.execute("DELETE FROM country_year_results")
         cur.execute("DELETE FROM song_show")
-        cur.execute("DELETE FROM song_language")
         cur.execute("DELETE FROM song_key_signature")
         cur.execute("DELETE FROM song_time_signature")
         cur.execute("DELETE FROM song_subgenre")
-        cur.execute("DELETE FROM song_audit_log")
+        cur.execute("DELETE FROM song_verification_comment")
+        cur.execute("DELETE FROM song_status")
+        cur.execute("DELETE FROM song_data")
+        cur.execute("DELETE FROM language_set_language")
+        cur.execute("DELETE FROM language_set")
         cur.execute("DELETE FROM song")
     conn.commit()
     conn.close()

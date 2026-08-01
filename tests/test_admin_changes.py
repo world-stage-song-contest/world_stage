@@ -1,0 +1,839 @@
+import json
+import uuid
+from pathlib import Path
+
+from world_stage.utils.song_revisions import (
+    create_song_revision,
+    set_song_status,
+    withdraw_song,
+)
+
+
+def _add_song(db, *, title="Original title", artist="Original artist") -> int:
+    with db.cursor() as cursor:
+        cursor.execute("SELECT set_config('app.current_user_id', '2', false)")
+        cursor.execute(
+            """
+            WITH inserted AS (
+                INSERT INTO song (country_id, year_id, entry_number)
+                VALUES ('ES', 2025, 1)
+                RETURNING id
+            )
+            INSERT INTO song_data (
+                song_id, submitter_id, title, artist
+            )
+            SELECT id, 2, %s, %s FROM inserted
+            RETURNING song_id
+            """,
+            (title, artist),
+        )
+        song_id = cursor.fetchone()["song_id"]
+        set_song_status(cursor, song_id, changed_by=2, is_placeholder=False)
+    db.commit()
+    return song_id
+
+
+def _login_admin(client, db) -> None:
+    session_id = str(uuid.uuid4())
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO session (user_id, session_id, expires_at)
+            VALUES (1, %s, CURRENT_TIMESTAMP + INTERVAL '1 day')
+            """,
+            (session_id,),
+        )
+    db.commit()
+    client.set_cookie("session", session_id)
+
+
+def test_song_changes_are_derived_from_adjacent_revisions(db):
+    song_id = _add_song(db)
+    with db.cursor() as cursor:
+        create_song_revision(
+            cursor, song_id, {"notes": "Metadata correction"}, changed_by=2
+        )
+        create_song_revision(
+            cursor, song_id, {"artist": "ORIGINAL ARTIST"}, changed_by=2
+        )
+        create_song_revision(
+            cursor, song_id, {"title": "Replacement title"}, changed_by=2
+        )
+        set_song_status(cursor, song_id, changed_by=2, is_placeholder=True)
+        create_song_revision(
+            cursor, song_id, {"submitter_id": 3}, changed_by=2
+        )
+        withdraw_song(cursor, song_id, changed_by=2)
+    db.commit()
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT event_type, changed_by, changed_fields
+            FROM song_change
+            WHERE song_country_id = 'ES' AND song_year_id = 2025
+            ORDER BY id
+            """
+        )
+        changes = cursor.fetchall()
+
+    assert [change["event_type"] for change in changes] == [
+        "create",
+        "song_modification",
+        "song_modification",
+        "song_replacement",
+        "ownership_change",
+        "delete",
+    ]
+    assert all(change["changed_by"] == 2 for change in changes)
+    assert changes[1]["changed_fields"]["notes"] == {
+        "old": None,
+        "new": "Metadata correction",
+    }
+    assert changes[2]["changed_fields"]["artist"] == {
+        "old": "Original artist",
+        "new": "ORIGINAL ARTIST",
+    }
+    assert changes[3]["changed_fields"]["title"] == {
+        "old": "Original title",
+        "new": "Replacement title",
+    }
+
+
+def test_refilling_a_withdrawn_song_is_a_creation(db):
+    song_id = _add_song(db)
+    with db.cursor() as cursor:
+        withdraw_song(cursor, song_id, changed_by=2)
+        cursor.execute(
+            """
+            INSERT INTO song_data (
+                song_id, submitter_id, title, artist, changed_by
+            ) VALUES (%s, 2, 'Returned title', 'Returned artist', 2)
+            """,
+            (song_id,),
+        )
+    db.commit()
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            "SELECT event_type FROM song_change WHERE song_id = %s ORDER BY id",
+            (song_id,),
+        )
+        event_types = [row["event_type"] for row in cursor.fetchall()]
+
+    assert event_types == ["create", "delete", "create"]
+
+
+def test_deletion_and_creation_are_derived_from_required_identity_fields(db):
+    song_id = _add_song(db)
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO song_data (song_id, title, artist, changed_by)
+            VALUES (%s, NULL, NULL, 2)
+            """,
+            (song_id,),
+        )
+        cursor.execute(
+            """
+            INSERT INTO song_data (
+                song_id, title, artist, modified_at, changed_by
+            ) VALUES (%s, 'Restored', 'Restored Artist', NULL, 2)
+            """,
+            (song_id,),
+        )
+    db.commit()
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            "SELECT event_type FROM song_change WHERE song_id = %s ORDER BY id",
+            (song_id,),
+        )
+        event_types = [row["event_type"] for row in cursor.fetchall()]
+        cursor.execute("SELECT title, artist FROM current_song WHERE id = %s", (song_id,))
+        current = cursor.fetchone()
+
+    assert event_types == ["create", "delete", "create"]
+    assert current == {"title": "Restored", "artist": "Restored Artist"}
+
+
+def test_consolidated_migration_reconstructs_legacy_audit_rows(db):
+    song_id = _add_song(db, title="New title", artist="Original artist")
+    with db.cursor() as cursor:
+        cursor.execute("DELETE FROM song_status WHERE song_id = %s", (song_id,))
+        cursor.execute(
+            """
+            UPDATE song_data
+            SET notes = 'Updated notes', submitter_id = 3
+            WHERE song_id = %s
+            """,
+            (song_id,),
+        )
+        cursor.execute(
+            """
+            CREATE TEMP TABLE song_audit_log (
+                id bigint PRIMARY KEY,
+                song_id bigint,
+                event_type text NOT NULL,
+                changed_by bigint,
+                changed_at timestamptz NOT NULL,
+                song_title text,
+                song_artist text,
+                song_country_id text,
+                song_year_id bigint,
+                changed_fields jsonb
+            ) ON COMMIT DROP
+            """
+        )
+        cursor.execute(
+            """
+            INSERT INTO song_audit_log VALUES
+                (1, %s, 'create', 2, '2025-01-01 12:00:00+00',
+                 'Old title', 'Original artist', 'ES', 2025, NULL),
+                (2, %s, 'song_replacement', 2, '2025-02-01 12:00:00+00',
+                 'New title', 'Original artist', 'ES', 2025,
+                 '{"title":{"old":"Old title","new":"New title"},
+                   "artist":{"old":"Original artist","new":"Original artist"}}'),
+                (3, %s, 'placeholder_on', 2, '2025-02-01 12:00:00+00',
+                 'New title', 'Original artist', 'ES', 2025, NULL),
+                (4, %s, 'ownership_change', 2, '2025-02-01 12:00:00+00',
+                 'New title', 'Original artist', 'ES', 2025,
+                 '{"submitter_id":{"old":"2","new":"3"}}'),
+                (5, %s, 'song_modification', 2, '2025-02-01 12:00:00+00',
+                 'New title', 'Original artist', 'ES', 2025,
+                 '{"notes":{"old":null,"new":"Updated notes"}}'),
+                (10, 9999, 'create', 2, '2024-01-01 12:00:00+00',
+                 'Deleted song', 'Past artist', 'US', 2025, NULL),
+                (11, 9999, 'song_modification', 2, '2024-02-01 12:00:00+00',
+                 'Deleted song', 'Past artist', 'US', 2025,
+                 '{"notes":{"old":null,"new":"Historical note"}}'),
+                (12, 9999, 'delete', 2, '2024-03-01 12:00:00+00',
+                 'Deleted song', 'Past artist', 'US', 2025, NULL)
+            """,
+            (song_id, song_id, song_id, song_id, song_id),
+        )
+
+        migration = (
+            Path(__file__).parents[1]
+            / "world_stage/migrations/20260801130000_add_song_verification_revisions.sql"
+        ).read_text()
+        reconstruction = migration.split(
+            "-- BEGIN LEGACY SONG AUDIT RECONSTRUCTION", 1
+        )[1].split("-- END LEGACY SONG AUDIT RECONSTRUCTION", 1)[0]
+        cursor.execute(reconstruction)
+    db.commit()
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT event_type, changed_by, song_title, changed_fields
+            FROM song_change
+            WHERE song_id = %s
+            ORDER BY id
+            """,
+            (song_id,),
+        )
+        changes = cursor.fetchall()
+
+    assert [change["event_type"] for change in changes] == [
+        "create",
+        "song_replacement",
+    ]
+    assert [change["song_title"] for change in changes] == [
+        "Old title",
+        "New title",
+    ]
+    assert [change["changed_by"] for change in changes] == [2, 2]
+    assert changes[-1]["changed_fields"]["notes"] == {
+        "old": None,
+        "new": "Updated notes",
+    }
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT event_type, changed_by, song_title, changed_fields
+            FROM song_change
+            WHERE song_country_id = 'US' AND song_year_id = 2025
+            ORDER BY id
+            """
+        )
+        deleted_changes = cursor.fetchall()
+
+    assert [change["event_type"] for change in deleted_changes] == [
+        "create",
+        "song_modification",
+        "delete",
+    ]
+    assert deleted_changes[1]["changed_fields"]["notes"] == {
+        "old": None,
+        "new": "Historical note",
+    }
+    assert deleted_changes[-1]["song_title"] == "Deleted song"
+    assert all(change["changed_by"] == 2 for change in deleted_changes)
+
+
+def test_changes_page_uses_timestamp_cursor(client, db):
+    song_id = _add_song(db, title="Revision 0")
+    _login_admin(client, db)
+
+    revision_ids = []
+    with db.cursor() as cursor:
+        cursor.execute("SELECT song_data_id FROM current_song WHERE id = %s", (song_id,))
+        revision_ids.append(cursor.fetchone()["song_data_id"])
+        for revision in range(1, 27):
+            row = create_song_revision(
+                cursor,
+                song_id,
+                {"title": f"Revision {revision}"},
+                changed_by=2,
+            )
+            revision_ids.append(row["id"])
+        for revision, revision_id in enumerate(revision_ids):
+            cursor.execute(
+                """
+                UPDATE song_data
+                SET created_at = TIMESTAMPTZ '2025-01-01 00:00:00+00'
+                               + %s * INTERVAL '1 second'
+                WHERE id = %s
+                """,
+                (revision, revision_id),
+            )
+        cursor.execute(
+            "SELECT created_at FROM song_data WHERE id = %s",
+            (revision_ids[2],),
+        )
+        second_page_before = cursor.fetchone()["created_at"].isoformat()
+    db.commit()
+
+    first_page = client.get("/admin/changes", headers={"Accept": "text/html"})
+
+    assert first_page.status_code == 200
+    assert first_page.text.count('class="event-badge') == 25
+    assert "Revision 26" in first_page.text
+    assert "before=" in first_page.text
+
+    second_page = client.get(
+        "/admin/changes",
+        query_string={"before": second_page_before},
+        headers={"Accept": "text/html"},
+    )
+
+    assert second_page.status_code == 200
+    assert second_page.text.count('class="event-badge') == 2
+    assert "Revision 1" in second_page.text
+    assert "Revision 0" in second_page.text
+    assert "← Newest" in second_page.text
+
+    timespan = client.get(
+        "/admin/changes",
+        query_string={
+            "from_time": "2025-01-01T00:00:10",
+            "to_time": "2025-01-01T00:00:12",
+        },
+        headers={"Accept": "text/html"},
+    )
+
+    assert timespan.status_code == 200
+    assert timespan.text.count('class="event-badge') == 3
+    assert "Revision 10" in timespan.text
+    assert "Revision 11" in timespan.text
+    assert "Revision 12" in timespan.text
+    assert "<td>Revision 9</td>" not in timespan.text
+    assert "<td>Revision 13</td>" not in timespan.text
+
+    from_time_only = client.get(
+        "/admin/changes",
+        query_string={"from_time": "2025-01-01T00:00:10"},
+        headers={"Accept": "text/html"},
+    )
+    to_time_only = client.get(
+        "/admin/changes",
+        query_string={"to_time": "2025-01-01T00:00:12"},
+        headers={"Accept": "text/html"},
+    )
+
+    assert from_time_only.status_code == 200
+    assert from_time_only.text.count('class="event-badge') == 17
+    assert to_time_only.status_code == 200
+    assert to_time_only.text.count('class="event-badge') == 13
+
+
+def test_changes_page_keeps_boundary_timestamp_together(client, db):
+    song_id = _add_song(db, title="Revision 0")
+    _login_admin(client, db)
+    with db.cursor() as cursor:
+        cursor.execute("SELECT song_data_id FROM current_song WHERE id = %s", (song_id,))
+        revision_ids = [cursor.fetchone()["song_data_id"]]
+        for revision in range(1, 27):
+            row = create_song_revision(
+                cursor,
+                song_id,
+                {"title": f"Revision {revision}"},
+                changed_by=2,
+            )
+            revision_ids.append(row["id"])
+        for revision, revision_id in enumerate(revision_ids):
+            timestamp_offset = max(revision, 2)
+            cursor.execute(
+                """
+                UPDATE song_data
+                SET created_at = TIMESTAMPTZ '2025-01-01 00:00:00+00'
+                               + %s * INTERVAL '1 second'
+                WHERE id = %s
+                """,
+                (timestamp_offset, revision_id),
+            )
+    db.commit()
+
+    response = client.get("/admin/changes", headers={"Accept": "text/html"})
+
+    assert response.status_code == 200
+    assert response.text.count('class="event-badge') == 27
+    assert "Older →" not in response.text
+
+
+def test_changes_page_includes_verification_decisions(client, db):
+    song_id = _add_song(db)
+    _login_admin(client, db)
+    with db.cursor() as cursor:
+        cursor.execute(
+            "SELECT song_data_id FROM current_song WHERE id = %s",
+            (song_id,),
+        )
+        song_data_id = cursor.fetchone()["song_data_id"]
+        cursor.execute(
+            """
+            INSERT INTO song_status (
+                song_id, song_data_id, approval_status, is_placeholder,
+                changed_by, created_at
+            ) VALUES
+                (%s, %s, 'accepted', false, 1,
+                 CURRENT_TIMESTAMP + INTERVAL '1 second'),
+                (%s, %s, 'more-info', false, 1,
+                 CURRENT_TIMESTAMP + INTERVAL '2 seconds'),
+                (%s, %s, 'rejected', false, 1,
+                 CURRENT_TIMESTAMP + INTERVAL '3 seconds'),
+                (%s, %s, 'pending', false, 1,
+                 CURRENT_TIMESTAMP + INTERVAL '4 seconds'),
+                (%s, %s, 'accepted', false, NULL,
+                 CURRENT_TIMESTAMP + INTERVAL '5 seconds')
+            """,
+            (
+                song_id, song_data_id,
+                song_id, song_data_id,
+                song_id, song_data_id,
+                song_id, song_data_id,
+                song_id, song_data_id,
+            ),
+        )
+    db.commit()
+
+    response = client.get(
+        "/admin/changes",
+        query_string={"events": "status_change"},
+        headers={"Accept": "text/html"},
+    )
+
+    assert response.status_code == 200
+    assert response.text.count('class="event-badge') == 4
+    assert "approval_status: pending → accepted" in response.text
+    assert "approval_status: accepted → more-info" in response.text
+    assert "approval_status: more-info → rejected" in response.text
+    assert "approval_status: rejected → pending" in response.text
+
+
+def test_content_revision_can_have_multiple_categories_without_status(client, db):
+    song_id = _add_song(db)
+    _login_admin(client, db)
+    with db.cursor() as cursor:
+        create_song_revision(
+            cursor,
+            song_id,
+            {
+                "title": "Replacement title",
+                "notes": "A simultaneous note",
+                "sources": "A simultaneous source",
+            },
+            changed_by=2,
+        )
+        set_song_status(cursor, song_id, changed_by=2, is_placeholder=True)
+    db.commit()
+
+    response = client.get(
+        "/admin/changes",
+        query_string=[
+            ("events", "replacement"),
+            ("events", "modification"),
+            ("events", "placeholder"),
+        ],
+        headers={"Accept": "text/html"},
+    )
+
+    assert response.status_code == 200
+    assert response.text.count("<tr>") == 3  # header, content, and status rows
+    assert 'class="event-badge event-replacement"' in response.text
+    assert 'class="event-badge event-modification"' not in response.text
+    assert 'class="event-badge event-placeholder"' in response.text
+    assert "Title: Original title → Replacement title" in response.text
+    assert ">notes, sources<" in response.text
+    assert "is_placeholder: false → true" in response.text
+
+
+def test_typed_field_filters_support_boundaries_and_multiple_conditions(client, db):
+    song_id = _add_song(db)
+    _login_admin(client, db)
+    with db.cursor() as cursor:
+        create_song_revision(cursor, song_id, {"snippet_start": 10}, changed_by=2)
+        create_song_revision(
+            cursor,
+            song_id,
+            {"snippet_end": 20, "notes": "Changed too"},
+            changed_by=2,
+        )
+        create_song_revision(
+            cursor,
+            song_id,
+            {"translated_lyrics": "Some lyrics"},
+            changed_by=2,
+        )
+        create_song_revision(cursor, song_id, {"snippet_start": 15}, changed_by=2)
+        create_song_revision(cursor, song_id, {"native_title": "Été"}, changed_by=2)
+    db.commit()
+
+    numeric_value = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [{"field": "snippet_start", "from": 10, "to": 15}]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    numeric_comparison = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "snippet_start",
+                        "from": 10,
+                        "from_operator": "gte",
+                        "to": 20,
+                        "to_operator": "lt",
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    excluded_numeric_comparison = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "snippet_start",
+                        "from": 10,
+                        "from_operator": "gt",
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    multiple_changes = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {"field": "snippet_end"},
+                    {"field": "notes"},
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    text_value = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "translated_lyrics",
+                        "to": "Some lyric_",
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    text_operator_responses = []
+    for operator, value in (
+        ("starts_with", "Some"),
+        ("ends_with", "lyrics"),
+        ("contains", "me lyr"),
+    ):
+        text_operator_responses.append(
+            client.get(
+                "/admin/changes",
+                query_string={
+                    "events": "modification",
+                    "filters": json.dumps(
+                        [
+                            {
+                                "field": "translated_lyrics",
+                                "to": value,
+                                "to_operator": operator,
+                            }
+                        ]
+                    ),
+                },
+                headers={"Accept": "text/html"},
+            )
+        )
+    case_insensitive = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "translated_lyrics",
+                        "to": "some",
+                        "to_operator": "starts_with",
+                        "to_case_sensitive": False,
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    case_sensitive = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "translated_lyrics",
+                        "to": "some",
+                        "to_operator": "starts_with",
+                        "to_case_sensitive": True,
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    default_text_normalization = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "native_title",
+                        "to": "ete",
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    accent_sensitive = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "native_title",
+                        "to": "ete",
+                        "to_case_sensitive": False,
+                        "to_accent_sensitive": True,
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    disjunction = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {"field": "snippet_end"},
+                    {"field": "translated_lyrics", "join": "or", "to": "Some %"},
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+
+    assert numeric_value.status_code == 200
+    assert numeric_value.text.count('class="event-badge event-modification"') == 1
+    assert ">snippet_start<" in numeric_value.text
+    assert numeric_comparison.status_code == 200
+    assert numeric_comparison.text.count(
+        'class="event-badge event-modification"'
+    ) == 1
+    assert excluded_numeric_comparison.status_code == 200
+    assert 'class="event-badge event-modification"' not in excluded_numeric_comparison.text
+    assert multiple_changes.status_code == 200
+    assert multiple_changes.text.count('class="event-badge event-modification"') == 1
+    assert ">notes, snippet_end<" in multiple_changes.text
+    assert text_value.status_code == 200
+    assert text_value.text.count('class="event-badge event-modification"') == 1
+    assert ">translated_lyrics<" in text_value.text
+    assert all(response.status_code == 200 for response in text_operator_responses)
+    assert all(
+        response.text.count('class="event-badge event-modification"') == 1
+        for response in text_operator_responses
+    )
+    assert case_insensitive.status_code == 200
+    assert case_insensitive.text.count('class="event-badge event-modification"') == 1
+    assert case_sensitive.status_code == 200
+    assert 'class="event-badge event-modification"' not in case_sensitive.text
+    assert default_text_normalization.status_code == 200
+    assert default_text_normalization.text.count(
+        'class="event-badge event-modification"'
+    ) == 1
+    assert accent_sensitive.status_code == 200
+    assert 'class="event-badge event-modification"' not in accent_sensitive.text
+    assert disjunction.status_code == 200
+    assert disjunction.text.count('class="event-badge event-modification"') == 2
+    assert ">notes, snippet_end<" in disjunction.text
+    assert ">translated_lyrics<" in disjunction.text
+
+
+def test_specific_outcome_filters(client, db):
+    song_id = _add_song(db)
+    _login_admin(client, db)
+    with db.cursor() as cursor:
+        set_song_status(cursor, song_id, changed_by=2, is_placeholder=True)
+        set_song_status(cursor, song_id, changed_by=2, is_placeholder=False)
+        cursor.execute(
+            "SELECT song_data_id FROM current_song WHERE id = %s", (song_id,)
+        )
+        song_data_id = cursor.fetchone()["song_data_id"]
+        cursor.execute(
+            """
+            INSERT INTO song_status (
+                song_id, song_data_id, approval_status, is_placeholder, changed_by
+            ) VALUES
+                (%s, %s, 'accepted', false, 1),
+                (%s, %s, 'rejected', false, 1)
+            """,
+            (song_id, song_data_id, song_id, song_data_id),
+        )
+    db.commit()
+
+    placeholder = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "placeholder",
+            "filters": json.dumps(
+                [{"field": "is_placeholder", "from": False, "to": True}]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    rejected = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "status_change",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "approval_status",
+                        "from": "accepted",
+                        "to": "rejected",
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    not_rejected = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "status_change",
+            "filters": json.dumps(
+                [
+                    {
+                        "field": "approval_status",
+                        "to": "rejected",
+                        "not": True,
+                    }
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+
+    assert placeholder.status_code == 200
+    assert placeholder.text.count('class="event-badge event-placeholder"') == 1
+    assert "is_placeholder: false → true" in placeholder.text
+    assert "is_placeholder: true → false" not in placeholder.text
+    assert rejected.status_code == 200
+    assert rejected.text.count('class="event-badge event-status_change"') == 1
+    assert "approval_status: accepted → rejected" in rejected.text
+    assert "approval_status: pending → accepted" not in rejected.text
+    assert not_rejected.status_code == 200
+    assert not_rejected.text.count('class="event-badge event-status_change"') == 1
+    assert "approval_status: pending → accepted" in not_rejected.text
+    assert "approval_status: accepted → rejected" not in not_rejected.text
+
+
+def test_changes_page_has_dynamic_typed_filter_builder(client, db):
+    _add_song(db)
+    _login_admin(client, db)
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO language_set (language_ids)
+            VALUES (ARRAY[20, 30]), (ARRAY[30, 20])
+            RETURNING id, language_ids
+            """
+        )
+        for language_set in cursor.fetchall():
+            for priority, language_id in enumerate(language_set["language_ids"]):
+                cursor.execute(
+                    """
+                    INSERT INTO language_set_language (
+                        language_set_id, language_id, priority
+                    ) VALUES (%s, %s, %s)
+                    """,
+                    (language_set["id"], language_id, priority),
+                )
+    db.commit()
+
+    response = client.get(
+        "/admin/changes",
+        query_string={
+            "filters": json.dumps(
+                [{"field": "is_placeholder", "to": False}]
+            )
+        },
+        headers={"Accept": "text/html"},
+    )
+
+    assert response.status_code == 200
+    assert "Add filter" in response.text
+    assert 'src="/static/js/admin_changes.js"' in response.text
+    assert "initializeAuditFilters()" in response.text
+    assert "is_placeholder" in response.text
+    assert "English, Spanish" in response.text
+    assert "Spanish, English" in response.text
+    assert "alice" in response.text
+    assert "bob" in response.text
+    assert "carol" in response.text
+    assert "Specific changes" not in response.text
+    assert "Specific outcomes" not in response.text

@@ -29,13 +29,18 @@ def test_cytube_playlist_inserts_and_labels_the_host(client, db):
         ):
             cur.execute(
                 """
-                INSERT INTO song (country_id, year_id, submitter_id, artist, title)
-                VALUES (%s, 2025, 1, %s, %s)
+                INSERT INTO song (country_id, year_id)
+                VALUES (%s, 2025)
                 RETURNING id
                 """,
-                (country, artist, title),
+                (country,),
             )
             song_ids[country] = cur.fetchone()["id"]
+            cur.execute(
+                """INSERT INTO song_data (song_id, submitter_id, artist, title)
+                   VALUES (%s, 1, %s, %s)""",
+                (song_ids[country], artist, title),
+            )
 
         cur.execute(
             """
@@ -116,13 +121,18 @@ def test_cytube_playlist_adds_opening_act_by_prior_year_placement(client, db):
         for short_name, placement, country in opening_act_shows:
             cur.execute(
                 """
-                INSERT INTO song (country_id, year_id, artist, title)
-                VALUES (%s, 2025, 'Previous Artist', 'Previous Song')
+                INSERT INTO song (country_id, year_id)
+                VALUES (%s, 2025)
                 RETURNING id
                 """,
                 (country,),
             )
             song_id = cur.fetchone()["id"]
+            cur.execute(
+                """INSERT INTO song_data (song_id, artist, title)
+                   VALUES (%s, 'Previous Artist', 'Previous Song')""",
+                (song_id,),
+            )
             cur.execute(
                 """
                 INSERT INTO country_year_results (
@@ -185,12 +195,17 @@ def test_all_recap_data_variants_include_submitter(client, db):
         show_id = cur.fetchone()["id"]
         cur.execute(
             """
-            INSERT INTO song (country_id, year_id, submitter_id, artist, title)
-            VALUES ('US', 2027, 1, 'Metadata Artist', 'Metadata Song')
+            INSERT INTO song (country_id, year_id)
+            VALUES ('US', 2027)
             RETURNING id
             """
         )
         song_id = cur.fetchone()["id"]
+        cur.execute(
+            """INSERT INTO song_data (song_id, submitter_id, artist, title)
+               VALUES (%s, 1, 'Metadata Artist', 'Metadata Song')""",
+            (song_id,),
+        )
         cur.execute(
             "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, 1)",
             (song_id, show_id),

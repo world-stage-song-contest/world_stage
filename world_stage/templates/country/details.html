@@ -150,7 +150,13 @@
         {% endif %}
         <tr>
             <th>Submitter</th>
-            <td><a href="{{ url_for('user.submissions', username=song.submitter) }}">{{ song.submitter }}</a></td>
+            <td>
+                {% if song.submitter %}
+                <a href="{{ url_for('user.submissions', username=song.submitter) }}">{{ song.submitter }}</a>
+                {% else %}
+                Unknown user
+                {% endif %}
+            </td>
         </tr>
         {% if song.placeholder %}
         <tr>

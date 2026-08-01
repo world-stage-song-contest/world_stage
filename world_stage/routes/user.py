@@ -226,7 +226,7 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val, *, revote=F
                vote_set.id AS vote_set_id, vote.score AS score,
                (SELECT MAX(point.score) FROM point
                 WHERE point.point_system_id = sh.point_system_id) AS show_max
-        FROM song
+        FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
         JOIN show sh ON song_show.show_id = sh.id AND sh.status = 'full'
         JOIN country ON song.country_id = country.id
@@ -266,7 +266,7 @@ def _votes_by_country(cursor, user_id: int, username: str, *, revote=False):
         """
         SELECT DISTINCT country.id AS cc, country.name
         FROM country
-        JOIN song ON song.country_id = country.id
+        JOIN current_song AS song ON song.country_id = country.id
         ORDER BY country.name
     """
     )
@@ -309,7 +309,7 @@ def _votes_by_user(cursor, user_id: int, username: str, *, revote=False):
         """
         SELECT DISTINCT account.id, account.username
         FROM account
-        JOIN song ON song.submitter_id = account.id
+        JOIN current_song AS song ON song.submitter_id = account.id
         ORDER BY account.username
     """
     )
@@ -350,7 +350,7 @@ def _votes_by_year(cursor, user_id: int, username: str, *, revote=False):
         """
         SELECT DISTINCT year.id, year.special_name, year.special_short_name
         FROM year
-        JOIN song ON song.year_id = year.id
+        JOIN current_song AS song ON song.year_id = year.id
         WHERE year.status = 'closed'
         ORDER BY year.id DESC
     """
@@ -398,7 +398,7 @@ def _medal_table(cursor, user_id: int, username: str, *, revote=False):
         FROM show sh
         {ballot_join}
         JOIN song_show ss ON ss.show_id = sh.id
-        JOIN song ON song.id = ss.song_id
+        JOIN current_song AS song ON song.id = ss.song_id
         JOIN country ON country.id = song.country_id
         LEFT JOIN vote ON vote.vote_set_id = vs.id AND vote.song_id = song.id
         LEFT JOIN point ON point.point_system_id = sh.point_system_id
@@ -510,7 +510,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
             SELECT score AS pts, song.title, song.artist,
                    song.country_id AS code, country.name, song.id
             FROM vote
-            JOIN song ON vote.song_id = song.id
+            JOIN current_song AS song ON vote.song_id = song.id
             JOIN country ON song.country_id = country.id
             WHERE vote.vote_set_id = %s
             ORDER BY score DESC
@@ -641,7 +641,7 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
             """
             SELECT vote.score AS pts, song.title, song.country_id AS code, song.id
             FROM vote
-            JOIN song ON song.id = vote.song_id
+            JOIN current_song AS song ON song.id = vote.song_id
             WHERE vote.vote_set_id = %s
             ORDER BY vote.score DESC
             """,
@@ -777,7 +777,7 @@ def predictions(username: str):
             SELECT prediction.position AS pos, song.title, song.artist,
                    song.country_id AS code, country.name, song.id
             FROM prediction
-            JOIN song ON prediction.song_id = song.id
+            JOIN current_song AS song ON prediction.song_id = song.id
             JOIN country ON song.country_id = country.id
             WHERE prediction.set_id = %s
             ORDER BY prediction.position

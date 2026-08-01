@@ -264,7 +264,7 @@ def vote(show: str, user: tuple[int, str]):
         cursor.execute(
             """
             SELECT song_id, score, country.id AS cc FROM vote
-            JOIN song ON vote.song_id = song.id
+            JOIN current_song AS song ON vote.song_id = song.id
             JOIN country ON song.country_id = country.id
             WHERE vote_set_id = %s
         """,

@@ -64,7 +64,7 @@ def generate_playlist(
             """
             SELECT LOWER(country.id) AS cc, video_link FROM year
             JOIN country ON year.host_id = country.id
-            JOIN song ON song.country_id = year.host_id
+            JOIN current_song AS song ON song.country_id = year.host_id
             WHERE year.id = %(y)s AND song.year_id = %(y)s
         """,
             {"y": show_data.year},
@@ -84,7 +84,7 @@ def generate_playlist(
 
     cursor.execute(
         """
-        SELECT LOWER(country.id) AS cc, video_link FROM song
+        SELECT LOWER(country.id) AS cc, video_link FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s
@@ -146,7 +146,7 @@ def get_show_play_entries(
                    song.vtt_link
             FROM year
             JOIN country ON year.host_id = country.id
-            JOIN song ON song.country_id = year.host_id
+            JOIN current_song AS song ON song.country_id = year.host_id
             WHERE year.id = %(y)s AND song.year_id = %(y)s
             """,
             {"y": show_data.year},
@@ -168,7 +168,7 @@ def get_show_play_entries(
                song.video_link AS url,
                song.poster_link,
                song.vtt_link
-        FROM song
+        FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s

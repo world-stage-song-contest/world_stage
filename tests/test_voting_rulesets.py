@@ -55,21 +55,22 @@ def _add_entry(
 ) -> int:
     cursor.execute(
         """
-        INSERT INTO song (
-            country_id, year_id, entry_number, title, artist,
-            is_placeholder, submitter_id
-        )
-        VALUES (%s, 2025, %s, %s, 'Artist', false, %s)
+        INSERT INTO song (country_id, year_id, entry_number)
+        VALUES (%s, 2025, %s)
         RETURNING id
         """,
         (
             country_id,
             show_id * 10 + position,
-            f"Entry {show_id}-{position}",
-            submitter_id,
         ),
     )
     song_id = cursor.fetchone()["id"]
+    cursor.execute(
+        """INSERT INTO song_data (
+               song_id, title, artist, submitter_id
+           ) VALUES (%s, %s, 'Artist', %s)""",
+        (song_id, f"Entry {show_id}-{position}", submitter_id),
+    )
     cursor.execute(
         """
         INSERT INTO song_show (song_id, show_id, running_order)

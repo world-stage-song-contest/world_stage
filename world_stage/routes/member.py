@@ -77,13 +77,15 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     user_limit = 1 if is_special else MAX_USER_SUBMISSIONS
 
     cursor.execute(
-        "SELECT COUNT(*) AS c FROM song WHERE year_id = %s AND NOT is_placeholder", (year,)
+        """SELECT COUNT(*) AS c FROM current_song AS song
+           WHERE year_id = %s AND NOT is_placeholder""",
+        (year,),
     )
     year_count = fetchone(cursor)["c"]
 
     cursor.execute(
         """
-        SELECT COUNT(*) AS c FROM song
+        SELECT COUNT(*) AS c FROM current_song AS song
         WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder
     """,
         (user_id, year),
@@ -95,7 +97,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     # Get user's own submissions
     cursor.execute(
         """
-        SELECT country.name, country.id AS cc FROM song
+        SELECT country.name, country.id AS cc FROM current_song AS song
         JOIN country ON song.country_id = country.id
         WHERE song.year_id = %s AND song.submitter_id = %s
         ORDER BY country.name
@@ -116,7 +118,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
         if closed and not is_special:
             cursor.execute(
                 """
-                SELECT country.name, country.id AS cc FROM song
+                SELECT country.name, country.id AS cc FROM current_song AS song
                 JOIN country ON song.country_id = country.id
                 WHERE song.year_id = %(year)s
                   AND submitter_id IS DISTINCT FROM %(user)s
@@ -130,7 +132,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
                 SELECT name, id AS cc FROM country
                 WHERE {availability_filter}
                       AND id NOT IN (
-                          SELECT country_id FROM song
+                          SELECT country_id FROM current_song AS song
                           WHERE year_id = %(year)s AND submitter_id = %(user)s
                       )
                 ORDER BY name
@@ -148,7 +150,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
             FROM country AS c
             WHERE {availability_filter}
               AND NOT EXISTS (
-                SELECT 1 FROM song AS s
+                SELECT 1 FROM current_song AS s
                 WHERE s.year_id = %(year)s AND s.country_id = c.id
                   AND s.submitter_id = %(user)s
               )
@@ -170,7 +172,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
             WHERE {availability_filter}
               AND NOT EXISTS (
                 SELECT 1
-                FROM song AS s
+                FROM current_song AS s
                 WHERE s.year_id = %(year)s
                 AND s.country_id = c.id
                 AND s.is_placeholder = FALSE
@@ -267,8 +269,8 @@ def get_country_data(year: int, country: str):
                        vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                        translated_lyrics,
                        romanized_lyrics, native_lyrics, notes, submitter_id,
-                       sources, admin_approved, entry_number
-                FROM song
+                       sources, entry_number
+                FROM current_song AS song
                 WHERE year_id = %s AND country_id = %s AND entry_number = %s
             """,
                 (year, country.upper(), entry_number),
@@ -283,8 +285,8 @@ def get_country_data(year: int, country: str):
                        vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                        translated_lyrics,
                        romanized_lyrics, native_lyrics, notes, submitter_id,
-                       sources, admin_approved, entry_number
-                FROM song
+                       sources, entry_number
+                FROM current_song AS song
                 WHERE year_id = %s AND country_id = %s AND submitter_id = %s
                 ORDER BY entry_number
                 LIMIT 1
@@ -299,8 +301,8 @@ def get_country_data(year: int, country: str):
                    vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                    translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
-                   sources, admin_approved, entry_number
-            FROM song
+                   sources, entry_number
+            FROM current_song AS song
             WHERE year_id = %s AND country_id = %s
         """,
             (year, country.upper()),
@@ -314,10 +316,12 @@ def get_country_data(year: int, country: str):
     cursor.execute(
         """
         SELECT language.id, language.name
-        FROM song_language
-        JOIN language ON song_language.language_id = language.id
-        WHERE song_id = %s
-        ORDER BY priority
+        FROM current_song AS song
+        JOIN language_set_language AS member
+          ON member.language_set_id = song.language_set_id
+        JOIN language ON member.language_id = language.id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -415,7 +419,6 @@ def get_country_data(year: int, country: str):
         "native_lyrics": row["native_lyrics"],
         "notes": row["notes"],
         "sources": row["sources"],
-        "admin_approved": row["admin_approved"],
         "user_id": row["submitter_id"] or 0,
         "languages": languages,
         "key_signatures": key_signatures,

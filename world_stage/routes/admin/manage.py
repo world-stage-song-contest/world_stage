@@ -81,14 +81,23 @@ def _render_manage(year_id: int, year_data: dict):
         (year_id,),
     )
     shows = cursor.fetchall()
-    return render_template("admin/manage_shows.html", year=year_data, shows=shows)
+    cursor.execute(
+        "SELECT id, name FROM country WHERE id <> 'XX' ORDER BY name, id"
+    )
+    countries = cursor.fetchall()
+    return render_template(
+        "admin/manage_shows.html",
+        year=year_data,
+        shows=shows,
+        countries=countries,
+    )
 
 
 @bp.get("/manage/<int:year>")
 def manage(year: int):
     cursor = get_db().cursor()
     cursor.execute(
-        "SELECT id, status FROM year WHERE id = %s AND id >= 0",
+        "SELECT id, status, host_id FROM year WHERE id = %s AND id >= 0",
         (year,),
     )
     year_data = cursor.fetchone()
@@ -109,7 +118,8 @@ def manage_special(short_name: str):
 
 @bp.post("/manage/<int:year>")
 def manage_post(year: int):
-    body = request.get_json()
+    is_form = not request.is_json
+    body = request.form if is_form else request.get_json(silent=True)
     if not body:
         return render_template("error.html", error="Empty request body"), 400
 
@@ -134,9 +144,76 @@ def manage_post(year: int):
             """,
                 (status, year),
             )
+        case "set_host":
+            if year < 0:
+                return render_template(
+                    "error.html", error="Special years cannot have a host"
+                ), 400
+
+            raw_host_id = body.get("host_id")
+            if raw_host_id is not None and not isinstance(raw_host_id, str):
+                return render_template(
+                    "error.html", error="Invalid host country"
+                ), 400
+            host_id = (raw_host_id or "").strip() or None
+            if host_id is not None:
+                cursor.execute("SELECT 1 FROM country WHERE id = %s", (host_id,))
+                if not cursor.fetchone():
+                    return render_template(
+                        "error.html", error=f"Invalid host country '{host_id}'"
+                    ), 400
+
+                cursor.execute(
+                    "SELECT id FROM show WHERE year_id = %s AND short_name = 'f'",
+                    (year,),
+                )
+                final = cursor.fetchone()
+                if not final:
+                    return render_template(
+                        "error.html", error=f"Final show for {year} not found"
+                    ), 400
+
+                cursor.execute(
+                    """
+                    SELECT id
+                    FROM song
+                    WHERE year_id = %s AND country_id = %s
+                    ORDER BY entry_number NULLS LAST, id
+                    LIMIT 1
+                    """,
+                    (year, host_id),
+                )
+                host_entry = cursor.fetchone()
+                if not host_entry:
+                    return render_template(
+                        "error.html",
+                        error=f"No {host_id} entry found for {year}",
+                    ), 400
+
+                cursor.execute(
+                    """
+                    INSERT INTO song_show (
+                        song_id, show_id, running_order, qualifier_order
+                    )
+                    VALUES (%s, %s, 1, 1)
+                    ON CONFLICT (song_id, show_id) DO UPDATE
+                    SET running_order = 1,
+                        qualifier_order = 1
+                    """,
+                    (host_entry["id"], final["id"]),
+                )
+
+            cursor.execute(
+                "UPDATE year SET host_id = %s WHERE id = %s AND id >= 0",
+                (host_id, year),
+            )
+            if cursor.rowcount == 0:
+                return render_template("error.html", error=f"Year {year} not found"), 404
         case _:
             return render_template("error.html", error=f"Unknown action '{action}'"), 400
     db.commit()
+    if is_form:
+        return redirect(url_for("admin.manage", year=year))
     return {"status": "success"}, 200
 
 
@@ -253,7 +330,7 @@ def set_pots(year: int):
 
     cursor.execute(
         """
-        SELECT country.id, name, pot, genre FROM song
+        SELECT country.id, name, pot, genre FROM current_song AS song
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id
         WHERE year_id = %s AND year.host_id IS DISTINCT FROM country.id

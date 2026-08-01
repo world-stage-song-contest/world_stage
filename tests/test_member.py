@@ -21,8 +21,12 @@ def test_admin_can_edit_closed_song_without_submitter(client, db):
         )
         cur.execute(
             """
-            INSERT INTO song (country_id, year_id, title, artist, is_placeholder)
-            VALUES ('HU', 1970, 'Lost Record', 'Unknown', false)
+            WITH inserted AS (
+                INSERT INTO song (country_id, year_id)
+                VALUES ('HU', 1970) RETURNING id
+            )
+            INSERT INTO song_data (song_id, title, artist)
+            SELECT id, 'Lost Record', 'Unknown' FROM inserted
             """
         )
         cur.execute(
