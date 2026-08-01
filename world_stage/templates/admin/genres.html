@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Genres{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.genre_index') }}">Genres</a>{% endblock %}
 {% block headercontents %}
 <style>
     .genres-table .subgenre-row {

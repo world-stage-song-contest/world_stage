@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Song audit log{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.changes') }}">Changes</a>{% endblock %}
 {% block headercontents %}
     <script src="{{ static('js/admin_changes.js') }}"></script>
     <style>

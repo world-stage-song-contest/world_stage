@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Add Language{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.language_create') }}">Add language</a>{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
 {% endblock %}

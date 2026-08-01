@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('admin.index') }}">Admin</a>
+    {% set child_navigation %}{% block admin_navigation %}{% endblock %}{% endset %}
+    {% if child_navigation|trim %}
+    <span class="nav-separator"></span>
+    {{ child_navigation }}
+    {% endif %}
+{% endblock %}

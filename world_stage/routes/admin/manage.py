@@ -45,7 +45,9 @@ def create_show_post(year: int):
         )
         db.commit()
     except psycopg.Error as e:
-        return render_template("admin/create_show.html", error=str(e))
+        return render_template(
+            "admin/create_show.html", error=str(e), years=get_years(), year=year
+        )
 
     return redirect(url_for("admin.create_show", year=year))
 

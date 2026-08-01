@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Fuck Up The Database{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.fuckup_db') }}">Database</a>{% endblock %}
 {% block content %}
 
 <div class="error" id="error">{{error}}</div>

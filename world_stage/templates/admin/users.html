@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Manage users{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.users') }}">Users</a>{% endblock %}
 {% block headercontents %}
     <script src="{{ static('js/manage.js') }}"></script>
     <script src="{{ static('js/sort-table.js') }}"></script>

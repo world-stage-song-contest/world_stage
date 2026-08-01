@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Predictions – All Shows{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.predictions_index') }}">Predictions</a>{% endblock %}
 {% block content %}
 
 <h2>Predictions by show</h2>

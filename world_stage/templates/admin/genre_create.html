@@ -1,5 +1,10 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Add Genre{% endblock %}
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.genre_index') }}">Genres</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('admin.genre_create') }}">Add</a>
+{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
 {% endblock %}

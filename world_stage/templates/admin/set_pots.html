@@ -1,5 +1,12 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Manage shows: {{year}}{% endblock %}
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('admin.manage', year=year) }}">{{ year }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('admin.set_pots', year=year) }}">Pots</a>
+{% endblock %}
 {% block headercontents %}
     <script src="{{ static('js/manage.js') }}"></script>
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">

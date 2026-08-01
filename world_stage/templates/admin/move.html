@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Move submission{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.move') }}">Move submission</a>{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
 {% endblock %}

@@ -1,4 +1,17 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
+    <span class="nav-separator"></span>
+    {% if year.special_short_name %}
+    <a class="nav-item" href="{{ url_for('admin.manage_special', short_name=year.special_short_name) }}">{{ year.special_name }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('admin.verifications_special', short_name=year.special_short_name) }}">Verifications</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('admin.manage', year=year.id) }}">{{ year.id }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('admin.verifications', year=year.id) }}">Verifications</a>
+    {% endif %}
+{% endblock %}
 {% macro render_comment_items(comments) %}
 {% for comment in comments %}
 <div class="verification-comment">

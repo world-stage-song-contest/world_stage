@@ -2,7 +2,7 @@ import math
 from collections import defaultdict
 
 import psycopg
-from flask import request
+from flask import request, url_for
 
 from ...db import get_db
 from ...utils import (
@@ -16,10 +16,10 @@ from ...utils import (
 from .common import _resolve_special, bp
 
 
-def _render_draw(year_id: int, label: str):
+def _render_draw(year_id: int, label: str, manage_url: str):
     """Render the multi-show (semifinal) draw page for a given year. ``label``
-    is shown in error messages and used as the JS RNG seed; for regular years
-    that's just the numeric year, for specials it's the negative year id.
+    is shown in error messages and navigation; for regular years that's just
+    the numeric year, while specials use their display name.
 
     Regular years group entries by ``country.pot`` (entries without a pot
     are excluded — same as the original behavior). Specials collapse every
@@ -99,22 +99,28 @@ def _render_draw(year_id: int, label: str):
         draw_assignments=draw_assignments,
         entry_show_by_song=entry_show_by_song,
         year=year_id,
+        year_label=label,
+        manage_url=manage_url,
         single_pot=single_pot,
     )
 
 
-@bp.get("/draw/<int:year>")
+@bp.get("/manage/<int:year>/draw")
 def draw(year: int):
-    return _render_draw(year, str(year))
+    return _render_draw(year, str(year), url_for("admin.manage", year=year))
 
 
-@bp.get("/draw/special/<short_name>")
+@bp.get("/manage/special/<short_name>/draw")
 def draw_special(short_name: str):
     special = _resolve_special(short_name)
     if not special:
         return render_template("error.html", error=f"Special '{short_name}' not found"), 404
 
-    return _render_draw(special["id"], special["special_name"] or short_name)
+    return _render_draw(
+        special["id"],
+        special["special_name"] or short_name,
+        url_for("admin.manage_special", short_name=short_name),
+    )
 
 
 def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -> str | None:
@@ -168,7 +174,7 @@ def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -
     return None
 
 
-@bp.post("/draw/<int:year>")
+@bp.post("/manage/<int:year>/draw")
 def draw_post(year: int):
     # Each value is a list of song IDs in running order.
     data: dict[str, list[int]] | None = request.json
@@ -213,7 +219,7 @@ def draw_post(year: int):
     return {}, 204
 
 
-@bp.post("/draw/special/<short_name>")
+@bp.post("/manage/special/<short_name>/draw")
 def draw_special_post(short_name: str):
     special = _resolve_special(short_name)
     if not special:
@@ -221,16 +227,21 @@ def draw_special_post(short_name: str):
     return draw_post(special["id"])
 
 
-@bp.get("/draw/special/<short_name>/<show>")
+@bp.get("/manage/special/<short_name>/draw/<show>")
 def draw_special_final(short_name: str, show: str):
     special = _resolve_special(short_name)
     if not special:
         return render_template("error.html", error=f"Special '{short_name}' not found"), 404
 
-    return draw_final(special["id"], show)
+    return draw_final(
+        special["id"],
+        show,
+        manage_url=url_for("admin.manage_special", short_name=short_name),
+        year_label=special["special_name"] or short_name,
+    )
 
 
-@bp.post("/draw/special/<short_name>/<show>")
+@bp.post("/manage/special/<short_name>/draw/<show>")
 def draw_special_final_post(short_name: str, show: str):
     special = _resolve_special(short_name)
     if not special:
@@ -238,8 +249,14 @@ def draw_special_final_post(short_name: str, show: str):
     return draw_final_post(special["id"], show)
 
 
-@bp.get("/draw/<int:year>/<show>")
-def draw_final(year: int, show: str):
+@bp.get("/manage/<int:year>/draw/<show>")
+def draw_final(
+    year: int,
+    show: str,
+    *,
+    manage_url: str | None = None,
+    year_label: str | None = None,
+):
     show_data = get_show_id(show, year)
     if not show_data:
         return render_template("error.html", error=f"Invalid show '{show}' for {year}"), 404
@@ -296,13 +313,15 @@ def draw_final(year: int, show: str):
         show=show,
         show_name=show_data.name,
         year=year,
+        year_label=year_label or str(year),
+        manage_url=manage_url or url_for("admin.manage", year=year),
         num=len(songs),
         lim=math.ceil((len(songs) / 2) or 1),
         single_pot=year < 0,
     )
 
 
-@bp.post("/draw/<int:year>/<show>")
+@bp.post("/manage/<int:year>/draw/<show>")
 def draw_final_post(year: int, show: str):
     # The client now sends a list of song IDs (in running order).
     data: dict[str, list[int]] | None = request.json

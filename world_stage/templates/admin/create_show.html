@@ -1,5 +1,12 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Administrator Utilities{% endblock %}
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('admin.manage', year=year) }}">{{ year }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('admin.create_show', year=year) }}">Create show</a>
+{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
 {% endblock %}

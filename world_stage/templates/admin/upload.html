@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Upload a file{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.upload') }}">Upload</a>{% endblock %}
 {% block headercontents %}
 {% endblock %}
 {% block content %}

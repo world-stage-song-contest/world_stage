@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Add Alternative Name{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.alternative_name_index') }}">Alternative names</a>{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
 {% endblock %}

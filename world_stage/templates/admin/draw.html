@@ -1,5 +1,12 @@
-{% extends "base.html" %}
-{% block title %}Draw {{ year }}{% endblock %}
+{% extends "admin/base.html" %}
+{% block title %}Draw {{ year_label }}{% endblock %}
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ manage_url }}">{{ year_label }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ request.path }}">Draw</a>
+{% endblock %}
 {% block headercontents %}
     <script>
         const year = {{ year }};

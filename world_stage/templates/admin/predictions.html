@@ -1,5 +1,10 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Predictions – {{ year }} {{ show_name }}{% endblock %}
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.predictions_index') }}">Predictions</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ request.path }}">{{ year }} {{ show_name }}</a>
+{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/predict.css') }}">
 {% endblock %}

@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Recap data{% endblock %}
+{% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.recap_data') }}">Recap data</a>{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
     <script>

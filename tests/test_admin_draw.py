@@ -67,7 +67,7 @@ def draw_setup(db, client):
 
 def test_draw_post_rejects_two_entries_from_same_pot_in_one_semifinal(client, draw_setup):
     res = client.post(
-        "/admin/draw/2025",
+        "/admin/manage/2025/draw",
         json={
             "sf1": [draw_setup["US"], draw_setup["ES"]],
             "sf2": [draw_setup["FR"], draw_setup["DE"]],
@@ -79,7 +79,7 @@ def test_draw_post_rejects_two_entries_from_same_pot_in_one_semifinal(client, dr
 
 
 def test_draw_page_renders_backend_assigned_slots(client, draw_setup):
-    res = client.get("/admin/draw/2025", headers={"Accept": "text/html,image/svg+xml"})
+    res = client.get("/admin/manage/2025/draw", headers={"Accept": "text/html,image/svg+xml"})
 
     assert res.status_code == 200
     html = res.text
@@ -90,7 +90,7 @@ def test_draw_page_renders_backend_assigned_slots(client, draw_setup):
 
 def test_draw_post_accepts_one_entry_per_pot_per_semifinal(client, db, draw_setup):
     res = client.post(
-        "/admin/draw/2025",
+        "/admin/manage/2025/draw",
         json={
             "sf1": [draw_setup["US"], draw_setup["FR"]],
             "sf2": [draw_setup["ES"], draw_setup["DE"]],

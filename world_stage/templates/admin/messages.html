@@ -1,10 +1,11 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Admin messages{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/messages.css') }}">
 {% endblock %}
-{% block navigation %}
-    <a class="nav-item" href="{{ url_for('admin.index') }}"><i class="ph-fill ph-shield"></i> Admin</a>
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.messages_inbox') }}">Messages</a>
+    <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('messages.new') }}"><i class="ph-fill ph-pencil-simple"></i> New admin message</a>
     <a class="nav-item" href="{{ url_for('messages.search') }}"><i class="ph-fill ph-magnifying-glass"></i> Search</a>
     <a class="nav-item" href="{{ url_for('messages.inbox') }}"><i class="ph-fill ph-user"></i> Personal inbox</a>

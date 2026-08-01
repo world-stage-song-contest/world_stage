@@ -1,5 +1,14 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Manage shows: {{ year.special_name or year.id }}{% endblock %}
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
+    <span class="nav-separator"></span>
+    {% if year.special_short_name %}
+    <a class="nav-item" href="{{ url_for('admin.manage_special', short_name=year.special_short_name) }}">{{ year.special_name }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('admin.manage', year=year.id) }}">{{ year.id }}</a>
+    {% endif %}
+{% endblock %}
 {% block headercontents %}
     <script src="{{ static('js/manage.js') }}"></script>
 {% endblock %}
