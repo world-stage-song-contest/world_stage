@@ -30,8 +30,17 @@
 </div>
 
 <h2>Done years</h2>
+
+<div class="detail-column-controls">
+    <label>
+        <input type="checkbox" checked
+               onchange="document.querySelectorAll('.adjusted-percent-table').forEach(table => table.classList.toggle('hide-detail', this.checked))">
+        Collapse detail columns
+    </label>
+</div>
+
 <div class="sticky-header-table-container">
-    <table class="results-table sticky-header-table sortable song-table">
+    <table class="results-table sticky-header-table sortable song-table adjusted-percent-table hide-detail">
         <thead>
             <tr>
                 <th>Year</th>
@@ -41,6 +50,7 @@
                 <th>Language</th>
                 <th>Points</th>
                 <th>% of Max</th>
+                <th class="detail-col" title="Midpoint-adjusted points percentage">Adjusted %</th>
                 <th>Submitter</th>
             </tr>
         </thead>
@@ -69,6 +79,7 @@
                 <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
                 <td class="points">{{ winner.vote_data.sum }}</td>
                 <td class="percent">{{ winner.vote_data.pct() }}</td>
+                <td class="percent detail-col">{{ winner.vote_data.adjusted_pct() }}</td>
                 <td class="submitter">{{ winner.submitter }}</td>
             </tr>
         {% endfor %}
@@ -78,7 +89,7 @@
 
 <h2>Specials</h2>
 <div class="sticky-header-table-container">
-    <table class="results-table sticky-header-table sortable song-table">
+    <table class="results-table sticky-header-table sortable song-table adjusted-percent-table hide-detail">
         <thead>
             <tr>
                 <th>Special</th>
@@ -88,6 +99,7 @@
                 <th>Language</th>
                 <th>Points</th>
                 <th>% of Max</th>
+                <th class="detail-col" title="Midpoint-adjusted points percentage">Adjusted %</th>
                 <th>Submitter</th>
             </tr>
         </thead>
@@ -113,9 +125,10 @@
                 <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
                 <td class="points">{{ winner.vote_data.sum }}</td>
                 <td class="percent">{{ winner.vote_data.pct() }}</td>
+                <td class="percent detail-col">{{ winner.vote_data.adjusted_pct() }}</td>
                 <td class="submitter">{{ winner.submitter }}</td>
                 {% else %}
-                <td colspan="7"></td>
+                <td colspan="8"></td>
                 {% endif %}
             </tr>
         {% endfor %}

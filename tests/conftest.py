@@ -109,6 +109,35 @@ def _seeded_db(_test_db):
             ON CONFLICT DO NOTHING
         """)
 
+        # Versioned voting rules are reference data. A schema-only copy of a
+        # migrated source database contains their table and triggers but not
+        # these rows, while its copied migration ledger marks the seed
+        # migration as already applied.
+        cur.execute("""
+            INSERT INTO voting_ruleset (
+                version, description, is_current, is_current_revote,
+                penalizes_non_voters
+            )
+            VALUES
+                ('v1', 'Ballot-flag entry is forced to receive 1 point',
+                    false, false, false),
+                ('v2', 'Ballot-flag entry is forbidden; other owned entries are allowed',
+                    false, false, false),
+                ('v3', 'Ballot-flag entry and all voter-owned entries are forbidden',
+                    false, false, false),
+                ('v4', 'Voter-owned entries are forbidden without a failure-to-vote penalty',
+                    false, false, false),
+                ('v5', 'Voter-owned entries are forbidden with a failure-to-vote penalty',
+                    true, false, true),
+                ('v6', 'Revote ownership exclusion with a ballot-capacity exception',
+                    false, true, true)
+            ON CONFLICT (version) DO UPDATE
+            SET description = EXCLUDED.description,
+                is_current = EXCLUDED.is_current,
+                is_current_revote = EXCLUDED.is_current_revote,
+                penalizes_non_voters = EXCLUDED.penalizes_non_voters
+        """)
+
         # Year (open for submissions)
         cur.execute("""
             INSERT INTO year (id, status, host_id)

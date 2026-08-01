@@ -30,7 +30,7 @@
     {% if has_qualifiers %}
     <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifiers</a>
     {% endif %}
-    <a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>
+    {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>{% endif %}
     {% endif %}
     {% else %}
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
@@ -41,7 +41,7 @@
     {% if has_qualifiers %}
     <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifiers</a>
     {% endif %}
-    <a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>
+    {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>{% endif %}
     {% endif %}
     {% endif %}
     {% if revote_eligible %}
@@ -80,8 +80,17 @@
     <a href="{{ url_for('playlist.show', key=show_key) }}">With postcards</a>/<a
     href="{{ url_for('playlist.show', key=show_key ~ '-np') }}">Without postcards</a>
 </div>
+{% if access != 'none' and access != 'draw' %}
+<div class="detail-column-controls">
+    <label>
+        <input type="checkbox" checked
+               onchange="document.querySelectorAll('.adjusted-percent-table').forEach(table => table.classList.toggle('hide-detail', this.checked))">
+        Collapse detail columns
+    </label>
+</div>
+{% endif %}
 <div id="scroll-container">
-<table class="sortable">
+<table class="sortable adjusted-percent-table hide-detail">
     <thead>
         <tr>
             <th>RO</th>
@@ -92,6 +101,7 @@
             <th>Place</th>
             <th>Points</th>
             <th>% of Max</th>
+            <th class="detail-col" title="Midpoint-adjusted points percentage">Adjusted %</th>
             <th>Voters</th>
         {% for point in points %}
             <th class="point-header"><div>{{ point }}</th>
@@ -135,6 +145,7 @@
                 {% endif %}
                 >{{ song.vote_data.sum }}</td>
                 <td class="number percent">{{ song.vote_data.pct() }}</td>
+                <td class="number percent detail-col">{{ song.vote_data.adjusted_pct() }}</td>
                 <td class="number">{{ song.vote_data.count }}</td>
             {% for point in points %}
                 {% set pts = song.get_pt(point) %}

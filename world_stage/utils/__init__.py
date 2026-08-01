@@ -94,10 +94,12 @@ from .types import (
     VoteData,
     Year,
 )
+from .voting import BallotEntryRule, ballot_rule_errors, get_ballot_entry_rules
 
 __all__ = (
     "LCG",
     "AbstractVoteSequencer",
+    "BallotEntryRule",
     "ChronologicalVoteSequencer",
     "Country",
     "ErrorID",
@@ -120,6 +122,7 @@ __all__ = (
     "format_timedelta",
     "generate_api_token",
     "get_api_auth",
+    "get_ballot_entry_rules",
     "get_closed_years",
     "get_countries",
     "get_country_name",
@@ -176,4 +179,5 @@ __all__ = (
     "with_permissions",
     "with_user",
     "write_m3u",
+    "ballot_rule_errors",
 )

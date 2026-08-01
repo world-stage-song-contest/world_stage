@@ -123,6 +123,13 @@ def test_revote_keeps_official_results_unchanged(client, db):
     assert b"<th>Place</th>" in response.data
     assert b"<th>Old</th>" in response.data
     assert response.data.count(b"<th>Diff</th>") == 2
+    assert b">% of Max</th>" in response.data
+    assert b">Adjusted %</th>" in response.data
+    assert b">45.45%</td>" in response.data
+    assert b"Collapse detail columns" in response.data
+    assert b'<input type="checkbox" checked' in response.data
+    assert b'class="sortable adjusted-percent-table hide-detail"' in response.data
+    assert b'<th class="detail-col"' in response.data
     assert b">2024<" in response.data
     assert b"/year/2024/rv" in response.data
     assert b">Original Results<" in response.data
@@ -137,6 +144,8 @@ def test_revote_keeps_official_results_unchanged(client, db):
     assert b'name="revoters_only"' in response.data
     assert b"Only use Revote votes" in response.data
     assert b"checked" in response.data
+    assert b">Adjusted %</th>" in response.data
+    assert b">45.45%</td>" in response.data
 
     response = client.get("/user/bob/revotes", headers={"Accept": "text/html"})
     assert response.status_code == 200
@@ -195,6 +204,10 @@ def test_revote_keeps_official_results_unchanged(client, db):
     assert response.status_code == 200
     assert b"Revote Results" in response.data
     assert b"/revote/2024/rv" in response.data
+    assert b"Collapse detail columns" in response.data
+    assert b'<input type="checkbox" checked' in response.data
+    assert b'class="sortable adjusted-percent-table hide-detail"' in response.data
+    assert b'<th class="detail-col"' in response.data
 
     session_id = uuid4()
     with db.cursor() as cursor:
@@ -235,7 +248,9 @@ def test_revote_keeps_official_results_unchanged(client, db):
     response = client.get("/revote/2024/rv/vote", headers={"Accept": "text/html"})
     assert response.status_code == 200
     assert b"Carol" in response.data
-    assert b"Original winner" not in response.data
+    # Excluding Carol's entry would leave only one entry for two scored
+    # positions, so the v6 capacity exception allows every entry.
+    assert b"Original winner" in response.data
     assert b"Revote winner" in response.data
     assert b">Clear<" in response.data
     assert b'onclick="clearVotes()"' in response.data

@@ -3,8 +3,10 @@ from flask import Blueprint, request
 from world_stage.db import fetchone, get_db
 from world_stage.utils import (
     ErrorID,
+    ballot_rule_errors,
     dt_now,
     err,
+    get_ballot_entry_rules,
     get_countries,
     get_show_id,
     require_api_auth,
@@ -229,9 +231,6 @@ def save_ballot(show: str, auth):
         return err(ErrorID.BAD_REQUEST, "A song can only receive one score")
     if any(song_id not in song_by_id for song_id in song_ids):
         return err(ErrorID.BAD_REQUEST, "Votes must reference songs in this show")
-    if any(song_by_id[song_id]["submitter_id"] == user_id for song_id in song_ids):
-        return err(ErrorID.BAD_REQUEST, "You cannot vote for your own song")
-
     nickname = data.get("nickname")
     if nickname is not None and not isinstance(nickname, str):
         return err(ErrorID.BAD_REQUEST, "nickname must be a string or null")
@@ -245,6 +244,37 @@ def save_ballot(show: str, auth):
     valid_country_ids = {country["id"] for country in countries}
     if country_id and country_id not in valid_country_ids:
         return err(ErrorID.BAD_REQUEST, "country_id is not available to this voter")
+
+    rules = get_ballot_entry_rules(
+        show_data.id,
+        "official",
+        user_id,
+        country_id,
+        list(song_by_id),
+    )
+    rule_errors = ballot_rule_errors(
+        {vote["score"]: vote["song_id"] for vote in votes}, rules
+    )
+    if rule_errors:
+        kind, reason, _song_id, required_score = rule_errors[0]
+        if kind == "forbidden":
+            if reason == "owner":
+                description = "You cannot vote for your own song"
+            elif reason == "flag_and_owner":
+                description = (
+                    "You cannot vote for your own song or the entry represented by "
+                    "your voting flag"
+                )
+            else:
+                description = (
+                    "You cannot vote for the entry represented by your voting flag"
+                )
+        else:
+            description = (
+                "The entry represented by your voting flag must receive "
+                f"{required_score} point"
+            )
+        return err(ErrorID.BAD_REQUEST, description)
 
     cursor.execute(
         """

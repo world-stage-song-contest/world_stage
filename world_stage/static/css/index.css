@@ -698,6 +698,14 @@ bdi {
     visibility: collapse !important;
 }
 
+.detail-column-controls {
+    margin: 0.5em 0;
+}
+
+table.hide-detail .detail-col {
+    display: none;
+}
+
 .big {
     font-size: 1.5em;
     font-weight: bold;

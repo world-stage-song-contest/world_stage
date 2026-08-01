@@ -1,5 +1,8 @@
 """Tests for authenticated ballot and prediction API endpoints."""
 
+import re
+from uuid import uuid4
+
 from world_stage.utils import (
     get_show_songs,
     get_show_winner,
@@ -46,7 +49,10 @@ def _seed_show_and_songs(db):
             """
             INSERT INTO point (id, point_system_id, place, score)
             VALUES (101, 10, 1, 12), (102, 10, 2, 10), (103, 10, 3, 8)
-            ON CONFLICT DO NOTHING
+            ON CONFLICT (id) DO UPDATE
+            SET point_system_id = EXCLUDED.point_system_id,
+                place = EXCLUDED.place,
+                score = EXCLUDED.score
             """
         )
         cursor.execute(
@@ -67,7 +73,9 @@ def _seed_show_and_songs(db):
                 voting_opens = EXCLUDED.voting_opens,
                 voting_closes = EXCLUDED.voting_closes,
                 predictions_close = EXCLUDED.predictions_close,
-                status = EXCLUDED.status
+                status = EXCLUDED.status,
+                voting_ruleset_version = 'v5',
+                revote_ruleset_version = 'v6'
             RETURNING id
             """
         )
@@ -316,6 +324,7 @@ def test_winner_loading_hydrates_only_the_materialized_winner(app, db):
             "languages": [lang.name for lang in winner.languages],
             "points": winner.vote_data.sum,
             "percentage": winner.vote_data.pct(),
+            "adjusted_percentage": winner.vote_data.adjusted_pct(),
         }
 
     @app.get("/_test/year-winner-loading")
@@ -328,6 +337,7 @@ def test_winner_loading_hydrates_only_the_materialized_winner(app, db):
             "languages": [lang.name for lang in winner.languages],
             "points": winner.vote_data.sum,
             "percentage": winner.vote_data.pct(),
+            "adjusted_percentage": winner.vote_data.adjusted_pct(),
         }
 
     show_response = app.test_client().get("/_test/show-winner-loading")
@@ -340,6 +350,7 @@ def test_winner_loading_hydrates_only_the_materialized_winner(app, db):
         "languages": ["English"],
         "points": 12,
         "percentage": "100.00%",
+        "adjusted_percentage": "100.00%",
     }
     assert year_response.status_code == 200
     assert year_response.headers["X-SQL-Query-Count"] == "2"
@@ -348,6 +359,7 @@ def test_winner_loading_hydrates_only_the_materialized_winner(app, db):
         "languages": ["English"],
         "points": 12,
         "percentage": "100.00%",
+        "adjusted_percentage": "100.00%",
     }
 
     with db.cursor() as cursor:
@@ -400,6 +412,72 @@ class TestVotingApi:
         response = client.get('/api/voting/2025-f', headers=bob_headers)
         assert _result(response)['ballot']['votes'] == ballot['votes']
 
+    def test_html_ballot_uses_rules_for_options_and_required_scores(
+        self, client, db
+    ):
+        song_ids = _seed_show_and_songs(db)
+        session_id = uuid4()
+        with db.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO session (user_id, session_id, expires_at)
+                VALUES (2, %s, CURRENT_TIMESTAMP + INTERVAL '1 hour')
+                """,
+                (session_id,),
+            )
+        db.commit()
+        client.set_cookie("session", str(session_id))
+
+        response = client.get('/vote/2025-f', headers={'Accept': 'text/html'})
+        assert response.status_code == 200
+        home_options = re.findall(
+            rf'<option value="{song_ids[0]}"[^>]*>', response.text
+        )
+        assert len(home_options) == 3
+        assert all('disabled' in option for option in home_options)
+
+        with db.cursor() as cursor:
+            cursor.execute("UPDATE point SET score = 1 WHERE id = 103")
+            cursor.execute(
+                """
+                UPDATE show
+                SET voting_ruleset_version = 'v1'
+                WHERE id = (SELECT show_id FROM song_show WHERE song_id = %s)
+                """,
+                (song_ids[0],),
+            )
+        db.commit()
+
+        response = client.get('/vote/2025-f', headers={'Accept': 'text/html'})
+        assert response.status_code == 200
+        home_options = re.findall(
+            rf'<option value="{song_ids[0]}"[^>]*>', response.text
+        )
+        assert len(home_options) == 3
+        assert sum('disabled' not in option for option in home_options) == 1
+
+        response = client.get('/vote/2025-f/rules?country=US')
+        assert response.status_code == 200
+        assert response.get_json()['rules'][str(song_ids[0])] == {
+            'kind': 'FORCED',
+            'reason': 'flag',
+            'required_score': 1,
+        }
+
+        response = client.post(
+            '/vote/2025-f',
+            data={
+                'nickname': 'Bob',
+                'country': 'US',
+                'pts-12': str(song_ids[0]),
+                'pts-10': str(song_ids[1]),
+                'pts-1': str(song_ids[2]),
+            },
+            headers={'Accept': 'text/html'},
+        )
+        assert response.status_code == 200
+        assert b'must receive 1 point' in response.data
+
     def test_ballot_rejects_own_song_and_incomplete_scores(self, client, db, bob_headers):
         song_ids = _seed_show_and_songs(db)
         response = client.put(
@@ -428,6 +506,99 @@ class TestVotingApi:
         )
         assert response.status_code == 400
         assert 'own song' in response.get_json()['error']['description']
+
+    def test_v2_uses_ballot_flag_and_allows_other_owned_entries(
+        self, client, db, bob_headers
+    ):
+        song_ids = _seed_show_and_songs(db)
+        with db.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE show
+                SET voting_ruleset_version = 'v2'
+                WHERE id = (SELECT show_id FROM song_show WHERE song_id = %s)
+                """,
+                (song_ids[0],),
+            )
+            cursor.execute(
+                "UPDATE song SET submitter_id = 2 WHERE id = %s",
+                (song_ids[1],),
+            )
+        db.commit()
+
+        response = client.put(
+            '/api/voting/2025-f',
+            headers=bob_headers,
+            json={
+                'country_id': 'US',
+                'votes': [
+                    {'score': 12, 'song_id': song_ids[1]},
+                    {'score': 10, 'song_id': song_ids[2]},
+                    {'score': 8, 'song_id': song_ids[3]},
+                ],
+            },
+        )
+        assert response.status_code == 200
+
+        response = client.put(
+            '/api/voting/2025-f',
+            headers=bob_headers,
+            json={
+                'country_id': 'US',
+                'votes': [
+                    {'score': 12, 'song_id': song_ids[0]},
+                    {'score': 10, 'song_id': song_ids[2]},
+                    {'score': 8, 'song_id': song_ids[3]},
+                ],
+            },
+        )
+        assert response.status_code == 400
+        assert 'voting flag' in response.get_json()['error']['description']
+
+    def test_v1_requires_one_point_for_the_ballot_flag_entry(
+        self, client, db, bob_headers
+    ):
+        song_ids = _seed_show_and_songs(db)
+        with db.cursor() as cursor:
+            cursor.execute("UPDATE point SET score = 1 WHERE id = 103")
+            cursor.execute(
+                """
+                UPDATE show
+                SET voting_ruleset_version = 'v1'
+                WHERE id = (SELECT show_id FROM song_show WHERE song_id = %s)
+                """,
+                (song_ids[0],),
+            )
+        db.commit()
+
+        response = client.put(
+            '/api/voting/2025-f',
+            headers=bob_headers,
+            json={
+                'country_id': 'US',
+                'votes': [
+                    {'score': 12, 'song_id': song_ids[0]},
+                    {'score': 10, 'song_id': song_ids[1]},
+                    {'score': 1, 'song_id': song_ids[2]},
+                ],
+            },
+        )
+        assert response.status_code == 400
+        assert 'must receive 1 point' in response.get_json()['error']['description']
+
+        response = client.put(
+            '/api/voting/2025-f',
+            headers=bob_headers,
+            json={
+                'country_id': 'US',
+                'votes': [
+                    {'score': 12, 'song_id': song_ids[1]},
+                    {'score': 10, 'song_id': song_ids[2]},
+                    {'score': 1, 'song_id': song_ids[0]},
+                ],
+            },
+        )
+        assert response.status_code == 200
 
 
 class TestPredictionApi:

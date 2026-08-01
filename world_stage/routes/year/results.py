@@ -144,6 +144,7 @@ def special_results(short_name: str, show: str, permissions: UserPermissions):
         participants=participants,
         voters=voter_count,
         can_apply_penalty=permissions.can_view_restricted,
+        penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
         revote_eligible=revote_eligible,
         special=short_name,
@@ -229,6 +230,7 @@ def special_detailed_results(short_name: str, show: str, permissions: UserPermis
         year=short_name,
         participants=len(songs),
         can_apply_penalty=permissions.can_view_restricted,
+        penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
         special=short_name,
         special_name=special_year["special_name"],
@@ -361,6 +363,7 @@ def results(year: int, show: str, permissions: UserPermissions):
         participants=participants,
         voters=voter_count,
         can_apply_penalty=permissions.can_view_restricted,
+        penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
         revote_eligible=revote_eligible,
     )
@@ -440,5 +443,6 @@ def detailed_results(year: int, show: str, permissions: UserPermissions):
         year=year,
         participants=len(songs),
         can_apply_penalty=permissions.can_view_restricted,
+        penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
     )

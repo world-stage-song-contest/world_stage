@@ -28,8 +28,15 @@
 <form method="get">
     <label><input type="checkbox" name="revoters_only" value="true" {% if revoters_only %}checked{% endif %} onchange="this.form.submit()"> Only use Revote votes</label>
 </form>
+<div class="detail-column-controls">
+    <label>
+        <input type="checkbox" checked
+               onchange="document.querySelectorAll('.adjusted-percent-table').forEach(table => table.classList.toggle('hide-detail', this.checked))">
+        Collapse detail columns
+    </label>
+</div>
 <div id="scroll-container">
-<table class="sortable">
+<table class="sortable adjusted-percent-table hide-detail">
     <thead>
         <tr>
             <th>RO</th>
@@ -42,6 +49,7 @@
             <th>Points</th>
             <th>Diff</th>
             <th>% of Max</th>
+            <th class="detail-col" title="Midpoint-adjusted points percentage">Adjusted %</th>
             <th>Voters</th>
             {% for point in points %}
             <th class="point-header"><div>{{ point }}</div></th>
@@ -82,6 +90,7 @@
             >{{ song.vote_data.sum }}</td>
             <td class="number">{{ '+' if points_difference > 0 else '' }}{{ points_difference }}</td>
             <td class="number percent">{{ song.vote_data.pct() }}</td>
+            <td class="number percent detail-col">{{ song.vote_data.adjusted_pct() }}</td>
             <td class="number">{{ song.vote_data.count }}</td>
             {% for point in points %}
             {% set received = song.get_pt(point) %}

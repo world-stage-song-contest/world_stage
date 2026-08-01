@@ -82,6 +82,11 @@ def _render_penalty(
     """Shared GET body for the regular and special penalty pages."""
     if not show_data.id:
         return render_template("error.html", error="Show not found"), 404
+    if not show_data.penalizes_non_voters:
+        return render_template(
+            "error.html",
+            error="This show's voting ruleset does not apply non-voter penalties.",
+        ), 400
     if show_data.voting_closes is None or show_data.voting_closes > dt_now():
         return render_template(
             "error.html",
@@ -108,6 +113,10 @@ def _apply_penalty(show_data: ShowData):
     everyone else in the candidate list has theirs cleared."""
     if not show_data.id:
         return {"error": "Show not found"}, 404
+    if not show_data.penalizes_non_voters:
+        return {
+            "error": "This show's voting ruleset does not apply non-voter penalties."
+        }, 400
     if show_data.voting_closes is None or show_data.voting_closes > dt_now():
         return {"error": "Voting hasn't closed yet"}, 400
 

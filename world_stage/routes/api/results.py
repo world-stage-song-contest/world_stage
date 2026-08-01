@@ -82,6 +82,9 @@ def _result_entries(cursor, show_id: int) -> list[dict]:
                country_show_results.placement_percentage,
                country_show_results.max_possible_points,
                country_show_results.points_percentage,
+               country_show_results.adjusted_max_possible_points,
+               country_show_results.points_midpoint,
+               country_show_results.adjusted_points_percentage,
                country_show_results.max_pts, country_show_results.total_voters,
                COALESCE(song_show.penalty, 0) AS penalty
         FROM country_show_results

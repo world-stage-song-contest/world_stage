@@ -27,10 +27,18 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
 
     cursor.execute(
         """
-        SELECT id, year_id, point_system_id, show_name, voting_opens, voting_closes,
-               predictions_close, dtf, sc, special, status
+        SELECT show.id, show.year_id, show.point_system_id, show.show_name,
+               show.voting_opens, show.voting_closes, show.predictions_close,
+               show.dtf, show.sc, show.special, show.status,
+               show.voting_ruleset_version, show.revote_ruleset_version,
+               official_rules.penalizes_non_voters,
+               revote_rules.penalizes_non_voters AS revote_penalizes_non_voters
         FROM show
-        WHERE year_id = %s AND short_name = %s
+        JOIN voting_ruleset official_rules
+          ON official_rules.version = show.voting_ruleset_version
+        JOIN voting_ruleset revote_rules
+          ON revote_rules.version = show.revote_ruleset_version
+        WHERE show.year_id = %s AND show.short_name = %s
     """,
         (year, short_show_name),
     )
@@ -67,6 +75,10 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         sc=sc,
         special=special,
         status=status,
+        voting_ruleset_version=show_row["voting_ruleset_version"],
+        revote_ruleset_version=show_row["revote_ruleset_version"],
+        penalizes_non_voters=show_row["penalizes_non_voters"],
+        revote_penalizes_non_voters=show_row["revote_penalizes_non_voters"],
     )
 
     return ret

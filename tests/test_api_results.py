@@ -99,6 +99,31 @@ class TestResultsApi:
             ('US', 1),
             ('ES', 2),
         ]
+        assert [
+            {
+                key: entry[key]
+                for key in (
+                    'points_percentage',
+                    'adjusted_points_percentage',
+                    'adjusted_max_possible_points',
+                    'points_midpoint',
+                )
+            }
+            for entry in data['entries']
+        ] == [
+            {
+                'points_percentage': '100.00',
+                'adjusted_points_percentage': '100.00',
+                'adjusted_max_possible_points': 12,
+                'points_midpoint': '11.000000',
+            },
+            {
+                'points_percentage': '83.33',
+                'adjusted_points_percentage': '45.45',
+                'adjusted_max_possible_points': 12,
+                'points_midpoint': '11.000000',
+            },
+        ]
 
         response = client.get('/api/results/2024-r/detailed')
         assert response.status_code == 200

@@ -1,6 +1,7 @@
 import datetime
 from collections import defaultdict
 from dataclasses import dataclass, field
+from decimal import Decimal
 from functools import lru_cache, total_ordering
 
 
@@ -19,6 +20,10 @@ class ShowData:
     sc: int | None
     special: int | None
     status: str
+    voting_ruleset_version: str
+    revote_ruleset_version: str
+    penalizes_non_voters: bool
+    revote_penalizes_non_voters: bool
 
 
 @dataclass(frozen=True)
@@ -62,6 +67,11 @@ class VoteData:
     # post-penalty total; this field is just for display.
     penalty: int = 0
     pts: dict[int, int] = field(default_factory=lambda: defaultdict(int))
+    max_possible_points: int | None = None
+    points_percentage: Decimal | None = None
+    adjusted_max_possible_points: int | None = None
+    points_midpoint: Decimal | None = None
+    adjusted_points_percentage: Decimal | None = None
 
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, VoteData):
@@ -104,6 +114,11 @@ class VoteData:
             return "0.00%"
         return f"{(self.sum / (self.show_voters * self.max_pts)) * 100:.2f}%"
 
+    def adjusted_pct(self) -> str:
+        if self.adjusted_points_percentage is None:
+            return "0.00%"
+        return f"{self.adjusted_points_percentage:.2f}%"
+
     def get_pt(self, pt: int) -> int:
         if pt not in self.pts:
             return 0
@@ -118,6 +133,11 @@ class VoteData:
             "sum": self.sum,
             "count": self.count,
             "pts": dict(self.pts),
+            "max_possible_points": self.max_possible_points,
+            "points_percentage": self.points_percentage,
+            "adjusted_max_possible_points": self.adjusted_max_possible_points,
+            "points_midpoint": self.points_midpoint,
+            "adjusted_points_percentage": self.adjusted_points_percentage,
         }
 
 

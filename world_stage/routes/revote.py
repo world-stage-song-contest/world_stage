@@ -1,12 +1,15 @@
 """Permanent re-voting for completed shows."""
 
 from collections import defaultdict
+from decimal import Decimal
 from typing import Any
 
 from flask import Blueprint, make_response, request, url_for
 
 from ..db import fetchone, get_db
 from ..utils import (
+    ballot_rule_errors,
+    get_ballot_entry_rules,
     get_countries,
     get_show_id,
     get_show_songs,
@@ -228,14 +231,26 @@ def vote(year: str, show: str, user: tuple[int, str]):
     )
     revote_count = fetchone(cursor)["count"]
     selected = _ballot_selection(cursor, ballot)
+    selected_country = ballot["country_id"] if ballot else None
+    if not selected_country and user_songs:
+        selected_country = user_songs[0].country.cc
+    all_songs = get_show_songs(show_data.year, show_data.short_name) or []
+    song_rules = get_ballot_entry_rules(
+        show_data.id,
+        "revote",
+        voter_id,
+        selected_country,
+        [song.id for song in all_songs],
+    )
+    songs = [
+        song for song in all_songs if song_rules[song.id].kind != "FORBIDDEN"
+    ]
 
     return render_template(
         "vote/vote.html",
-        songs=[
-            song
-            for song in get_show_songs(show_data.year, show_data.short_name) or []
-            if song.submitter_id != voter_id
-        ],
+        songs=songs,
+        song_rules=song_rules,
+        forced_song_by_score={},
         points=show_data.points,
         selected=selected,
         username=username,
@@ -244,7 +259,7 @@ def vote(year: str, show: str, user: tuple[int, str]):
         show_name=show_data.name,
         show=show,
         short_name=show_data.short_name,
-        selected_country=ballot["country_id"] if ballot else None,
+        selected_country=selected_country,
         countries=countries,
         vote_count=revote_count,
         is_revote=True,
@@ -252,6 +267,7 @@ def vote(year: str, show: str, user: tuple[int, str]):
         other_revote_shows=_other_revote_shows(show_data.year, show),
         revote_year=revote_year["key"],
         original_results_url=_original_results_url(show_data.year, show_data.short_name),
+        rules_url=None,
     )
 
 
@@ -441,6 +457,64 @@ def results(year: str, show: str):
             data.penalty = penalty
             data.sum = max(sum(score * count for score, count in distribution.items()) - penalty, 0)
             song.vote_data = data
+
+        midpoint = (
+            Decimal(sum(show_data.points)) * revote_voters / len(songs)
+            if songs
+            else Decimal(0)
+        )
+        adjusted_caps = {song.id: 0 for song in songs}
+        if revote_voters:
+            cursor.execute(
+                """
+                SELECT s.id AS song_id, SUM(rule.score_cap)::integer AS score_cap
+                FROM song_show ss
+                JOIN song s ON s.id = ss.song_id
+                JOIN vote_set vs
+                  ON vs.show_id = ss.show_id
+                 AND vs.result_mode = 'revote'
+                CROSS JOIN LATERAL ballot_entry_rule(
+                    ss.show_id, 'revote', vs.voter_id, vs.country_id, s.id
+                ) rule
+                WHERE ss.show_id = %s
+                GROUP BY s.id
+                """,
+                (show_data.id,),
+            )
+            adjusted_caps.update(
+                {row["song_id"]: row["score_cap"] for row in cursor.fetchall()}
+            )
+
+        if songs:
+            cursor.execute(
+                """
+                SELECT data.song_id,
+                       ROUND(calculate_adjusted_points_percentage(
+                           data.points, %s, data.max_possible
+                       ), 2) AS adjusted_percentage
+                FROM unnest(%s::bigint[], %s::numeric[], %s::numeric[])
+                    AS data(song_id, points, max_possible)
+                """,
+                (
+                    midpoint,
+                    [song.id for song in songs],
+                    [song.vote_data.sum for song in songs],
+                    [adjusted_caps[song.id] for song in songs],
+                ),
+            )
+            adjusted_percentages = {
+                row["song_id"]: row["adjusted_percentage"]
+                for row in cursor.fetchall()
+            }
+            for song in songs:
+                song.vote_data.max_possible_points = (
+                    song.vote_data.max_pts * revote_voters
+                )
+                song.vote_data.adjusted_max_possible_points = adjusted_caps[song.id]
+                song.vote_data.points_midpoint = midpoint
+                song.vote_data.adjusted_points_percentage = adjusted_percentages[
+                    song.id
+                ]
     songs.sort(reverse=True)
 
     return render_template(
@@ -460,6 +534,7 @@ def results(year: str, show: str):
         other_revote_shows=_other_revote_shows(show_data.year, show),
         revote_year=revote_year["key"],
         original_results_url=_original_results_url(show_data.year, show_data.short_name),
+        rules_url=None,
     )
 
 
@@ -565,9 +640,7 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
     voter_id, username = user
     songs = get_show_songs(show_data.year, show_data.short_name) or []
     songs_by_id = {song.id: song for song in songs}
-    selectable_songs = [song for song in songs if song.submitter_id != voter_id]
     user_songs = get_user_songs(voter_id, show_data.year)
-    user_song_ids = {song.id for song in user_songs}
     countries = list({song.country.cc: song.country for song in user_songs}.values())
     if not countries:
         countries = get_countries()
@@ -594,9 +667,6 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
         elif song_id not in songs_by_id:
             errors.append(f"Invalid song for {point} points.")
             invalid.append(point)
-        elif song_id in user_song_ids:
-            errors.append(f"You cannot vote for your own song ({point} points).")
-            invalid.append(point)
         else:
             votes[point] = song_id
 
@@ -606,6 +676,26 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
     if duplicate_points:
         errors.append("A song can only receive one score.")
         invalid.extend(duplicate_points)
+
+    song_rules = get_ballot_entry_rules(
+        show_data.id,
+        "revote",
+        voter_id,
+        country_id,
+        list(songs_by_id),
+    )
+    for kind, _reason, _song_id, score in ballot_rule_errors(votes, song_rules):
+        if kind == "forbidden":
+            message = f"You cannot vote for your own song ({score} points)."
+        else:
+            message = f"This entry must receive {score} point."
+        if message not in errors:
+            errors.append(message)
+        if score is not None:
+            invalid.append(score)
+    selectable_songs = [
+        song for song in songs if song_rules[song.id].kind != "FORBIDDEN"
+    ]
 
     if not errors:
         action = _save_revote(voter_id, show_data.id, nickname, country_id, votes)
@@ -621,6 +711,8 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
     return render_template(
         "vote/vote.html",
         songs=selectable_songs,
+        song_rules=song_rules,
+        forced_song_by_score={},
         points=show_data.points,
         errors=errors,
         selected=selected,

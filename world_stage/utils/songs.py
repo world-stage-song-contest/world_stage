@@ -189,6 +189,15 @@ def _vote_data_from_row(song: dict) -> VoteData | None:
         total_votes=song.get("result_total_votes"),
         max_pts=song.get("result_max_pts"),
         show_voters=song.get("result_total_voters"),
+        max_possible_points=song.get("result_max_possible_points"),
+        points_percentage=song.get("result_points_percentage"),
+        adjusted_max_possible_points=song.get(
+            "result_adjusted_max_possible_points"
+        ),
+        points_midpoint=song.get("result_points_midpoint"),
+        adjusted_points_percentage=song.get(
+            "result_adjusted_points_percentage"
+        ),
     )
     vote_data.sum = total_points
     vote_data.count = song.get("result_total_votes") or 0
@@ -230,7 +239,9 @@ def get_votes_for_songs(
         """
         SELECT csr.song_id, csr.total_points, csr.total_votes_received,
                csr.point_distribution,
-               csr.max_pts, csr.total_voters,
+               csr.max_pts, csr.total_voters, csr.max_possible_points,
+               csr.points_percentage, csr.adjusted_max_possible_points,
+               csr.points_midpoint, csr.adjusted_points_percentage,
                COALESCE(
                    CASE WHEN csr.result_mode = 'revote' THEN ss.revote_penalty ELSE ss.penalty END,
                    0
@@ -250,6 +261,11 @@ def get_votes_for_songs(
             total_votes=row["total_votes_received"],
             max_pts=row["max_pts"],
             show_voters=row["total_voters"],
+            max_possible_points=row["max_possible_points"],
+            points_percentage=row["points_percentage"],
+            adjusted_max_possible_points=row["adjusted_max_possible_points"],
+            points_midpoint=row["points_midpoint"],
+            adjusted_points_percentage=row["adjusted_points_percentage"],
         )
         vote_data.sum = row["total_points"]
         vote_data.count = row["total_votes_received"]
@@ -669,6 +685,11 @@ def get_show_winner(year: int | None, show: str) -> Song | None:
     winner_result.point_distribution AS result_point_distribution,
     winner_result.max_pts AS result_max_pts,
     winner_result.total_voters AS result_total_voters,
+    winner_result.max_possible_points AS result_max_possible_points,
+    winner_result.points_percentage AS result_points_percentage,
+    winner_result.adjusted_max_possible_points AS result_adjusted_max_possible_points,
+    winner_result.points_midpoint AS result_points_midpoint,
+    winner_result.adjusted_points_percentage AS result_adjusted_points_percentage,
     COALESCE(winner_song_show.penalty, 0) AS result_penalty""",
         joins="""
 JOIN country_show_results winner_result ON winner_result.song_id = song.id
@@ -690,6 +711,11 @@ def get_year_winner(year: int) -> Song | None:
     winner_result.point_distribution AS result_point_distribution,
     winner_result.max_pts AS result_max_pts,
     winner_result.total_voters AS result_total_voters,
+    winner_result.max_possible_points AS result_max_possible_points,
+    winner_result.points_percentage AS result_points_percentage,
+    winner_result.adjusted_max_possible_points AS result_adjusted_max_possible_points,
+    winner_result.points_midpoint AS result_points_midpoint,
+    winner_result.adjusted_points_percentage AS result_adjusted_points_percentage,
     COALESCE(winner_song_show.penalty, 0) AS result_penalty""",
         joins="""
 JOIN country_year_results cyr ON cyr.song_id = song.id

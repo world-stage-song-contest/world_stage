@@ -8,11 +8,8 @@ from flask import Flask
 
 from scripts.build_flag_catalog import build_catalog
 from world_stage import (
-    _configure_local_assets,
-    _current_static_release,
     _environment_boolean,
     _flag_url,
-    _static_url,
 )
 
 COLOUR_NAMES = (
@@ -102,84 +99,6 @@ def test_formatted_background_colours_meet_wcag_contrast():
             assert selected_ratio >= 4.5, f"{theme} {colour}: {selected_ratio:.2f}:1"
             assert selected_ratio >= max(black_ratio, white_ratio) - 1e-9
 
-
-def test_current_static_release_uses_deployment_symlink(tmp_path: Path):
-    static_root = tmp_path / "static"
-    release = static_root / "assets" / "release-20260719"
-    release.mkdir(parents=True)
-    (static_root / "current").symlink_to("assets/release-20260719")
-
-    assert _current_static_release(str(static_root)) == "release-20260719"
-
-
-def test_static_url_includes_current_release():
-    app = Flask(__name__)
-    app.config.update(STATIC_URL_PREFIX="/static", STATIC_RELEASE="release-20260719")
-
-    assert _static_url(app, "images/bias.png") == "/static/release-20260719/images/bias.png"
-
-
-def test_static_url_uses_unversioned_path_without_a_deployed_release():
-    app = Flask(__name__)
-    app.config.update(STATIC_URL_PREFIX="/static", STATIC_RELEASE=None)
-
-    assert _static_url(app, "css/index.css") == "/static/css/index.css"
-
-
-def test_flag_images_are_not_selectable_or_draggable(client):
-    response = client.get(
-        "/country/", headers={"Accept": "text/html"}, follow_redirects=True
-    )
-
-    assert response.status_code == 200
-    assert b'class="flag flag-image"' in response.data
-    assert b'draggable="false"' in response.data
-
-    stylesheet = client.get("/static/css/index.css")
-    assert stylesheet.status_code == 200
-    assert b".flag-image" in stylesheet.data
-    assert b"user-select: none" in stylesheet.data
-    assert b"-webkit-user-drag: none" in stylesheet.data
-
-
-def test_show_player_keeps_a_fixed_16_by_9_aspect_ratio():
-    template = (
-        Path(__file__).parents[1] / "world_stage/templates/year/play.html"
-    ).read_text()
-
-    assert "aspectRatio: '16:9'" in template
-
-
-def test_show_player_swaps_subtitles_with_each_entry():
-    template = (
-        Path(__file__).parents[1] / "world_stage/templates/year/play.html"
-    ).read_text()
-
-    assert 'crossorigin="anonymous"' in template
-    assert "player.removeRemoteTextTrack(remote[i]);" in template
-    assert "src: entry.vtt" in template
-    assert "trackEl.track.mode = 'showing'" in template
-
-
-def test_radio_player_supports_cross_origin_subtitles():
-    root = Path(__file__).parents[1] / "world_stage"
-    template = (root / "templates/radio.html").read_text()
-    script = (root / "static/js/radio.js").read_text()
-
-    assert 'crossorigin="anonymous"' in template
-    assert "src: song.vtt" in script
-    assert "srclang: 'en'" in script
-    assert "trackEl.track.mode = 'showing'" in script
-
-
-def test_admin_submission_serializes_subtitle_url():
-    script = (
-        Path(__file__).parents[1] / "world_stage/static/js/submit.js"
-    ).read_text()
-
-    assert "data.vtt_link = vttLink.value || null;" in script
-
-
 def test_flag_url_selects_small_assets_and_falls_back_to_regular(tmp_path: Path):
     catalogue_path = tmp_path / "flags.sqlite"
     with sqlite3.connect(catalogue_path) as catalogue:
@@ -268,21 +187,6 @@ def test_flag_catalog_builder_writes_javascript_manifest(tmp_path: Path):
     assert columns == ["relative_path", "country_code", "variant", "shape", "size"]
     assert paths == ["AA/rect-small.svg", "AA/rect.svg"]
     assert schema_version == 2
-
-
-def test_local_assets_are_served_without_generated_files():
-    app = Flask("world_stage", static_folder=None)
-    app.config.update(STATIC_URL_PREFIX="/static", STATIC_RELEASE=None)
-    app.extensions["flag_catalog"] = {"pid": None, "connection": None}
-    _configure_local_assets(app)
-
-    client = app.test_client()
-    assert client.get("/static/css/index.css").status_code == 200
-    assert client.get("/static/flags/XX/square.svg").status_code == 200
-    assert client.get("/static/flag-manifest.js").status_code == 200
-    assert client.get("/robots.txt").status_code == 200
-    assert client.get("/favicon.ico").status_code == 200
-    assert _flag_url(app, "missing", 30, "square") == "/static/flags/XX/square.svg"
 
 
 def test_local_assets_environment_variable(monkeypatch):

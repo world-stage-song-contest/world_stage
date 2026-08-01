@@ -105,7 +105,7 @@
     {% if has_qualifiers %}
     <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifiers</a>
     {% endif %}
-    <a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>
+    {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>{% endif %}
     {% endif %}
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('playlist.show', key=special ~ show) }}">Download .m3u</a>
@@ -118,7 +118,7 @@
     {% if has_qualifiers %}
     <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifiers</a>
     {% endif %}
-    <a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>
+    {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>{% endif %}
     {% endif %}
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('playlist.show', key='%04d'|format(year|abs) ~ show) }}">Download .m3u</a>
