@@ -18,6 +18,8 @@ EVENT_CATEGORIES = {
 }
 
 FILTER_FIELDS = {
+    "country_id": "text",
+    "year_id": "numeric",
     "title": "text",
     "artist": "text",
     "native_title": "text",
@@ -42,12 +44,15 @@ FILTER_FIELDS = {
     "is_placeholder": "boolean",
 }
 CHOICE_FIELDS = {
+    "country_id",
+    "year_id",
     "language_set_id",
     "title_language_id",
     "native_language_id",
     "submitter_id",
     "approval_status",
 }
+IDENTITY_FIELDS = {"country_id", "year_id"}
 TEXT_PATTERN_FIELDS = {
     field
     for field, field_type in FILTER_FIELDS.items()
@@ -71,6 +76,33 @@ TEXT_OPERATORS = {
 
 def _filter_field_config(cursor):
     config = {field: {"type": field_type} for field, field_type in FILTER_FIELDS.items()}
+
+    cursor.execute("SELECT id, name FROM country ORDER BY name, id")
+    config["country_id"].update(
+        identity=True,
+        choices=[
+            {"value": row["id"], "label": row["name"] or row["id"]}
+            for row in cursor.fetchall()
+        ],
+    )
+
+    cursor.execute(
+        """
+        SELECT id, special_name
+        FROM year
+        ORDER BY id DESC
+        """
+    )
+    config["year_id"].update(
+        identity=True,
+        choices=[
+            {
+                "value": row["id"],
+                "label": row["special_name"] or str(row["id"]),
+            }
+            for row in cursor.fetchall()
+        ],
+    )
 
     cursor.execute("SELECT id, username FROM account ORDER BY username, id")
     config["submitter_id"]["choices"] = [
@@ -144,6 +176,8 @@ def _parse_filters():
         for boundary in ("from", "to"):
             if boundary not in item:
                 continue
+            if field in IDENTITY_FIELDS and boundary == "from":
+                continue
             value = item[boundary]
             field_type = FILTER_FIELDS[field]
             if field_type == "boolean" and not isinstance(value, bool):
@@ -194,6 +228,28 @@ def _filter_expression(selected_filters):
     params = []
     for index, selected_filter in enumerate(selected_filters):
         field = selected_filter["field"]
+        if field in IDENTITY_FIELDS:
+            identity_column = {
+                "country_id": "raw.song_country_id",
+                "year_id": "raw.song_year_id",
+            }[field]
+            clause = f"{identity_column} IS NOT NULL"
+            clause_params = []
+            if "to" in selected_filter:
+                value_clause = f"{identity_column} = %s"
+                if selected_filter.get("not"):
+                    value_clause = f"NOT ({value_clause})"
+                clause = f"({clause}) AND ({value_clause})"
+                clause_params.append(selected_filter["to"])
+            elif selected_filter.get("not"):
+                clause = f"NOT ({clause})"
+
+            if index:
+                clauses.append(selected_filter.get("join", "and").upper())
+            clauses.append(f"({clause})")
+            params.extend(clause_params)
+            continue
+
         changed = "COALESCE(raw.changed_fields, '{}'::jsonb) ? %s"
         changed_params = [field]
         constraints = []

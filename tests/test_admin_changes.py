@@ -676,6 +676,27 @@ def test_typed_field_filters_support_boundaries_and_multiple_conditions(client, 
         },
         headers={"Accept": "text/html"},
     )
+    entry_identity = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps(
+                [
+                    {"field": "country_id", "to": "ES"},
+                    {"field": "year_id", "join": "and", "to": 2025},
+                ]
+            ),
+        },
+        headers={"Accept": "text/html"},
+    )
+    other_country = client.get(
+        "/admin/changes",
+        query_string={
+            "events": "modification",
+            "filters": json.dumps([{"field": "country_id", "to": "FR"}]),
+        },
+        headers={"Accept": "text/html"},
+    )
 
     assert numeric_value.status_code == 200
     assert numeric_value.text.count('class="event-badge event-modification"') == 1
@@ -711,6 +732,10 @@ def test_typed_field_filters_support_boundaries_and_multiple_conditions(client, 
     assert disjunction.text.count('class="event-badge event-modification"') == 2
     assert ">notes, snippet_end<" in disjunction.text
     assert ">translated_lyrics<" in disjunction.text
+    assert entry_identity.status_code == 200
+    assert entry_identity.text.count('class="event-badge event-modification"') == 5
+    assert other_country.status_code == 200
+    assert 'class="event-badge event-modification"' not in other_country.text
 
 
 def test_specific_outcome_filters(client, db):

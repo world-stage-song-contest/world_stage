@@ -32,7 +32,12 @@ function initializeAuditFilters() {
         const controls = document.createDocumentFragment();
         let control;
 
-        if (config.choices) {
+        if (config.identity && boundary === "from") {
+            control = document.createElement("input");
+            control.type = "text";
+            control.disabled = true;
+            control.placeholder = "—";
+        } else if (config.choices) {
             control = document.createElement("select");
             control.append(option("", `Any ${label} value`, value));
             for (const choice of config.choices) {
