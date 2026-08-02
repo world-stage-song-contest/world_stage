@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Move entries{% endblock %}
+{% block navigation %}<a class="nav-item" href="{{ url_for('member.index') }}">Member</a>{% endblock %}
+{% block headercontents %}
+    <script src="{{ static('js/move.js') }}"></script>
+    <link rel="stylesheet" href="{{ static('css/forms.css') }}">
+{% endblock %}
+{% block onload %}onLoad(){% endblock %}
+{% block content %}
+<p>Select an upcoming year, choose one of your entries, then choose its new year and country.</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<p id="error-message" class="error hidden"></p>
+
+<form id="move-entry" name="move_entry">
+    <fieldset class="grid">
+        <legend>Entry</legend>
+        <label for="from_year">Year</label>
+        <select name="from_year" id="from_year" required>
+            <option value="">Select a year</option>
+            {% for year in years %}<option value="{{ year.id }}">{{ year.id }}</option>{% endfor %}
+        </select>
+
+        <label for="song_id">Country</label>
+        <select name="song_id" id="song_id" required disabled>
+            <option value="">Select a country</option>
+        </select>
+    </fieldset>
+
+    <fieldset class="grid" id="destination-fields">
+        <legend>Move to</legend>
+        <label for="to_year">Year</label>
+        <select name="to_year" id="to_year" required disabled>
+            <option value="">Select a year</option>
+            {% for year in years %}<option value="{{ year.id }}">{{ year.id }}</option>{% endfor %}
+        </select>
+
+        <label for="to_country">Country</label>
+        <select name="to_country" id="to_country" required disabled>
+            <option value="">Select a country</option>
+        </select>
+    </fieldset>
+
+    <button type="submit" id="move-button" disabled>Move</button>
+</form>
+{% endblock %}

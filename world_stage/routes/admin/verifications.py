@@ -118,11 +118,7 @@ def _render_verifications(year: dict):
         LEFT JOIN LATERAL (
             SELECT newer.id, newer.title, newer.artist
             FROM song_data AS newer
-            WHERE newer.country_id = data.country_id
-              AND newer.year_id = data.year_id
-              AND newer.entry_number IS NOT DISTINCT FROM data.entry_number
-              AND (newer.created_at, newer.id) > (data.created_at, data.id)
-            ORDER BY newer.created_at, newer.id
+            WHERE newer.previous_revision_id = data.id
             LIMIT 1
         ) AS next_data ON true
         LEFT JOIN LATERAL (

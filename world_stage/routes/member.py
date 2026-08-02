@@ -15,6 +15,7 @@ from ..utils import (
     resolve_country_code,
     with_permissions,
 )
+from ..utils.entry_moves import EntryMoveError, move_entry
 from ..utils.song_revisions import MAX_YEAR_SUBMISSIONS
 
 bp = Blueprint("member", __name__, url_prefix="/member")
@@ -213,6 +214,152 @@ def index(user: tuple[int, str], permissions: UserPermissions):
         username=user[1],
         has_unread_messages=has_unread_messages(user[0], permissions),
     )
+
+
+def _move_page(*, error=None):
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT id FROM year WHERE status = 'open' AND id >= 0 ORDER BY id"
+    )
+    years = cursor.fetchall()
+    return render_template(
+        "member/move.html",
+        years=years,
+        error=error,
+    )
+
+
+@bp.get("/move")
+@require_user(redirect_to_login=True)
+def move(user: tuple[int, str]):
+    return _move_page()
+
+
+@bp.get("/move/<int:year>")
+@require_user()
+def move_entries(year: int, user: tuple[int, str]):
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT song.id, song.country_id AS cc, country.name AS country
+        FROM current_song AS song
+        JOIN country ON country.id = song.country_id
+        JOIN year ON year.id = song.year_id
+        WHERE song.submitter_id = %s AND song.year_id = %s
+          AND year.status = 'open' AND year.id >= 0
+        ORDER BY country.name, song.entry_number
+        """,
+        (user[0], year),
+    )
+    return {"entries": cursor.fetchall()}
+
+
+@bp.get("/move/destinations/<int:year>")
+@require_user()
+def move_destinations(year: int, user: tuple[int, str]):
+    try:
+        song_id = int(request.args.get("song_id", ""))
+    except ValueError:
+        return {"error": "Invalid entry"}, 400
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT song.id, song.year_id, song.country_id
+        FROM current_song AS song
+        JOIN year ON year.id = song.year_id
+        WHERE song.id = %s AND song.submitter_id = %s
+          AND year.status = 'open' AND year.id >= 0
+        """,
+        (song_id, user[0]),
+    )
+    source = cursor.fetchone()
+    if source is None:
+        return {"error": "Entry not found"}, 404
+
+    cursor.execute("SELECT status FROM year WHERE id = %s AND id >= 0", (year,))
+    destination_year = cursor.fetchone()
+    if destination_year is None or destination_year["status"] != "open":
+        return {"error": "Destination must be an upcoming year"}, 400
+
+    cursor.execute(
+        """
+        SELECT country.id AS cc, country.name,
+               EXISTS (
+                   SELECT 1 FROM current_song AS placeholder
+                   WHERE placeholder.year_id = %(year)s
+                     AND placeholder.country_id = country.id
+                     AND placeholder.is_placeholder
+               ) AS replaces_placeholder
+        FROM country
+        WHERE country.is_participating
+          AND NOT (
+              %(year)s = %(source_year)s
+              AND country.id = %(source_country)s
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM current_song AS occupied
+              WHERE occupied.year_id = %(year)s
+                AND occupied.country_id = country.id
+                AND NOT occupied.is_placeholder
+          )
+        ORDER BY country.name
+        """,
+        {
+            "year": year,
+            "source_year": source["year_id"],
+            "source_country": source["country_id"],
+        },
+    )
+    return {"countries": cursor.fetchall()}
+
+
+@bp.post("/move")
+@require_user(redirect_to_login=True)
+def move_post(user: tuple[int, str]):
+    payload = request.get_json(silent=True) or request.form
+    try:
+        song_id = int(payload.get("song_id", ""))
+        to_year = int(payload.get("to_year", ""))
+    except (TypeError, ValueError):
+        if request.accept_mimetypes.accept_json:
+            return {"error": {"description": "Invalid entry or year"}}, 400
+        return _move_page(error="Invalid entry or year"), 400
+    to_country = payload.get("to_country", "")
+    if not to_country:
+        if request.accept_mimetypes.accept_json:
+            return {"error": {"description": "Destination country is required"}}, 400
+        return _move_page(error="Destination country is required"), 400
+
+    db = get_db()
+    try:
+        move_entry(
+            db.cursor(),
+            song_id,
+            to_year=to_year,
+            to_country=to_country,
+            changed_by=user[0],
+            submitter_id=user[0],
+        )
+    except EntryMoveError as exc:
+        db.rollback()
+        if request.accept_mimetypes.accept_json:
+            return {"error": {"description": str(exc)}}, 400
+        return _move_page(error=str(exc)), 400
+    db.commit()
+    details_url = url_for(
+        "country.details", code=to_country.lower(), year=to_year
+    )
+    if request.accept_mimetypes.accept_json:
+        return {
+            "result": {
+                "id": song_id,
+                "year": to_year,
+                "country_id": to_country,
+                "details_url": details_url,
+            }
+        }
+    return redirect(details_url)
 
 
 @bp.get("/submit")

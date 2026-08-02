@@ -33,14 +33,14 @@
     <fieldset class="grid">
         <legend>To</legend>
         <label for="to_cc">Country</label>
-        <select name="to_cc" id="to_cc">
+        <select name="to_cc" id="to_cc" required>
             <option value=""></option>
             {% for country in countries %}
                 <option value="{{ country.id }}" {% if country.id == to_cc %}selected{%endif%}>{{ country.name }}</option>
             {% endfor %}
         </select>
         <label for="to_year">Year</label>
-        <select name="to_year" id="to_year">
+        <select name="to_year" id="to_year" required>
             <option value=""></option>
             {% for year in years %}
                 <option value="{{ year.id }}" {% if year.id == to_year %}selected{%endif%}>{{ year.id }}</option>

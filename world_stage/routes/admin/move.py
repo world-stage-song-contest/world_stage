@@ -1,11 +1,12 @@
 
-import psycopg
 from flask import request
 
 from ...db import get_db
 from ...utils import (
     render_template,
+    require_user,
 )
+from ...utils.entry_moves import EntryMoveError, move_entry
 from .common import bp
 
 
@@ -15,7 +16,7 @@ def move():
     cursor = db.cursor()
 
     cursor.execute("""
-        SELECT id FROM year ORDER BY id
+        SELECT id FROM year WHERE status = 'open' AND id >= 0 ORDER BY id
     """)
     years = cursor.fetchall()
 
@@ -28,12 +29,13 @@ def move():
 
 
 @bp.post("/move")
-def move_post():
+@require_user()
+def move_post(user: tuple[int, str]):
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute("""
-        SELECT id FROM year ORDER BY id
+        SELECT id FROM year WHERE status = 'open' AND id >= 0 ORDER BY id
     """)
     years = cursor.fetchall()
 
@@ -60,10 +62,10 @@ def move_post():
             countries=countries,
         ), 400
 
-    if not to_year_txt and not to_cc:
+    if not to_year_txt or not to_cc:
         return render_template(
             "admin/move.html",
-            error="At least one of to year and to country must be specificed",
+            error="To year and to country must be specified",
             from_year=from_year_txt,
             to_year=to_year_txt,
             from_cc=from_cc,
@@ -87,7 +89,7 @@ def move_post():
         ), 400
 
     try:
-        to_year = int(to_year_txt) if to_year_txt else None
+        to_year = int(to_year_txt)
     except ValueError:
         return render_template(
             "admin/move.html",
@@ -100,20 +102,34 @@ def move_post():
             countries=countries,
         ), 400
 
-    try:
-        cursor.execute(
-            """
-            UPDATE song
-            SET year_id = COALESCE(%s, year_id),
-                country_id = COALESCE(%s, country_id)
-            WHERE year_id = %s AND country_id = %s
+    cursor.execute(
+        """
+        SELECT id FROM current_song
+        WHERE year_id = %s AND country_id = %s
+        ORDER BY entry_number
         """,
-            (to_year, to_cc, from_year, from_cc),
-        )
-    except psycopg.Error as e:
+        (from_year, from_cc),
+    )
+    source = cursor.fetchone()
+    if source is None:
+        error = "Source entry not found"
+    else:
+        try:
+            move_entry(
+                cursor,
+                source["id"],
+                to_year=to_year,
+                to_country=to_cc,
+                changed_by=user[0],
+            )
+            error = None
+        except EntryMoveError as exc:
+            error = str(exc)
+    if error:
+        db.rollback()
         return render_template(
             "admin/move.html",
-            error=f"Database error: {str(e)}",
+            error=error,
             from_year=from_year_txt,
             to_year=to_year_txt,
             from_cc=from_cc,
