@@ -1,5 +1,12 @@
 from psycopg import sql
 
+MAX_YEAR_SUBMISSIONS = 73
+
+
+class NonPlaceholderLimitError(ValueError):
+    """Raised when a status change would exceed a year's entry capacity."""
+
+
 SONG_DATA_FIELDS = (
     "submitter_id",
     "title",
@@ -124,6 +131,32 @@ def set_song_status(
         previous["approval_status"], previous["is_placeholder"]
     ) == (next_approval, next_placeholder):
         return None
+
+    # Serialize placeholder removals within a year before checking capacity.
+    # Excluding the target makes this work for both initial status creation
+    # (current_song defaults to non-placeholder) and true -> false changes.
+    if not next_placeholder and (previous is None or previous["is_placeholder"]):
+        cursor.execute(
+            """SELECT year_id FROM current_song WHERE id = %s""",
+            (song_id,),
+        )
+        song = cursor.fetchone()
+        if song is None:
+            raise LookupError(f"Current song data for song {song_id} was not found")
+        year_id = song["year_id"]
+        if year_id >= 0:
+            cursor.execute("SELECT id FROM year WHERE id = %s FOR UPDATE", (year_id,))
+            cursor.execute(
+                """SELECT COUNT(*) AS count
+                   FROM current_song
+                   WHERE year_id = %s AND id <> %s AND NOT is_placeholder""",
+                (year_id, song_id),
+            )
+            if cursor.fetchone()["count"] >= MAX_YEAR_SUBMISSIONS:
+                raise NonPlaceholderLimitError(
+                    f"This year already has the maximum number of entries "
+                    f"({MAX_YEAR_SUBMISSIONS})"
+                )
 
     cursor.execute(
         """

@@ -16,6 +16,8 @@ from world_stage.utils import (
     resp,
 )
 from world_stage.utils.song_revisions import (
+    MAX_YEAR_SUBMISSIONS,
+    NonPlaceholderLimitError,
     create_song_revision,
     set_song_status,
     withdraw_song,
@@ -44,7 +46,6 @@ MAX_SNIPPET_DURATION = 20
 MAX_SNIPPET2_DURATION = 10
 MAX_USER_SUBMISSIONS = 2
 MAX_USER_SUBMISSIONS_SPECIAL = 1
-MAX_YEAR_SUBMISSIONS = 73
 
 MUTABLE_TEXT_FIELDS = (
     "title",
@@ -694,6 +695,41 @@ def _validate_year(cursor, year: int) -> tuple | None:
     return None
 
 
+def _regular_submission_limit_error(
+    cursor, user_id: int, year: int, *, exclude_song_id: int | None = None
+) -> tuple | None:
+    """Validate a non-placeholder regular-year entry against both limits."""
+    exclusion = "" if exclude_song_id is None else "AND id <> %(exclude_song_id)s"
+    params = {
+        "user_id": user_id,
+        "year": year,
+        "exclude_song_id": exclude_song_id,
+    }
+    cursor.execute(
+        f"""SELECT COUNT(*) AS c FROM current_song
+            WHERE submitter_id = %(user_id)s AND year_id = %(year)s
+              AND NOT is_placeholder {exclusion}""",
+        params,
+    )
+    if fetchone(cursor)["c"] >= MAX_USER_SUBMISSIONS:
+        return err(
+            ErrorID.FORBIDDEN,
+            f"You may submit at most {MAX_USER_SUBMISSIONS} songs per year",
+        )
+
+    cursor.execute(
+        f"""SELECT COUNT(*) AS c FROM current_song
+            WHERE year_id = %(year)s AND NOT is_placeholder {exclusion}""",
+        params,
+    )
+    if fetchone(cursor)["c"] >= MAX_YEAR_SUBMISSIONS:
+        return err(
+            ErrorID.FORBIDDEN,
+            f"This year already has the maximum number of entries ({MAX_YEAR_SUBMISSIONS})",
+        )
+    return None
+
+
 # ── GET /api/song/<id> ───────────────────────────────────────────────
 
 
@@ -875,6 +911,8 @@ def create_song(auth: tuple):
     if cc_err:
         return cc_err
 
+    is_placeholder = bool(data.get("is_placeholder", False))
+
     # ── Duplicate / entry_number handling ────────────────────────
     # A country may participate more than once. Withdrawn identities continue
     # to reserve their number, so a later submission is always the next entry.
@@ -898,28 +936,9 @@ def create_song(auth: tuple):
                     ErrorID.FORBIDDEN,
                     f"You may submit at most {MAX_USER_SUBMISSIONS_SPECIAL} song per special",
                 )
-        else:
-            cursor.execute(
-                "SELECT COUNT(*) AS c FROM current_song "
-                "WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder",
-                (user_id, year),
-            )
-            if fetchone(cursor)["c"] >= MAX_USER_SUBMISSIONS:
-                return err(
-                    ErrorID.FORBIDDEN,
-                    f"You may submit at most {MAX_USER_SUBMISSIONS} songs per year",
-                )
-
-            cursor.execute(
-                """SELECT COUNT(*) AS c FROM current_song AS song
-                   WHERE year_id = %s AND NOT is_placeholder""",
-                (year,),
-            )
-            if fetchone(cursor)["c"] >= MAX_YEAR_SUBMISSIONS:
-                return err(
-                    ErrorID.FORBIDDEN,
-                    f"This year already has the maximum number of entries ({MAX_YEAR_SUBMISSIONS})",
-                )
+        elif not is_placeholder:
+            if limit_err := _regular_submission_limit_error(cursor, user_id, year):
+                return limit_err
 
     # ── Parse body ───────────────────────────────────────────────
     language_ids, lang_errors = _parse_languages(data)
@@ -940,7 +959,6 @@ def create_song(auth: tuple):
 
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
 
-    is_placeholder = bool(data.get("is_placeholder", False))
     is_translation = bool(data.get("is_translation", False))
     does_match = bool(data.get("does_match", False))
     title_language_id, native_language_id = _resolve_language_ids(
@@ -1028,9 +1046,13 @@ def create_song(auth: tuple):
             user_id,
         ),
     )
-    set_song_status(
-        cursor, song_id, changed_by=user_id, is_placeholder=is_placeholder
-    )
+    try:
+        set_song_status(
+            cursor, song_id, changed_by=user_id, is_placeholder=is_placeholder
+        )
+    except NonPlaceholderLimitError as exc:
+        db.rollback()
+        return err(ErrorID.FORBIDDEN, str(exc))
 
     if key_signatures:
         _replace_song_key_signatures(cursor, song_id, key_signatures)
@@ -1115,6 +1137,19 @@ def replace_song(id: int, auth: tuple):
     is_placeholder = bool(data.get("is_placeholder", False))
     is_translation = bool(data.get("is_translation", False))
     does_match = bool(data.get("does_match", False))
+
+    if (
+        not permissions.can_edit
+        and not _is_special_year(row["year_id"])
+        and not is_placeholder
+        and row["is_placeholder"]
+        and (
+            limit_err := _regular_submission_limit_error(
+                cursor, user_id, row["year_id"], exclude_song_id=id
+            )
+        )
+    ):
+        return limit_err
 
     # Admin-only media fields are preserved for non-admins because their form
     # doesn't expose them.
@@ -1205,7 +1240,11 @@ def replace_song(id: int, auth: tuple):
     }
     if revision_changes:
         create_song_revision(cursor, id, revision_changes, changed_by=user_id)
-    set_song_status(cursor, id, changed_by=user_id, is_placeholder=is_placeholder)
+    try:
+        set_song_status(cursor, id, changed_by=user_id, is_placeholder=is_placeholder)
+    except NonPlaceholderLimitError as exc:
+        db.rollback()
+        return err(ErrorID.FORBIDDEN, str(exc))
 
     # PUT is full replacement: absent collection fields mean clear
     # them rather than preserve.
@@ -1381,6 +1420,19 @@ def update_song(id: int, auth: tuple):
     ):
         return err(ErrorID.BAD_REQUEST, message)
 
+    if (
+        not permissions.can_edit
+        and not _is_special_year(row["year_id"])
+        and row["is_placeholder"]
+        and data.get("is_placeholder") is False
+        and (
+            limit_err := _regular_submission_limit_error(
+                cursor, user_id, row["year_id"], exclude_song_id=id
+            )
+        )
+    ):
+        return limit_err
+
     # ── Execute ──────────────────────────────────────────────────
     if sets:
         changes = {}
@@ -1411,12 +1463,16 @@ def update_song(id: int, auth: tuple):
         create_song_revision(cursor, id, changes, changed_by=user_id)
 
     if "is_placeholder" in data:
-        set_song_status(
-            cursor,
-            id,
-            changed_by=user_id,
-            is_placeholder=bool(data["is_placeholder"]),
-        )
+        try:
+            set_song_status(
+                cursor,
+                id,
+                changed_by=user_id,
+                is_placeholder=bool(data["is_placeholder"]),
+            )
+        except NonPlaceholderLimitError as exc:
+            db.rollback()
+            return err(ErrorID.FORBIDDEN, str(exc))
 
     if key_signatures is not None:
         _replace_song_key_signatures(cursor, id, key_signatures)

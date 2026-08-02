@@ -15,11 +15,11 @@ from ..utils import (
     resolve_country_code,
     with_permissions,
 )
+from ..utils.song_revisions import MAX_YEAR_SUBMISSIONS
 
 bp = Blueprint("member", __name__, url_prefix="/member")
 
 MAX_USER_SUBMISSIONS = 2
-MAX_YEAR_SUBMISSIONS = 73
 
 
 def get_languages() -> list[dict]:
@@ -62,7 +62,7 @@ def get_genre_options() -> list[dict]:
     return list(grouped.values())
 
 
-def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str, list[dict]]:
+def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str, Any]:
     """Get countries available for submission"""
     db = get_db()
     cursor = db.cursor()
@@ -70,7 +70,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     cursor.execute("SELECT status FROM year WHERE id = %s", (year,))
     year_result = cursor.fetchone()
     if not year_result:
-        return {"own": [], "placeholder": []}
+        return {"own": [], "placeholder": [], "force_placeholder": False}
 
     closed = year_result["status"] != "open"
     is_special = year < 0
@@ -92,7 +92,20 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     )
     user_count = fetchone(cursor)["c"]
 
-    countries: dict[str, list[dict[str, Any]]] = {"own": [], "placeholder": []}
+    force_placeholder = (
+        not all
+        and not is_special
+        and not closed
+        and (
+            user_count >= MAX_USER_SUBMISSIONS
+            or year_count >= MAX_YEAR_SUBMISSIONS
+        )
+    )
+    countries: dict[str, Any] = {
+        "own": [],
+        "placeholder": [],
+        "force_placeholder": force_placeholder,
+    }
 
     # Get user's own submissions
     cursor.execute(
@@ -159,12 +172,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
             {"year": year, "user": user_id},
         )
         countries["placeholder"] = cursor.fetchall()
-    elif (
-        not is_special
-        and user_count < MAX_USER_SUBMISSIONS
-        and not closed
-        and year_count < MAX_YEAR_SUBMISSIONS
-    ):
+    elif not is_special and not closed:
         cursor.execute(
             f"""
             SELECT c.name, c.id AS cc

@@ -1,5 +1,6 @@
 // ── State ────────────────────────────────────────────────────────────
 let currentSongId = null;   // non-null when editing an existing song
+let yearRequiresPlaceholder = false;
 
 // ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -294,6 +295,14 @@ function clearFormFields() {
     if (forceSubmitter) {
         forceSubmitter.value = 'none';
     }
+
+    setPlaceholderRequirement(yearRequiresPlaceholder);
+}
+
+function setPlaceholderRequirement(required) {
+    const checkbox = document.getElementById('is_placeholder');
+    checkbox.checked = !!required;
+    checkbox.disabled = !!required;
 }
 
 function resetLanguageRows() {
@@ -750,6 +759,7 @@ async function populateCountries(yearSelect) {
     }
 
     const countries = countriesData.countries;
+    yearRequiresPlaceholder = !!countries.force_placeholder;
     clearCountriesSelect();
     const countrySelect = document.getElementById('country');
     countrySelect.value = '';
@@ -801,6 +811,11 @@ async function populateSongData(entryNumberOverride) {
         // No existing song — form is already cleared, ready for new entry
         return;
     }
+
+    // Existing regular entries must remain editable. Existing placeholders
+    // stay forced on when turning them into a regular entry would exceed a
+    // submission limit.
+    setPlaceholderRequirement(yearRequiresPlaceholder && !!songData.is_placeholder);
 
     // Track the song ID for PATCH/DELETE
     currentSongId = songData.id || null;

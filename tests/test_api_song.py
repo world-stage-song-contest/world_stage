@@ -228,11 +228,64 @@ class TestCreateSong:
         resp = _create_song(client, bob_headers, country="FR")
         assert resp.status_code == 403
 
+    def test_placeholders_bypass_submission_limit(self, client, bob_headers):
+        _create_song(client, bob_headers, country="US")
+        _create_song(client, bob_headers, country="ES")
+
+        third = _create_song(
+            client, bob_headers, country="FR", is_placeholder=True
+        )
+        fourth = _create_song(
+            client, bob_headers, country="US", is_placeholder=True
+        )
+
+        assert third.status_code == 201
+        assert fourth.status_code == 201
+        assert _result(third)["is_placeholder"] is True
+        assert _result(fourth)["is_placeholder"] is True
+
+    def test_extra_submission_still_must_be_placeholder(self, client, bob_headers):
+        _create_song(client, bob_headers, country="US")
+        _create_song(client, bob_headers, country="ES")
+        _create_song(client, bob_headers, country="FR", is_placeholder=True)
+
+        resp = _create_song(
+            client, bob_headers, country="US", is_placeholder=False
+        )
+
+        assert resp.status_code == 403
+
     def test_admin_bypasses_submission_limit(self, client, alice_headers):
         _create_song(client, alice_headers, country="US")
         _create_song(client, alice_headers, country="ES")
         resp = _create_song(client, alice_headers, country="FR")
         assert resp.status_code == 201
+
+    def test_global_limit_applies_to_admin_status_changes(
+        self, client, alice_headers, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "world_stage.utils.song_revisions.MAX_YEAR_SUBMISSIONS", 2
+        )
+        _create_song(client, alice_headers, country="US")
+        _create_song(client, alice_headers, country="ES")
+
+        over_limit = _create_song(client, alice_headers, country="FR")
+        placeholder_id = _result(
+            _create_song(
+                client, alice_headers, country="FR", is_placeholder=True
+            )
+        )["id"]
+
+        response = client.patch(
+            f"/api/song/{placeholder_id}",
+            json={"is_placeholder": False},
+            headers=alice_headers,
+        )
+
+        assert over_limit.status_code == 403
+        assert response.status_code == 403
+        assert "maximum number of entries (2)" in _error(response)["description"]
 
     def test_form_encoded(self, client, bob_headers):
         resp = client.post(
@@ -356,6 +409,21 @@ class TestUpdateSong:
                 (song_id,),
             )
             assert cursor.fetchone()["count"] == 2
+
+    def test_extra_placeholder_cannot_be_promoted(self, client, bob_headers):
+        _create_song(client, bob_headers, country="US")
+        _create_song(client, bob_headers, country="ES")
+        placeholder_id = _result(
+            _create_song(client, bob_headers, country="FR", is_placeholder=True)
+        )["id"]
+
+        response = client.patch(
+            f"/api/song/{placeholder_id}",
+            json={"is_placeholder": False},
+            headers=bob_headers,
+        )
+
+        assert response.status_code == 403
 
     def test_logs_second_snippet_changes(self, client, db, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
