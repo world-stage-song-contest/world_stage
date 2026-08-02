@@ -36,9 +36,13 @@ def latest_song_data(cursor, song_id: int) -> dict | None:
         """
         SELECT data.* FROM song
         JOIN song_data AS data
-          ON data.country_id = song.country_id
-         AND data.year_id = song.year_id
-         AND data.entry_number IS NOT DISTINCT FROM song.entry_number
+          ON data.song_id = song.id
+          OR (
+              data.song_id IS NULL
+              AND data.country_id = song.country_id
+              AND data.year_id = song.year_id
+              AND data.entry_number IS NOT DISTINCT FROM song.entry_number
+          )
         WHERE song.id = %s
         ORDER BY data.created_at DESC, data.id DESC
         LIMIT 1

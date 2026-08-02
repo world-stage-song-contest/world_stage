@@ -1,3 +1,7 @@
+.verification-stats {
+    font-size: 1.1rem;
+}
+
 .verification-table-wrapper {
     overflow-x: auto;
 }
@@ -17,6 +21,11 @@
 
 .verification-table tr.withdrawn-or-replaced > td {
     background-color: var(--result-last);
+    color: var(--result-text);
+}
+
+.verification-table tr.withdrawn-or-replaced > td a {
+    color: var(--result-text);
 }
 
 .verification-entry {
@@ -40,10 +49,12 @@
 .verification-source-content {
     box-sizing: border-box;
     width: 100%;
-    max-height: 12rem;
-    overflow: auto;
+    line-height: 1.25rem;
+    max-height: 12.5rem;
+    overflow: hidden;
     font-family: monospace;
-    white-space: pre;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     tab-size: 4;
 }
 

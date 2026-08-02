@@ -290,22 +290,6 @@ CREATE TRIGGER set_song_data_entry_tuple
 BEFORE INSERT ON song_data
 FOR EACH ROW EXECUTE FUNCTION set_song_data_entry_tuple();
 
-CREATE OR REPLACE FUNCTION sync_song_data_entry_tuple()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-    UPDATE song_data
-    SET country_id = NEW.country_id,
-        year_id = NEW.year_id,
-        entry_number = NEW.entry_number
-    WHERE song_id = NEW.id;
-    RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER sync_song_data_entry_tuple
-AFTER UPDATE OF country_id, year_id, entry_number ON song
-FOR EACH ROW EXECUTE FUNCTION sync_song_data_entry_tuple();
-
 CREATE INDEX IF NOT EXISTS idx_song_data_song_created
     ON song_data (song_id, created_at DESC, id DESC);
 
@@ -367,9 +351,13 @@ SELECT song.id, song.country_id, song.year_id, song.entry_number,
 FROM song
 JOIN LATERAL (
     SELECT song_data.* FROM song_data
-    WHERE song_data.country_id = song.country_id
-      AND song_data.year_id = song.year_id
-      AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+    WHERE song_data.song_id = song.id
+       OR (
+           song_data.song_id IS NULL
+           AND song_data.country_id = song.country_id
+           AND song_data.year_id = song.year_id
+           AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+       )
     ORDER BY song_data.created_at DESC, song_data.id DESC
     LIMIT 1
 ) AS data ON true

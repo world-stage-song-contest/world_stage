@@ -27,15 +27,16 @@ def _add_song(
     sources: str | None = None,
     year: int = 2025,
     placeholder: bool = False,
+    entry_number: int = 1,
 ) -> int:
     with db.cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO song (country_id, year_id)
-            VALUES (%s, %s)
+            INSERT INTO song (country_id, year_id, entry_number)
+            VALUES (%s, %s, %s)
             RETURNING id
             """,
-            (country, year),
+            (country, year, entry_number),
         )
         song_id = cursor.fetchone()["id"]
         cursor.execute(
@@ -81,8 +82,63 @@ def test_verification_page_lists_all_entries_and_sources(client, db):
     assert "Spain" in response.text
     assert "France" in response.text
     assert response.text.count("Submitter: bob") == 2
+    assert '<a href="/country/es/2025"><em>Test Song</em></a>' in response.text
+    assert '<a href="/country/fr/2025"><em>Test Song</em></a>' in response.text
     assert 'href="https://example.com/release"' in response.text
+    assert 'class="verification-dialog-open verification-source-dialog-open"' in response.text
+    assert 'data-dialog="source-dialog-song-' in response.text
+    assert ' hidden>View full sources</button>' in response.text
     assert "No sources specified" in response.text
+
+
+def test_verification_headline_counts_only_current_non_placeholder_entries(
+    client, db
+):
+    pending_id = _add_song(db, "ES", entry_number=1)
+    accepted_id = _add_song(db, "FR", entry_number=1)
+    rejected_id = _add_song(db, "US", entry_number=1)
+    more_info_id = _add_song(db, "ES", entry_number=2)
+    _add_song(db, "FR", entry_number=2, placeholder=True)
+    replaced_id = _add_song(db, "ES", entry_number=3)
+    withdrawn_id = _add_song(db, "US", entry_number=2)
+    _login(client, db, 1)
+
+    with db.cursor() as cursor:
+        set_song_status(cursor, accepted_id, changed_by=1, approval_status="accepted")
+        set_song_status(cursor, rejected_id, changed_by=1, approval_status="rejected")
+        set_song_status(cursor, more_info_id, changed_by=1, approval_status="more-info")
+        set_song_status(cursor, replaced_id, changed_by=1, approval_status="accepted")
+        set_song_status(cursor, withdrawn_id, changed_by=1, approval_status="rejected")
+    db.commit()
+
+    # A historical replacement must not add another accepted entry.
+    _revise_song(db, replaced_id, artist="Replacement Artist")
+
+    from world_stage.utils.song_revisions import withdraw_song
+
+    with db.cursor() as cursor:
+        withdraw_song(cursor, withdrawn_id, changed_by=2)
+    db.commit()
+
+    response = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+
+    assert response.status_code == 200
+    headline = " ".join(
+        response.text.split('<p class="verification-stats">', 1)[1]
+        .split("</p>", 1)[0]
+        .replace("<strong>", "")
+        .replace("</strong>", "")
+        .split()
+    )
+    assert headline == (
+        "Pending: 1, Accepted: 2, Rejected: 1, "
+        "Waiting for info: 1, Placeholders: 1"
+    )
+    assert f'id="song-{pending_id}"' in response.text
+    assert "<strong>Pending</strong>" in response.text
+    assert '<strong class="colour-green">Accepted</strong>' in response.text
+    assert '<strong class="colour-red">Rejected</strong>' in response.text
+    assert '<strong class="colour-yellow">More information</strong>' in response.text
 
 
 def test_deleted_entries_keep_normal_country_sorting(client, db):
@@ -144,6 +200,10 @@ def test_replaced_revision_is_listed_without_review_history(client, db):
     assert f'id="historical-song-{old_version_id}"' in response.text
     assert "Replacement Artist" in response.text
     assert f'verifications/{old_version_id}/merge' in response.text
+    historical_row = response.text.split(
+        f'id="historical-song-{old_version_id}"', 1
+    )[1].split("</tr>", 1)[0]
+    assert '<td class="verification-status"></td>' in historical_row
 
 
 def test_multiple_comments_are_appended_and_attributed_to_each_moderator(client, db):
@@ -554,6 +614,11 @@ def test_moderator_can_hide_replaced_and_withdrawn_revisions(client, db):
 
     with db.cursor() as cursor:
         withdraw_song(cursor, withdrawn_song_id, changed_by=2)
+        cursor.execute(
+            "DELETE FROM song_status WHERE song_id = %s",
+            (withdrawn_song_id,),
+        )
+        cursor.execute("DELETE FROM song WHERE id = %s", (withdrawn_song_id,))
     db.commit()
 
     page = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
@@ -569,6 +634,7 @@ def test_moderator_can_hide_replaced_and_withdrawn_revisions(client, db):
     )
     assert replaced_hide.status_code == 302
     assert withdrawn_hide.status_code == 302
+    assert withdrawn_hide.headers["Location"] == "/admin/manage/2025/verifications"
 
     with db.cursor() as cursor:
         cursor.execute(

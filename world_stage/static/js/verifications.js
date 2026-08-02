@@ -1,4 +1,13 @@
 function initializeVerifications() {
+    const updateSourceButtons = () => {
+        document.querySelectorAll('.verification-source-dialog-open').forEach((button) => {
+            const preview = button.previousElementSibling;
+            button.hidden = preview.scrollHeight <= preview.clientHeight + 1;
+        });
+    };
+    updateSourceButtons();
+    window.addEventListener('resize', updateSourceButtons);
+
     document.querySelectorAll('.verification-dialog').forEach((dialog) => {
         dialog.querySelector('.verification-dialog-close').addEventListener('click', () => {
             dialog.close();

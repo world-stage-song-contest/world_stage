@@ -234,11 +234,25 @@ def _render_verifications(year: dict):
 
     verification_groups.sort(key=group_sort_key)
 
+    verification_stats = {
+        "pending": 0,
+        "accepted": 0,
+        "rejected": 0,
+        "more-info": 0,
+        "placeholders": 0,
+    }
+    for song in songs:
+        if song["is_placeholder"]:
+            verification_stats["placeholders"] += 1
+        else:
+            verification_stats[song["approval_status"]] += 1
+
     return render_template(
         "admin/verifications.html",
         year=year,
         comments_by_song=comments_by_song,
         verification_groups=verification_groups,
+        verification_stats=verification_stats,
     )
 
 
@@ -402,29 +416,19 @@ def _hide_verification_revision(
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT song.id AS song_id
+        SELECT old.song_id
         FROM song_data AS old
-        JOIN song
-          ON song.country_id = old.country_id
-         AND song.year_id = old.year_id
-         AND song.entry_number IS NOT DISTINCT FROM old.entry_number
-        JOIN LATERAL (
-            SELECT newest.id
-            FROM song_data AS newest
-            WHERE newest.country_id = old.country_id
-              AND newest.year_id = old.year_id
-              AND newest.entry_number IS NOT DISTINCT FROM old.entry_number
-            ORDER BY newest.created_at DESC, newest.id DESC
-            LIMIT 1
-        ) AS latest ON true
         WHERE old.id = %s
           AND old.year_id = %s
-          AND song.year_id = %s
-          AND old.id <> latest.id
           AND old.title IS NOT NULL
           AND old.artist IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM current_song AS current
+              WHERE current.song_data_id = old.id
+          )
         """,
-        (version_id, year_id, year_id),
+        (version_id, year_id),
     )
     row = cursor.fetchone()
     if not row:
@@ -441,7 +445,8 @@ def _hide_verification_revision(
         (version_id, user_id),
     )
     db.commit()
-    return redirect(f"{redirect_url}#song-{row['song_id']}")
+    anchor = f"#song-{row['song_id']}" if row["song_id"] is not None else ""
+    return redirect(f"{redirect_url}{anchor}")
 
 
 @bp.post("/manage/<int:year>/verifications/<int:song_id>/comments")

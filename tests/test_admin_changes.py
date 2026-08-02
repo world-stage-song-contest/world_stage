@@ -100,6 +100,57 @@ def test_song_changes_are_derived_from_adjacent_revisions(db):
     }
 
 
+def test_moving_then_replacing_preserves_old_revision_country(db):
+    song_id = _add_song(db, title="North Macedonian entry")
+    with db.cursor() as cursor:
+        cursor.execute(
+            "UPDATE song SET country_id = 'FR' WHERE id = %s",
+            (song_id,),
+        )
+
+        # The moved entry remains readable before its replacement is saved.
+        cursor.execute(
+            "SELECT country_id, title FROM current_song WHERE id = %s",
+            (song_id,),
+        )
+        moved = cursor.fetchone()
+        assert moved == {
+            "country_id": "FR",
+            "title": "North Macedonian entry",
+        }
+
+        create_song_revision(
+            cursor,
+            song_id,
+            {"title": "Algerian entry"},
+            changed_by=2,
+        )
+    db.commit()
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT country_id, title
+            FROM song_data
+            WHERE song_id = %s
+            ORDER BY created_at, id
+            """,
+            (song_id,),
+        )
+        revisions = cursor.fetchall()
+        cursor.execute(
+            "SELECT country_id, title FROM current_song WHERE id = %s",
+            (song_id,),
+        )
+        current = cursor.fetchone()
+
+    assert revisions == [
+        {"country_id": "ES", "title": "North Macedonian entry"},
+        {"country_id": "FR", "title": "Algerian entry"},
+    ]
+    assert current == {"country_id": "FR", "title": "Algerian entry"}
+
+
 def test_refilling_a_withdrawn_song_is_a_creation(db):
     song_id = _add_song(db)
     with db.cursor() as cursor:
