@@ -147,3 +147,8 @@
     gap: 0.5rem;
     margin-top: 1rem;
 }
+
+.verification-manipulation-buttons {
+    display: flex;
+    gap: 1rem;
+}

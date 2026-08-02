@@ -68,15 +68,24 @@
         <br>
         <small>Submitted by {{ entry.submitter_username or 'Unknown user' }}</small>
         <br><em>{{ 'Withdrawn' if entry.song_deleted else 'Replaced' }}</em>
-        {% if not entry.song_deleted and entry.comments %}
-            {% if year.special_short_name %}
-            <form method="post" action="{{ url_for('admin.merge_replaced_song_special', short_name=year.special_short_name, version_id=entry.id) }}">
-            {% else %}
-            <form method="post" action="{{ url_for('admin.merge_replaced_song', year=year.id, version_id=entry.id) }}">
+        <div class="verification-manipulation-buttons">
+            {% if not entry.song_deleted %}
+                {% if year.special_short_name %}
+                <form method="post" action="{{ url_for('admin.merge_replaced_song_special', short_name=year.special_short_name, version_id=entry.id) }}">
+                {% else %}
+                <form method="post" action="{{ url_for('admin.merge_replaced_song', year=year.id, version_id=entry.id) }}">
+                {% endif %}
+                    <button type="submit" title="Treat the current artist and title as a correction to this song">Merge</button>
+                </form>
             {% endif %}
-                <button type="submit" title="Treat the current artist and title as a correction to this song">Merge</button>
+            {% if year.special_short_name %}
+            <form method="post" action="{{ url_for('admin.hide_verification_revision_special', short_name=year.special_short_name, version_id=entry.id) }}">
+            {% else %}
+            <form method="post" action="{{ url_for('admin.hide_verification_revision', year=year.id, version_id=entry.id) }}">
+            {% endif %}
+                <button type="submit" title="Hide this historical submission from verifications">Hide</button>
             </form>
-        {% endif %}
+        </div>
     </td>
     {{ render_sources(entry, 'historical-' ~ entry.id) }}
     <td class="verification-status"><strong>{{ entry.approval_status|replace('-', ' ')|title }}</strong></td>
@@ -99,7 +108,7 @@
     {% set manage_url = url_for('admin.manage', year=year.id) %}
 {% endif %}
 
-{% if songs or deleted_entries %}
+{% if verification_groups %}
 <div class="verification-table-wrapper">
     <table class="verification-table">
         <thead>
@@ -111,10 +120,12 @@
             </tr>
         </thead>
         <tbody>
-            {% for song in songs %}
-            {% for entry in historical_entries_by_song.get(song.id, []) %}
+            {% for group in verification_groups %}
+            {% for entry in group.historical_entries %}
                 {{ render_historical_entry(entry, year) }}
             {% endfor %}
+            {% if group.song %}
+            {% set song = group.song %}
             <tr id="song-{{ song.id }}"{% if song.is_placeholder %} class="placeholder"{% endif %}>
                 <td class="verification-entry">
                     <strong class="country">{{ flag(song.country_id, 21, song.country_name) }} {{ song.country_name }}</strong>
@@ -189,9 +200,7 @@
                     </form>
                 </td>
             </tr>
-            {% endfor %}
-            {% for entry in deleted_entries %}
-                {{ render_historical_entry(entry, year) }}
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>

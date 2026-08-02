@@ -85,6 +85,51 @@ def test_verification_page_lists_all_entries_and_sources(client, db):
     assert "No sources specified" in response.text
 
 
+def test_deleted_entries_keep_normal_country_sorting(client, db):
+    france_song_id = _add_song(db, "FR")
+    spain_song_id = _add_song(db, "ES")
+    united_states_song_id = _add_song(db, "US")
+    _login(client, db, 1)
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT id, song_data_id
+            FROM current_song
+            WHERE id = ANY(%s)
+            """,
+            ([france_song_id, united_states_song_id],),
+        )
+        version_ids = {
+            row["id"]: row["song_data_id"] for row in cursor.fetchall()
+        }
+
+        from world_stage.utils.song_revisions import withdraw_song
+
+        withdraw_song(cursor, france_song_id, changed_by=2)
+        withdraw_song(cursor, united_states_song_id, changed_by=2)
+        cursor.execute(
+            "DELETE FROM song_status WHERE song_id = ANY(%s)",
+            ([france_song_id, united_states_song_id],),
+        )
+        cursor.execute(
+            "DELETE FROM song WHERE id = ANY(%s)",
+            ([france_song_id, united_states_song_id],),
+        )
+    db.commit()
+
+    response = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+
+    assert response.status_code == 200
+    france_position = response.text.index(
+        f'id="historical-song-{version_ids[france_song_id]}"'
+    )
+    spain_position = response.text.index(f'id="song-{spain_song_id}"')
+    united_states_position = response.text.index(
+        f'id="historical-song-{version_ids[united_states_song_id]}"'
+    )
+    assert france_position < spain_position < united_states_position
+
+
 def test_replaced_revision_is_listed_without_review_history(client, db):
     _login(client, db, 1)
     song_id = _add_song(db, "ES")
@@ -98,6 +143,7 @@ def test_replaced_revision_is_listed_without_review_history(client, db):
     assert response.status_code == 200
     assert f'id="historical-song-{old_version_id}"' in response.text
     assert "Replacement Artist" in response.text
+    assert f'verifications/{old_version_id}/merge' in response.text
 
 
 def test_multiple_comments_are_appended_and_attributed_to_each_moderator(client, db):
@@ -226,6 +272,65 @@ def test_moderator_can_set_all_four_verification_states(client, db):
             {"status": "more-info", "moderator_id": 1},
             {"status": "pending", "moderator_id": 1},
         ]
+
+
+def test_moderator_can_merge_multiple_title_corrections_without_comments(client, db):
+    song_id = _add_song(db, "ES")
+    _login(client, db, 1)
+    with db.cursor() as cursor:
+        cursor.execute(
+            "UPDATE song_data SET title = '[TBDG' WHERE song_id = %s",
+            (song_id,),
+        )
+        cursor.execute("SELECT song_data_id FROM current_song WHERE id = %s", (song_id,))
+        first_version_id = cursor.fetchone()["song_data_id"]
+    db.commit()
+
+    second_version_id = _revise_song(db, song_id, title="[TBD")
+    current_version_id = _revise_song(db, song_id, title="[TBD]")
+
+    page = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+    assert page.status_code == 200
+    assert f'id="historical-song-{first_version_id}"' in page.text
+    assert f'id="historical-song-{second_version_id}"' in page.text
+    assert f'verifications/{first_version_id}/merge' in page.text
+    assert f'verifications/{second_version_id}/merge' in page.text
+
+    first_merge = client.post(
+        f"/admin/manage/2025/verifications/{first_version_id}/merge"
+    )
+    second_merge = client.post(
+        f"/admin/manage/2025/verifications/{second_version_id}/merge"
+    )
+
+    assert first_merge.status_code == 302
+    assert second_merge.status_code == 302
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT song_data_id, merged_into_song_data_id, merged_by
+            FROM song_revision_merge
+            ORDER BY song_data_id
+            """
+        )
+        assert cursor.fetchall() == [
+            {
+                "song_data_id": first_version_id,
+                "merged_into_song_data_id": current_version_id,
+                "merged_by": 1,
+            },
+            {
+                "song_data_id": second_version_id,
+                "merged_into_song_data_id": current_version_id,
+                "merged_by": 1,
+            },
+        ]
+
+    page = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+    assert page.status_code == 200
+    assert f'id="historical-song-{first_version_id}"' not in page.text
+    assert f'id="historical-song-{second_version_id}"' not in page.text
+    assert "[TBD]" in page.text
 
 
 def test_rejection_and_more_info_require_a_submitter_message(client, db):
@@ -407,6 +512,92 @@ def test_moderator_can_merge_a_replaced_song_back(client, db):
         assert cursor.fetchone()["song_data_id"] == current_version_id
         cursor.execute("SELECT approval_status FROM current_song WHERE id = %s", (song_id,))
         assert cursor.fetchone()["approval_status"] == "accepted"
+        cursor.execute(
+            """
+            SELECT merged_into_song_data_id, merged_by
+            FROM song_revision_merge
+            WHERE song_data_id = %s
+            """,
+            (version_id,),
+        )
+        assert cursor.fetchone() == {
+            "merged_into_song_data_id": current_version_id,
+            "merged_by": 1,
+        }
+
+    page = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+    assert page.status_code == 200
+    assert f'id="historical-song-{version_id}"' not in page.text
+
+
+def test_moderator_can_hide_replaced_and_withdrawn_revisions(client, db):
+    replaced_song_id = _add_song(db, "ES")
+    withdrawn_song_id = _add_song(db, "FR")
+    _login(client, db, 1)
+    client.post(
+        f"/admin/manage/2025/verifications/{replaced_song_id}/comments",
+        data={"comment": "Preserved hidden note."},
+    )
+    with db.cursor() as cursor:
+        cursor.execute(
+            "SELECT id, song_data_id FROM current_song WHERE id = ANY(%s) ORDER BY id",
+            ([replaced_song_id, withdrawn_song_id],),
+        )
+        versions = {
+            row["id"]: row["song_data_id"] for row in cursor.fetchall()
+        }
+    replaced_version_id = versions[replaced_song_id]
+    withdrawn_version_id = versions[withdrawn_song_id]
+
+    _revise_song(db, replaced_song_id, title="Actual selected song")
+    from world_stage.utils.song_revisions import withdraw_song
+
+    with db.cursor() as cursor:
+        withdraw_song(cursor, withdrawn_song_id, changed_by=2)
+    db.commit()
+
+    page = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+    assert page.status_code == 200
+    assert f'verifications/{replaced_version_id}/hide' in page.text
+    assert f'verifications/{withdrawn_version_id}/hide' in page.text
+
+    replaced_hide = client.post(
+        f"/admin/manage/2025/verifications/{replaced_version_id}/hide"
+    )
+    withdrawn_hide = client.post(
+        f"/admin/manage/2025/verifications/{withdrawn_version_id}/hide"
+    )
+    assert replaced_hide.status_code == 302
+    assert withdrawn_hide.status_code == 302
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT song_data_id, hidden_by
+            FROM song_verification_hidden_revision
+            ORDER BY song_data_id
+            """
+        )
+        assert cursor.fetchall() == [
+            {"song_data_id": replaced_version_id, "hidden_by": 1},
+            {"song_data_id": withdrawn_version_id, "hidden_by": 1},
+        ]
+        cursor.execute(
+            """
+            SELECT song_data_id, body
+            FROM song_verification_comment
+            WHERE body = 'Preserved hidden note.'
+            """
+        )
+        assert cursor.fetchone() == {
+            "song_data_id": replaced_version_id,
+            "body": "Preserved hidden note.",
+        }
+
+    page = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+    assert page.status_code == 200
+    assert f'id="historical-song-{replaced_version_id}"' not in page.text
+    assert f'id="historical-song-{withdrawn_version_id}"' not in page.text
 
 
 def test_comment_must_target_a_song_in_the_managed_year(client, db):

@@ -135,9 +135,15 @@ def _render_verifications(year: dict):
         ) AS status ON true
         JOIN country ON country.id = data.country_id
         LEFT JOIN account AS submitter ON submitter.id = data.submitter_id
+        LEFT JOIN song_revision_merge AS manual_merge
+          ON manual_merge.song_data_id = data.id
+        LEFT JOIN song_verification_hidden_revision AS hidden_revision
+          ON hidden_revision.song_data_id = data.id
         WHERE data.year_id = %s
           AND data.title IS NOT NULL
           AND data.artist IS NOT NULL
+          AND manual_merge.song_data_id IS NULL
+          AND hidden_revision.song_data_id IS NULL
           AND (
               data.id = latest_content.id
               OR (
@@ -199,13 +205,40 @@ def _render_verifications(year: dict):
         else:
             deleted_entries.append(entry)
 
+    verification_groups = []
+    for song in songs:
+        verification_groups.append(
+            {
+                "song": song,
+                "historical_entries": historical_entries_by_song[song["id"]],
+            }
+        )
+
+    deleted_entries_by_song = defaultdict(list)
+    for entry in deleted_entries:
+        deleted_entries_by_song[
+            (entry["country_id"], entry["entry_number"])
+        ].append(entry)
+    for deleted_group in deleted_entries_by_song.values():
+        verification_groups.append(
+            {"song": None, "historical_entries": deleted_group}
+        )
+
+    def group_sort_key(group):
+        representative = group["song"] or group["historical_entries"][0]
+        return (
+            (representative["country_name"] or representative["country_id"]).casefold(),
+            representative["entry_number"] or 1,
+            representative["country_id"],
+        )
+
+    verification_groups.sort(key=group_sort_key)
+
     return render_template(
         "admin/verifications.html",
         year=year,
-        songs=songs,
         comments_by_song=comments_by_song,
-        historical_entries_by_song=historical_entries_by_song,
-        deleted_entries=deleted_entries,
+        verification_groups=verification_groups,
     )
 
 
@@ -307,7 +340,12 @@ def _set_verification(
     return redirect(f"{redirect_url}#song-{song_id}")
 
 
-def _merge_replaced_song(year_id: int, version_id: int, redirect_url: str):
+def _merge_replaced_song(
+    year_id: int,
+    version_id: int,
+    user_id: int,
+    redirect_url: str,
+):
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
@@ -321,6 +359,8 @@ def _merge_replaced_song(year_id: int, version_id: int, redirect_url: str):
         JOIN current_song AS current ON current.id = song.id
         WHERE old.id = %s AND song.year_id = %s AND current.year_id = %s
           AND old.id <> current.song_data_id
+          AND current.title IS NOT NULL
+          AND current.artist IS NOT NULL
         """,
         (version_id, year_id, year_id),
     )
@@ -335,6 +375,70 @@ def _merge_replaced_song(year_id: int, version_id: int, redirect_url: str):
         WHERE song_data_id = %s
         """,
         (row["song_data_id"], version_id),
+    )
+    cursor.execute(
+        """
+        INSERT INTO song_revision_merge (
+            song_data_id, merged_into_song_data_id, merged_by
+        ) VALUES (%s, %s, %s)
+        ON CONFLICT (song_data_id) DO UPDATE
+        SET merged_into_song_data_id = EXCLUDED.merged_into_song_data_id,
+            merged_by = EXCLUDED.merged_by,
+            created_at = CURRENT_TIMESTAMP
+        """,
+        (version_id, row["song_data_id"], user_id),
+    )
+    db.commit()
+    return redirect(f"{redirect_url}#song-{row['song_id']}")
+
+
+def _hide_verification_revision(
+    year_id: int,
+    version_id: int,
+    user_id: int,
+    redirect_url: str,
+):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        SELECT song.id AS song_id
+        FROM song_data AS old
+        JOIN song
+          ON song.country_id = old.country_id
+         AND song.year_id = old.year_id
+         AND song.entry_number IS NOT DISTINCT FROM old.entry_number
+        JOIN LATERAL (
+            SELECT newest.id
+            FROM song_data AS newest
+            WHERE newest.country_id = old.country_id
+              AND newest.year_id = old.year_id
+              AND newest.entry_number IS NOT DISTINCT FROM old.entry_number
+            ORDER BY newest.created_at DESC, newest.id DESC
+            LIMIT 1
+        ) AS latest ON true
+        WHERE old.id = %s
+          AND old.year_id = %s
+          AND song.year_id = %s
+          AND old.id <> latest.id
+          AND old.title IS NOT NULL
+          AND old.artist IS NOT NULL
+        """,
+        (version_id, year_id, year_id),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return render_template("error.html", error="Song version not found"), 404
+
+    cursor.execute(
+        """
+        INSERT INTO song_verification_hidden_revision (song_data_id, hidden_by)
+        VALUES (%s, %s)
+        ON CONFLICT (song_data_id) DO UPDATE
+        SET hidden_by = EXCLUDED.hidden_by,
+            created_at = CURRENT_TIMESTAMP
+        """,
+        (version_id, user_id),
     )
     db.commit()
     return redirect(f"{redirect_url}#song-{row['song_id']}")
@@ -384,6 +488,22 @@ def merge_replaced_song(year: int, version_id: int, user: tuple[int, str]):
     return _merge_replaced_song(
         year,
         version_id,
+        user[0],
+        url_for("admin.verifications", year=year),
+    )
+
+
+@bp.post("/manage/<int:year>/verifications/<int:version_id>/hide")
+@require_user()
+def hide_verification_revision(year: int, version_id: int, user: tuple[int, str]):
+    cursor = get_db().cursor()
+    cursor.execute("SELECT id FROM year WHERE id = %s AND id >= 0", (year,))
+    if not cursor.fetchone():
+        return render_template("error.html", error=f"Year {year} not found"), 404
+    return _hide_verification_revision(
+        year,
+        version_id,
+        user[0],
         url_for("admin.verifications", year=year),
     )
 
@@ -435,5 +555,22 @@ def merge_replaced_song_special(
     return _merge_replaced_song(
         year["id"],
         version_id,
+        user[0],
+        url_for("admin.verifications_special", short_name=short_name),
+    )
+
+
+@bp.post("/manage/special/<short_name>/verifications/<int:version_id>/hide")
+@require_user()
+def hide_verification_revision_special(
+    short_name: str, version_id: int, user: tuple[int, str]
+):
+    year = _resolve_special(short_name)
+    if not year:
+        return render_template("error.html", error=f"Special '{short_name}' not found"), 404
+    return _hide_verification_revision(
+        year["id"],
+        version_id,
+        user[0],
         url_for("admin.verifications_special", short_name=short_name),
     )

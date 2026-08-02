@@ -274,6 +274,8 @@ def _clean_songs(_seeded_db):
         cur.execute("DELETE FROM song_subgenre")
         cur.execute("DELETE FROM song_verification_comment")
         cur.execute("DELETE FROM song_status")
+        cur.execute("DELETE FROM song_revision_merge")
+        cur.execute("DELETE FROM song_verification_hidden_revision")
         cur.execute("DELETE FROM song_data")
         cur.execute("DELETE FROM language_set_language")
         cur.execute("DELETE FROM language_set")
