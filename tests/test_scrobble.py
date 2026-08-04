@@ -3,6 +3,7 @@
 import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +29,7 @@ def _add_song(db, cc, year, title, artist, link, duration):
             (song_id, title, artist, link, duration),
         )
     db.commit()
+    return song_id
 
 
 def _make_session(db, user_id):
@@ -284,6 +286,58 @@ class TestScrobbleEndpoints:
         )
         assert [c for c in fake_call if c["method"] == "track.scrobble"] == []
 
+    def test_catalog_playback_endpoints_use_authoritative_song(self, client, db, fake_call):
+        song_id = _add_song(
+            db, "US", 2024, "Catalog Title", "Catalog Artist", "https://m/x.mp4", 180.0
+        )
+        self._link(db, 2)
+        sid = _make_session(db, 2)
+        client.set_cookie("session", sid)
+
+        now_response = client.post(
+            "/scrobble/now-playing",
+            json={"song_id": song_id, "artist": "HACKED", "track": "HACKED"},
+        )
+        timestamp = int(datetime.now(UTC).timestamp())
+        scrobble_response = client.post(
+            "/scrobble",
+            json={
+                "song_id": song_id,
+                "timestamp": timestamp,
+                "artist": "HACKED",
+                "track": "HACKED",
+            },
+        )
+
+        assert now_response.status_code == 204
+        assert scrobble_response.status_code == 204
+        submitted = [
+            call for call in fake_call
+            if call["method"] in ("track.updateNowPlaying", "track.scrobble")
+        ]
+        assert [call["params"]["artist"] for call in submitted] == [
+            "Catalog Artist", "Catalog Artist"
+        ]
+        assert [call["params"]["track"] for call in submitted] == [
+            "Catalog Title", "Catalog Title"
+        ]
+        assert submitted[1]["params"]["timestamp"] == timestamp
+        assert submitted[1]["params"]["album"] is None
+
+    def test_catalog_scrobble_rejects_invalid_timestamp(self, client, db, fake_call):
+        song_id = _add_song(db, "US", 2024, "T", "A", "https://m/x.mp4", 180.0)
+        self._link(db, 2)
+        sid = _make_session(db, 2)
+        client.set_cookie("session", sid)
+
+        response = client.post(
+            "/scrobble",
+            json={"song_id": song_id, "timestamp": "not-a-timestamp"},
+        )
+
+        assert response.status_code == 204
+        assert [call for call in fake_call if call["method"] == "track.scrobble"] == []
+
 
 # ── Connect / callback ───────────────────────────────────────────────
 
@@ -325,3 +379,20 @@ def test_radio_page_scrobble_disabled_when_logged_out(client):
     resp = client.get("/radio", headers={"Accept": "text/html"})
     assert resp.status_code == 200
     assert b"window.SCROBBLE_ENABLED = false" in resp.data
+
+
+def test_site_scrobble_client_uses_lastfm_threshold_and_catalog_id(client):
+    response = client.get("/static/js/scrobble.js")
+    assert response.status_code == 200
+    source = response.get_data(as_text=True)
+
+    assert "Math.min(duration / 2, 240)" in source
+    assert "song_id: this.song.id" in source
+    assert "post('/scrobble/now-playing'" in source
+    assert "post('/scrobble'" in source
+
+
+def test_show_player_tracks_only_song_entries():
+    source = Path("world_stage/templates/year/play.html").read_text(encoding="utf-8")
+    assert "entry.kind === 'song' ? entry : null" in source
+    assert "scrobbleTracker.setSong" in source

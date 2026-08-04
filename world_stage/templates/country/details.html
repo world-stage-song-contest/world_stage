@@ -7,6 +7,7 @@
     <script src="{{ static('js/sort-table.js') }}"></script>
     <script src="{{ static('js/year.js') }}"></script>
     <script src="{{ static('js/footnote.js') }}"></script>
+    <script src="{{ static('js/scrobble.js') }}"></script>
     <link href="https://vjs.zencdn.net/8.23.3/video-js.css" rel="stylesheet" />
     <style>
         #video-player-container {
@@ -408,6 +409,38 @@
 {% endif %}
 
 <script src="https://vjs.zencdn.net/8.23.3/video.min.js"></script>
+
+<script>
+    (function () {
+        const tracker = new WorldStageScrobble.Tracker(
+            {{ 'true' if scrobble_enabled else 'false' }}
+        );
+        tracker.setSong({
+            id: {{ song.id }},
+            duration: {{ song.duration|tojson }},
+        });
+
+        const youtube = document.getElementById('youtube-player');
+        if (youtube) {
+            tracker.attachYouTube(youtube);
+            return;
+        }
+
+        const media = document.getElementById('video-player');
+        if (!media) return;
+        if (typeof videojs === 'function') {
+            try {
+                const player = (videojs.getPlayer && videojs.getPlayer('video-player'))
+                    || videojs('video-player');
+                tracker.durationProvider = () => player.duration();
+                tracker.attachVideoJs(player);
+                return;
+            } catch (e) { /* use the native element below */ }
+        }
+        tracker.durationProvider = () => media.duration;
+        tracker.attachMedia(media);
+    })();
+</script>
 
 {% set has_recap = song.recap_start_seconds is not none
                   and song.recap_end_seconds is not none

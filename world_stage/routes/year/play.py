@@ -3,11 +3,13 @@ import math
 
 from flask import request
 
+from ... import scrobble
 from ...db import fetchone, get_db
 from ...utils import (
     ShowData,
     UserPermissions,
     get_show_id,
+    get_user_id_from_session,
     render_template,
     with_permissions,
 )
@@ -139,8 +141,10 @@ def get_show_play_entries(
             """
             SELECT LOWER(country.id) AS cc,
                    country.name AS country,
+                   song.id,
                    song.title,
                    song.artist,
+                   song.duration,
                    song.video_link AS url,
                    song.poster_link,
                    song.vtt_link
@@ -163,8 +167,10 @@ def get_show_play_entries(
         """
         SELECT LOWER(country.id) AS cc,
                country.name AS country,
+               song.id,
                song.title,
                song.artist,
+               song.duration,
                song.video_link AS url,
                song.poster_link,
                song.vtt_link
@@ -202,10 +208,12 @@ def get_show_play_entries(
         entries.append(
             {
                 "kind": "song",
+                "id": row["id"],
                 "cc": cc,
                 "country": row.get("country") or "",
                 "title": row.get("title") or "",
                 "artist": row.get("artist") or "",
+                "duration": row.get("duration"),
                 "url": url,
                 "poster": row.get("poster_link") or None,
                 "vtt": row.get("vtt_link") or None,
@@ -234,6 +242,11 @@ def get_show_play_entries(
     )
 
     return entries, bad_countries
+
+
+def _scrobble_enabled() -> bool:
+    user = get_user_id_from_session(request.cookies.get("session"))
+    return bool(user) and scrobble.has_enabled_account(user[0])
 
 
 @bp.get("/<int:year>/<show>/play")
@@ -271,6 +284,7 @@ def show_play(year: int, show: str, permissions: UserPermissions):
         has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
         special=None,
         special_name=None,
+        scrobble_enabled=_scrobble_enabled(),
     )
 
 
@@ -314,4 +328,5 @@ def special_show_play(short_name: str, show: str, permissions: UserPermissions):
         has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
         special=short_name,
         special_name=special_year["special_name"],
+        scrobble_enabled=_scrobble_enabled(),
     )

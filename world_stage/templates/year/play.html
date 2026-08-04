@@ -3,6 +3,7 @@
 {% block headercontents %}
     <link href="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video-js.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video.min.js"></script>
+    <script src="{{ static('js/scrobble.js') }}"></script>
     <style>
         #play-controls {
             display: flex;
@@ -185,6 +186,10 @@
         fluid: true,
         aspectRatio: '16:9',
     });
+    const scrobbleTracker = new WorldStageScrobble.Tracker(
+        {{ 'true' if scrobble_enabled else 'false' }}
+    );
+    scrobbleTracker.attachVideoJs(player);
 
     let currentIndex = -1;
     const listEl = document.getElementById('custom-playlist');
@@ -209,6 +214,12 @@
     function loadEntry(index, { autoplay = true } = {}) {
         const entry = ENTRIES[index];
         if (!entry) return;
+        // Postcards and the final recap deliberately clear the tracker:
+        // only full catalog songs are eligible for scrobbling.
+        scrobbleTracker.setSong(
+            entry.kind === 'song' ? entry : null,
+            () => player.duration()
+        );
         currentIndex = index;
 
         const videoEl = videoElement();

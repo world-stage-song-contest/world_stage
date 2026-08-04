@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from flask import Blueprint, redirect, request, url_for
 
+from .. import scrobble
 from ..db import get_db
 from ..media import duration_for_link, is_media_link
 from ..utils import (
@@ -399,16 +400,18 @@ mime_types = {
 
 def generate_iframe(url: str, img_url: str | None, vtt_url: str | None = None):
     if "youtu.be" in url:
-        video_id = url.split("/")[-1]
-        return (f'<iframe src="https://www.youtube.com/embed/{video_id}"'
-                'frameborder="0" allowfullscreen></iframe>')
+        video_id = url.split("/")[-1].split("?", 1)[0]
+        return (f'<iframe id="youtube-player" '
+                f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1"'
+                ' frameborder="0" allowfullscreen></iframe>')
 
     elif "youtube.com/watch" in url:
         match = re.search(r"v=([^&]+)", url)
         if match:
             video_id = match.group(1)
-            return (f'<iframe src="https://www.youtube.com/embed/{video_id}"'
-                    'frameborder="0" allowfullscreen></iframe>')
+            return (f'<iframe id="youtube-player" '
+                    f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1"'
+                    ' frameborder="0" allowfullscreen></iframe>')
 
     elif "drive.google.com/file/d/" in url:
         match = re.search(r"/d/([^/]+)", url)
@@ -509,6 +512,7 @@ def details(code: str, year: int, user: tuple[int, str] | None, permissions: Use
         notes=notes,
         song_results=song_results,
         revote_results=revote_results,
+        scrobble_enabled=bool(user_id) and scrobble.has_enabled_account(user_id),
     )
 
 
@@ -610,6 +614,7 @@ def _render_song_details(
         revote_results=revote_results,
         special=special_short_name,
         special_name=special_name,
+        scrobble_enabled=bool(user_id) and scrobble.has_enabled_account(user_id),
     )
 
 

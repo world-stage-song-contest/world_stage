@@ -112,7 +112,7 @@ def _validate_submission(slot_id) -> dict | None:
 
 
 def _scrobble_user():
-    """The logged-in user id for a scrobble POST, or None."""
+    """The logged-in user id for a radio scrobble POST, or None."""
     user = get_user_id_from_session(request.cookies.get("session"))
     return user[0] if user else None
 

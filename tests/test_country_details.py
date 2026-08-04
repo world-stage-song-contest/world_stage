@@ -90,3 +90,24 @@ def test_details_page_attaches_subtitles_to_direct_media(client, db):
         f'<track kind="subtitles" src="{vtt_url}" srclang="en" '
         'label="Subtitles" default>'
     ) in response.text
+
+
+def test_details_page_enables_youtube_scrobble_events(client, db):
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            WITH inserted AS (
+                INSERT INTO song (country_id, year_id) VALUES ('US', 2025) RETURNING id
+            ) INSERT INTO song_data (song_id, title, artist, video_link, duration)
+              SELECT id, 'YouTube Song', 'Test Artist',
+                     'https://youtu.be/abcdefghijk', 180 FROM inserted
+            """
+        )
+    db.commit()
+
+    response = client.get("/country/us/2025", headers={"Accept": "text/html"})
+
+    assert response.status_code == 200
+    assert 'id="youtube-player"' in response.text
+    assert "abcdefghijk?enablejsapi=1" in response.text
+    assert "tracker.attachYouTube(youtube)" in response.text

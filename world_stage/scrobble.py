@@ -1,4 +1,4 @@
-"""Optional Last.fm / Libre.fm scrobbling for the radio.
+"""Optional Last.fm / Libre.fm scrobbling for site playback.
 
 Both services speak the AudioScrobbler 2.0 protocol: an API key + shared
 secret identify the app, a per-user session key (obtained via the
@@ -245,7 +245,15 @@ def _mark_scrobbled(account_id: int):
     db.commit()
 
 
-def send_to_all(user_id, *, artist, track, timestamp=None, duration=None, album=ALBUM):
+def send_to_all(
+    user_id,
+    *,
+    artist,
+    track,
+    timestamp=None,
+    duration=None,
+    album: str | None = ALBUM,
+):
     """Dispatch a now-playing update (timestamp=None) or a scrobble
     (timestamp set) to every enabled, configured account for the user.
 
