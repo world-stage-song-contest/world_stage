@@ -17,7 +17,10 @@
     <a class="nav-item" href="{{ url_for('user.predictions', username=username) }}">Predictions history</a>
 {% endblock %}
 {% block content %}
-{% macro entry_table(entries, special, show_country, show_year=true) %}
+{% macro vote_points_cell(cell, submitted_by_voter, mark_unvoted_submissions) %}
+<td class="num {{ '' if cell.part else 'unavailable' }}">{% if cell.pts is not none %}{{ 'N/A' if mark_unvoted_submissions and submitted_by_voter and not cell.voted_for else cell.pts }}{% endif %}</td>
+{% endmacro %}
+{% macro entry_table(entries, special, show_country, show_year=true, mark_unvoted_submissions=false) %}
 <div id="scroll-container">
 <table class="sortable votes-by-country">
     <thead>
@@ -51,9 +54,9 @@
             <td><a href="{{ entry_url }}">{{ c.title }}</a></td>
             <td class="num" data-value="{{ c.pct }}">{{ '%.2f'|format(c.pct) }}%</td>
             <td class="num">{{ c.total }}</td>
-            <td class="num {{ '' if c.final.part else 'unavailable' }}">{{ c.final.pts if c.final.pts is not none else '' }}</td>
-            <td class="num {{ '' if c.repe.part else 'unavailable' }}">{{ c.repe.pts if c.repe.pts is not none else '' }}</td>
-            <td class="num {{ '' if c.semi.part else 'unavailable' }}">{{ c.semi.pts if c.semi.pts is not none else '' }}</td>
+            {{ vote_points_cell(c.final, c.submitted_by_voter, mark_unvoted_submissions) }}
+            {{ vote_points_cell(c.repe, c.submitted_by_voter, mark_unvoted_submissions) }}
+            {{ vote_points_cell(c.semi, c.submitted_by_voter, mark_unvoted_submissions) }}
         </tr>
     {% endfor %}
     </tbody>
@@ -143,11 +146,11 @@
 <h3 class="country-heading">{{ flag(selected_country.cc, 36) }} {{ selected_country.name }}</h3>
 {% if regular_entries or special_entries %}
 {% if regular_entries %}
-{{ entry_table(regular_entries, false, false) }}
+{{ entry_table(regular_entries, false, false, true, true) }}
 {% endif %}
 {% if special_entries %}
 <h2>Specials</h2>
-{{ entry_table(special_entries, true, false) }}
+{{ entry_table(special_entries, true, false, true, true) }}
 {% endif %}
 {% else %}
 <p>No votes to show for this country.</p>

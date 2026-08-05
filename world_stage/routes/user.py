@@ -138,7 +138,7 @@ def _vote_column(short_name: str) -> str | None:
     return None
 
 
-def _aggregate_entries(rows) -> list[dict]:
+def _aggregate_entries(rows, voter_id: int) -> list[dict]:
     """Group raw per-(show, entry) rows into one dict per (year, entry).
 
     Each show column records whether the entry actually competed in that show
@@ -163,11 +163,12 @@ def _aggregate_entries(rows) -> list[dict]:
                 "country": row["country"],
                 "artist": row["artist"],
                 "title": row["title"],
+                "submitted_by_voter": row["submitter_id"] == voter_id,
                 "total": 0,
                 "max_possible": 0,
-                "final": {"part": False, "pts": None},
-                "repe": {"part": False, "pts": None},
-                "semi": {"part": False, "pts": None},
+                "final": {"part": False, "pts": None, "voted_for": False},
+                "repe": {"part": False, "pts": None, "voted_for": False},
+                "semi": {"part": False, "pts": None, "voted_for": False},
             }
             groups[key] = g
 
@@ -187,6 +188,7 @@ def _aggregate_entries(rows) -> list[dict]:
             # blank only for shows the entry sat out or the user didn't vote in.
             if voted:
                 cell["pts"] = (cell["pts"] or 0) + (score or 0)
+                cell["voted_for"] = cell["voted_for"] or score is not None
 
     entries = [g for g in groups.values() if g["max_possible"] > 0]
     for g in entries:
@@ -222,6 +224,7 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val, *, revote=F
         SELECT sh.short_name, sh.year_id,
                year.special_name, year.special_short_name,
                song.id AS song_id, song.title, song.artist, song.entry_number,
+               song.submitter_id,
                country.id AS cc, country.name AS country,
                vote_set.id AS vote_set_id, vote.score AS score,
                (SELECT MAX(point.score) FROM point
@@ -237,7 +240,7 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val, *, revote=F
     """,
         (voter_id, where_val),
     )
-    entries = _aggregate_entries(cursor.fetchall())
+    entries = _aggregate_entries(cursor.fetchall(), voter_id)
     entries.sort(key=lambda g: (g["year_id"] or 0, g["country"] or ""))
     return entries
 
