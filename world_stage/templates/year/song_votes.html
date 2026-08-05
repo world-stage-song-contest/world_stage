@@ -137,7 +137,7 @@
                     {% for voter in group.voters %}
                     <span class="voter-entry{% if voter.changed %} changed-vote{% endif %}">
                         {{ flag(voter.code, 21, voter.country_name) }}
-                        <a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>
+                        {% if voter.is_submitter %}<em>{% endif %}<a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>{% if voter.is_submitter %}</em>{% endif %}
                     </span>
                     {% endfor %}
                 {% endif %}

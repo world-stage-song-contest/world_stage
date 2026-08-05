@@ -280,7 +280,7 @@ def song_votes(year: str, show: str, song_id: int):
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT song.id, song.title, song.artist, song.country_id,
+        SELECT song.id, song.title, song.artist, song.country_id, song.submitter_id,
                country.name AS country_name
         FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
@@ -348,6 +348,7 @@ def song_votes(year: str, show: str, song_id: int):
             "username": voter["username"],
             "code": voter["code"],
             "country_name": voter["country_name"] or "",
+            "is_submitter": voter["voter_id"] == song["submitter_id"],
             "changed": (
                 voter["voter_id"] in revote_voter_ids
                 and score != original_scores.get(voter["voter_id"], 0)
@@ -355,7 +356,7 @@ def song_votes(year: str, show: str, song_id: int):
         }
         if score:
             groups[score].append(voter_entry)
-        else:
+        elif not voter_entry["is_submitter"]:
             no_points_voters.append(voter_entry)
 
     points = sorted(show_data.points, reverse=True)

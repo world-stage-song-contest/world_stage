@@ -124,7 +124,7 @@ def special_song_votes(
 
     cursor.execute(
         """
-        SELECT song.id, song.title, song.artist, song.country_id,
+        SELECT song.id, song.title, song.artist, song.country_id, song.submitter_id,
                country.name AS country_name, country.cc3,
                song_show.running_order, song.entry_number
         FROM current_song AS song
@@ -159,7 +159,8 @@ def special_song_votes(
 
     cursor.execute(
         """
-        SELECT account.username, COALESCE(vote_set.country_id, 'XX') AS code,
+        SELECT account.id AS voter_id, account.username,
+               COALESCE(vote_set.country_id, 'XX') AS code,
                country.name AS country_name, country.cc3
         FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
@@ -196,10 +197,11 @@ def special_song_votes(
             "code": voter_info["code"],
             "cc3": voter_info.get("cc3", ""),
             "country_name": voter_info.get("country_name", ""),
+            "is_submitter": voter_info["voter_id"] == song["submitter_id"],
         }
         if score > 0:
             groups[score].append(voter_entry)
-        else:
+        elif not voter_entry["is_submitter"]:
             no_points_voters.append(voter_entry)
 
     point_groups = []
@@ -269,7 +271,7 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
     # Find the song for this country in this show
     cursor.execute(
         """
-        SELECT song.id, song.title, song.artist, song.country_id,
+        SELECT song.id, song.title, song.artist, song.country_id, song.submitter_id,
                country.name AS country_name, country.cc3,
                song_show.running_order
         FROM current_song AS song
@@ -304,7 +306,8 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
     # Get all voters for this show with their country associations
     cursor.execute(
         """
-        SELECT account.username, COALESCE(vote_set.country_id, 'XX') AS code,
+        SELECT account.id AS voter_id, account.username,
+               COALESCE(vote_set.country_id, 'XX') AS code,
                country.name AS country_name, country.cc3
         FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
@@ -344,10 +347,11 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
             "code": voter_info["code"],
             "cc3": voter_info.get("cc3", ""),
             "country_name": voter_info.get("country_name", ""),
+            "is_submitter": voter_info["voter_id"] == song["submitter_id"],
         }
         if score > 0:
             groups[score].append(voter_entry)
-        else:
+        elif not voter_entry["is_submitter"]:
             no_points_voters.append(voter_entry)
 
     # Build ordered list of point groups

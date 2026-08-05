@@ -29,7 +29,10 @@ def test_revote_keeps_official_results_unchanged(client, db):
         show_id = show["id"]
 
         song_ids = []
-        for country, title in (("US", "Original winner"), ("ES", "Revote winner")):
+        for country, title, submitter_id in (
+            ("US", "Original winner", 3),
+            ("ES", "Revote winner", 1),
+        ):
             cursor.execute(
                 """
                 INSERT INTO song (country_id, year_id)
@@ -41,9 +44,9 @@ def test_revote_keeps_official_results_unchanged(client, db):
             song_id = cursor.fetchone()["id"]
             song_ids.append(song_id)
             cursor.execute(
-                """INSERT INTO song_data (song_id, title, artist)
-                   VALUES (%s, %s, 'Artist')""",
-                (song_id, title),
+                """INSERT INTO song_data (song_id, title, artist, submitter_id)
+                   VALUES (%s, %s, 'Artist', %s)""",
+                (song_id, title, submitter_id),
             )
         cursor.executemany(
             "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
@@ -179,6 +182,18 @@ def test_revote_keeps_official_results_unchanged(client, db):
             "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
             [(original_set, song_ids[0], 12), (original_set, song_ids[1], 10)],
         )
+        cursor.execute(
+            """
+            INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
+            VALUES (1, %s, 'FR', 'official') RETURNING id
+            """,
+            (show_id,),
+        )
+        alice_set = cursor.fetchone()["id"]
+        cursor.execute(
+            "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, 10)",
+            (alice_set, song_ids[0]),
+        )
     db.commit()
 
     response = client.get(f"/revote/2024/rv/song/{song_ids[0]}", headers={"Accept": "text/html"})
@@ -186,8 +201,14 @@ def test_revote_keeps_official_results_unchanged(client, db):
     assert b"Original winner" in response.data
     assert b"/country/us/2024" in response.data
     assert b">carol</a>" in response.data
+    assert b"<em><a href=\"/user/carol\">carol</a></em>" in response.data
+    assert b">alice</a>" in response.data
     assert b"changed-vote" in response.data
     assert response.data.count(b'class="voter-entry changed-vote"') == 1
+
+    response = client.get(f"/revote/2024/rv/song/{song_ids[1]}", headers={"Accept": "text/html"})
+    assert response.status_code == 200
+    assert b">alice</a>" not in response.data
 
     response = client.get("/revote/2024/rv/detailed", headers={"Accept": "text/html"})
     assert response.status_code == 200
