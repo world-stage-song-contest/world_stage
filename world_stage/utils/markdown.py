@@ -6,6 +6,10 @@ from markdown_it import MarkdownIt
 from markdown_it.rules_inline import StateInline
 
 BBCODE_COLOURS = frozenset({"red", "green", "blue", "yellow", "magenta", "cyan", "white", "black"})
+LANGUAGE_TAG_PATTERN = r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*"
+LYRICS_LANGUAGE_MARKER_RE = re.compile(
+    rf"^\s*\{{lang=(?P<language>{LANGUAGE_TAG_PATTERN})?\}}[ \t]*"
+)
 
 FONT_OPEN_TAG_RE = re.compile(
     r"""\[font(?P<attributes>(?:\s+[A-Za-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s\]]+))+\s*)\]"""
@@ -272,7 +276,7 @@ def make_bbcode_plugin(allowed_colours):
     colour_names = "|".join(re.escape(colour) for colour in sorted(allowed_colours))
     c_re = re.compile(rf"\[c=({colour_names})\]")
     bg_re = re.compile(rf"\[bg=({colour_names})\]")
-    lang_re = re.compile(r"\[lang=([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\]")
+    lang_re = re.compile(rf"\[lang=({LANGUAGE_TAG_PATTERN})\]")
     close_re = {
         "b": "[/b]",
         "i": "[/i]",
@@ -547,3 +551,29 @@ def get_markdown_parser():
         .use(make_entity_plugin())
     )
     return md
+
+
+def render_lyrics(value: str) -> list[dict[str, str | None]]:
+    """Render lyrics line by line, applying passage-level language markers."""
+    md = get_markdown_parser()
+    rendered_lines: list[dict[str, str | None]] = []
+    active_language: str | None = None
+
+    for raw_line in value.split("\n"):
+        line = raw_line.removesuffix("\r")
+
+        if not line.strip():
+            active_language = None
+            rendered_lines.append({"html": "", "lang": None})
+            continue
+
+        marker = LYRICS_LANGUAGE_MARKER_RE.match(line)
+        if marker:
+            active_language = marker.group("language")
+            line = line[marker.end() :]
+            if not line:
+                continue
+
+        rendered_lines.append({"html": md.renderInline(line), "lang": active_language})
+
+    return rendered_lines

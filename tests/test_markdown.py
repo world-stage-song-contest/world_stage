@@ -1,7 +1,7 @@
 import pytest
 
 from world_stage.messaging import message_preview
-from world_stage.utils import get_markdown_parser
+from world_stage.utils import get_markdown_parser, render_lyrics
 
 
 def render(value: str) -> str:
@@ -65,3 +65,34 @@ def test_invalid_lang_tags_cannot_inject_attributes(value: str):
 
     assert "[lang" in rendered
     assert "<span lang=" not in rendered
+
+
+def test_lyrics_language_markers_apply_until_blank_line_or_override():
+    assert render_lyrics(
+        "{lang=es}\nHola\n[b]mundo[/b]\n{lang=fr}Bonjour\nEncore\n\nDefault"
+    ) == [
+        {"html": "Hola", "lang": "es"},
+        {"html": "<strong>mundo</strong>", "lang": "es"},
+        {"html": "Bonjour", "lang": "fr"},
+        {"html": "Encore", "lang": "fr"},
+        {"html": "", "lang": None},
+        {"html": "Default", "lang": None},
+    ]
+
+
+def test_lyrics_language_marker_can_be_reset_explicitly():
+    assert render_lyrics("{lang=es}Hola\n{lang=}Default") == [
+        {"html": "Hola", "lang": "es"},
+        {"html": "Default", "lang": None},
+    ]
+
+
+def test_invalid_lyrics_language_marker_is_rendered_as_text():
+    lines = render_lyrics('{lang=en" onmouseover="alert(1)}Text')
+
+    assert lines == [
+        {
+            "html": "{lang=en&quot; onmouseover=&quot;alert(1)}Text",
+            "lang": None,
+        }
+    ]

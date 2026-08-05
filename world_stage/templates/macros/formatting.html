@@ -1,11 +1,11 @@
-{% macro formatting_guide(subject="text", include_footnotes=false) -%}
+{% macro formatting_guide(subject="text", include_footnotes=false, include_lyrics=false) -%}
 <div class="banner long-text formatting-guide">
     <div>
         While entering {{ subject }}, you may use basic BBCode-like markup.
         <details>
             <summary>Markup guide</summary>
             <ul>
-                <li>Language – use <code>[lang=tag>]text[/lang]</code></li>
+                <li>Language – use <code>[lang=&lt;tag>]text[/lang]</code></li>
                 <li><strong>Bold</strong> – use <code>[b]bold text[/b]</code></li>
                 <li><em>Italic</em> – use <code>[i]italic text[/i]</code></li>
                 <li><ins>Underline</ins> – use <code>[u]underlined text[/u]</code></li>
@@ -117,6 +117,13 @@
             <p>
                 You can also use <code>[NUMBER]</code> to insert an automatically
                 generated footnote number, for example <code>[1]</code>.
+            </p>
+            {% endif %}
+            {% if include_lyrics %}
+            <p>
+                Use <code>{lang=&lt;tag>}</code> to set the language of the following
+                lyric lines. Another marker overrides it, and a blank line resets it.
+                Use <code>{lang=}</code> to reset it explicitly.
             </p>
             {% endif %}
         </details>

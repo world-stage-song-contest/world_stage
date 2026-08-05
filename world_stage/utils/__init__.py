@@ -36,6 +36,7 @@ from .markdown import (
     get_markdown_parser,
     make_bbcode_plugin,
     make_entity_plugin,
+    render_lyrics,
 )
 from .responses import (
     ErrorID,
@@ -167,6 +168,7 @@ __all__ = (
     "parse_cookie",
     "parse_seconds",
     "parse_timedelta",
+    "render_lyrics",
     "render_template",
     "require_api_auth",
     "require_permissions",

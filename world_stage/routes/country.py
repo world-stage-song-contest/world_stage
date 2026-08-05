@@ -19,6 +19,7 @@ from ..utils import (
     get_song,
     get_special_song,
     get_special_songs_for_country,
+    render_lyrics,
     render_template,
     require_permissions,
     require_user,
@@ -477,11 +478,11 @@ def details(code: str, year: int, user: tuple[int, str] | None, permissions: Use
     md = get_markdown_parser()
 
     if song.translated_lyrics:
-        translated_lyrics = md.renderInline(song.translated_lyrics).split("\n")
+        translated_lyrics = render_lyrics(song.translated_lyrics)
     if song.latin_lyrics:
-        latin_lyrics = md.renderInline(song.latin_lyrics).split("\n")
+        latin_lyrics = render_lyrics(song.latin_lyrics)
     if song.native_lyrics:
-        native_lyrics = md.renderInline(song.native_lyrics).split("\n")
+        native_lyrics = render_lyrics(song.native_lyrics)
     if song.lyrics_notes:
         notes = md.renderInline(song.lyrics_notes).split("\n")
 
@@ -577,11 +578,9 @@ def _render_song_details(
     can_edit = permissions.can_edit or user_id == song.submitter_id
 
     md = get_markdown_parser()
-    translated_lyrics = (
-        md.renderInline(song.translated_lyrics).split("\n") if song.translated_lyrics else []
-    )
-    latin_lyrics = md.renderInline(song.latin_lyrics).split("\n") if song.latin_lyrics else []
-    native_lyrics = md.renderInline(song.native_lyrics).split("\n") if song.native_lyrics else []
+    translated_lyrics = render_lyrics(song.translated_lyrics) if song.translated_lyrics else []
+    latin_lyrics = render_lyrics(song.latin_lyrics) if song.latin_lyrics else []
+    native_lyrics = render_lyrics(song.native_lyrics) if song.native_lyrics else []
     notes = md.renderInline(song.lyrics_notes).split("\n") if song.lyrics_notes else []
     sources = song.sources or ""
 
