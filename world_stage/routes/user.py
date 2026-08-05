@@ -258,17 +258,28 @@ def _year_entries(cursor, voter_id: int, year_id: int, *, revote=False) -> list[
 
 
 def _votes_by_country(cursor, user_id: int, username: str, *, revote=False):
-    """Per-country view: a dropdown of every participating country; picking one
-    lists that country's entries with the user's points. Regular-year entries
-    (oldest first) and special editions (by name) are split into two tables.
+    """Per-country view: a dropdown of countries that competed in shows where
+    the user cast a ballot; picking one lists that country's entries with the
+    user's points. Regular-year entries (oldest first) and special editions
+    (by name) are split into two tables.
     """
+    result_mode_filter = "" if revote else "AND history_vote_set.result_mode = 'official'"
+    revote_filter = "AND sh.revote_eligible_at IS NOT NULL" if revote else ""
     cursor.execute(
-        """
+        f"""
         SELECT DISTINCT country.id AS cc, country.name
         FROM country
         JOIN current_song AS song ON song.country_id = country.id
+        JOIN song_show ON song_show.song_id = song.id
+        JOIN show sh ON sh.id = song_show.show_id AND sh.status = 'full'
+        JOIN vote_set history_vote_set
+          ON history_vote_set.show_id = sh.id
+         AND history_vote_set.voter_id = %s
+         {result_mode_filter}
+        WHERE TRUE {revote_filter}
         ORDER BY country.name
-    """
+    """,
+        (user_id,),
     )
     country_list = [dict(r) for r in cursor.fetchall()]
 
@@ -301,17 +312,29 @@ def _votes_by_country(cursor, user_id: int, username: str, *, revote=False):
 
 
 def _votes_by_user(cursor, user_id: int, username: str, *, revote=False):
-    """Per-submitter view: a dropdown of every submitter; picking one lists the
-    entries they submitted with this user's points. Like the per-country view
-    but spanning countries, so the tables also carry a country column.
+    """Per-submitter view: a dropdown of other users whose entries competed in
+    shows where this user cast a ballot; picking one lists those entries with
+    this user's points. Like the per-country view but spanning countries, so
+    the tables also carry a country column.
     """
+    result_mode_filter = "" if revote else "AND history_vote_set.result_mode = 'official'"
+    revote_filter = "AND sh.revote_eligible_at IS NOT NULL" if revote else ""
     cursor.execute(
-        """
-        SELECT DISTINCT account.id, account.username
+        f"""
+        SELECT DISTINCT account.id, account.username,
+               LOWER(unaccent(account.username)) AS username_sort
         FROM account
         JOIN current_song AS song ON song.submitter_id = account.id
-        ORDER BY account.username
-    """
+        JOIN song_show ON song_show.song_id = song.id
+        JOIN show sh ON sh.id = song_show.show_id AND sh.status = 'full'
+        JOIN vote_set history_vote_set
+          ON history_vote_set.show_id = sh.id
+         AND history_vote_set.voter_id = %s
+         {result_mode_filter}
+        WHERE account.id <> %s {revote_filter}
+        ORDER BY username_sort, account.username, account.id
+    """,
+        (user_id, user_id),
     )
     user_list = [dict(r) for r in cursor.fetchall()]
 
