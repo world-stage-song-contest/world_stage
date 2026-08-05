@@ -11,6 +11,7 @@ import subprocess
 
 import psycopg
 import pytest
+from flask import template_rendered
 from psycopg.rows import dict_row
 
 from world_stage import create_app
@@ -21,6 +22,17 @@ SOURCE_DB = os.environ.get("TEST_SOURCE_DB", "worldstage")
 # Connection string pointing at the *maintenance* database so we can
 # CREATE / DROP the test database itself.
 _MAINTENANCE_DSN = os.environ.get("TEST_MAINTENANCE_DSN", "dbname=postgres")
+
+
+@pytest.fixture()
+def rendered_templates(app):
+    rendered = []
+
+    def capture(_sender, template, context, **_extra):
+        rendered.append((template.name, context))
+
+    with template_rendered.connected_to(capture, app):
+        yield rendered
 
 
 # ── session-scoped: create & destroy the test database ──────────────

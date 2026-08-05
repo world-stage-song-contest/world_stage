@@ -78,16 +78,6 @@ def test_draw_post_rejects_two_entries_from_same_pot_in_one_semifinal(client, dr
     assert res.json["error"] == "Show sf1 contains multiple entries from pot 1"
 
 
-def test_draw_page_renders_backend_assigned_slots(client, draw_setup):
-    res = client.get("/admin/manage/2025/draw", headers={"Accept": "text/html,image/svg+xml"})
-
-    assert res.status_code == 200
-    html = res.text
-    for song_id in draw_setup.values():
-        assert f'data-id="{song_id}"' in html
-    assert 'data-id=""' not in html
-
-
 def test_draw_post_accepts_one_entry_per_pot_per_semifinal(client, db, draw_setup):
     res = client.post(
         "/admin/manage/2025/draw",

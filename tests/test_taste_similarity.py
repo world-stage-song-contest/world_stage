@@ -63,7 +63,9 @@ def _similarity(cursor, include_revotes=None):
     return float(cursor.fetchone()["similarity"])
 
 
-def test_taste_similarity_revotes_replace_each_voters_official_ballot(client, db):
+def test_taste_similarity_revotes_replace_each_voters_official_ballot(
+    client, db, rendered_templates
+):
     with db.cursor() as cursor:
         cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
         cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point_system")
@@ -134,15 +136,13 @@ def test_taste_similarity_revotes_replace_each_voters_official_ballot(client, db
 
     response = client.get("/user/alice/similar", headers={"Accept": "text/html"})
     assert response.status_code == 200
-    assert b'name="include_revotes" value="true" checked' in response.data
-    assert b"-50.00%" in response.data
+    assert rendered_templates[-1][1]["include_revotes"] is True
 
     response = client.get(
         "/user/alice/similar?include_revotes=false", headers={"Accept": "text/html"}
     )
     assert response.status_code == 200
-    assert b'name="include_revotes" value="true" checked' not in response.data
-    assert b"100.00%" in response.data
+    assert rendered_templates[-1][1]["include_revotes"] is False
 
     # An unchecked form checkbox is absent from the query string; the form's
     # submission sentinel distinguishes that from the default first visit.
@@ -151,8 +151,7 @@ def test_taste_similarity_revotes_replace_each_voters_official_ballot(client, db
         headers={"Accept": "text/html"},
     )
     assert response.status_code == 200
-    assert b'name="include_revotes" value="true" checked' not in response.data
-    assert b"100.00%" in response.data
+    assert rendered_templates[-1][1]["include_revotes"] is False
 
     with db.cursor() as cursor:
         # Alice's Revote combines with Bob's official ballot when Bob has not

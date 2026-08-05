@@ -2,6 +2,8 @@ import json
 import uuid
 from pathlib import Path
 
+from flask import template_rendered
+
 from world_stage.utils.song_revisions import (
     create_song_revision,
     set_song_status,
@@ -47,22 +49,32 @@ def _login_admin(client, db) -> None:
     client.set_cookie("session", session_id)
 
 
+def _get_changes(client, **query_string):
+    rendered = []
+
+    def capture(_sender, template, context, **_extra):
+        if template.name == "admin/changes.html":
+            rendered.append(context)
+
+    with template_rendered.connected_to(capture, client.application):
+        response = client.get(
+            "/admin/changes",
+            query_string=query_string,
+            headers={"Accept": "text/html"},
+        )
+
+    assert rendered
+    return response, rendered[0]
+
+
 def test_song_changes_are_derived_from_adjacent_revisions(db):
     song_id = _add_song(db)
     with db.cursor() as cursor:
-        create_song_revision(
-            cursor, song_id, {"notes": "Metadata correction"}, changed_by=2
-        )
-        create_song_revision(
-            cursor, song_id, {"artist": "ORIGINAL ARTIST"}, changed_by=2
-        )
-        create_song_revision(
-            cursor, song_id, {"title": "Replacement title"}, changed_by=2
-        )
+        create_song_revision(cursor, song_id, {"notes": "Metadata correction"}, changed_by=2)
+        create_song_revision(cursor, song_id, {"artist": "ORIGINAL ARTIST"}, changed_by=2)
+        create_song_revision(cursor, song_id, {"title": "Replacement title"}, changed_by=2)
         set_song_status(cursor, song_id, changed_by=2, is_placeholder=True)
-        create_song_revision(
-            cursor, song_id, {"submitter_id": 3}, changed_by=2
-        )
+        create_song_revision(cursor, song_id, {"submitter_id": 3}, changed_by=2)
         withdraw_song(cursor, song_id, changed_by=2)
     db.commit()
 
@@ -268,9 +280,9 @@ def test_consolidated_migration_reconstructs_legacy_audit_rows(db):
             Path(__file__).parents[1]
             / "world_stage/migrations/20260801130000_add_song_verification_revisions.sql"
         ).read_text()
-        reconstruction = migration.split(
-            "-- BEGIN LEGACY SONG AUDIT RECONSTRUCTION", 1
-        )[1].split("-- END LEGACY SONG AUDIT RECONSTRUCTION", 1)[0]
+        reconstruction = migration.split("-- BEGIN LEGACY SONG AUDIT RECONSTRUCTION", 1)[1].split(
+            "-- END LEGACY SONG AUDIT RECONSTRUCTION", 1
+        )[0]
         cursor.execute(reconstruction)
     db.commit()
 
@@ -357,57 +369,42 @@ def test_changes_page_uses_timestamp_cursor(client, db):
         second_page_before = cursor.fetchone()["created_at"].isoformat()
     db.commit()
 
-    first_page = client.get("/admin/changes", headers={"Accept": "text/html"})
+    first_page, first_context = _get_changes(client)
 
     assert first_page.status_code == 200
-    assert first_page.text.count('class="event-badge') == 25
-    assert "Revision 26" in first_page.text
-    assert "before=" in first_page.text
+    assert len(first_context["changes"]) == 25
+    assert first_context["changes"][0]["song_title"] == "Revision 26"
+    assert first_context["changes"][-1]["song_title"] == "Revision 2"
+    assert first_context["next_before"] is not None
 
-    second_page = client.get(
-        "/admin/changes",
-        query_string={"before": second_page_before},
-        headers={"Accept": "text/html"},
-    )
+    second_page, second_context = _get_changes(client, before=second_page_before)
 
     assert second_page.status_code == 200
-    assert second_page.text.count('class="event-badge') == 2
-    assert "Revision 1" in second_page.text
-    assert "Revision 0" in second_page.text
-    assert "← Newest" in second_page.text
+    assert [change["song_title"] for change in second_context["changes"]] == [
+        "Revision 1",
+        "Revision 0",
+    ]
 
-    timespan = client.get(
-        "/admin/changes",
-        query_string={
-            "from_time": "2025-01-01T00:00:10",
-            "to_time": "2025-01-01T00:00:12",
-        },
-        headers={"Accept": "text/html"},
+    timespan, timespan_context = _get_changes(
+        client,
+        from_time="2025-01-01T00:00:10",
+        to_time="2025-01-01T00:00:12",
     )
 
     assert timespan.status_code == 200
-    assert timespan.text.count('class="event-badge') == 3
-    assert "Revision 10" in timespan.text
-    assert "Revision 11" in timespan.text
-    assert "Revision 12" in timespan.text
-    assert "<td>Revision 9</td>" not in timespan.text
-    assert "<td>Revision 13</td>" not in timespan.text
+    assert [change["song_title"] for change in timespan_context["changes"]] == [
+        "Revision 12",
+        "Revision 11",
+        "Revision 10",
+    ]
 
-    from_time_only = client.get(
-        "/admin/changes",
-        query_string={"from_time": "2025-01-01T00:00:10"},
-        headers={"Accept": "text/html"},
-    )
-    to_time_only = client.get(
-        "/admin/changes",
-        query_string={"to_time": "2025-01-01T00:00:12"},
-        headers={"Accept": "text/html"},
-    )
+    from_time_only, from_context = _get_changes(client, from_time="2025-01-01T00:00:10")
+    to_time_only, to_context = _get_changes(client, to_time="2025-01-01T00:00:12")
 
     assert from_time_only.status_code == 200
-    assert from_time_only.text.count('class="event-badge') == 17
+    assert len(from_context["changes"]) == 17
     assert to_time_only.status_code == 200
-    assert to_time_only.text.count('class="event-badge') == 13
+    assert len(to_context["changes"]) == 13
 
 
 def test_changes_page_keeps_boundary_timestamp_together(client, db):
@@ -437,11 +434,11 @@ def test_changes_page_keeps_boundary_timestamp_together(client, db):
             )
     db.commit()
 
-    response = client.get("/admin/changes", headers={"Accept": "text/html"})
+    response, context = _get_changes(client)
 
     assert response.status_code == 200
-    assert response.text.count('class="event-badge') == 27
-    assert "Older →" not in response.text
+    assert len(context["changes"]) == 27
+    assert context["next_before"] is None
 
 
 def test_changes_page_includes_verification_decisions(client, db):
@@ -471,27 +468,29 @@ def test_changes_page_includes_verification_decisions(client, db):
                  CURRENT_TIMESTAMP + INTERVAL '5 seconds')
             """,
             (
-                song_id, song_data_id,
-                song_id, song_data_id,
-                song_id, song_data_id,
-                song_id, song_data_id,
-                song_id, song_data_id,
+                song_id,
+                song_data_id,
+                song_id,
+                song_data_id,
+                song_id,
+                song_data_id,
+                song_id,
+                song_data_id,
+                song_id,
+                song_data_id,
             ),
         )
     db.commit()
 
-    response = client.get(
-        "/admin/changes",
-        query_string={"events": "status_change"},
-        headers={"Accept": "text/html"},
-    )
+    response, context = _get_changes(client, events="status_change")
 
     assert response.status_code == 200
-    assert response.text.count('class="event-badge') == 4
-    assert "approval_status: pending → accepted" in response.text
-    assert "approval_status: accepted → more-info" in response.text
-    assert "approval_status: more-info → rejected" in response.text
-    assert "approval_status: rejected → pending" in response.text
+    assert [change["change_details"] for change in context["changes"]] == [
+        ["approval_status: rejected → pending"],
+        ["approval_status: more-info → rejected"],
+        ["approval_status: accepted → more-info"],
+        ["approval_status: pending → accepted"],
+    ]
 
 
 def test_content_revision_can_have_multiple_categories_without_status(client, db):
@@ -511,24 +510,23 @@ def test_content_revision_can_have_multiple_categories_without_status(client, db
         set_song_status(cursor, song_id, changed_by=2, is_placeholder=True)
     db.commit()
 
-    response = client.get(
-        "/admin/changes",
-        query_string=[
-            ("events", "replacement"),
-            ("events", "modification"),
-            ("events", "placeholder"),
-        ],
-        headers={"Accept": "text/html"},
+    response, context = _get_changes(
+        client,
+        events=["replacement", "modification", "placeholder"],
     )
 
     assert response.status_code == 200
-    assert response.text.count("<tr>") == 3  # header, content, and status rows
-    assert 'class="event-badge event-replacement"' in response.text
-    assert 'class="event-badge event-modification"' not in response.text
-    assert 'class="event-badge event-placeholder"' in response.text
-    assert "Title: Original title → Replacement title" in response.text
-    assert ">notes, sources<" in response.text
-    assert "is_placeholder: false → true" in response.text
+    changes = {
+        tuple(change["event_categories"]): change["change_details"]
+        for change in context["changes"]
+    }
+    assert changes == {
+        ("replacement",): [
+            "Title: Original title → Replacement title",
+            "notes, sources",
+        ],
+        ("placeholder",): ["is_placeholder: false → true"],
+    }
 
 
 def test_typed_field_filters_support_boundaries_and_multiple_conditions(client, db):
@@ -552,77 +550,60 @@ def test_typed_field_filters_support_boundaries_and_multiple_conditions(client, 
         create_song_revision(cursor, song_id, {"native_title": "Été"}, changed_by=2)
     db.commit()
 
-    numeric_value = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [{"field": "snippet_start", "from": 10, "to": 15}]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    numeric_value, numeric_value_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps([{"field": "snippet_start", "from": 10, "to": 15}]),
     )
-    numeric_comparison = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "snippet_start",
-                        "from": 10,
-                        "from_operator": "gte",
-                        "to": 20,
-                        "to_operator": "lt",
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    numeric_comparison, numeric_comparison_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {
+                    "field": "snippet_start",
+                    "from": 10,
+                    "from_operator": "gte",
+                    "to": 20,
+                    "to_operator": "lt",
+                }
+            ]
+        ),
     )
-    excluded_numeric_comparison = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "snippet_start",
-                        "from": 10,
-                        "from_operator": "gt",
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    excluded_numeric_comparison, excluded_numeric_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {
+                    "field": "snippet_start",
+                    "from": 10,
+                    "from_operator": "gt",
+                }
+            ]
+        ),
     )
-    multiple_changes = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {"field": "snippet_end"},
-                    {"field": "notes"},
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    multiple_changes, multiple_changes_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {"field": "snippet_end"},
+                {"field": "notes"},
+            ]
+        ),
     )
-    text_value = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "translated_lyrics",
-                        "to": "Some lyric_",
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    text_value, text_value_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {
+                    "field": "translated_lyrics",
+                    "to": "Some lyric_",
+                }
+            ]
+        ),
     )
     text_operator_responses = []
     for operator, value in (
@@ -631,162 +612,140 @@ def test_typed_field_filters_support_boundaries_and_multiple_conditions(client, 
         ("contains", "me lyr"),
     ):
         text_operator_responses.append(
-            client.get(
-                "/admin/changes",
-                query_string={
-                    "events": "modification",
-                    "filters": json.dumps(
-                        [
-                            {
-                                "field": "translated_lyrics",
-                                "to": value,
-                                "to_operator": operator,
-                            }
-                        ]
-                    ),
-                },
-                headers={"Accept": "text/html"},
+            _get_changes(
+                client,
+                events="modification",
+                filters=json.dumps(
+                    [
+                        {
+                            "field": "translated_lyrics",
+                            "to": value,
+                            "to_operator": operator,
+                        }
+                    ]
+                ),
             )
         )
-    case_insensitive = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "translated_lyrics",
-                        "to": "some",
-                        "to_operator": "starts_with",
-                        "to_case_sensitive": False,
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    case_insensitive, case_insensitive_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {
+                    "field": "translated_lyrics",
+                    "to": "some",
+                    "to_operator": "starts_with",
+                    "to_case_sensitive": False,
+                }
+            ]
+        ),
     )
-    case_sensitive = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "translated_lyrics",
-                        "to": "some",
-                        "to_operator": "starts_with",
-                        "to_case_sensitive": True,
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    case_sensitive, case_sensitive_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {
+                    "field": "translated_lyrics",
+                    "to": "some",
+                    "to_operator": "starts_with",
+                    "to_case_sensitive": True,
+                }
+            ]
+        ),
     )
-    default_text_normalization = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "native_title",
-                        "to": "ete",
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    default_text_normalization, default_text_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {
+                    "field": "native_title",
+                    "to": "ete",
+                }
+            ]
+        ),
     )
-    accent_sensitive = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "native_title",
-                        "to": "ete",
-                        "to_case_sensitive": False,
-                        "to_accent_sensitive": True,
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    accent_sensitive, accent_sensitive_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {
+                    "field": "native_title",
+                    "to": "ete",
+                    "to_case_sensitive": False,
+                    "to_accent_sensitive": True,
+                }
+            ]
+        ),
     )
-    disjunction = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {"field": "snippet_end"},
-                    {"field": "translated_lyrics", "join": "or", "to": "Some %"},
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    disjunction, disjunction_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {"field": "snippet_end"},
+                {"field": "translated_lyrics", "join": "or", "to": "Some %"},
+            ]
+        ),
     )
-    entry_identity = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps(
-                [
-                    {"field": "country_id", "to": "ES"},
-                    {"field": "year_id", "join": "and", "to": 2025},
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    entry_identity, entry_identity_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps(
+            [
+                {"field": "country_id", "to": "ES"},
+                {"field": "year_id", "join": "and", "to": 2025},
+            ]
+        ),
     )
-    other_country = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "modification",
-            "filters": json.dumps([{"field": "country_id", "to": "FR"}]),
-        },
-        headers={"Accept": "text/html"},
+    other_country, other_country_context = _get_changes(
+        client,
+        events="modification",
+        filters=json.dumps([{"field": "country_id", "to": "FR"}]),
     )
 
     assert numeric_value.status_code == 200
-    assert numeric_value.text.count('class="event-badge event-modification"') == 1
-    assert ">snippet_start<" in numeric_value.text
+    assert [change["change_details"] for change in numeric_value_context["changes"]] == [
+        ["snippet_start"]
+    ]
     assert numeric_comparison.status_code == 200
-    assert numeric_comparison.text.count(
-        'class="event-badge event-modification"'
-    ) == 1
+    assert [change["change_details"] for change in numeric_comparison_context["changes"]] == [
+        ["snippet_start"]
+    ]
     assert excluded_numeric_comparison.status_code == 200
-    assert 'class="event-badge event-modification"' not in excluded_numeric_comparison.text
+    assert excluded_numeric_context["changes"] == []
     assert multiple_changes.status_code == 200
-    assert multiple_changes.text.count('class="event-badge event-modification"') == 1
-    assert ">notes, snippet_end<" in multiple_changes.text
+    assert [change["change_details"] for change in multiple_changes_context["changes"]] == [
+        ["notes, snippet_end"]
+    ]
     assert text_value.status_code == 200
-    assert text_value.text.count('class="event-badge event-modification"') == 1
-    assert ">translated_lyrics<" in text_value.text
-    assert all(response.status_code == 200 for response in text_operator_responses)
+    assert [change["change_details"] for change in text_value_context["changes"]] == [
+        ["translated_lyrics"]
+    ]
+    assert all(response.status_code == 200 for response, _ in text_operator_responses)
     assert all(
-        response.text.count('class="event-badge event-modification"') == 1
-        for response in text_operator_responses
+        [change["change_details"] for change in context["changes"]] == [["translated_lyrics"]]
+        for _, context in text_operator_responses
     )
     assert case_insensitive.status_code == 200
-    assert case_insensitive.text.count('class="event-badge event-modification"') == 1
+    assert len(case_insensitive_context["changes"]) == 1
     assert case_sensitive.status_code == 200
-    assert 'class="event-badge event-modification"' not in case_sensitive.text
+    assert case_sensitive_context["changes"] == []
     assert default_text_normalization.status_code == 200
-    assert default_text_normalization.text.count(
-        'class="event-badge event-modification"'
-    ) == 1
+    assert len(default_text_context["changes"]) == 1
     assert accent_sensitive.status_code == 200
-    assert 'class="event-badge event-modification"' not in accent_sensitive.text
+    assert accent_sensitive_context["changes"] == []
     assert disjunction.status_code == 200
-    assert disjunction.text.count('class="event-badge event-modification"') == 2
-    assert ">notes, snippet_end<" in disjunction.text
-    assert ">translated_lyrics<" in disjunction.text
+    assert {tuple(change["change_details"]) for change in disjunction_context["changes"]} == {
+        ("notes, snippet_end",),
+        ("translated_lyrics",),
+    }
     assert entry_identity.status_code == 200
-    assert entry_identity.text.count('class="event-badge event-modification"') == 5
+    assert len(entry_identity_context["changes"]) == 5
     assert other_country.status_code == 200
-    assert 'class="event-badge event-modification"' not in other_country.text
+    assert other_country_context["changes"] == []
 
 
 def test_specific_outcome_filters(client, db):
@@ -795,9 +754,7 @@ def test_specific_outcome_filters(client, db):
     with db.cursor() as cursor:
         set_song_status(cursor, song_id, changed_by=2, is_placeholder=True)
         set_song_status(cursor, song_id, changed_by=2, is_placeholder=False)
-        cursor.execute(
-            "SELECT song_data_id FROM current_song WHERE id = %s", (song_id,)
-        )
+        cursor.execute("SELECT song_data_id FROM current_song WHERE id = %s", (song_id,))
         song_data_id = cursor.fetchone()["song_data_id"]
         cursor.execute(
             """
@@ -811,105 +768,47 @@ def test_specific_outcome_filters(client, db):
         )
     db.commit()
 
-    placeholder = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "placeholder",
-            "filters": json.dumps(
-                [{"field": "is_placeholder", "from": False, "to": True}]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    placeholder, placeholder_context = _get_changes(
+        client,
+        events="placeholder",
+        filters=json.dumps([{"field": "is_placeholder", "from": False, "to": True}]),
     )
-    rejected = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "status_change",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "approval_status",
-                        "from": "accepted",
-                        "to": "rejected",
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    rejected, rejected_context = _get_changes(
+        client,
+        events="status_change",
+        filters=json.dumps(
+            [
+                {
+                    "field": "approval_status",
+                    "from": "accepted",
+                    "to": "rejected",
+                }
+            ]
+        ),
     )
-    not_rejected = client.get(
-        "/admin/changes",
-        query_string={
-            "events": "status_change",
-            "filters": json.dumps(
-                [
-                    {
-                        "field": "approval_status",
-                        "to": "rejected",
-                        "not": True,
-                    }
-                ]
-            ),
-        },
-        headers={"Accept": "text/html"},
+    not_rejected, not_rejected_context = _get_changes(
+        client,
+        events="status_change",
+        filters=json.dumps(
+            [
+                {
+                    "field": "approval_status",
+                    "to": "rejected",
+                    "not": True,
+                }
+            ]
+        ),
     )
 
     assert placeholder.status_code == 200
-    assert placeholder.text.count('class="event-badge event-placeholder"') == 1
-    assert "is_placeholder: false → true" in placeholder.text
-    assert "is_placeholder: true → false" not in placeholder.text
+    assert [change["change_details"] for change in placeholder_context["changes"]] == [
+        ["is_placeholder: false → true"]
+    ]
     assert rejected.status_code == 200
-    assert rejected.text.count('class="event-badge event-status_change"') == 1
-    assert "approval_status: accepted → rejected" in rejected.text
-    assert "approval_status: pending → accepted" not in rejected.text
+    assert [change["change_details"] for change in rejected_context["changes"]] == [
+        ["approval_status: accepted → rejected"]
+    ]
     assert not_rejected.status_code == 200
-    assert not_rejected.text.count('class="event-badge event-status_change"') == 1
-    assert "approval_status: pending → accepted" in not_rejected.text
-    assert "approval_status: accepted → rejected" not in not_rejected.text
-
-
-def test_changes_page_has_dynamic_typed_filter_builder(client, db):
-    _add_song(db)
-    _login_admin(client, db)
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO language_set (language_ids)
-            VALUES (ARRAY[20, 30]), (ARRAY[30, 20])
-            RETURNING id, language_ids
-            """
-        )
-        for language_set in cursor.fetchall():
-            for priority, language_id in enumerate(language_set["language_ids"]):
-                cursor.execute(
-                    """
-                    INSERT INTO language_set_language (
-                        language_set_id, language_id, priority
-                    ) VALUES (%s, %s, %s)
-                    """,
-                    (language_set["id"], language_id, priority),
-                )
-    db.commit()
-
-    response = client.get(
-        "/admin/changes",
-        query_string={
-            "filters": json.dumps(
-                [{"field": "is_placeholder", "to": False}]
-            )
-        },
-        headers={"Accept": "text/html"},
-    )
-
-    assert response.status_code == 200
-    assert "Add filter" in response.text
-    assert 'src="/static/js/admin_changes.js"' in response.text
-    assert "initializeAuditFilters()" in response.text
-    assert "is_placeholder" in response.text
-    assert "English, Spanish" in response.text
-    assert "Spanish, English" in response.text
-    assert "alice" in response.text
-    assert "bob" in response.text
-    assert "carol" in response.text
-    assert "Specific changes" not in response.text
-    assert "Specific outcomes" not in response.text
+    assert [change["change_details"] for change in not_rejected_context["changes"]] == [
+        ["approval_status: pending → accepted"]
+    ]

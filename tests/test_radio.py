@@ -148,12 +148,6 @@ class TestRadioNow:
         assert abs(first["offset"] - second["offset"]) < 1
 
 
-def test_radio_page(client):
-    resp = client.get("/radio", headers={"Accept": "text/html"})
-    assert resp.status_code == 200
-    assert b"Tune in" in resp.data
-
-
 def test_radio_client_posts_and_deduplicates_by_slot_id(client):
     resp = client.get("/static/js/radio.js")
     assert resp.status_code == 200

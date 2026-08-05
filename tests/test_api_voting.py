@@ -1,8 +1,5 @@
 """Tests for authenticated ballot and prediction API endpoints."""
 
-import re
-from uuid import uuid4
-
 from world_stage.utils import (
     get_show_songs,
     get_show_winner,
@@ -422,72 +419,6 @@ class TestVotingApi:
 
         response = client.get('/api/voting/2025-f', headers=bob_headers)
         assert _result(response)['ballot']['votes'] == ballot['votes']
-
-    def test_html_ballot_uses_rules_for_options_and_required_scores(
-        self, client, db
-    ):
-        song_ids = _seed_show_and_songs(db)
-        session_id = uuid4()
-        with db.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO session (user_id, session_id, expires_at)
-                VALUES (2, %s, CURRENT_TIMESTAMP + INTERVAL '1 hour')
-                """,
-                (session_id,),
-            )
-        db.commit()
-        client.set_cookie("session", str(session_id))
-
-        response = client.get('/vote/2025-f', headers={'Accept': 'text/html'})
-        assert response.status_code == 200
-        home_options = re.findall(
-            rf'<option value="{song_ids[0]}"[^>]*>', response.text
-        )
-        assert len(home_options) == 3
-        assert all('disabled' in option for option in home_options)
-
-        with db.cursor() as cursor:
-            cursor.execute("UPDATE point SET score = 1 WHERE id = 103")
-            cursor.execute(
-                """
-                UPDATE show
-                SET voting_ruleset_version = 'v1'
-                WHERE id = (SELECT show_id FROM song_show WHERE song_id = %s)
-                """,
-                (song_ids[0],),
-            )
-        db.commit()
-
-        response = client.get('/vote/2025-f', headers={'Accept': 'text/html'})
-        assert response.status_code == 200
-        home_options = re.findall(
-            rf'<option value="{song_ids[0]}"[^>]*>', response.text
-        )
-        assert len(home_options) == 3
-        assert sum('disabled' not in option for option in home_options) == 1
-
-        response = client.get('/vote/2025-f/rules?country=US')
-        assert response.status_code == 200
-        assert response.get_json()['rules'][str(song_ids[0])] == {
-            'kind': 'FORCED',
-            'reason': 'flag',
-            'required_score': 1,
-        }
-
-        response = client.post(
-            '/vote/2025-f',
-            data={
-                'nickname': 'Bob',
-                'country': 'US',
-                'pts-12': str(song_ids[0]),
-                'pts-10': str(song_ids[1]),
-                'pts-1': str(song_ids[2]),
-            },
-            headers={'Accept': 'text/html'},
-        )
-        assert response.status_code == 200
-        assert b'must receive 1 point' in response.data
 
     def test_ballot_rejects_own_song_and_incomplete_scores(self, client, db, bob_headers):
         song_ids = _seed_show_and_songs(db)

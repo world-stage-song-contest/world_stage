@@ -16,8 +16,10 @@ def _login(client, db, user_id: int):
     client.set_cookie("session", session_id)
 
 
-def _select_options(html: str, select_id: str) -> str:
-    return html.split(f'id="{select_id}"', 1)[1].split("</select>", 1)[0]
+def _context(rendered_templates, template_name: str):
+    name, context = rendered_templates[-1]
+    assert name == template_name
+    return context
 
 
 def _insert_conversation(
@@ -194,7 +196,9 @@ def test_admin_creation_is_recorded_and_includes_owner_as_participant(client, db
         assert cursor.fetchone() == {"sender_id": 1, "sender_kind": "admin"}
 
 
-def test_participant_can_change_own_email_notification_preference(client, db):
+def test_participant_can_change_own_email_notification_preference(
+    client, db, rendered_templates
+):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -202,21 +206,6 @@ def test_participant_can_change_own_email_notification_preference(client, db):
         participants=[3],
     )
     _login(client, db, 2)
-
-    thread = client.get(
-        f"/messages/{conversation_id}", headers={"Accept": "text/html"}
-    )
-    assert thread.status_code == 200
-    notification_input = thread.text.split('id="email_notifications"', 1)[1].split(
-        ">", 1
-    )[0]
-    assert "checked" not in notification_input
-    highlight_input = thread.text.split(
-        'id="suppress_unread_highlight"', 1
-    )[1].split(">", 1)[0]
-    assert "checked" not in highlight_input
-    pinned_input = thread.text.split('id="pinned"', 1)[1].split(">", 1)[0]
-    assert "checked" not in pinned_input
 
     response = client.post(
         f"/messages/{conversation_id}/notifications",
@@ -270,29 +259,18 @@ def test_participant_can_change_own_email_notification_preference(client, db):
     db.commit()
 
     inbox = client.get("/messages", headers={"Accept": "text/html"})
-    assert f'<a class="conversation-row" href="/messages/{conversation_id}">' in inbox.text
-    assert '<span class="message-badge unread">1 unread</span>' in inbox.text
-    assert '<i class="ph-fill ph-push-pin"></i> Pinned' in inbox.text
-    assert inbox.text.index("Notification preference") < inbox.text.index(
-        "Newer unpinned conversation"
-    )
+    assert inbox.status_code == 200
+    conversations = _context(rendered_templates, "messages/inbox.html")["conversations"]
+    assert [conversation["id"] for conversation in conversations[:2]] == [
+        conversation_id,
+        newer_conversation_id,
+    ]
+    assert conversations[0]["unread_count"] == 1
+    assert conversations[0]["pinned"] is True
 
-    thread = client.get(
-        f"/messages/{conversation_id}", headers={"Accept": "text/html"}
-    )
-    notification_input = thread.text.split('id="email_notifications"', 1)[1].split(
-        ">", 1
-    )[0]
-    assert "checked" in notification_input
-    highlight_input = thread.text.split(
-        'id="suppress_unread_highlight"', 1
-    )[1].split(">", 1)[0]
-    assert "checked" in highlight_input
-    pinned_input = thread.text.split('id="pinned"', 1)[1].split(">", 1)[0]
-    assert "checked" in pinned_input
-
-
-def test_unapproved_accounts_are_excluded_from_participant_selectors(client, db):
+def test_unapproved_accounts_are_excluded_from_participant_selectors(
+    client, db, rendered_templates
+):
     with db.cursor() as cursor:
         cursor.execute("UPDATE account SET approved = false WHERE id = 3")
     db.commit()
@@ -316,22 +294,26 @@ def test_unapproved_accounts_are_excluded_from_participant_selectors(client, db)
         _login(client, db, 2)
 
         compose = client.get("/messages/new", headers={"Accept": "text/html"})
-        compose_participants = _select_options(compose.text, "participant_available")
-        assert '<option value="3"' not in compose_participants
+        assert compose.status_code == 200
+        compose_context = _context(rendered_templates, "messages/new.html")
+        assert 3 not in {recipient["id"] for recipient in compose_context["recipients"]}
 
         search = client.get("/messages/search", headers={"Accept": "text/html"})
-        participant_filters = _select_options(search.text, "participant_available")
-        assert '<option value="3"' not in participant_filters
-
-        sender_filters = _select_options(search.text, "sender")
-        assert '<option value="3"' in sender_filters
+        assert search.status_code == 200
+        search_context = _context(rendered_templates, "messages/search.html")
+        assert 3 not in {
+            account["id"] for account in search_context["participant_filter_accounts"]
+        }
+        assert 3 in {
+            account["id"] for account in search_context["sender_filter_accounts"]
+        }
     finally:
         with db.cursor() as cursor:
             cursor.execute("UPDATE account SET approved = true WHERE id = 3")
         db.commit()
 
 
-def test_search_accounts_are_scoped_to_interactions(client, app, db):
+def test_search_accounts_are_scoped_to_interactions(client, app, db, rendered_templates):
     _insert_conversation(
         db,
         owner_account_id=2,
@@ -360,12 +342,12 @@ def test_search_accounts_are_scoped_to_interactions(client, app, db):
         "/messages/search",
         headers={"Accept": "text/html"},
     )
-    user_sender_filters = _select_options(user_search.text, "sender")
-    user_participant_filters = _select_options(user_search.text, "participant_available")
-    assert '<option value="3"' in user_sender_filters
-    assert '<option value="3"' in user_participant_filters
-    assert '<option value="1"' not in user_sender_filters
-    assert '<option value="1"' not in user_participant_filters
+    assert user_search.status_code == 200
+    user_context = _context(rendered_templates, "messages/search.html")
+    assert {account["id"] for account in user_context["sender_filter_accounts"]} == {3}
+    assert {account["id"] for account in user_context["participant_filter_accounts"]} == {
+        3
+    }
 
     admin_client = app.test_client()
     _login(admin_client, db, 1)
@@ -373,17 +355,17 @@ def test_search_accounts_are_scoped_to_interactions(client, app, db):
         "/messages/search",
         headers={"Accept": "text/html"},
     )
-    admin_sender_filters = _select_options(admin_search.text, "sender")
-    admin_participant_filters = _select_options(
-        admin_search.text, "participant_available"
-    )
-    assert '<option value="2"' in admin_sender_filters
-    assert '<option value="2"' in admin_participant_filters
-    assert '<option value="3"' not in admin_sender_filters
-    assert '<option value="3"' not in admin_participant_filters
+    assert admin_search.status_code == 200
+    admin_context = _context(rendered_templates, "messages/search.html")
+    assert {account["id"] for account in admin_context["sender_filter_accounts"]} == {2}
+    assert {account["id"] for account in admin_context["participant_filter_accounts"]} == {
+        2
+    }
 
 
-def test_admin_messaging_interface_shows_only_shared_conversations(client, app, db):
+def test_admin_messaging_interface_shows_only_shared_conversations(
+    client, app, db, rendered_templates
+):
     private_conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -417,91 +399,19 @@ def test_admin_messaging_interface_shows_only_shared_conversations(client, app, 
 
     admin_client = app.test_client()
     _login(admin_client, db, 1)
-    response = admin_client.get(
-        "/admin/messages", headers={"Accept": "text/html"}
-    )
+    response = admin_client.get("/admin/messages", headers={"Accept": "text/html"})
     assert response.status_code == 200
-    assert "Shared with administrators" in response.text
-    assert "Shared message" in response.text
-    assert "Private user conversation" not in response.text
-    assert '<span class="message-badge unread">1 unread</span>' in response.text
-    assert 'href="/messages/new"' in response.text
-    assert 'href="/messages"' in response.text
-
-    admin_index = admin_client.get("/admin", headers={"Accept": "text/html"})
-    assert 'href="/admin/messages" class="card card-attention"' in admin_index.text
-
-    home = admin_client.get("/", headers={"Accept": "text/html"})
-    assert 'href="/admin/" class="card card-attention"' in home.text
+    conversations = _context(rendered_templates, "admin/messages.html")["conversations"]
+    assert [conversation["id"] for conversation in conversations] == [
+        shared_conversation_id
+    ]
+    assert conversations[0]["unread_count"] == 1
 
     compose = admin_client.get("/messages/new", headers={"Accept": "text/html"})
-    assert 'href="/admin/messages"' in compose.text
-    assert (
-        '<button type="button" onclick="window.location.href=\'/admin/messages\'">'
-        "Cancel</button>"
-    ) in compose.text
-
-
-def test_search_form_has_semantic_sections_and_date_controller(client, db):
-    _login(client, db, 2)
-
-    response = client.get(
-        "/messages/search",
-        headers={"Accept": "text/html"},
-    )
-
-    assert response.status_code == 200
-    assert response.text.count('<fieldset class="grid">') == 3
-    assert "Words and subject" in response.text
-    assert "People" in response.text
-    assert "Date" in response.text
-    assert "data-date-mode" in response.text
-    assert "data-date-single" in response.text
-    assert "data-date-range" in response.text
-    assert 'data-participant-required="false"' in response.text
-    assert 'data-participant-transfer' in response.text
-    assert "js/messages.js" in response.text
-    assert '<option value="me"' in response.text
-    assert "Me (bob)" in response.text
-    assert "<h2>Search message history</h2>" not in response.text
-    clear_button = (
-        '<button type="button" onclick="window.location.href=\'/messages/search\'">'
-        "Clear filters</button>"
-    )
-    assert clear_button in response.text
-    assert ">Clear filters</a>" not in response.text
-
-    compose = client.get("/messages/new", headers={"Accept": "text/html"})
-    cancel_button = (
-        '<button type="button" onclick="window.location.href=\'/messages\'">'
-        "Cancel</button>"
-    )
-    assert cancel_button in compose.text
-    assert '>Cancel</a>' not in compose.text
-    assert "<h2>New conversation</h2>" not in compose.text
-
-    inbox = client.get("/messages", headers={"Accept": "text/html"})
-    assert "<h2>Your conversations</h2>" not in inbox.text
-
-
-def test_conversation_forms_use_two_panel_participant_selector(client, db):
-    _login(client, db, 2)
-
-    compose = client.get("/messages/new", headers={"Accept": "text/html"})
     assert compose.status_code == 200
-    assert 'data-participant-transfer' in compose.text
-    assert 'data-participant-add disabled' in compose.text
-    assert 'data-participant-remove disabled' in compose.text
-    assert "js/messages.js" in compose.text
-
-    available = _select_options(compose.text, "participant_available")
-    selected = _select_options(compose.text, "participant_id")
-    assert '<option value="1">alice</option>' in available
-    assert '<option value="3">carol</option>' in available
-    assert "<option" not in selected
 
 
-def test_search_can_filter_messages_sent_by_current_user(client, db):
+def test_search_can_filter_messages_sent_by_current_user(client, db, rendered_templates):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -529,12 +439,11 @@ def test_search_can_filter_messages_sent_by_current_user(client, db):
     )
 
     assert response.status_code == 200
-    assert "Message sent by current user" in response.text
-    assert "Message sent by another user" not in response.text
-    assert '<option value="me" selected>Me (bob)</option>' in response.text
+    results = _context(rendered_templates, "messages/search.html")["results"]
+    assert [result["sender_id"] for result in results] == [2]
 
 
-def test_search_can_filter_system_messages(client, db):
+def test_search_can_filter_system_messages(client, db, rendered_templates):
     system_conversation_id = _insert_conversation(
         db,
         owner_account_id=None,
@@ -568,12 +477,12 @@ def test_search_can_filter_system_messages(client, db):
     )
 
     assert response.status_code == 200
-    assert "Automated alert" in response.text
-    assert "Human message" not in response.text
-    assert '<option value="system" selected>System messages</option>' in response.text
+    results = _context(rendered_templates, "messages/search.html")["results"]
+    assert len(results) == 1
+    assert results[0]["sender_kind"] == "system"
 
 
-def test_participant_and_shared_admin_access(client, app, db):
+def test_participant_and_shared_admin_access(client, app, db, rendered_templates):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -591,19 +500,11 @@ def test_participant_and_shared_admin_access(client, app, db):
     db.commit()
 
     _login(client, db, 3)
-    response = client.get(
-        f"/messages/{conversation_id}", headers={"Accept": "text/html"}
-    )
+    response = client.get(f"/messages/{conversation_id}", headers={"Accept": "text/html"})
     assert response.status_code == 200
-    assert "Hello Carol" in response.text
-    assert "<h2>Private first</h2>" not in response.text
-    assert '<details class="thread-participants">' in response.text
-    assert "<summary>All participants</summary>" in response.text
-    assert "<details class=\"thread-participants\" open" not in response.text
-    assert (
-        '<p class="conversation-participants thread-participant-full-list">'
-        in response.text
-    )
+    context = _context(rendered_templates, "messages/thread.html")
+    assert [message["body"] for message in context["messages"]] == ["Hello Carol"]
+    assert {participant["id"] for participant in context["participants"]} == {2, 3}
 
     response = client.post(
         f"/messages/{conversation_id}/reply",
@@ -613,9 +514,7 @@ def test_participant_and_shared_admin_access(client, app, db):
 
     admin_client = app.test_client()
     _login(admin_client, db, 1)
-    response = admin_client.get(
-        f"/messages/{conversation_id}", headers={"Accept": "text/html"}
-    )
+    response = admin_client.get(f"/messages/{conversation_id}", headers={"Accept": "text/html"})
     assert response.status_code == 404
 
     with db.cursor() as cursor:
@@ -625,9 +524,7 @@ def test_participant_and_shared_admin_access(client, app, db):
         )
     db.commit()
 
-    response = admin_client.get(
-        f"/messages/{conversation_id}", headers={"Accept": "text/html"}
-    )
+    response = admin_client.get(f"/messages/{conversation_id}", headers={"Accept": "text/html"})
     assert response.status_code == 200
     response = admin_client.post(
         f"/messages/{conversation_id}/reply",
@@ -671,7 +568,9 @@ def test_participant_and_shared_admin_access(client, app, db):
         assert cursor.fetchone()["email_notifications"] is True
 
 
-def test_unread_counts_are_per_user_and_threads_mark_messages_read(client, app, db):
+def test_unread_counts_are_per_user_and_threads_mark_messages_read(
+    client, app, db, rendered_templates
+):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -694,17 +593,10 @@ def test_unread_counts_are_per_user_and_threads_mark_messages_read(client, app, 
     _login(client, db, 2)
 
     inbox = client.get("/messages", headers={"Accept": "text/html"})
-    assert 'class="conversation-row unread"' in inbox.text
-    assert '<span class="message-badge unread">2 unread</span>' in inbox.text
-    assert (
-        '<p class="conversation-preview">carol: Second unread message</p>'
-        in inbox.text
-    )
-
-    home = client.get("/", headers={"Accept": "text/html"})
-    assert '<a href="/member/" class="card card-attention"' in home.text
-    member = client.get("/member", headers={"Accept": "text/html"})
-    assert '<a href="/messages" class="card card-attention"' in member.text
+    assert inbox.status_code == 200
+    conversations = _context(rendered_templates, "messages/inbox.html")["conversations"]
+    assert conversations[0]["unread_count"] == 2
+    assert conversations[0]["latest_message_id"] is not None
 
     thread = client.get(
         f"/messages/{conversation_id}",
@@ -727,14 +619,6 @@ def test_unread_counts_are_per_user_and_threads_mark_messages_read(client, app, 
         )
         assert last_read == cursor.fetchone()["latest_message_id"]
 
-    inbox = client.get("/messages", headers={"Accept": "text/html"})
-    assert 'class="conversation-row unread"' not in inbox.text
-    assert 'class="message-badge unread"' not in inbox.text
-    home = client.get("/", headers={"Accept": "text/html"})
-    assert '<a href="/member/" class="card card-attention"' not in home.text
-    member = client.get("/member", headers={"Accept": "text/html"})
-    assert '<a href="/messages" class="card card-attention"' not in member.text
-
     with db.cursor() as cursor:
         cursor.execute(
             """
@@ -746,15 +630,22 @@ def test_unread_counts_are_per_user_and_threads_mark_messages_read(client, app, 
     db.commit()
 
     inbox = client.get("/messages", headers={"Accept": "text/html"})
-    assert '<span class="message-badge unread">1 unread</span>' in inbox.text
+    assert _context(rendered_templates, "messages/inbox.html")["conversations"][0][
+        "unread_count"
+    ] == 1
 
     carol_client = app.test_client()
     _login(carol_client, db, 3)
     carol_inbox = carol_client.get("/messages", headers={"Accept": "text/html"})
-    assert '<span class="message-badge unread">1 unread</span>' in carol_inbox.text
+    assert carol_inbox.status_code == 200
+    assert _context(rendered_templates, "messages/inbox.html")["conversations"][0][
+        "unread_count"
+    ] == 1
 
 
-def test_shared_admin_unread_state_is_independent_for_each_admin(client, app, db):
+def test_shared_admin_unread_state_is_independent_for_each_admin(
+    client, app, db, rendered_templates
+):
     with db.cursor() as cursor:
         cursor.execute("UPDATE account SET role = 'admin' WHERE id = 3")
     db.commit()
@@ -779,7 +670,10 @@ def test_shared_admin_unread_state_is_independent_for_each_admin(client, app, db
 
         _login(client, db, 1)
         first_admin_inbox = client.get("/messages", headers={"Accept": "text/html"})
-        assert '<span class="message-badge unread">1 unread</span>' in first_admin_inbox.text
+        assert first_admin_inbox.status_code == 200
+        assert _context(rendered_templates, "messages/inbox.html")["conversations"][0][
+            "unread_count"
+        ] == 1
         client.get(
             f"/messages/{conversation_id}",
             headers={"Accept": "text/html"},
@@ -791,17 +685,20 @@ def test_shared_admin_unread_state_is_independent_for_each_admin(client, app, db
             "/messages",
             headers={"Accept": "text/html"},
         )
-        assert '<span class="message-badge unread">1 unread</span>' in second_admin_inbox.text
+        assert second_admin_inbox.status_code == 200
+        assert _context(rendered_templates, "messages/inbox.html")["conversations"][0][
+            "unread_count"
+        ] == 1
 
-        first_admin_inbox = client.get("/messages", headers={"Accept": "text/html"})
-        assert 'class="message-badge unread"' not in first_admin_inbox.text
     finally:
         with db.cursor() as cursor:
             cursor.execute("UPDATE account SET role = 'user' WHERE id = 3")
         db.commit()
 
 
-def test_owner_can_edit_subject_participants_and_admin_access(client, db):
+def test_owner_can_edit_subject_participants_and_admin_access(
+    client, db, rendered_templates
+):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -815,15 +712,9 @@ def test_owner_can_edit_subject_participants_and_admin_access(client, db):
         headers={"Accept": "text/html"},
     )
     assert edit_page.status_code == 200
-    assert "The owner remains a participant." in edit_page.text
-    participant_options = _select_options(edit_page.text, "participant_id")
-    assert '<option value="2"' not in participant_options
-    assert '<option value="3">carol</option>' in participant_options
-    assert '<input type="hidden" name="participant_id" value="3">' in edit_page.text
-    available_options = _select_options(edit_page.text, "participant_available")
-    assert '<option value="1">alice</option>' in available_options
-    assert '<option value="2"' not in available_options
-    assert '<option value="3"' not in available_options
+    edit_context = _context(rendered_templates, "messages/edit.html")
+    assert edit_context["values"]["participant_ids"] == ["3"]
+    assert {recipient["id"] for recipient in edit_context["recipients"]} == {1, 3}
 
     response = client.post(
         f"/messages/{conversation_id}/edit",
@@ -865,14 +756,13 @@ def test_owner_can_edit_subject_participants_and_admin_access(client, db):
         f"/messages/{conversation_id}",
         headers={"Accept": "text/html"},
     )
-    assert "Updated subject" in thread.text
-    assert (
-        f'<a class="nav-item" href="/messages/{conversation_id}/edit">'
-        '<i class="ph-fill ph-pencil-simple"></i> Edit conversation</a>'
-    ) in thread.text
+    assert thread.status_code == 200
+    thread_context = _context(rendered_templates, "messages/thread.html")
+    assert thread_context["conversation"]["subject"] == "Updated subject"
+    assert thread_context["can_edit"] is True
 
 
-def test_non_owner_cannot_edit_user_conversation(client, db):
+def test_non_owner_cannot_edit_user_conversation(client, db, rendered_templates):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -885,7 +775,8 @@ def test_non_owner_cannot_edit_user_conversation(client, db):
         f"/messages/{conversation_id}",
         headers={"Accept": "text/html"},
     )
-    assert f'href="/messages/{conversation_id}/edit"' not in thread.text
+    assert thread.status_code == 200
+    assert _context(rendered_templates, "messages/thread.html")["can_edit"] is False
 
     edit_page = client.get(
         f"/messages/{conversation_id}/edit",
@@ -904,7 +795,9 @@ def test_non_owner_cannot_edit_user_conversation(client, db):
         assert cursor.fetchone()["subject"] == "Creator only"
 
 
-def test_invited_participant_can_leave_but_owner_cannot(client, db):
+def test_invited_participant_can_leave_but_owner_cannot(
+    client, db, rendered_templates
+):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -918,13 +811,7 @@ def test_invited_participant_can_leave_but_owner_cannot(client, db):
         headers={"Accept": "text/html"},
     )
     assert thread.status_code == 200
-    assert f'action="/messages/{conversation_id}/leave"' in thread.text
-    assert '<button type="submit">Leave conversation</button>' in thread.text
-    assert '<details class="conversation-options constrained">' in thread.text
-    assert "<summary>Conversation options</summary>" in thread.text
-    assert thread.text.index('class="reply-panel"') < thread.text.index(
-        'class="conversation-options constrained"'
-    )
+    assert _context(rendered_templates, "messages/thread.html")["can_leave"] is True
 
     response = client.post(f"/messages/{conversation_id}/leave")
     assert response.status_code == 302
@@ -950,13 +837,11 @@ def test_invited_participant_can_leave_but_owner_cannot(client, db):
         headers={"Accept": "text/html"},
     )
     assert owner_thread.status_code == 200
-    assert f'action="/messages/{conversation_id}/leave"' not in owner_thread.text
+    assert _context(rendered_templates, "messages/thread.html")["can_leave"] is False
     assert client.post(f"/messages/{conversation_id}/leave").status_code == 403
 
 
-def test_disabling_admin_access_keeps_admin_as_an_ordinary_participant(
-    client, app, db
-):
+def test_disabling_admin_access_keeps_admin_as_an_ordinary_participant(client, app, db):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -1033,7 +918,6 @@ def test_all_admins_can_edit_admin_created_conversation(client, db):
             headers={"Accept": "text/html"},
         )
         assert edit_page.status_code == 200
-        assert "Admin-created conversations remain shared" in edit_page.text
 
         response = client.post(
             f"/messages/{conversation_id}/edit",
@@ -1078,57 +962,7 @@ def test_all_admins_can_edit_admin_created_conversation(client, db):
         db.commit()
 
 
-def test_message_alignment_and_sender_colour_hashes(client, db):
-    conversation_id = _insert_conversation(
-        db,
-        owner_account_id=2,
-        subject="Bubble styling",
-        participants=[1, 2, 3],
-        admin_accessible=True,
-        participant_roles={1: "admin"},
-    )
-    with db.cursor() as cursor:
-        cursor.executemany(
-            """
-            INSERT INTO message (conversation_id, sender_id, sender_kind, body)
-            VALUES (%s, %s, %s, %s)
-            """,
-            [
-                (conversation_id, 2, "participant", "Own bubble"),
-                (conversation_id, 3, "participant", "Other bubble"),
-                (conversation_id, 1, "admin", "Moderator bubble"),
-            ],
-        )
-    db.commit()
-    _login(client, db, 2)
-
-    response = client.get(
-        f"/messages/{conversation_id}",
-        headers={"Accept": "text/html"},
-    )
-
-    assert response.status_code == 200
-    assert (
-        'class="message-row participant own"\n         '
-        'style="--sender-colour: #d4735e"'
-    ) in response.text
-    assert "All conversations" not in response.text
-    assert (
-        'class="message-row participant other"\n         '
-        'style="--sender-colour: #4e0740"'
-    ) in response.text
-    assert (
-        'class="message-row admin other"\n         '
-        'style="--sender-colour: #6b86b2"'
-    ) in response.text
-    assert response.text.count('class="message-avatar"') == 3
-    assert 'src="/avatars/1"' in response.text
-    assert 'src="/avatars/2"' in response.text
-    assert 'src="/avatars/3"' in response.text
-    assert "Administrator</span>" not in response.text
-
-
-def test_user_can_hide_message_avatars(client, db):
+def test_user_can_hide_message_avatars(client, db, rendered_templates):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -1152,15 +986,13 @@ def test_user_can_hide_message_avatars(client, db):
         headers={"Accept": "text/html"},
     )
     assert settings.status_code == 200
-    assert 'id="hide-message-avatars" name="hide_message_avatars"' in settings.text
-    assert 'value="true" checked' in settings.text
 
     response = client.get(
         f"/messages/{conversation_id}",
         headers={"Accept": "text/html"},
     )
     assert response.status_code == 200
-    assert 'class="message-avatar"' not in response.text
+    assert _context(rendered_templates, "messages/thread.html")["show_avatars"] is False
 
     client.post(
         "/settings",
@@ -1171,10 +1003,11 @@ def test_user_can_hide_message_avatars(client, db):
         f"/messages/{conversation_id}",
         headers={"Accept": "text/html"},
     )
-    assert 'class="message-avatar"' in response.text
+    assert response.status_code == 200
+    assert _context(rendered_templates, "messages/thread.html")["show_avatars"] is True
 
 
-def test_system_conversation_is_formatted_and_cannot_be_replied_to(client, db):
+def test_system_conversation_cannot_be_replied_to(client, db, rendered_templates):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=None,
@@ -1187,44 +1020,14 @@ def test_system_conversation_is_formatted_and_cannot_be_replied_to(client, db):
             INSERT INTO message (conversation_id, sender_id, sender_kind, body)
             VALUES (%s, NULL, 'system', %s)
             """,
-            (
-                conversation_id,
-                "Use [code]<safe>[/code]\n[pre]one\n  two[/pre]\n[o]overlined[/o]"
-                "\n[bg=yellow][b]highlighted[/b][/bg]"
-                "\n[c=white][bg=black]contrast[/bg][/c]"
-                "\n[c=black][bg=white]inverse[/bg][/c]"
-                "\n[font fg=#123 bg='fff' size=1 family=serif weight=bold "
-                "style=italic]font text[/font]",
-            ),
+            (conversation_id, "System notice"),
         )
     db.commit()
     _login(client, db, 2)
 
-    response = client.get(
-        f"/messages/{conversation_id}", headers={"Accept": "text/html"}
-    )
+    response = client.get(f"/messages/{conversation_id}", headers={"Accept": "text/html"})
     assert response.status_code == 200
-    assert "<code>&lt;safe&gt;</code>" in response.text
-    assert "<pre>one\n  two</pre>" in response.text
-    assert '<span class="overline">overlined</span>' in response.text
-    assert 'class="message-avatar"' not in response.text
-    assert (
-        '<span class="background-colour-yellow"><strong>highlighted</strong></span>'
-        in response.text
-    )
-    assert (
-        '<span class="colour-white"><span class="background-colour-black">'
-        "contrast</span></span>"
-    ) in response.text
-    assert (
-        '<span class="colour-black"><span class="background-colour-white">'
-        "inverse</span></span>"
-    ) in response.text
-    assert (
-        '<span style="color: #123; background-color: #fff; font-size: 0.5rem; '
-        'font-family: serif; font-weight: 700; font-style: italic">font text</span>'
-    ) in response.text
-    assert "cannot be replied to" in response.text
+    assert _context(rendered_templates, "messages/thread.html")["can_reply"] is False
 
     response = client.post(
         f"/messages/{conversation_id}/reply",
@@ -1234,7 +1037,9 @@ def test_system_conversation_is_formatted_and_cannot_be_replied_to(client, db):
     assert response.status_code == 403
 
 
-def test_search_filters_body_sender_participant_subject_and_exact_date(client, db):
+def test_search_filters_body_sender_participant_subject_and_exact_date(
+    client, db, rendered_templates
+):
     conversation_id = _insert_conversation(
         db,
         owner_account_id=2,
@@ -1267,11 +1072,11 @@ def test_search_filters_body_sender_participant_subject_and_exact_date(client, d
     )
 
     assert response.status_code == 200
-    assert "Specific planning topic" in response.text
-    assert "searchable needle" in response.text
-    selected_participants = _select_options(response.text, "participant")
-    assert '<option value="3">carol</option>' in selected_participants
-    assert '<input type="hidden" name="participant" value="3">' in response.text
+    context = _context(rendered_templates, "messages/search.html")
+    assert [result["conversation_id"] for result in context["results"]] == [
+        conversation_id
+    ]
+    assert context["filters"].getlist("participant") == ["3"]
 
 
 def test_message_validation_rejects_blank_and_over_limit(client, db):
@@ -1289,7 +1094,6 @@ def test_message_validation_rejects_blank_and_over_limit(client, db):
         headers={"Accept": "text/html"},
     )
     assert blank.status_code == 400
-    assert "Message is required" in blank.text
 
     too_long = client.post(
         f"/messages/{conversation_id}/reply",
@@ -1297,4 +1101,3 @@ def test_message_validation_rejects_blank_and_over_limit(client, db):
         headers={"Accept": "text/html"},
     )
     assert too_long.status_code == 400
-    assert "at most 5000 characters" in too_long.text

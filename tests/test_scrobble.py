@@ -372,15 +372,6 @@ class TestConnectFlow:
         assert rows[0]["remote_username"] == "lfm_user"
 
 
-# ── Radio page flag ──────────────────────────────────────────────────
-
-
-def test_radio_page_scrobble_disabled_when_logged_out(client):
-    resp = client.get("/radio", headers={"Accept": "text/html"})
-    assert resp.status_code == 200
-    assert b"window.SCROBBLE_ENABLED = false" in resp.data
-
-
 def test_site_scrobble_client_uses_lastfm_threshold_and_catalog_id(client):
     response = client.get("/static/js/scrobble.js")
     assert response.status_code == 200

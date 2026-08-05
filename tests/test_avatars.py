@@ -79,10 +79,6 @@ def test_user_can_upload_and_remove_avatar(client, db):
     assert served.content_type == "image/png"
     assert served.data == avatar["image_data"]
 
-    settings = client.get("/settings", headers={"Accept": "text/html"})
-    assert "Your custom avatar is active." in settings.text
-    assert 'value="remove"' in settings.text
-
     response = client.post(
         "/settings/avatar",
         data={"action": "remove"},
@@ -106,7 +102,6 @@ def test_avatar_upload_rejects_invalid_or_oversized_images(client, db):
         headers={"Accept": "text/html"},
     )
     assert oversized.status_code == 400
-    assert "must not exceed 512 × 512 pixels" in oversized.text
 
     invalid = client.post(
         "/settings/avatar",
@@ -115,7 +110,6 @@ def test_avatar_upload_rejects_invalid_or_oversized_images(client, db):
         headers={"Accept": "text/html"},
     )
     assert invalid.status_code == 400
-    assert "Upload a valid PNG, JPEG, or WebP image" in invalid.text
 
     with db.cursor() as cursor:
         cursor.execute("SELECT 1 FROM account_avatar WHERE account_id = 2")

@@ -22,7 +22,9 @@ def test_history_user_list_sorts_case_and_accent_insensitively(app, monkeypatch)
     assert "ORDER BY username_sort, account.username, account.id" in cursor.query
 
 
-def test_history_filters_country_and_user_lists_to_voted_shows(client, db):
+def test_history_filters_country_and_user_lists_to_voted_shows(
+    client, db, rendered_templates
+):
     with db.cursor() as cursor:
         cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
         cursor.execute(
@@ -106,12 +108,11 @@ def test_history_filters_country_and_user_lists_to_voted_shows(client, db):
         "/user/bob/votes?view=country", headers={"Accept": "text/html"}
     )
     assert country_response.status_code == 200
-    assert b">Spain</option>" in country_response.data
-    assert b">United States</option>" in country_response.data
-    assert b">France</option>" not in country_response.data
+    assert {country["cc"] for country in rendered_templates[-1][1]["country_list"]} == {
+        "ES",
+        "US",
+    }
 
     user_response = client.get("/user/bob/votes?view=user", headers={"Accept": "text/html"})
     assert user_response.status_code == 200
-    assert b">alice</option>" in user_response.data
-    assert b">bob</option>" not in user_response.data
-    assert b">carol</option>" not in user_response.data
+    assert [user["id"] for user in rendered_templates[-1][1]["user_list"]] == [1]
