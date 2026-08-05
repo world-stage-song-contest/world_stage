@@ -272,6 +272,7 @@ def make_bbcode_plugin(allowed_colours):
     colour_names = "|".join(re.escape(colour) for colour in sorted(allowed_colours))
     c_re = re.compile(rf"\[c=({colour_names})\]")
     bg_re = re.compile(rf"\[bg=({colour_names})\]")
+    lang_re = re.compile(r"\[lang=([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)\]")
     close_re = {
         "b": "[/b]",
         "i": "[/i]",
@@ -285,6 +286,7 @@ def make_bbcode_plugin(allowed_colours):
         "c": "[/c]",
         "bg": "[/bg]",
         "font": "[/font]",
+        "lang": "[/lang]",
     }
 
     def bbcode_plugin(md: MarkdownIt):
@@ -382,6 +384,31 @@ def make_bbcode_plugin(allowed_colours):
                 state.posMax = old_max
                 return True
 
+            m = lang_re.match(src, pos)
+            if m:
+                language_tag = m.group(1)
+
+                open_len = m.end()
+                close_tag = close_re["lang"]
+                end_pos = src.find(close_tag, open_len, state.posMax)
+                if end_pos == -1:
+                    return False
+                if silent:
+                    return True
+
+                old_max = state.posMax
+                state.pos = open_len
+                state.posMax = end_pos
+
+                token = state.push("bb_lang_open", "span", 1)
+                token.attrs = {"lang": language_tag}
+                state.md.inline.tokenize(state)
+                state.push("bb_lang_close", "span", -1)
+
+                state.pos = end_pos + len(close_tag)
+                state.posMax = old_max
+                return True
+
             parsed_font = _parse_font_open_tag(src, pos, allowed_colours, state.posMax)
             if parsed_font:
                 open_end, attributes = parsed_font
@@ -443,6 +470,13 @@ def make_bbcode_plugin(allowed_colours):
         md.add_render_rule("bb_colour_close", simple_close("span"))
         md.add_render_rule("bb_background_colour_open", render_colour_open)
         md.add_render_rule("bb_background_colour_close", simple_close("span"))
+
+        def render_lang_open(self, tokens, idx, opts, env):
+            language_tag = escape(tokens[idx].attrs["lang"], quote=True)
+            return f'<span lang="{language_tag}">'
+
+        md.add_render_rule("bb_lang_open", render_lang_open)
+        md.add_render_rule("bb_lang_close", simple_close("span"))
 
         def render_font_open(self, tokens, idx, opts, env):
             style = escape(tokens[idx].attrs["style"], quote=True)

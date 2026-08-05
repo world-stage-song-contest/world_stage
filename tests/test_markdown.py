@@ -41,3 +41,27 @@ def test_font_tags_are_removed_from_message_previews():
         message_preview("[font fg=red size='6']Important[/font] [b]message[/b]")
         == "Important message"
     )
+
+
+@pytest.mark.parametrize("language_tag", ["pl", "en-US", "sr-Latn", "zh-Hant-TW"])
+def test_lang_tag(language_tag: str):
+    assert (
+        render(f"[lang={language_tag}]formatted [b]text[/b][/lang]")
+        == f'<span lang="{language_tag}">formatted <strong>text</strong></span>'
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        '[lang=en" onmouseover="alert(1)]text[/lang]',
+        "[lang=en US]text[/lang]",
+        "[lang=]text[/lang]",
+        "[lang=en]text",
+    ],
+)
+def test_invalid_lang_tags_cannot_inject_attributes(value: str):
+    rendered = render(value)
+
+    assert "[lang" in rendered
+    assert "<span lang=" not in rendered
