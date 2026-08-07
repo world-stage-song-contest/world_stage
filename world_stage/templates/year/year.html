@@ -21,8 +21,10 @@
     {% endfor %}
     <span class="nav-separator"></span>
     {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_year_voters', short_name=special) }}">Voters</a>
     <a class="nav-item" href="{{ url_for('year.special_nfs', short_name=special) }}">National Finals</a>
     {% else %}
+    <a class="nav-item" href="{{ url_for('year.year_voters', year=year) }}">Voters</a>
     <a class="nav-item" href="{{ url_for('year.nfs', year=year) }}">National Finals</a>
     {% endif %}
 {% endblock %}
