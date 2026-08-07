@@ -24,16 +24,16 @@ def _seed_show(db):
         """)
         cur.execute("""
             INSERT INTO show (
-                id, year_id, point_system_id, show_name, short_name,
+                id, year_id, point_system_id, show_type,
                 voting_opens, voting_closes, predictions_close, date,
-                dtf, sc, status
+                status
             )
             VALUES (
-                1, 2025, 1, 'Final', 'f',
+                1, 2025, 1, 'f',
                 CURRENT_TIMESTAMP - INTERVAL '1 hour',
                 CURRENT_TIMESTAMP + INTERVAL '1 hour',
                 CURRENT_TIMESTAMP + INTERVAL '30 minutes',
-                DATE '2025-05-10', NULL, NULL, 'full'
+                DATE '2025-05-10', 'full'
             )
             ON CONFLICT DO NOTHING
         """)

@@ -16,14 +16,42 @@ class ShowData:
     voting_closes: datetime.datetime | None
     predictions_close: datetime.datetime | None
     year: int
-    dtf: int | None
-    sc: int | None
-    special: int | None
     status: str
     voting_ruleset_version: str
     revote_ruleset_version: str
     penalizes_non_voters: bool
     revote_penalizes_non_voters: bool
+    local_short_name: str
+    national_final_id: int | None
+    national_final_short_name: str | None
+    national_final_name: str | None
+    national_final_owner_id: int | None
+    national_final_country_id: str | None
+    national_final_status: str | None
+    progressions: list[dict]
+
+    @property
+    def total_qualifiers(self) -> int:
+        return sum(edge["qualifier_count"] for edge in self.progressions)
+
+    @property
+    def primary_qualifiers(self) -> int:
+        return self.progressions[0]["qualifier_count"] if self.progressions else 0
+
+    def qualifier_class(
+        self,
+        entry_status: str | None,
+        first: str = "direct-to-final",
+        later: str = "second-chance",
+        non_qualifier: str = "non-qualifier",
+    ) -> str:
+        """Map a stored progression destination to the existing result styles."""
+        if entry_status == "nq":
+            return non_qualifier
+        for index, progression in enumerate(self.progressions):
+            if progression["target_short_name"] == entry_status:
+                return first if index == 0 else later
+        return ""
 
 
 @dataclass(frozen=True)
@@ -34,6 +62,17 @@ class UserPermissions:
 
     def __str__(self) -> str:
         return self.role
+
+
+def can_manage_show(
+    show: ShowData, user: tuple[int, str] | None, permissions: UserPermissions
+) -> bool:
+    """Whether this caller may manage and preview this particular show."""
+    return permissions.can_view_restricted or bool(
+        user is not None
+        and show.national_final_owner_id is not None
+        and user[0] == show.national_final_owner_id
+    )
 
 
 @dataclass(kw_only=True)
@@ -189,16 +228,6 @@ class Show:
         self.date = date
 
     def __lt__(self, other):
-        def value_map(name: str) -> int:
-            if name.startswith("sf"):
-                return 0
-            elif name == "sc":
-                return 1
-            elif name == "f":
-                return 2
-            else:
-                return 3
-
         if not isinstance(other, Show):
             return NotImplemented
 
@@ -208,6 +237,10 @@ class Show:
         if self.year != other.year:
             return self.year < other.year
 
-        v1 = value_map(self.short_name)
-        v2 = value_map(other.short_name)
-        return v1 < v2
+        return (
+            self.date or datetime.date.max,
+            self.short_name,
+        ) < (
+            other.date or datetime.date.max,
+            other.short_name,
+        )

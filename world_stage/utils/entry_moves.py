@@ -39,7 +39,7 @@ def move_entry(
         FROM song AS stable
         JOIN current_song AS current ON current.id = stable.id
         JOIN year AS source_year ON source_year.id = current.year_id
-        WHERE current.id = %s {owner_filter}
+        WHERE current.id = %s AND current.main_participant {owner_filter}
         FOR UPDATE OF stable
         """,
         params,
@@ -64,6 +64,19 @@ def move_entry(
     )
     if cursor.fetchone() is None:
         raise EntryMoveError("Invalid destination country")
+
+    cursor.execute(
+        """
+        SELECT 1 FROM national_final
+        WHERE year_id = %s AND owner_country_id = %s
+          AND status <> 'cancelled'
+        """,
+        (to_year, to_country),
+    )
+    if cursor.fetchone() is not None:
+        raise EntryMoveError(
+            "This country is being selected through a national final"
+        )
 
     if source["year_id"] == to_year and source["country_id"] == to_country:
         raise EntryMoveError("The entry is already in that slot")

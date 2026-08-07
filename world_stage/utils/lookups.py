@@ -28,19 +28,46 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
     cursor.execute(
         """
         SELECT show.id, show.year_id, show.point_system_id, show.show_name,
+               show.short_name AS local_short_name, show.national_final_id,
+               national_final.short_name AS national_final_short_name,
+               national_final.name AS national_final_name,
+               national_final.owner_id AS national_final_owner_id,
+               national_final.owner_country_id AS national_final_country_id,
+               national_final.status AS national_final_status,
+               COALESCE((
+                   SELECT jsonb_agg(
+                       jsonb_build_object(
+                           'target_show_id', progression.target_show_id,
+                           'target_short_name', target.short_name,
+                           'target_name', target.show_name,
+                           'qualifier_count', progression.qualifier_count,
+                           'priority', progression.priority
+                       ) ORDER BY progression.priority
+                   )
+                   FROM show_progression AS progression
+                   JOIN show AS target ON target.id = progression.target_show_id
+                   WHERE progression.source_show_id = show.id
+               ), '[]'::jsonb) AS progressions,
                show.voting_opens, show.voting_closes, show.predictions_close,
-               show.dtf, show.sc, show.special, show.status,
+               show.status,
                show.voting_ruleset_version, show.revote_ruleset_version,
                official_rules.penalizes_non_voters,
                revote_rules.penalizes_non_voters AS revote_penalizes_non_voters
         FROM show
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
         JOIN voting_ruleset official_rules
           ON official_rules.version = show.voting_ruleset_version
         JOIN voting_ruleset revote_rules
           ON revote_rules.version = show.revote_ruleset_version
-        WHERE show.year_id = %s AND show.short_name = %s
+        WHERE show.year_id = %s
+          AND (
+              (show.national_final_id IS NULL AND show.short_name = %s)
+              OR
+              (show.national_final_id IS NOT NULL
+               AND national_final.short_name || '-' || show.short_name = %s)
+          )
     """,
-        (year, short_show_name),
+        (year, short_show_name, short_show_name),
     )
 
     show_row = cursor.fetchone()
@@ -49,12 +76,14 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         year_id = show_row["year_id"]
         point_system_id = show_row["point_system_id"]
         show_name = show_row["show_name"]
+        resolved_short_name = show_row["local_short_name"]
+        if show_row["national_final_short_name"]:
+            resolved_short_name = (
+                f"{show_row['national_final_short_name']}-{resolved_short_name}"
+            )
         voting_opens = show_row["voting_opens"]
         voting_closes = show_row["voting_closes"]
         predictions_close = show_row["predictions_close"]
-        dtf = show_row["dtf"]
-        sc = show_row["sc"]
-        special = show_row["special"]
         status = show_row["status"]
     else:
         return None
@@ -66,19 +95,24 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         points=list(points),
         point_system_id=point_system_id,
         name=show_name,
-        short_name=short_show_name,
+        short_name=resolved_short_name,
         voting_opens=voting_opens,
         voting_closes=voting_closes,
         predictions_close=predictions_close,
         year=year_id,
-        dtf=dtf,
-        sc=sc,
-        special=special,
         status=status,
         voting_ruleset_version=show_row["voting_ruleset_version"],
         revote_ruleset_version=show_row["revote_ruleset_version"],
         penalizes_non_voters=show_row["penalizes_non_voters"],
         revote_penalizes_non_voters=show_row["revote_penalizes_non_voters"],
+        local_short_name=show_row["local_short_name"],
+        national_final_id=show_row["national_final_id"],
+        national_final_short_name=show_row["national_final_short_name"],
+        national_final_name=show_row["national_final_name"],
+        national_final_owner_id=show_row["national_final_owner_id"],
+        national_final_country_id=show_row["national_final_country_id"],
+        national_final_status=show_row["national_final_status"],
+        progressions=show_row["progressions"],
     )
 
     return ret
@@ -227,9 +261,11 @@ def get_year_shows(year: int, pattern: str = "") -> list[dict]:
 
     cursor.execute(
         """
-        SELECT show_name, short_name FROM show
-        WHERE year_id = %s AND LOWER(short_name) LIKE LOWER(%s)
-        ORDER BY short_name
+        SELECT show.show_name, show.short_name FROM show
+        JOIN show_types ON show_types.id = show.show_type
+        WHERE year_id = %s AND national_final_id IS NULL
+          AND LOWER(short_name) LIKE LOWER(%s)
+        ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
     """,
         (year, pattern + "%"),
     )

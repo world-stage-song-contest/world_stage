@@ -4,18 +4,101 @@ from ...db import fetchone, get_db
 from ...utils import (
     LCG,
     UserPermissions,
+    can_manage_show,
     dt_now,
     get_show_id,
     get_show_songs,
     render_template,
-    with_permissions,
+    with_auth,
 )
 from .common import bp, get_other_shows, resolve_special
 
 
+def _qualification_groups(show_data, songs):
+    """Return actual saved advancements, or the ranking-derived preview."""
+    derived = []
+    offset = 0
+    for progression in show_data.progressions:
+        count = progression["qualifier_count"]
+        derived.append([(song, False) for song in songs[offset : offset + count]])
+        offset += count
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT target_show_id, song_id, is_special
+        FROM show_qualifier
+        WHERE source_show_id = %s
+        ORDER BY target_show_id, qualifier_order
+        """,
+        (show_data.id,),
+    )
+    saved = cursor.fetchall()
+    songs_by_id = {song.id: song for song in songs}
+    if saved:
+        by_target: dict[int, list[tuple[object, bool]]] = {}
+        for qualifier in saved:
+            song = songs_by_id.get(qualifier["song_id"])
+            if song:
+                by_target.setdefault(qualifier["target_show_id"], []).append(
+                    (song, qualifier["is_special"])
+                )
+        return [
+            by_target.get(progression["target_show_id"], derived[index])
+            for index, progression in enumerate(show_data.progressions)
+        ]
+    return derived
+
+
+def _prepare_qualification_results(show_data, songs, access: str, reveal: str):
+    result_places = {song.id: place for place, song in enumerate(songs, 1)}
+    groups = _qualification_groups(show_data, songs)
+    qualifiers = [song for group in groups for song, _special in group]
+    qualifier_ids = {song.id for song in qualifiers}
+    qualifier_reveal = []
+
+    if show_data.status == "partial":
+        lcg = LCG(show_data.id)
+        for index, group in enumerate(groups):
+            shuffled = list(group)
+            lcg.shuffle(shuffled)
+            qualifier_reveal.extend(
+                {
+                    "cc": song.country.cc,
+                    "name": song.country.name,
+                    "variant": song.country.flag_variant,
+                    "cls": "qual-dtf" if index == 0 else "qual-sc",
+                    "special": special,
+                }
+                for song, special in shuffled
+            )
+
+    if access == "partial":
+        placeholder = max(qualifiers, key=lambda song: result_places[song.id], default=None)
+        songs = [
+            song for song in songs
+            if song.id not in qualifier_ids or song is placeholder
+        ]
+        if reveal:
+            for song in songs:
+                song.hidden = True
+        if placeholder:
+            if placeholder.vote_data:
+                placeholder.vote_data.ro = -1
+            placeholder.artist = ""
+            placeholder.title = ""
+            placeholder.country.name = ""
+            placeholder.country.cc = "XX"
+    elif access == "full" and reveal:
+        for song in qualifiers:
+            song.hidden = True
+
+    return songs, qualifier_reveal, result_places
+
+
 @bp.get("/special/<short_name>/<show>")
-@with_permissions
-def special_results(short_name: str, show: str, permissions: UserPermissions):
+@with_auth
+def special_results(short_name: str, show: str, user, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -26,13 +109,14 @@ def special_results(short_name: str, show: str, permissions: UserPermissions):
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status == "none" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status == "none" and not elevated:
         return render_template("error.html", error="This show has no songs"), 400
 
     reveal = ""
     access = show_data.status
 
-    if permissions.can_view_restricted:
+    if elevated:
         if access == "draw":
             access = "partial"
             reveal = "unrevealed"
@@ -66,63 +150,12 @@ def special_results(short_name: str, show: str, permissions: UserPermissions):
     revote_eligible = fetchone(cursor)["eligible"]
     songs.sort(reverse=True)
 
-    off = 0
-    qualifier_reveal = []
+    songs, qualifier_reveal, result_places = _prepare_qualification_results(
+        show_data, songs, access, reveal
+    )
 
-    # Build the qualifier banner whenever the partial results are actually
-    # set in the database (``status == "partial"``) — including when an admin
-    # viewing such a show is bumped up to full access. It is NOT shown for a
-    # draw-status show an admin is merely previewing as partial, since those
-    # qualifiers aren't set yet. Computed from the full sorted list before any
-    # slicing/redaction below, and captured as plain values so the later
-    # redaction can't blank a card. The DtF/SC groups are shuffled with the
-    # same seed the qualifiers reveal uses (see ``qualifiers_scores``) so they
-    # appear in reveal order.
-    if show_data.status == "partial":
-        dtf = show_data.dtf or 0
-        sc = show_data.sc or 0
-        lcg = LCG(show_data.id)
-        dtf_quals = songs[:dtf]
-        sc_quals = songs[dtf:dtf + sc]
-        lcg.shuffle(dtf_quals)
-        lcg.shuffle(sc_quals)
-        qualifier_reveal = [
-            {"cc": s.country.cc, "name": s.country.name,
-             "variant": s.country.flag_variant, "cls": cls}
-            for group, cls in ((dtf_quals, "qual-dtf"), (sc_quals, "qual-sc"))
-            for s in group
-        ]
-
-    if access == "partial":
-        if show_data.dtf:
-            off = show_data.dtf - 1
-        if show_data.sc:
-            off += show_data.sc
-
-        songs = songs[off:]
-        if reveal:
-            for s in songs:
-                s.hidden = True
-
-        if songs:
-            if songs[0].vote_data:
-                songs[0].vote_data.ro = -1
-            songs[0].artist = ""
-            songs[0].title = ""
-            songs[0].country.name = ""
-            songs[0].country.cc = "XX"
-    elif access == "full" and reveal:
-        if show_data.dtf:
-            off = show_data.dtf - 1
-        if show_data.sc:
-            off += show_data.sc
-        if reveal:
-            for i in range(off + 1):
-                songs[i].hidden = True
-        off = 0
-
-    qualifiers = show_data.dtf or 0
-    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+    qualifiers = show_data.primary_qualifiers
+    sc_qualifiers = show_data.total_qualifiers
 
     return render_template(
         "year/summary.html",
@@ -133,7 +166,8 @@ def special_results(short_name: str, show: str, permissions: UserPermissions):
         points=show_data.points,
         show=show,
         access=access,
-        offset=off,
+        offset=0,
+        result_places=result_places,
         qualifier_reveal=qualifier_reveal,
         other_shows=get_other_shows(_year, show),
         show_name=show_data.name,
@@ -143,9 +177,9 @@ def special_results(short_name: str, show: str, permissions: UserPermissions):
         year_id=_year,
         participants=participants,
         voters=voter_count,
-        can_apply_penalty=permissions.can_view_restricted,
+        can_apply_penalty=elevated,
         penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
+        has_qualifiers=bool(show_data.progressions),
         revote_eligible=revote_eligible,
         special=short_name,
         special_name=special_year["special_name"],
@@ -153,8 +187,8 @@ def special_results(short_name: str, show: str, permissions: UserPermissions):
 
 
 @bp.get("/special/<short_name>/<show>/detailed")
-@with_permissions
-def special_detailed_results(short_name: str, show: str, permissions: UserPermissions):
+@with_auth
+def special_detailed_results(short_name: str, show: str, user, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -165,7 +199,8 @@ def special_detailed_results(short_name: str, show: str, permissions: UserPermis
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status != "full" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status != "full" and not elevated:
         return render_template(
             "error.html", error="You aren't allowed to access the detailed results yet"
         ), 400
@@ -173,7 +208,7 @@ def special_detailed_results(short_name: str, show: str, permissions: UserPermis
     if (
         show_data.voting_closes
         and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
+        and not elevated
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
@@ -215,8 +250,8 @@ def special_detailed_results(short_name: str, show: str, permissions: UserPermis
 
     songs.sort(reverse=True)
 
-    qualifiers = show_data.dtf or 0
-    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+    qualifiers = show_data.primary_qualifiers
+    sc_qualifiers = show_data.total_qualifiers
 
     return render_template(
         "year/detailed.html",
@@ -229,29 +264,30 @@ def special_detailed_results(short_name: str, show: str, permissions: UserPermis
         show=show,
         year=short_name,
         participants=len(songs),
-        can_apply_penalty=permissions.can_view_restricted,
+        can_apply_penalty=elevated,
         penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
+        has_qualifiers=bool(show_data.progressions),
         special=short_name,
         special_name=special_year["special_name"],
     )
 
 @bp.get("/<int:year>/<show>")
-@with_permissions
-def results(year: int, show: str, permissions: UserPermissions):
+@with_auth
+def results(year: int, show: str, user, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status == "none" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status == "none" and not elevated:
         return render_template("error.html", error="This show has no songs"), 400
 
     reveal = ""
     access = show_data.status
 
-    if permissions.can_view_restricted:
+    if elevated:
         if access == "draw":
             access = "partial"
             reveal = "unrevealed"
@@ -285,63 +321,12 @@ def results(year: int, show: str, permissions: UserPermissions):
     revote_eligible = fetchone(cursor)["eligible"]
     songs.sort(reverse=True)
 
-    off = 0
-    qualifier_reveal = []
+    songs, qualifier_reveal, result_places = _prepare_qualification_results(
+        show_data, songs, access, reveal
+    )
 
-    # Build the qualifier banner whenever the partial results are actually
-    # set in the database (``status == "partial"``) — including when an admin
-    # viewing such a show is bumped up to full access. It is NOT shown for a
-    # draw-status show an admin is merely previewing as partial, since those
-    # qualifiers aren't set yet. Computed from the full sorted list before any
-    # slicing/redaction below, and captured as plain values so the later
-    # redaction can't blank a card. The DtF/SC groups are shuffled with the
-    # same seed the qualifiers reveal uses (see ``qualifiers_scores``) so they
-    # appear in reveal order.
-    if show_data.status == "partial":
-        dtf = show_data.dtf or 0
-        sc = show_data.sc or 0
-        lcg = LCG(show_data.id)
-        dtf_quals = songs[:dtf]
-        sc_quals = songs[dtf:dtf + sc]
-        lcg.shuffle(dtf_quals)
-        lcg.shuffle(sc_quals)
-        qualifier_reveal = [
-            {"cc": s.country.cc, "name": s.country.name,
-             "variant": s.country.flag_variant, "cls": cls}
-            for group, cls in ((dtf_quals, "qual-dtf"), (sc_quals, "qual-sc"))
-            for s in group
-        ]
-
-    if access == "partial":
-        if show_data.dtf:
-            off = show_data.dtf - 1
-        if show_data.sc:
-            off += show_data.sc
-
-        songs = songs[off:]
-        if reveal:
-            for s in songs:
-                s.hidden = True
-
-        if songs:
-            if songs[0].vote_data:
-                songs[0].vote_data.ro = -1
-            songs[0].artist = ""
-            songs[0].title = ""
-            songs[0].country.name = ""
-            songs[0].country.cc = "XX"
-    elif access == "full" and reveal:
-        if show_data.dtf:
-            off = show_data.dtf - 1
-        if show_data.sc:
-            off += show_data.sc
-        if reveal:
-            for i in range(off + 1):
-                songs[i].hidden = True
-        off = 0
-
-    qualifiers = show_data.dtf or 0
-    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+    qualifiers = show_data.primary_qualifiers
+    sc_qualifiers = show_data.total_qualifiers
 
     return render_template(
         "year/summary.html",
@@ -352,7 +337,8 @@ def results(year: int, show: str, permissions: UserPermissions):
         points=show_data.points,
         show=show,
         access=access,
-        offset=off,
+        offset=0,
+        result_places=result_places,
         qualifier_reveal=qualifier_reveal,
         other_shows=get_other_shows(_year, show),
         show_name=show_data.name,
@@ -362,23 +348,24 @@ def results(year: int, show: str, permissions: UserPermissions):
         year_id=_year,
         participants=participants,
         voters=voter_count,
-        can_apply_penalty=permissions.can_view_restricted,
+        can_apply_penalty=elevated,
         penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
+        has_qualifiers=bool(show_data.progressions),
         revote_eligible=revote_eligible,
     )
 
 
 @bp.get("/<int:year>/<show>/detailed")
-@with_permissions
-def detailed_results(year: int, show: str, permissions: UserPermissions):
+@with_auth
+def detailed_results(year: int, show: str, user, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status != "full" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status != "full" and not elevated:
         return render_template(
             "error.html", error="You aren't allowed to access the detailed results yet"
         ), 400
@@ -386,7 +373,7 @@ def detailed_results(year: int, show: str, permissions: UserPermissions):
     if (
         show_data.voting_closes
         and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
+        and not elevated
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
@@ -428,8 +415,8 @@ def detailed_results(year: int, show: str, permissions: UserPermissions):
 
     songs.sort(reverse=True)
 
-    qualifiers = show_data.dtf or 0
-    sc_qualifiers = (show_data.sc or 0) + (show_data.special or 0) + qualifiers
+    qualifiers = show_data.primary_qualifiers
+    sc_qualifiers = show_data.total_qualifiers
 
     return render_template(
         "year/detailed.html",
@@ -442,7 +429,7 @@ def detailed_results(year: int, show: str, permissions: UserPermissions):
         show=show,
         year=year,
         participants=len(songs),
-        can_apply_penalty=permissions.can_view_restricted,
+        can_apply_penalty=elevated,
         penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=show_data.dtf is not None or show_data.sc is not None,
+        has_qualifiers=bool(show_data.progressions),
     )

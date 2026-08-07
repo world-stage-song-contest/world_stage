@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}National Finals: {{ year_label }}{% endblock %}
+{% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ year_label }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year_label }}</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ request.path }}">National Finals</a>
+{% endblock %}
+{% block content %}
+<h2>National Finals</h2>
+{% if national_finals %}
+<table>
+    <thead><tr><th>National final</th><th>Country</th><th>Owner</th><th>Status</th><th>Shows</th><th>Dates</th></tr></thead>
+    <tbody>
+    {% for nf in national_finals %}
+    <tr>
+        <td>
+            {% if special %}
+            <a href="{{ url_for('year.special_nf_details', short_name=special, nf_short_name=nf.short_name) }}">{{ nf.name }}</a>
+            {% else %}
+            <a href="{{ url_for('year.nf_details', year=year, nf_short_name=nf.short_name) }}">{{ nf.name }}</a>
+            {% endif %}
+        </td>
+        <td>{{ nf.owner_country_name or 'Multiple countries' }}</td>
+        <td>{{ nf.owner_username }}</td>
+        <td>{{ nf.status|title }}</td>
+        <td>{{ nf.show_count }}</td>
+        <td>
+            {% if nf.first_date == nf.last_date %}{{ nf.first_date or '' }}
+            {% else %}{{ nf.first_date or '' }}–{{ nf.last_date or '' }}{% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No national finals have been set up for this year.</p>
+{% endif %}
+{% endblock %}

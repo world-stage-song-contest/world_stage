@@ -38,7 +38,10 @@ def get_voter_participation(
 
     if allowed_shows is None:
         cursor.execute(
-            "SELECT short_name FROM show WHERE year_id = %s ORDER BY date, id",
+            "SELECT show.short_name FROM show "
+            "JOIN show_types ON show_types.id = show.show_type "
+            "WHERE year_id = %s ORDER BY show_types.sort_order, "
+            "show.show_number NULLS FIRST, show.id",
             (year_id,),
         )
         short_names = [row["short_name"] for row in cursor.fetchall()]
@@ -46,7 +49,10 @@ def get_voter_participation(
         # Preserve the chronological order returned by the canonical query
         # while honouring the caller's allow-list.
         cursor.execute(
-            "SELECT short_name FROM show WHERE year_id = %s ORDER BY date, id",
+            "SELECT show.short_name FROM show "
+            "JOIN show_types ON show_types.id = show.show_type "
+            "WHERE year_id = %s ORDER BY show_types.sort_order, "
+            "show.show_number NULLS FIRST, show.id",
             (year_id,),
         )
         allowed_set = set(allowed_shows)
@@ -145,8 +151,9 @@ def _render_year_voters(
         cursor.execute(
             """
             SELECT short_name FROM show
+            JOIN show_types ON show_types.id = show.show_type
             WHERE year_id = %s AND status IN ('partial', 'full')
-            ORDER BY date, id
+            ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
             """,
             (year_id,),
         )

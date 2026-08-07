@@ -708,7 +708,7 @@ def _regular_submission_limit_error(
     cursor.execute(
         f"""SELECT COUNT(*) AS c FROM current_song
             WHERE submitter_id = %(user_id)s AND year_id = %(year)s
-              AND NOT is_placeholder {exclusion}""",
+              AND main_participant AND NOT is_placeholder {exclusion}""",
         params,
     )
     if fetchone(cursor)["c"] >= MAX_USER_SUBMISSIONS:
@@ -719,7 +719,8 @@ def _regular_submission_limit_error(
 
     cursor.execute(
         f"""SELECT COUNT(*) AS c FROM current_song
-            WHERE year_id = %(year)s AND NOT is_placeholder {exclusion}""",
+            WHERE year_id = %(year)s AND main_participant
+              AND NOT is_placeholder {exclusion}""",
         params,
     )
     if fetchone(cursor)["c"] >= MAX_YEAR_SUBMISSIONS:
@@ -903,13 +904,58 @@ def create_song(auth: tuple):
     db = get_db()
     cursor = db.cursor()
 
-    year_err = _validate_year(cursor, year)
-    if year_err:
-        return year_err
+    national_final_id = data.get("national_final_id")
+    national_final = None
+    if national_final_id is not None:
+        try:
+            national_final_id = int(national_final_id)
+        except (TypeError, ValueError):
+            return err(ErrorID.BAD_REQUEST, "national_final_id must be an integer")
+        cursor.execute(
+            "SELECT id, year_id, owner_id, owner_country_id, status "
+            "FROM national_final WHERE id = %s",
+            (national_final_id,),
+        )
+        national_final = cursor.fetchone()
+        if not national_final:
+            return err(ErrorID.NOT_FOUND, "National final not found")
+        if national_final["status"] not in {"draft", "submissions"}:
+            return err(ErrorID.BAD_REQUEST, "This national final is not accepting candidates")
+        if not permissions.can_view_restricted and national_final["owner_id"] != user_id:
+            return err(ErrorID.FORBIDDEN, "You do not manage this national final")
+        if national_final["year_id"] != year:
+            return err(ErrorID.BAD_REQUEST, "National final and song year do not match")
+    else:
+        year_err = _validate_year(cursor, year)
+        if year_err:
+            return year_err
 
     cc, cc_err = _validate_country(country_code)
     if cc_err:
         return cc_err
+    if (
+        national_final
+        and national_final["owner_country_id"]
+        and cc != national_final["owner_country_id"]
+    ):
+        return err(
+            ErrorID.BAD_REQUEST,
+            "This national final only accepts its owner country",
+        )
+    if national_final is None:
+        cursor.execute(
+            """
+            SELECT 1 FROM national_final
+            WHERE year_id = %s AND owner_country_id = %s
+              AND status <> 'cancelled'
+            """,
+            (year, cc),
+        )
+        if cursor.fetchone():
+            return err(
+                ErrorID.FORBIDDEN,
+                "This country is being selected through a national final",
+            )
 
     is_placeholder = bool(data.get("is_placeholder", False))
 
@@ -924,7 +970,7 @@ def create_song(auth: tuple):
     entry_number = fetchone(cursor)["next"]
 
     # ── Submission limits (non-admins) ───────────────────────────
-    if not permissions.can_edit:
+    if national_final is None and not permissions.can_edit:
         if _is_special_year(year):
             cursor.execute(
                 "SELECT COUNT(*) AS c FROM current_song "
@@ -1012,13 +1058,18 @@ def create_song(auth: tuple):
 
     cursor.execute(
         """
-        INSERT INTO song (year_id, country_id, entry_number)
-        VALUES (%s, %s, %s)
+        INSERT INTO song (year_id, country_id, entry_number, main_participant)
+        VALUES (%s, %s, %s, %s)
         RETURNING id
     """,
-        (year, cc, entry_number),
+        (year, cc, entry_number, national_final is None),
     )
     song_id = fetchone(cursor)["id"]
+    if national_final_id is not None:
+        cursor.execute(
+            "INSERT INTO national_final_song (national_final_id, song_id) VALUES (%s, %s)",
+            (national_final_id, song_id),
+        )
     cursor.execute(
         """
         INSERT INTO song_data (

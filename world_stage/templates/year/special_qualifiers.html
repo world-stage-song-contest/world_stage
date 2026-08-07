@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Special qualifiers: {{ year }} {{ show_name }}{% endblock %}
+{% block headercontents %}<link rel="stylesheet" href="{{ static('css/forms.css') }}">{% endblock %}
+{% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results</a>
+    <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifier reveal</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results</a>
+    <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifier reveal</a>
+    {% endif %}
+{% endblock %}
+{% block content %}
+<h2>Special qualifiers</h2>
+<p>Use this only to advance a song manually outside the configured qualification places.</p>
+
+{% if candidates %}
+<form method="post">
+    <fieldset class="grid">
+        <legend>Add special qualifier</legend>
+        <label class="req" for="song_id">Song</label>
+        <select id="song_id" name="song_id" required>
+            {% for song in candidates %}
+            <option value="{{ song.id }}">{{ song.country }}: {{ song.artist }}: {{ song.title }}</option>
+            {% endfor %}
+        </select>
+        <label class="req" for="target_show_id">Destination</label>
+        <select id="target_show_id" name="target_show_id" required>
+            {% for progression in progressions %}
+            <option value="{{ progression.target_show_id }}">{{ progression.target_name }}</option>
+            {% endfor %}
+        </select>
+    </fieldset>
+    <button name="action" value="add">Add special qualifier</button>
+</form>
+{% else %}
+<p>There are no unqualified songs available.</p>
+{% endif %}
+
+{% if special_qualifiers %}
+<h3>Current special qualifiers</h3>
+<table>
+    <thead><tr><th>Country</th><th>Artist</th><th>Song</th><th>Destination</th><th></th></tr></thead>
+    <tbody>
+    {% for song in special_qualifiers %}
+    <tr>
+        <td>{{ song.country }}</td>
+        <td>{{ song.artist }}</td>
+        <td>{{ song.title }}</td>
+        <td>{{ song.target_name }}</td>
+        <td>
+            <form method="post">
+                <input type="hidden" name="song_id" value="{{ song.song_id }}">
+                <button name="action" value="remove">Remove</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -127,6 +127,21 @@ def _seeded_db(_test_db):
             ON CONFLICT DO NOTHING
         """)
 
+        cur.execute("""
+            INSERT INTO show_types (id, name, sort_order)
+            VALUES ('sf', 'Semi-Final', 1),
+                   ('sc', 'Repechage', 2),
+                   ('f', 'Final', 3)
+            ON CONFLICT (id) DO UPDATE
+            SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order
+        """)
+
+        cur.execute("""
+            INSERT INTO national_final_status (name)
+            VALUES ('draft'), ('submissions'), ('voting'), ('finished'), ('cancelled')
+            ON CONFLICT DO NOTHING
+        """)
+
         # Versioned voting rules are reference data. A schema-only copy of a
         # migrated source database contains their table and triggers but not
         # these rows, while its copied migration ledger marks the seed
@@ -280,6 +295,7 @@ def _clean_songs(_seeded_db):
         cur.execute("DELETE FROM vote_set")
         cur.execute("DELETE FROM country_show_results")
         cur.execute("DELETE FROM country_year_results")
+        cur.execute("DELETE FROM national_final_song")
         cur.execute("DELETE FROM song_show")
         cur.execute("DELETE FROM song_key_signature")
         cur.execute("DELETE FROM song_time_signature")
@@ -292,5 +308,23 @@ def _clean_songs(_seeded_db):
         cur.execute("DELETE FROM language_set_language")
         cur.execute("DELETE FROM language_set")
         cur.execute("DELETE FROM song")
+        cur.execute("DELETE FROM show_result_refresh_queue")
+        cur.execute("DELETE FROM show_qualifier")
+        cur.execute("DELETE FROM show_progression")
+        cur.execute("DELETE FROM show")
+        cur.execute("DELETE FROM national_final")
+        cur.execute("DELETE FROM point")
+        cur.execute("DELETE FROM point_system")
+        cur.execute("DELETE FROM session")
+        cur.execute("DELETE FROM api_token WHERE user_id > 3")
+        cur.execute("DELETE FROM account WHERE id > 3")
+        cur.execute(
+            """
+            UPDATE account
+            SET approved = true,
+                role = CASE WHEN id = 1 THEN 'admin' ELSE 'user' END
+            WHERE id IN (1, 2, 3)
+            """
+        )
     conn.commit()
     conn.close()

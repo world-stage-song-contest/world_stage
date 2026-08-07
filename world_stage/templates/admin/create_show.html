@@ -1,32 +1,180 @@
 {% extends "admin/base.html" %}
-{% block title %}Administrator Utilities{% endblock %}
+{% macro progression_row(submitted_target='', submitted_count='') %}
+<div class="labels-row progression-row">
+    <select class="progression-target labels-row-item stretchable"
+            name="progression_target_id"
+            aria-label="Destination">
+        <option value=""></option>
+        {% for target in progression_targets %}
+        <option value="{{ target.id }}"
+                data-event="{{ target.national_final_id or 'main' }}"
+                data-type="{{ target.show_type }}"
+                {% if submitted_target == target.id|string %}selected{% endif %}>{{ target.show_name }}</option>
+        {% endfor %}
+    </select>
+    <input class="progression-count labels-row-item" type="number" min="1"
+           name="progression_count" value="{{ submitted_count }}"
+           aria-label="Qualifiers" placeholder="Qualifiers">
+    <button class="progression-remove" type="button">Remove</button>
+</div>
+{% endmacro %}
+{% block title %}Create show: {{ year_data.special_name or year }}{% endblock %}
 {% block admin_navigation %}
     <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
     <span class="nav-separator"></span>
+    {% if year_data.special_short_name %}
+    <a class="nav-item" href="{{ url_for('admin.manage_special', short_name=year_data.special_short_name) }}">{{ year_data.special_name }}</a>
+    {% else %}
     <a class="nav-item" href="{{ url_for('admin.manage', year=year) }}">{{ year }}</a>
+    {% endif %}
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('admin.create_show', year=year) }}">Create show</a>
 {% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
+    <script>
+        function updatePointFields() {
+            const system = document.getElementById('point_system_id');
+            const points = document.getElementById('custom_points');
+            const isCustom = system.value === 'custom';
+            if (!isCustom) {
+                points.value = system.selectedOptions[0].dataset.points;
+            }
+            points.disabled = !isCustom;
+            points.required = isCustom;
+        }
+        function updateShowNumber(initial = false) {
+            const type = document.getElementById('show_type').value;
+            const number = document.getElementById('show_number');
+            number.disabled = type !== 'sf';
+            if (number.disabled) {
+                number.value = '';
+            } else if (!initial || !number.dataset.hasSubmittedForm) {
+                const event = document.getElementById('national_final_id');
+                number.value = event.selectedOptions[0].dataset.nextSemifinal;
+            }
+        }
+        function updateProgressionTargets() {
+            const event = document.getElementById('national_final_id').value;
+            const targets = [...document.querySelectorAll('.progression-target')];
+            for (const select of targets) {
+                for (const option of select.options) {
+                    option.hidden = option.value && option.dataset.event !== event;
+                }
+                if (select.selectedOptions[0]?.hidden) select.value = '';
+            }
+        }
+        function addProgressionRow(targetType = '', qualifierCount = '', focus = true) {
+            const template = document.getElementById('progression-row-template');
+            const row = template.content.firstElementChild.cloneNode(true);
+            row.querySelector('.progression-remove').addEventListener('click', () => {
+                row.remove();
+            });
+            document.getElementById('progression-rows').append(row);
+            updateProgressionTargets();
+            const target = row.querySelector('.progression-target');
+            if (targetType) {
+                const option = [...target.options].find(
+                    candidate => !candidate.hidden && candidate.dataset.type === targetType
+                );
+                if (!option) {
+                    row.remove();
+                    return;
+                }
+                target.value = option.value;
+                row.querySelector('.progression-count').value = qualifierCount;
+            }
+            if (focus) target.focus();
+        }
+        function applyProgressionDefaults() {
+            document.getElementById('progression-rows').replaceChildren();
+            const type = document.getElementById('show_type').value;
+            const defaults = type === 'sf' ? [['f', '5'], ['sc', '4']]
+                : type === 'sc' ? [['f', '7']] : [];
+            for (const [targetType, count] of defaults) {
+                addProgressionRow(targetType, count, false);
+            }
+        }
+        function initializeProgressionRows() {
+            for (const button of document.querySelectorAll('.progression-remove')) {
+                button.addEventListener('click', () => button.closest('.progression-row').remove());
+            }
+            updateProgressionTargets();
+        }
+    </script>
 {% endblock %}
 {% block content %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
 <form method="POST">
     <fieldset class="grid">
-        <legend>Year</legend>
-        <label for="show_name">Full Show Name</label>
-        <input name="show_name" id="show_name" required>
-        <label for="show_name">Short Show Name</label>
-        <input name="short_name" id="short_name">
-        <label for="dtf">Qualifiers</label>
-        <input type="number" name="dtf" id="dtf">
-        <label for="sc">Second Chance</label>
-        <input type="number" name="sc" id="sc">
+        <legend>Show</legend>
+        <label class="req" for="national_final_id">For</label>
+        <select name="national_final_id" id="national_final_id" required
+                onchange="updateShowNumber(); applyProgressionDefaults()">
+            <option value="main" data-next-semifinal="{{ main_next_semifinal_number }}"
+                    {% if not form or form.national_final_id == 'main' %}selected{% endif %}>{{ year_data.special_name or year }} (main contest)</option>
+            {% for nf in national_finals %}
+            <option value="{{ nf.id }}" data-next-semifinal="{{ nf.next_semifinal_number }}"
+                    {% if form and form.national_final_id == nf.id|string %}selected{% endif %}>
+                {{ nf.name }}
+            </option>
+            {% endfor %}
+        </select>
+        <label class="req" for="show_type">Type</label>
+        <select name="show_type" id="show_type" required
+                onchange="updateShowNumber(); applyProgressionDefaults()">
+            {% for type in show_types %}
+            <option value="{{ type.id }}" {% if form and form.show_type == type.id %}selected{% endif %}>{{ type.name }}</option>
+            {% endfor %}
+        </select>
+        <label for="show_number">Number</label>
+        <input type="number" min="1" name="show_number" id="show_number"
+               {% if form %}data-has-submitted-form="true"{% endif %}
+               value="{{ form.show_number if form else '' }}">
         <label for="date">Date</label>
-        <input type="date" name="date" id="date">
+        <input type="date" name="date" id="date"
+               value="{{ form.date if form else '' }}">
+    </fieldset>
+    <fieldset class="nongrid">
+        <legend>Progression</legend>
+        {% set submitted_targets = form.getlist('progression_target_id') if form else [] %}
+        {% set submitted_counts = form.getlist('progression_count') if form else [] %}
+        {% set progression_rows = [submitted_targets|length, submitted_counts|length]|max %}
+        <div id="progression-rows">
+        {% for index in range(progression_rows) %}
+        {% set submitted_target = submitted_targets[index] if index < submitted_targets|length else '' %}
+        {% set submitted_count = submitted_counts[index] if index < submitted_counts|length else '' %}
+        {{ progression_row(submitted_target, submitted_count) }}
+        {% endfor %}
+        </div>
+        <button type="button" onclick="addProgressionRow()">Add destination</button>
+        <template id="progression-row-template">{{ progression_row() }}</template>
+    </fieldset>
+    <fieldset class="grid">
+        <legend>Point system</legend>
+        <label class="req" for="point_system_id">System</label>
+        <select name="point_system_id" id="point_system_id" onchange="updatePointFields()">
+            {% for system in point_systems %}
+            <option value="{{ system.id }}" data-points="{{ system.points|join(', ') }}"
+                    {% if (form and form.point_system_id == system.id|string) or (not form and system.id == 1) %}selected{% endif %}>
+                #{{ system.id }} — {{ system.points|join(', ') }}
+            </option>
+            {% endfor %}
+            <option value="custom" {% if form and form.point_system_id == 'custom' %}selected{% endif %}>Custom…</option>
+        </select>
+        <label class="req" for="custom_points">Scores</label>
+        <input name="custom_points" id="custom_points"
+               {% if not form or form.point_system_id != 'custom' %}disabled{% endif %}
+               value="{{ form.custom_points if form and form.custom_points else '12, 10, 8, 7, 6, 5, 4, 3, 2, 1' }}">
     </fieldset>
     <div>
         <button type="submit">Create</button>
     </div>
 </form>
+<script>
+    updatePointFields();
+    updateShowNumber(true);
+    initializeProgressionRows();
+    {% if not form %}applyProgressionDefaults();{% endif %}
+</script>
 {% endblock %}

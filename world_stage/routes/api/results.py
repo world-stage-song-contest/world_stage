@@ -46,9 +46,7 @@ def _show_json(show, key: str, year_status: str) -> dict:
         "short_name": show.short_name,
         "status": show.status,
         "points": show.points,
-        "dtf": show.dtf,
-        "sc": show.sc,
-        "special": show.special,
+        "progressions": show.progressions,
     }
 
 
@@ -85,6 +83,8 @@ def _result_entries(cursor, show_id: int) -> list[dict]:
                country_show_results.adjusted_max_possible_points,
                country_show_results.points_midpoint,
                country_show_results.adjusted_points_percentage,
+               country_show_results.entry_status,
+               country_show_results.special_qualifier,
                country_show_results.max_pts, country_show_results.total_voters,
                COALESCE(song_show.penalty, 0) AS penalty
         FROM country_show_results
@@ -102,18 +102,20 @@ def _result_entries(cursor, show_id: int) -> list[dict]:
 
 
 def _qualifiers(entries: list[dict], show) -> list[dict]:
-    dtf = show.dtf or 0
-    sc = show.sc or 0
-    special = show.special or 0
     result = []
-    for entry in entries[:dtf]:
-        result.append(
-            {"song_id": entry["song_id"], "country_id": entry["country_id"], "type": "dtf"}
-        )
-    for entry in entries[dtf:dtf + sc + special]:
-        result.append(
-            {"song_id": entry["song_id"], "country_id": entry["country_id"], "type": "sc"}
-        )
+    progressions = {edge["target_short_name"]: edge for edge in show.progressions}
+    for entry in entries:
+        progression = progressions.get(entry["entry_status"])
+        if progression:
+            result.append(
+                {
+                    "song_id": entry["song_id"],
+                    "country_id": entry["country_id"],
+                    "target_show_id": progression["target_show_id"],
+                    "target_short_name": progression["target_short_name"],
+                    "special": entry["special_qualifier"],
+                }
+            )
     return result
 
 
@@ -149,8 +151,8 @@ def results(show: str):
     qualifiers = _qualifiers(entries, show_data) if show_data.status == "partial" else []
 
     if access == "partial":
-        cutoff = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
-        entries = [entry for entry in entries if entry["place"] > cutoff]
+        qualifier_ids = {entry["song_id"] for entry in qualifiers}
+        entries = [entry for entry in entries if entry["song_id"] not in qualifier_ids]
 
     return resp(
         {

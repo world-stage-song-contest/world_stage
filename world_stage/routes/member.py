@@ -79,7 +79,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
 
     cursor.execute(
         """SELECT COUNT(*) AS c FROM current_song AS song
-           WHERE year_id = %s AND NOT is_placeholder""",
+           WHERE year_id = %s AND main_participant AND NOT is_placeholder""",
         (year,),
     )
     year_count = fetchone(cursor)["c"]
@@ -87,7 +87,8 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     cursor.execute(
         """
         SELECT COUNT(*) AS c FROM current_song AS song
-        WHERE submitter_id = %s AND year_id = %s AND NOT is_placeholder
+        WHERE submitter_id = %s AND year_id = %s
+          AND main_participant AND NOT is_placeholder
     """,
         (user_id, year),
     )
@@ -97,10 +98,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
         not all
         and not is_special
         and not closed
-        and (
-            user_count >= MAX_USER_SUBMISSIONS
-            or year_count >= MAX_YEAR_SUBMISSIONS
-        )
+        and (user_count >= MAX_USER_SUBMISSIONS or year_count >= MAX_YEAR_SUBMISSIONS)
     )
     countries: dict[str, Any] = {
         "own": [],
@@ -114,6 +112,13 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
         SELECT country.name, country.id AS cc FROM current_song AS song
         JOIN country ON song.country_id = country.id
         WHERE song.year_id = %s AND song.submitter_id = %s
+          AND song.main_participant
+          AND NOT EXISTS (
+              SELECT 1 FROM national_final
+              WHERE national_final.year_id = song.year_id
+                AND national_final.owner_country_id = song.country_id
+                AND national_final.status <> 'cancelled'
+          )
         ORDER BY country.name
     """,
         (year, user_id),
@@ -136,6 +141,12 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
                 JOIN country ON song.country_id = country.id
                 WHERE song.year_id = %(year)s
                   AND submitter_id IS DISTINCT FROM %(user)s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM national_final
+                      WHERE national_final.year_id = song.year_id
+                        AND national_final.owner_country_id = song.country_id
+                        AND national_final.status <> 'cancelled'
+                  )
                 ORDER BY country.name
             """,
                 {"year": year, "user": user_id},
@@ -145,9 +156,16 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
                 f"""
                 SELECT name, id AS cc FROM country
                 WHERE {availability_filter}
+                      AND NOT EXISTS (
+                          SELECT 1 FROM national_final
+                          WHERE national_final.year_id = %(year)s
+                            AND national_final.owner_country_id = country.id
+                            AND national_final.status <> 'cancelled'
+                      )
                       AND id NOT IN (
                           SELECT country_id FROM current_song AS song
                           WHERE year_id = %(year)s AND submitter_id = %(user)s
+                            AND main_participant
                       )
                 ORDER BY name
             """,
@@ -164,9 +182,15 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
             FROM country AS c
             WHERE {availability_filter}
               AND NOT EXISTS (
+                  SELECT 1 FROM national_final
+                  WHERE national_final.year_id = %(year)s
+                    AND national_final.owner_country_id = c.id
+                    AND national_final.status <> 'cancelled'
+              )
+              AND NOT EXISTS (
                 SELECT 1 FROM current_song AS s
                 WHERE s.year_id = %(year)s AND s.country_id = c.id
-                  AND s.submitter_id = %(user)s
+                  AND s.submitter_id = %(user)s AND s.main_participant
               )
             ORDER BY c.name
         """,
@@ -180,11 +204,17 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
             FROM country AS c
             WHERE {availability_filter}
               AND NOT EXISTS (
+                  SELECT 1 FROM national_final
+                  WHERE national_final.year_id = %(year)s
+                    AND national_final.owner_country_id = c.id
+                    AND national_final.status <> 'cancelled'
+              )
+              AND NOT EXISTS (
                 SELECT 1
                 FROM current_song AS s
                 WHERE s.year_id = %(year)s
                 AND s.country_id = c.id
-                AND s.is_placeholder = FALSE
+                AND s.main_participant AND s.is_placeholder = FALSE
                 AND s.submitter_id <> %(user)s
             )
             ORDER BY c.name
@@ -209,18 +239,19 @@ def get_users() -> list[dict]:
 @require_user(redirect_to_login=True)
 @with_permissions
 def index(user: tuple[int, str], permissions: UserPermissions):
+    cursor = get_db().cursor()
+    cursor.execute("SELECT COUNT(*) AS count FROM national_final WHERE owner_id = %s", (user[0],))
     return render_template(
         "member/index.html",
         username=user[1],
         has_unread_messages=has_unread_messages(user[0], permissions),
+        owns_national_finals=cursor.fetchone()["count"] > 0,
     )
 
 
 def _move_page(*, error=None):
     cursor = get_db().cursor()
-    cursor.execute(
-        "SELECT id FROM year WHERE status = 'open' AND id >= 0 ORDER BY id"
-    )
+    cursor.execute("SELECT id FROM year WHERE status = 'open' AND id >= 0 ORDER BY id")
     years = cursor.fetchall()
     return render_template(
         "member/move.html",
@@ -293,6 +324,12 @@ def move_destinations(year: int, user: tuple[int, str]):
                ) AS replaces_placeholder
         FROM country
         WHERE country.is_participating
+          AND NOT EXISTS (
+              SELECT 1 FROM national_final
+              WHERE national_final.year_id = %(year)s
+                AND national_final.owner_country_id = country.id
+                AND national_final.status <> 'cancelled'
+          )
           AND NOT (
               %(year)s = %(source_year)s
               AND country.id = %(source_country)s
@@ -347,9 +384,7 @@ def move_post(user: tuple[int, str]):
             return {"error": {"description": str(exc)}}, 400
         return _move_page(error=str(exc)), 400
     db.commit()
-    details_url = url_for(
-        "country.details", code=to_country.lower(), year=to_year
-    )
+    details_url = url_for("country.details", code=to_country.lower(), year=to_year)
     if request.accept_mimetypes.accept_json:
         return {
             "result": {
@@ -369,6 +404,31 @@ def submit(user: tuple[int, str], permissions: UserPermissions):
     year = request.args.get("year")
     country = request.args.get("country")
     entry_number = request.args.get("entry_number")
+    national_final_id = request.args.get("national_final_id", type=int)
+    national_final = None
+    countries = {}
+    if national_final_id is not None:
+        cursor = get_db().cursor()
+        cursor.execute(
+            """
+            SELECT national_final.*, year.special_short_name
+            FROM national_final
+            JOIN year ON year.id = national_final.year_id
+            WHERE national_final.id = %s
+            """,
+            (national_final_id,),
+        )
+        national_final = cursor.fetchone()
+        if not national_final:
+            return render_template("error.html", error="National final not found"), 404
+        if national_final["status"] not in {"draft", "submissions"}:
+            return render_template(
+                "error.html", error="National final is not accepting candidates"
+            ), 400
+        if not permissions.can_view_restricted and national_final["owner_id"] != user[0]:
+            return render_template("error.html", error="Not authorized"), 403
+        year = str(national_final["year_id"])
+        country = national_final["owner_country_id"] or country
 
     return render_template(
         "member/submit.html",
@@ -379,10 +439,11 @@ def submit(user: tuple[int, str], permissions: UserPermissions):
         years=get_years_grouped(),
         languages=get_languages(),
         genre_options=get_genre_options(),
-        countries={},
+        countries=countries,
         data={},
         onLoad=True,
         users=get_users(),
+        national_final=national_final,
     )
 
 
@@ -391,6 +452,29 @@ def get_countries_for_year(year: int):
     session_data = get_user_id_from_session(request.cookies.get("session"))
     user_id = session_data[0] if session_data else None
     permissions = get_user_permissions(user_id)
+    national_final_id = request.args.get("national_final_id", type=int)
+    if national_final_id is not None:
+        cursor = get_db().cursor()
+        cursor.execute(
+            "SELECT owner_id, owner_country_id, status FROM national_final "
+            "WHERE id = %s AND year_id = %s",
+            (national_final_id, year),
+        )
+        nf = cursor.fetchone()
+        if not nf or (not permissions.can_view_restricted and nf["owner_id"] != user_id):
+            return {"error": "Not authorized"}, 403
+        if nf["status"] not in {"draft", "submissions"}:
+            return {"error": "National final is not accepting candidates"}, 400
+        if nf["owner_country_id"]:
+            cursor.execute(
+                "SELECT id AS cc, name FROM country WHERE id = %s",
+                (nf["owner_country_id"],),
+            )
+        else:
+            cursor.execute("SELECT id AS cc, name FROM country WHERE id <> 'XX' ORDER BY name")
+        return {
+            "countries": {"own": [], "placeholder": cursor.fetchall(), "force_placeholder": False}
+        }
     countries = get_countries(year, user_id, all=permissions.can_edit)
     return {"countries": countries}
 
@@ -406,35 +490,32 @@ def get_country_data(year: int, country: str):
     db = get_db()
     cursor = db.cursor()
 
-    # For specials, a country can have multiple entries. Since each user
-    # can only submit one song per special, default to fetching the
-    # current user's own entry for that country. An explicit entry_number
-    # query parameter overrides (used by admins to edit other people's).
-    if year < 0:
-        entry_raw = request.args.get("entry_number")
-        if entry_raw is not None:
-            try:
-                entry_number = int(entry_raw)
-            except (ValueError, TypeError):
-                return {"error": "entry_number must be an integer"}, 400
-            cursor.execute(
-                """
-                SELECT id, title, native_title, artist, is_placeholder,
-                       title_language_id, native_language_id, video_link, poster_link,
-                       vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
-                       translated_lyrics,
-                       romanized_lyrics, native_lyrics, notes, submitter_id,
-                       sources, entry_number
-                FROM current_song AS song
-                WHERE year_id = %s AND country_id = %s AND entry_number = %s
-            """,
-                (year, country.upper(), entry_number),
-            )
-        else:
-            session_data = get_user_id_from_session(request.cookies.get("session"))
-            current_user_id = session_data[0] if session_data else None
-            cursor.execute(
-                """
+    # An explicit entry number addresses NF candidates and special entries
+    # without relying on the country/year pair being unique.
+    entry_raw = request.args.get("entry_number")
+    if entry_raw is not None:
+        try:
+            entry_number = int(entry_raw)
+        except (ValueError, TypeError):
+            return {"error": "entry_number must be an integer"}, 400
+        cursor.execute(
+            """
+            SELECT id, title, native_title, artist, is_placeholder,
+                   title_language_id, native_language_id, video_link, poster_link,
+                   vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
+                   translated_lyrics,
+                   romanized_lyrics, native_lyrics, notes, submitter_id,
+                   sources, entry_number
+            FROM current_song AS song
+            WHERE year_id = %s AND country_id = %s AND entry_number = %s
+        """,
+            (year, country.upper(), entry_number),
+        )
+    elif year < 0:
+        session_data = get_user_id_from_session(request.cookies.get("session"))
+        current_user_id = session_data[0] if session_data else None
+        cursor.execute(
+            """
                 SELECT id, title, native_title, artist, is_placeholder,
                        title_language_id, native_language_id, video_link, poster_link,
                        vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
@@ -446,8 +527,8 @@ def get_country_data(year: int, country: str):
                 ORDER BY entry_number
                 LIMIT 1
             """,
-                (year, country.upper(), current_user_id),
-            )
+            (year, country.upper(), current_user_id),
+        )
     else:
         cursor.execute(
             """

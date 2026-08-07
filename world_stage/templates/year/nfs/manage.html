@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Manage {{ nf.name }}{% endblock %}
+{% block headercontents %}
+<script>
+    function updateIdentifier() {
+        const country = document.getElementById('owner_country_id').value;
+        const identifier = document.getElementById('short_name');
+        if (country) {
+            identifier.value = country.toLowerCase();
+            identifier.disabled = true;
+            identifier.required = false;
+        } else {
+            if (identifier.disabled) identifier.value = '';
+            identifier.disabled = false;
+            identifier.required = true;
+        }
+    }
+</script>
+{% endblock %}
+{% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special_nf_details', short_name=special, nf_short_name=nf.short_name) }}">Public view</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.nf_details', year=year, nf_short_name=nf.short_name) }}">Public view</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ request.path }}">Manage</a>
+{% endblock %}
+{% block content %}
+<h2>Manage {{ nf.name }}</h2>
+
+<h2>Metadata</h2>
+<form method="post">
+    <p>
+        <label class="req" for="name">Full name</label>
+        <input name="name" id="name" required value="{{ nf.name }}">
+    </p>
+    {% if can_reassign_owner %}
+    <p>
+        <label class="req" for="owner_id">Owner</label>
+        <select name="owner_id" id="owner_id" required>
+            {% for owner in metadata_owners %}
+            <option value="{{ owner.id }}" {% if owner.id == nf.owner_id %}selected{% endif %}>{{ owner.username }}</option>
+            {% endfor %}
+        </select>
+    </p>
+    {% else %}
+    <p>Owner: {{ nf.owner_username }}</p>
+    {% endif %}
+    <p>
+        <label for="owner_country_id">Owner country</label>
+        <select name="owner_country_id" id="owner_country_id" onchange="updateIdentifier()">
+            <option value=""></option>
+            {% for country in metadata_countries %}
+            <option value="{{ country.id }}" {% if country.id == nf.owner_country_id %}selected{% endif %}>{{ country.name }}</option>
+            {% endfor %}
+        </select>
+    </p>
+    <p>
+        <label class="req" for="short_name">Identifier</label>
+        <input name="short_name" id="short_name" required
+               pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value="{{ nf.short_name }}">
+    </p>
+    <button name="action" value="update_metadata">Save metadata</button>
+</form>
+<script>updateIdentifier();</script>
+
+<h2>Lifecycle</h2>
+<form method="post">
+    <label for="lifecycle-status">National final status</label>
+    <select id="lifecycle-status" name="lifecycle_status">
+        {% for value in ['draft', 'submissions', 'voting', 'finished', 'cancelled'] %}
+        <option value="{{ value }}" {% if value == nf.status %}selected{% endif %}>{{ value|title }}</option>
+        {% endfor %}
+    </select>
+    <button name="action" value="set_lifecycle">Change status</button>
+</form>
+
+<h2>Shows</h2>
+<table>
+    <thead><tr><th>Show</th><th>Date</th><th>Points</th><th>Voting and results</th></tr></thead>
+    <tbody>
+    {% for show in shows %}
+    <tr>
+        <td>{{ show.show_name }}</td>
+        <td>{{ show.date or '' }}</td>
+        <td>{{ show.points|join(', ') }}</td>
+        <td>
+            <form method="post">
+                <input type="hidden" name="show_id" value="{{ show.id }}">
+                {% if show.voting_closes or not show.voting_opens %}
+                <button name="action" value="open_voting">{% if show.voting_closes %}Reopen{% else %}Open{% endif %} voting</button>
+                {% else %}<button name="action" value="close_voting">Close voting</button>{% endif %}
+                <select name="status">
+                    {% for value in ['none', 'draw', 'partial', 'full'] %}
+                    <option value="{{ value }}" {% if value == show.status %}selected{% endif %}>{{ value }}</option>
+                    {% endfor %}
+                </select>
+                <button name="action" value="set_status">Change result visibility</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Candidates</h2>
+{% if nf.status in ['draft', 'submissions'] %}
+<p><a href="{{ url_for('member.submit', national_final_id=nf.id) }}">Add a candidate</a></p>
+{% endif %}
+{% if candidates %}
+<table>
+    <thead><tr><th>Country</th><th>Artist</th><th>Title</th><th>Submitter</th><th>Shows</th><th>Manage</th></tr></thead>
+    <tbody>
+    {% for song in candidates %}
+    <tr>
+        <td>{{ song.country }}</td><td>{{ song.artist }}</td>
+        <td><a href="{{ url_for('member.submit', national_final_id=nf.id, year=year, country=song.country_id, entry_number=song.entry_number) }}">{{ song.title }}</a></td>
+        <td>{{ song.submitter or '' }}</td>
+        <td>{% for assignment in assignments.get(song.id, []) %}{{ assignment.short_name|upper }} (#{{ assignment.running_order }}){% if not loop.last %}, {% endif %}{% endfor %}</td>
+        <td>
+            <form method="post">
+                <input type="hidden" name="song_id" value="{{ song.id }}">
+                <input type="hidden" name="enabled" value="{{ 'false' if song.main_participant else 'true' }}">
+                <button name="action" value="set_main_participant">{% if song.main_participant %}Remove selection{% else %}Select for main contest{% endif %}</button>
+            </form>
+            {% for show in shows %}
+            <form method="post">
+                <input type="hidden" name="song_id" value="{{ song.id }}">
+                <input type="hidden" name="show_id" value="{{ show.id }}">
+                {% set assigned = assignments.get(song.id, [])|selectattr('short_name', 'equalto', show.short_name)|list %}
+                <button name="action" value="{{ 'remove' if assigned else 'assign' }}">{{ 'Remove from' if assigned else 'Add to' }} {{ show.short_name|upper }}</button>
+                {% if assigned %}
+                <input type="number" min="1" name="running_order" value="{{ assigned[0].running_order }}" aria-label="Running order">
+                <button name="action" value="set_order">Set order</button>
+                {% endif %}
+            </form>
+            {% endfor %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}<p>No candidates have been added yet.</p>{% endif %}
+{% endblock %}

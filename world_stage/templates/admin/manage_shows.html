@@ -28,10 +28,20 @@
 <div>
     <h2>Other links</h2>
     <ul>
-        {# create_show and set_pots take <int:year> and don't yet support
-           special years, so suppress those links for specials. #}
-        {% if not year.special_short_name %}
         <li><a href="{{ url_for('admin.create_show', year=year.id) }}">Create Show</a></li>
+        <li><a href="{{ url_for('admin.create_national_final', year=year.id) }}">Create National Final</a></li>
+        {% if national_finals %}
+        <li>National finals:
+            {% for nf in national_finals %}
+                {% if year.special_short_name %}
+                <a href="{{ url_for('year.manage_special_nf', short_name=year.special_short_name, nf_short_name=nf.short_name) }}">{{ nf.name }}</a>
+                {% else %}
+                <a href="{{ url_for('year.manage_nf', year=year.id, nf_short_name=nf.short_name) }}">{{ nf.name }}</a>
+                {% endif %}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </li>
+        {% endif %}
+        {% if not year.special_short_name %}
         <li><a href="{{ url_for('admin.set_pots', year=year.id) }}">Set Pots</a></li>
         <li><a href="{{ url_for('admin.verifications', year=year.id) }}">Verifications</a></li>
         {% else %}
@@ -66,7 +76,9 @@
         {% set show_statuses = ['none', 'draw', 'partial', 'full'] %}
         {% for show in shows %}
         <tr>
-            <td>{{ show.show_name }}</td>
+            <td>
+                {{ show.show_name }}
+            </td>
             <td>
                 <div class="state-cell">
                 {% if show.voting_closes %}

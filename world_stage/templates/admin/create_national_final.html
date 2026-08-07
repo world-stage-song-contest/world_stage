@@ -1,0 +1,61 @@
+{% extends "admin/base.html" %}
+{% block title %}Create national final: {{ year_data.special_name or year }}{% endblock %}
+{% block admin_navigation %}
+    <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
+    <span class="nav-separator"></span>
+    {% if year_data.special_short_name %}
+    <a class="nav-item" href="{{ url_for('admin.manage_special', short_name=year_data.special_short_name) }}">{{ year_data.special_name }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('admin.manage', year=year) }}">{{ year }}</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('admin.create_national_final', year=year) }}">Create national final</a>
+{% endblock %}
+{% block headercontents %}
+    <link rel="stylesheet" href="{{ static('css/forms.css') }}">
+    <script>
+        function updateIdentifier() {
+            const country = document.getElementById('owner_country_id').value;
+            const identifier = document.getElementById('short_name');
+            if (country) {
+                identifier.value = country.toLowerCase();
+                identifier.disabled = true;
+                identifier.required = false;
+            } else {
+                if (identifier.disabled) identifier.value = '';
+                identifier.disabled = false;
+                identifier.required = true;
+            }
+        }
+    </script>
+{% endblock %}
+{% block content %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="POST">
+    <fieldset class="grid">
+        <legend>National final</legend>
+        <label class="req" for="name">Full name</label>
+        <input name="name" id="name" required placeholder="Serbian National Final"
+               value="{{ form.name if form else '' }}">
+        <label class="req" for="owner_id">Owner</label>
+        <select name="owner_id" id="owner_id" required>
+            {% for user in users %}
+            <option value="{{ user.id }}" {% if form and form.owner_id == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+            {% endfor %}
+        </select>
+        <label for="owner_country_id">Owner country</label>
+        <select name="owner_country_id" id="owner_country_id" onchange="updateIdentifier()">
+            <option value=""></option>
+            {% for country in countries %}
+            <option value="{{ country.id }}" {% if form and form.owner_country_id == country.id %}selected{% endif %}>{{ country.name }}</option>
+            {% endfor %}
+        </select>
+        <label class="req" for="short_name">Identifier</label>
+        <input name="short_name" id="short_name" required placeholder="fam"
+               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+               value="{{ form.short_name if form else '' }}">
+    </fieldset>
+    <div><button type="submit">Create</button></div>
+</form>
+<script>updateIdentifier();</script>
+{% endblock %}

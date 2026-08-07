@@ -34,8 +34,8 @@ def final_and_spanish_entry(db):
         )
         cursor.execute(
             """
-            INSERT INTO show (year_id, show_name, short_name, status)
-            VALUES (2025, 'Final', 'f', 'none')
+            INSERT INTO show (year_id, show_type, status)
+            VALUES (2025, 'f', 'none')
             RETURNING id
             """
         )
@@ -73,7 +73,7 @@ def test_manage_year_can_set_host(client, db, admin_session, final_and_spanish_e
         assert cursor.fetchone()["host_id"] == "ES"
         cursor.execute(
             """
-            SELECT song_id, running_order, qualifier_order
+            SELECT song_id, running_order
             FROM song_show
             WHERE show_id = %s
             """,
@@ -82,8 +82,54 @@ def test_manage_year_can_set_host(client, db, admin_session, final_and_spanish_e
         assert cursor.fetchone() == {
             "song_id": song_id,
             "running_order": 1,
-            "qualifier_order": 1,
         }
+
+
+def test_lineup_issues_only_block_relevant_state_transitions(
+    client, db, admin_session, final_and_spanish_entry
+):
+    final_id, _ = final_and_spanish_entry
+
+    page = client.get("/admin/manage/2025", headers={"Accept": "application/json"})
+    assert page.status_code == 200
+    data = page.get_json()
+    assert "lineup_issues" not in data
+    assert "unassigned_lineup_issue" not in data
+
+    response = client.post(
+        "/admin/manage/2025/f",
+        json={"action": "open_voting"},
+    )
+    assert response.status_code == 400
+    response_codes = {
+        issue["code"] for issue in response.get_json()["lineup_issues"]
+    }
+    assert "lineup_empty" in response_codes
+    assert "main_participant_unassigned" not in response_codes
+
+    response = client.post(
+        "/admin/manage/2025/f",
+        json={"action": "set_status", "status": "full"},
+    )
+    assert response.status_code == 400
+    assert "lineup_empty" in {
+        issue["code"] for issue in response.get_json()["lineup_issues"]
+    }
+
+    response = client.post(
+        "/admin/manage/2025",
+        json={"action": "change_year_status", "year_status": "ongoing"},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["lineup_issues"] == [
+        {
+            "code": "main_participant_unassigned",
+            "message": "1 main contest participant is not assigned to any show.",
+        }
+    ]
+    with db.cursor() as cursor:
+        cursor.execute("SELECT voting_opens FROM show WHERE id = %s", (final_id,))
+        assert cursor.fetchone()["voting_opens"] is None
 
 
 def test_manage_year_rejects_unknown_host(client, db, admin_session):

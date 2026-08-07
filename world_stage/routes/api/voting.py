@@ -25,7 +25,8 @@ def _show_or_error(key: str):
 
 def _voting_is_open(show) -> bool:
     return not (
-        (show.voting_opens and show.voting_opens > dt_now())
+        (show.national_final_id is not None and show.national_final_status != "voting")
+        or (show.voting_opens and show.voting_opens > dt_now())
         or (show.voting_closes and show.voting_closes < dt_now())
     )
 
@@ -33,7 +34,8 @@ def _voting_is_open(show) -> bool:
 def _predictions_are_open(show) -> bool:
     deadline = show.predictions_close or show.voting_closes
     return not (
-        (show.voting_opens and show.voting_opens > dt_now())
+        (show.national_final_id is not None and show.national_final_status != "voting")
+        or (show.voting_opens and show.voting_opens > dt_now())
         or (deadline and deadline < dt_now())
     )
 
@@ -76,6 +78,7 @@ def _voter_countries(cursor, user_id: int, year: int) -> list[dict]:
         FROM current_song AS song
         JOIN country ON country.id = song.country_id
         WHERE song.submitter_id = %s AND song.year_id = %s
+          AND song.main_participant
         ORDER BY country.name
         """,
         (user_id, year),

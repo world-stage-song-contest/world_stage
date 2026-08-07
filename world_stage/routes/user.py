@@ -627,6 +627,7 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
     original_scores: dict[tuple[int, int], int] = {}
     original_vote_show_ids: set[int] = set()
     show_results: dict[tuple[int, int], dict] = {}
+    progression_priorities: dict[tuple[int, str], int] = {}
     if show_ids:
         cursor.execute(
             """
@@ -651,7 +652,7 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         }
         cursor.execute(
             """
-            SELECT show_id, song_id, place, entry_status
+            SELECT show_id, song_id, place, entry_status, special_qualifier
             FROM country_show_results
             WHERE show_id = ANY(%s) AND result_mode = 'revote'
             """,
@@ -659,6 +660,20 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         )
         show_results = {
             (row["show_id"], row["song_id"]): row for row in cursor.fetchall()
+        }
+        cursor.execute(
+            """
+            SELECT progression.source_show_id, target.short_name,
+                   progression.priority
+            FROM show_progression AS progression
+            JOIN show AS target ON target.id = progression.target_show_id
+            WHERE progression.source_show_id = ANY(%s)
+            """,
+            (show_ids,),
+        )
+        progression_priorities = {
+            (row["source_show_id"], row["short_name"]): row["priority"]
+            for row in cursor.fetchall()
         }
 
     for vote in votes:
@@ -678,19 +693,18 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
             result = show_results.get((vote["show_id"], row["id"]))
             entry_status = result["entry_status"] if result else None
             row["result_place"] = result["place"] if result else None
+            row["special_qualifier"] = bool(result and result["special_qualifier"])
             row["points_difference"] = row["pts"] - original_scores.get(
                 (vote["show_id"], row["id"]), 0
             )
-            if vote["short_name"].startswith("sf"):
-                row["class"] = (
-                    "qualifier"
-                    if entry_status == "dtf"
-                    else "sc-qualifier" if entry_status in ("sc", "special") else ""
-                )
-            elif vote["short_name"] == "sc" and entry_status == "dtf":
-                row["class"] = "qualifier"
-            else:
-                row["class"] = ""
+            progression_priority = progression_priorities.get(
+                (vote["show_id"], entry_status)
+            )
+            row["class"] = (
+                "qualifier"
+                if progression_priority == 1
+                else "sc-qualifier" if progression_priority is not None else ""
+            )
             points.append(row)
         vote["points"] = points
 

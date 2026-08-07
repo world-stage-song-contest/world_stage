@@ -220,7 +220,7 @@
     <table class="user-votes{% if is_revote %} revotes{% if vote.has_original_vote %} revotes-with-difference{% endif %}{% endif %}">
         <tbody>
         {% for v in vote.points %}
-            <tr class="{{ v.class }}">
+            <tr class="{{ v.class }}"{% if v.special_qualifier %} title="Special qualifier"{% endif %}>
                 <td class="points-data">{{ v.pts }}p</td>
                 {% if is_revote and vote.has_original_vote %}<td class="points-data points-difference">{{ '+' if v.points_difference > 0 else '' }}{{ v.points_difference }}</td>{% endif %}
                 <td><div class="song-container">{{ flag(v.code, 36) }} <div class="song-title">{{ v.title }}</div></div></td>

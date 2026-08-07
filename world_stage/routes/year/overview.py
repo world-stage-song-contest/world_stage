@@ -14,6 +14,25 @@ from ...utils import (
 from .common import bp, get_specials, resolve_special
 
 
+def _ongoing_national_finals(year_id: int) -> list[dict]:
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT national_final.short_name, national_final.name,
+               country.id AS country_id, country.name AS country_name,
+               account.username AS owner_username
+        FROM national_final
+        JOIN country ON country.id = national_final.owner_country_id
+        JOIN account ON account.id = national_final.owner_id
+        WHERE national_final.year_id = %s
+          AND national_final.status IN ('draft', 'submissions', 'voting')
+        ORDER BY country.name
+        """,
+        (year_id,),
+    )
+    return cursor.fetchall()
+
+
 @bp.get("/")
 def index():
     db = get_db()
@@ -56,22 +75,26 @@ def special(short_name: str, permissions: UserPermissions):
     cursor = db.cursor()
 
     songs = get_year_songs(_year, select_languages=True)
+    ongoing_national_finals = _ongoing_national_finals(_year)
 
     cursor.execute(
         """SELECT COUNT(*) AS c FROM current_song AS song
-           WHERE year_id = %s AND NOT is_placeholder""",
+           WHERE year_id = %s AND main_participant AND NOT is_placeholder""",
         (_year,),
     )
     total_entries = fetchone(cursor)["c"]
     total_placeholders = len(songs) - total_entries
     cursor.execute(
-        "SELECT short_name, show_name, date FROM show WHERE year_id = %s ORDER BY id", (_year,)
+        "SELECT show.short_name, show.show_name, show.date FROM show "
+        "JOIN show_types ON show_types.id = show.show_type "
+        "WHERE year_id = %s AND national_final_id IS NULL "
+        "ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id",
+        (_year,),
     )
     shows = [
         Show(year=_year, short_name=show["short_name"], name=show["show_name"], date=show["date"])
         for show in cursor.fetchall()
     ]
-    shows.sort()
 
     cl = special_year["status"] == "closed"
     year_placements = get_year_placements(_year) if cl else {}
@@ -126,6 +149,7 @@ def special(short_name: str, permissions: UserPermissions):
         can_view_voters=can_view_voters,
         special=short_name,
         special_name=special_year["special_name"],
+        ongoing_national_finals=ongoing_national_finals,
     )
 
 @bp.get("/<int:year>")
@@ -140,6 +164,7 @@ def year(year: int, permissions: UserPermissions):
     cl = year_row["status"] == "closed"
 
     songs = get_year_songs(_year, select_languages=True)
+    ongoing_national_finals = _ongoing_national_finals(_year)
 
     free_countries = []
 
@@ -151,6 +176,12 @@ def year(year: int, permissions: UserPermissions):
               AND is_participating = true
               AND available_from <= %(year)s
               AND available_until >= %(year)s
+              AND NOT EXISTS (
+                  SELECT 1 FROM national_final
+                  WHERE national_final.year_id = %(year)s
+                    AND national_final.owner_country_id = country.id
+                    AND national_final.status <> 'cancelled'
+              )
             ORDER BY name
         """,
             {"ccs": [s.country.cc for s in songs], "year": _year},
@@ -160,19 +191,22 @@ def year(year: int, permissions: UserPermissions):
 
     cursor.execute(
         """SELECT COUNT(*) AS c FROM current_song AS song
-           WHERE year_id = %s AND NOT is_placeholder""",
+           WHERE year_id = %s AND main_participant AND NOT is_placeholder""",
         (_year,),
     )
     total_entries = fetchone(cursor)["c"]
     total_placeholders = len(songs) - total_entries
     cursor.execute(
-        "SELECT short_name, show_name, date FROM show WHERE year_id = %s ORDER BY id", (_year,)
+        "SELECT show.short_name, show.show_name, show.date FROM show "
+        "JOIN show_types ON show_types.id = show.show_type "
+        "WHERE year_id = %s AND national_final_id IS NULL "
+        "ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id",
+        (_year,),
     )
     shows = [
         Show(year=_year, short_name=show["short_name"], name=show["show_name"], date=show["date"])
         for show in cursor.fetchall()
     ]
-    shows.sort()
 
     year_placements = get_year_placements(_year) if cl else {}
 
@@ -226,4 +260,5 @@ def year(year: int, permissions: UserPermissions):
         has_sf=has_sf,
         sf_numbers=sf_numbers,
         can_view_voters=can_view_voters,
+        ongoing_national_finals=ongoing_national_finals,
     )

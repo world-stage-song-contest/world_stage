@@ -1,5 +1,4 @@
 import io
-import json
 import urllib.parse
 from collections import defaultdict
 from collections.abc import Iterable
@@ -35,7 +34,7 @@ def render_template(template: str, **kwargs) -> Response:
         resp.data = flask.render_template(template, **kwargs)
         resp.content_type = "text/html"
     elif request.accept_mimetypes.accept_json:
-        resp.data = json.dumps(kwargs)
+        resp.data = flask.json.dumps(kwargs)
         resp.content_type = "application/json"
     else:
         resp.data = (f"Invalid format. Accepted MIME types are: [{request.accept_mimetypes}] "

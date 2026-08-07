@@ -142,7 +142,7 @@ def special_song_votes(
         return render_template("error.html", error="Song not found in this show"), 404
 
     if show_data.status == "partial" and not permissions.can_view_restricted:
-        qualifier_cutoff = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
+        qualifier_cutoff = show_data.total_qualifiers
         if qualifier_cutoff > 0:
             cursor.execute(
                 """
@@ -288,7 +288,7 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
 
     # In partial mode, block access to qualifier results
     if show_data.status == "partial" and not permissions.can_view_restricted:
-        qualifier_cutoff = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
+        qualifier_cutoff = show_data.total_qualifiers
         if qualifier_cutoff > 0:
             cursor.execute(
                 """

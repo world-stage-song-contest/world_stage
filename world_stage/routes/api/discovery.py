@@ -26,12 +26,17 @@ def _permissions_json(permissions: UserPermissions) -> dict:
 
 
 def _show_json(row: dict, points: list[int] | None = None) -> dict:
+    local_short_name = row["short_name"]
+    route_short_name = (
+        f"{row['national_final_short_name']}-{local_short_name}"
+        if row.get("national_final_short_name") else local_short_name
+    )
     special = row["special_short_name"] is not None
     if special:
-        key = f"{row['special_short_name']}-{row['short_name']}"
+        key = f"{row['special_short_name']}-{route_short_name}"
         display_name = f"{row['special_name']} {row['show_name']}"
     else:
-        key = f"{row['year_id']}-{row['short_name']}"
+        key = f"{row['year_id']}-{route_short_name}"
         display_name = f"{row['year_id']} {row['show_name']}"
 
     return {
@@ -39,7 +44,9 @@ def _show_json(row: dict, points: list[int] | None = None) -> dict:
         "key": key,
         "name": row["show_name"],
         "display_name": display_name,
-        "short_name": row["short_name"],
+        "short_name": route_short_name,
+        "local_short_name": local_short_name,
+        "national_final_short_name": row.get("national_final_short_name"),
         "year": row["year_id"],
         "special_name": row["special_name"],
         "special_short_name": row["special_short_name"],
@@ -50,9 +57,7 @@ def _show_json(row: dict, points: list[int] | None = None) -> dict:
         "voting_opens": row["voting_opens"],
         "voting_closes": row["voting_closes"],
         "predictions_close": row["predictions_close"],
-        "dtf": row["dtf"],
-        "sc": row["sc"],
-        "special": row["special"],
+        "progressions": row["progressions"],
     }
 
 
@@ -172,12 +177,28 @@ def shows():
         f"""
         SELECT show.id, show.year_id, show.point_system_id, show.show_name,
                show.short_name, show.voting_opens, show.voting_closes,
-               show.predictions_close, show.date, show.dtf, show.sc, show.special,
-               show.status, year.special_name, year.special_short_name
+               show.predictions_close, show.date,
+               show.status, year.special_name, year.special_short_name,
+               national_final.short_name AS national_final_short_name,
+               COALESCE((
+                   SELECT jsonb_agg(jsonb_build_object(
+                       'target_show_id', progression.target_show_id,
+                       'target_short_name', target.short_name,
+                       'target_name', target.show_name,
+                       'qualifier_count', progression.qualifier_count,
+                       'priority', progression.priority
+                   ) ORDER BY progression.priority)
+                   FROM show_progression AS progression
+                   JOIN show AS target ON target.id = progression.target_show_id
+                   WHERE progression.source_show_id = show.id
+               ), '[]'::jsonb) AS progressions
         FROM show
+        JOIN show_types ON show_types.id = show.show_type
         JOIN year ON year.id = show.year_id
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
         {where}
-        ORDER BY show.year_id, show.date NULLS LAST, show.id
+        ORDER BY show.year_id, national_final.id NULLS FIRST,
+                 show_types.sort_order, show.show_number NULLS FIRST, show.id
         """,
         params,
     )
@@ -202,16 +223,33 @@ def open_votings():
         """
         SELECT show.id, show.year_id, show.point_system_id, show.show_name,
                show.short_name, show.voting_opens, show.voting_closes,
-               show.predictions_close, show.date, show.dtf, show.sc, show.special,
+               show.predictions_close, show.date,
                show.status, year.special_name, year.special_short_name,
+               national_final.short_name AS national_final_short_name,
+               COALESCE((
+                   SELECT jsonb_agg(jsonb_build_object(
+                       'target_show_id', progression.target_show_id,
+                       'target_short_name', target.short_name,
+                       'target_name', target.show_name,
+                       'qualifier_count', progression.qualifier_count,
+                       'priority', progression.priority
+                   ) ORDER BY progression.priority)
+                   FROM show_progression AS progression
+                   JOIN show AS target ON target.id = progression.target_show_id
+                   WHERE progression.source_show_id = show.id
+               ), '[]'::jsonb) AS progressions,
                COUNT(vote_set.id) AS vote_count
         FROM show
+        JOIN show_types ON show_types.id = show.show_type
         JOIN year ON year.id = show.year_id
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
         LEFT JOIN vote_set ON vote_set.show_id = show.id AND vote_set.result_mode = 'official'
         WHERE show.voting_opens <= CURRENT_TIMESTAMP
           AND (show.voting_closes IS NULL OR show.voting_closes >= CURRENT_TIMESTAMP)
-        GROUP BY show.id, year.id
-        ORDER BY show.id
+          AND (national_final.id IS NULL OR national_final.status = 'voting')
+        GROUP BY show.id, year.id, national_final.id, show_types.sort_order
+        ORDER BY show.year_id, national_final.id NULLS FIRST,
+                 show_types.sort_order, show.show_number NULLS FIRST, show.id
         """
     )
 

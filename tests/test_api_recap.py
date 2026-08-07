@@ -10,15 +10,20 @@ def _revise_song(db, song_id, **changes):
     db.commit()
 
 
-def _seed_recap_data(db, *, show_name="API Recap", short_name="api"):
+def _seed_recap_data(db):
     with db.cursor() as cur:
         cur.execute(
+            "SELECT COALESCE(MAX(show_number), 0) + 1 AS number "
+            "FROM show WHERE year_id = 2025 AND show_type = 'sf'"
+        )
+        show_number = cur.fetchone()["number"]
+        cur.execute(
             """
-            INSERT INTO show (year_id, show_name, short_name)
-            VALUES (2025, %s, %s)
+            INSERT INTO show (year_id, show_type, show_number)
+            VALUES (2025, 'sf', %s)
             RETURNING id
             """,
-            (show_name, short_name),
+            (show_number,),
         )
         show_id = cur.fetchone()["id"]
         cur.execute(
@@ -39,15 +44,15 @@ def _seed_recap_data(db, *, show_name="API Recap", short_name="api"):
             (song_id, show_id),
         )
     db.commit()
-    return song_id
+    return song_id, f"sf{show_number}"
 
 
 def test_recap_api_returns_recap_data(client, db):
-    _seed_recap_data(db)
+    _, show = _seed_recap_data(db)
 
     response = client.get(
         "/api/recap",
-        query_string={"type": "show", "show": "2025-api"},
+        query_string={"type": "show", "show": f"2025-{show}"},
     )
 
     assert response.status_code == 200
@@ -55,7 +60,7 @@ def test_recap_api_returns_recap_data(client, db):
         {
             "year": 2025,
             "submitter": "alice",
-            "show": "2025api",
+            "show": f"2025{show}",
             "ro": 1,
             "cc": "us",
             "country": "United States",
@@ -71,12 +76,12 @@ def test_recap_api_returns_recap_data(client, db):
 
 
 def test_recap_api_preserves_configured_snippet_times(client, db):
-    song_id = _seed_recap_data(db, show_name="Timed API Recap", short_name="timed")
+    song_id, show = _seed_recap_data(db)
     _revise_song(db, song_id, snippet_start=0, snippet_end=30)
 
     response = client.get(
         "/api/recap",
-        query_string={"type": "show", "show": "2025-timed"},
+        query_string={"type": "show", "show": f"2025-{show}"},
     )
 
     assert response.status_code == 200
@@ -85,12 +90,12 @@ def test_recap_api_preserves_configured_snippet_times(client, db):
 
 
 def test_recap_api_does_not_default_end_when_start_is_configured(client, db):
-    song_id = _seed_recap_data(db, show_name="Open-ended API Recap", short_name="open-ended")
+    song_id, show = _seed_recap_data(db)
     _revise_song(db, song_id, snippet_start=12)
 
     response = client.get(
         "/api/recap",
-        query_string={"type": "show", "show": "2025-open-ended"},
+        query_string={"type": "show", "show": f"2025-{show}"},
     )
 
     assert response.status_code == 200
@@ -99,12 +104,12 @@ def test_recap_api_does_not_default_end_when_start_is_configured(client, db):
 
 
 def test_recap_api_preserves_second_snippet_times(client, db):
-    song_id = _seed_recap_data(db, show_name="Second API Recap", short_name="second")
+    song_id, show = _seed_recap_data(db)
     _revise_song(db, song_id, snippet2_start=80, snippet2_end=88)
 
     response = client.get(
         "/api/recap",
-        query_string={"type": "show", "show": "2025-second"},
+        query_string={"type": "show", "show": f"2025-{show}"},
     )
 
     assert response.status_code == 200
@@ -113,12 +118,12 @@ def test_recap_api_preserves_second_snippet_times(client, db):
 
 
 def test_recap_api_derives_second_snippet_end(client, db):
-    song_id = _seed_recap_data(db, show_name="Derived API Recap", short_name="derived")
+    song_id, show = _seed_recap_data(db)
     _revise_song(db, song_id, snippet2_start=80)
 
     response = client.get(
         "/api/recap",
-        query_string={"type": "show", "show": "2025-derived"},
+        query_string={"type": "show", "show": f"2025-{show}"},
     )
 
     assert response.status_code == 200
@@ -127,12 +132,12 @@ def test_recap_api_derives_second_snippet_end(client, db):
 
 
 def test_recap_api_derives_second_snippet_from_first(client, db):
-    song_id = _seed_recap_data(db, show_name="Fallback API Recap", short_name="fallback")
+    song_id, show = _seed_recap_data(db)
     _revise_song(db, song_id, snippet_start=12, snippet_end=20)
 
     response = client.get(
         "/api/recap",
-        query_string={"type": "show", "show": "2025-fallback"},
+        query_string={"type": "show", "show": f"2025-{show}"},
     )
 
     assert response.status_code == 200
@@ -141,11 +146,11 @@ def test_recap_api_derives_second_snippet_from_first(client, db):
 
 
 def test_recap_api_is_public(client, db):
-    _seed_recap_data(db, show_name="Public API Recap", short_name="public-api")
+    _, show = _seed_recap_data(db)
 
     response = client.get(
         "/api/recap",
-        query_string={"type": "show", "show": "2025-public-api"},
+        query_string={"type": "show", "show": f"2025-{show}"},
     )
 
     assert response.status_code == 200
@@ -153,8 +158,8 @@ def test_recap_api_is_public(client, db):
 
 
 def test_recap_api_etag_tracks_exported_values(client, db):
-    song_id = _seed_recap_data(db, show_name="ETag API Recap", short_name="etag")
-    query = {"type": "show", "show": "2025-etag"}
+    song_id, show = _seed_recap_data(db)
+    query = {"type": "show", "show": f"2025-{show}"}
 
     initial = client.get("/api/recap", query_string=query)
     repeated = client.get("/api/recap", query_string=query)

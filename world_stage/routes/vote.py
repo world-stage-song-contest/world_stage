@@ -158,23 +158,31 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
 
 @bp.get("/")
 def index():
-    open_votings = []
-
     db = get_db()
     cursor = db.cursor()
 
     cursor.execute("""
-        SELECT show.id, show.show_name AS name, show.short_name,
+        SELECT show.id, show.show_name AS name,
+               COALESCE(national_final.short_name || '-', '') || show.short_name AS short_name,
                show.year_id AS year, show.voting_opens, show.voting_closes,
                show.predictions_close,
-               year.special_name, year.special_short_name
+               year.special_name, year.special_short_name,
+               national_final.id AS national_final_id,
+               national_final.name AS national_final_name
         FROM show
+        JOIN show_types ON show_types.id = show.show_type
         LEFT JOIN year ON year.id = show.year_id
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
         WHERE voting_opens <= CURRENT_TIMESTAMP
           AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
-        ORDER BY show.id
+          AND (national_final.id IS NULL OR national_final.status = 'voting')
+        ORDER BY (show.year_id < 0), show.year_id DESC,
+                 national_final.id NULLS FIRST, national_final.name,
+                 show_types.sort_order, show.show_number NULLS FIRST, show.id
     """)
 
+    year_sections: dict[tuple[int | None, int | None], dict] = {}
+    special_sections: dict[tuple[int | None, int | None], dict] = {}
     for row in cursor.fetchall():
         left = None
         if row["voting_closes"]:
@@ -182,18 +190,29 @@ def index():
         pred_deadline = row["predictions_close"] or row["voting_closes"]
         predictions_open = not pred_deadline or pred_deadline >= dt_now()
         if row["special_short_name"]:
-            display_name = f"{row['special_name']} {row['name']}"
+            parent_name = row["special_name"]
             url_short = f"{row['special_short_name']}-{row['short_name']}"
-        elif row["year"]:
-            display_name = f"{row['year']} {row['name']}"
+            sections = special_sections
+        elif row["year"] is not None:
+            parent_name = str(row["year"])
             url_short = f"{row['year']}-{row['short_name']}"
+            sections = year_sections
         else:
-            display_name = row["name"]
+            parent_name = "Other"
             url_short = row["short_name"]
-        open_votings.append(
+            sections = year_sections
+        section_key = (row["year"], row["national_final_id"])
+        section_name = parent_name
+        if row["national_final_name"]:
+            section_name = f"{parent_name}: {row['national_final_name']}"
+        section = sections.setdefault(
+            section_key,
+            {"name": section_name, "shows": []},
+        )
+        section["shows"].append(
             {
                 "id": row["id"],
-                "name": display_name,
+                "name": row["name"],
                 "short_name": url_short,
                 "voting_opens": row["voting_opens"],
                 "voting_closes": row["voting_closes"],
@@ -201,7 +220,11 @@ def index():
                 "left": format_timedelta(left),
             }
         )
-    return render_template("vote/index.html", shows=open_votings)
+    return render_template(
+        "vote/index.html",
+        year_sections=list(year_sections.values()),
+        special_sections=list(special_sections.values()),
+    )
 
 
 @bp.get("/<show>")
@@ -219,7 +242,9 @@ def vote(show: str, user: tuple[int, str]):
         return render_template("error.html", error="Show not found"), 404
 
     if (
-        show_data.voting_opens
+        show_data.national_final_id is not None
+        and show_data.national_final_status != "voting"
+        or show_data.voting_opens
         and show_data.voting_opens > dt_now()
         or show_data.voting_closes
         and show_data.voting_closes < dt_now()
@@ -237,7 +262,7 @@ def vote(show: str, user: tuple[int, str]):
         cursor.execute("SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,))
         user_id = cursor.fetchone()
         if user_id:
-            user_songs = get_user_songs(user_id["id"], show_data.year)
+            user_songs = get_user_songs(user_id["id"], show_data.year, main_only=True)
             countries = list(map(lambda s: s.country, user_songs))
             cursor.execute(
                 """
@@ -326,7 +351,9 @@ def ballot_rules(show: str, user: tuple[int, str]):
     if not show_data or not show_data.id:
         return {"error": "Show not found"}, 404
     if (
-        show_data.voting_opens
+        show_data.national_final_id is not None
+        and show_data.national_final_status != "voting"
+        or show_data.voting_opens
         and show_data.voting_opens > dt_now()
         or show_data.voting_closes
         and show_data.voting_closes < dt_now()
@@ -378,7 +405,9 @@ def vote_post(show: str, user: tuple[int, str]):
         return render_template("error.html", error="Show not found"), 404
 
     if (
-        show_data.voting_opens
+        show_data.national_final_id is not None
+        and show_data.national_final_status != "voting"
+        or show_data.voting_opens
         and show_data.voting_opens > dt_now()
         or show_data.voting_closes
         and show_data.voting_closes < dt_now()
@@ -565,8 +594,8 @@ def predict(show: str, user: tuple[int, str]):
         year=show_data.year,
         prediction_count=prediction_count,
         has_existing=has_existing,
-        dtf=show_data.dtf or 0,
-        sc=show_data.sc or 0,
+        dtf=show_data.primary_qualifiers,
+        sc=show_data.total_qualifiers - show_data.primary_qualifiers,
     )
 
 
@@ -639,8 +668,8 @@ def predict_post(show: str, user: tuple[int, str]):
             prediction_count=prediction_count,
             has_existing=False,
             errors=errors,
-            dtf=show_data.dtf or 0,
-            sc=show_data.sc or 0,
+            dtf=show_data.primary_qualifiers,
+            sc=show_data.total_qualifiers - show_data.primary_qualifiers,
         ), 400
 
     db = get_db()

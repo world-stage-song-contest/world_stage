@@ -6,6 +6,13 @@
         const year = "{{ year or '' }}";
         const country = "{{ country or '' }}";
         const entryNumber = "{{ entry_number or '' }}";
+        const nationalFinalId = {{ national_final.id if national_final else 'null' }};
+        const nationalFinalReturnUrl = {{ (
+            url_for('year.special_nf_details', short_name=national_final.special_short_name, nf_short_name=national_final.short_name)
+            if national_final and national_final.special_short_name else
+            url_for('year.nf_details', year=national_final.year_id, nf_short_name=national_final.short_name)
+            if national_final else none
+        )|tojson }};
     </script>
     <script src="{{ static('js/submit.js') }}"></script>
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
@@ -75,6 +82,7 @@
 <p id="error-message" class="error hidden"></p>
 <p id="success-message" class="success hidden"></p>
 <form id="submit-song" name="submit_song">
+    {% if national_final %}<input type="hidden" name="national_final_id" value="{{ national_final.id }}">{% endif %}
     <fieldset class="grid" id="select-submission">
         <legend>Submit for</legend>
         <label for="year">Year</label>

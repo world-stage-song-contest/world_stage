@@ -27,19 +27,23 @@ def _create_show(cursor, *, version: str | None, scores: list[int]) -> int:
         ],
     )
     cursor.execute(
+        "SELECT COALESCE(MAX(show_number), 0) + 1 AS number "
+        "FROM show WHERE year_id = 2025 AND show_type = 'sf'"
+    )
+    show_number = cursor.fetchone()["number"]
+    cursor.execute(
         """
         INSERT INTO show (
             year_id, point_system_id, voting_ruleset_version,
-            show_name, short_name, status
+            show_type, show_number, status
         )
-        VALUES (2025, %s, %s, %s, %s, 'none')
+        VALUES (2025, %s, %s, 'sf', %s, 'none')
         RETURNING id
         """,
         (
             point_system_id,
             version,
-            f"Ruleset test {point_system_id}",
-            f"rules-{point_system_id}",
+            show_number,
         ),
     )
     return cursor.fetchone()["id"]

@@ -55,18 +55,17 @@ def _seed_show_and_songs(db):
         cursor.execute(
             """
             INSERT INTO show (
-                year_id, point_system_id, show_name, short_name,
+                year_id, point_system_id, show_type,
                 voting_opens, voting_closes, predictions_close, status
             )
             VALUES (
-                2025, 10, 'Final', 'f',
+                2025, 10, 'f',
                 CURRENT_TIMESTAMP - INTERVAL '1 hour',
                 CURRENT_TIMESTAMP + INTERVAL '1 hour',
                 CURRENT_TIMESTAMP + INTERVAL '30 minutes', 'full'
             )
-            ON CONFLICT (year_id, show_name) DO UPDATE
+            ON CONFLICT (year_id, short_name) WHERE national_final_id IS NULL DO UPDATE
             SET point_system_id = EXCLUDED.point_system_id,
-                short_name = EXCLUDED.short_name,
                 voting_opens = EXCLUDED.voting_opens,
                 voting_closes = EXCLUDED.voting_closes,
                 predictions_close = EXCLUDED.predictions_close,

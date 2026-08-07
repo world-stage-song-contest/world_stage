@@ -85,8 +85,10 @@ def test_taste_similarity_revotes_replace_each_voters_official_ballot(
         )
         cursor.execute(
             """
-            INSERT INTO show (year_id, point_system_id, show_name, short_name, status, dtf)
-            VALUES (2024, %s, 'Taste similarity test', 'taste', 'full', 1)
+            INSERT INTO show (
+                year_id, point_system_id, show_type, show_number, status
+            )
+            VALUES (2024, %s, 'sf', 83, 'full')
             RETURNING id
             """,
             (point_system_id,),

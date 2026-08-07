@@ -17,6 +17,7 @@ from .decorators import (
     with_user,
 )
 from .draw import draw_running_order, draw_semifinals, spread_running_order
+from .lineups import get_lineup_issues, get_unassigned_lineup_issue
 from .lookups import (
     get_closed_years,
     get_countries,
@@ -94,6 +95,7 @@ from .types import (
     UserPermissions,
     VoteData,
     Year,
+    can_manage_show,
 )
 from .voting import BallotEntryRule, ballot_rule_errors, get_ballot_entry_rules
 
@@ -129,6 +131,7 @@ __all__ = (
     "get_country_name",
     "get_country_songs",
     "get_language",
+    "get_lineup_issues",
     "get_languages_for_songs",
     "get_markdown_parser",
     "get_points_for_system",
@@ -150,6 +153,7 @@ __all__ = (
     "get_user_from_api_token",
     "get_user_id_from_session",
     "get_user_permissions",
+    "get_unassigned_lineup_issue",
     "get_user_role_from_session",
     "get_user_songs",
     "get_vote_count_for_show",
@@ -182,4 +186,5 @@ __all__ = (
     "with_user",
     "write_m3u",
     "ballot_rule_errors",
+    "can_manage_show",
 )

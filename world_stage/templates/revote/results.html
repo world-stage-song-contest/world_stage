@@ -71,19 +71,15 @@
             else 'non-qualifier'
         ) %}
         {% set old_class = {1: 'first', 2: 'second', 3: 'third', original_total: 'last'}.get(original_place, '') %}
-        {% set old_qclass = (
-            'direct-to-final' if original and original.entry_status == 'dtf'
-            else 'second-chance' if original and original.entry_status in ('sc', 'special')
-            else 'non-qualifier' if original and original.entry_status == 'nq'
-            else ''
-        ) %}
+        {% set old_qclass = qualifier_class(original.entry_status) if original else '' %}
         <tr data-value="{{ place }}" class="{{ class }} {{ qclass }}">
             <th class="number">{{ song.vote_data.ro }}</th>
             <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
             <td><span class="col-truncate" title="{{ song.artist }}">{{ song.artist }}</span></td>
             <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('revote.song_votes', year=revote_year, show=show, song_id=song.id) }}">{{ song.title }}</a></td>
             <td class="number extra-visible">{{ place }}</td>
-            <td class="number old-result {{ old_class }} {{ old_qclass }}">{{ original_place }}</td>
+            <td class="number old-result {{ old_class }} {{ old_qclass }}"
+                {% if original and original.special_qualifier %}title="Special qualifier"{% endif %}>{{ original_place }}</td>
             <td class="number">{{ '+' if place_difference > 0 else '' }}{{ place_difference }}</td>
             <td class="number{% if song.vote_data.penalty %} has-penalty{% endif %}"
                 {% if song.vote_data.penalty %}title="Penalty of {{ song.vote_data.penalty }} points applied"{% endif %}

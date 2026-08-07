@@ -1,7 +1,3 @@
-let nTop = 0;
-let nSecondChance = 0;
-let nSpecial = 0;
-
 // Each entry is uniquely keyed by ``<cc>-<entry_number>`` — country code
 // alone isn't unique on specials, where the same country can submit
 // several entries.
@@ -10,24 +6,22 @@ function entryKey(country) {
 }
 
 let revealOrder = {
-    /** @type {Array<[object, boolean]>} */
-    dtf: [],
-    /** @type {Array<[object, boolean]>} */
-    sc: [],
+    groups: [],
 
     data: function() {
-        return this.dtf.concat(this.sc);
+        return this.groups.flatMap((group, index) =>
+            group.entries.map(entry => [entry, index > 0, group.target_show_id])
+        );
     },
 
     type: function(country) {
         const key = entryKey(country);
-        if (this.dtf.some(v => entryKey(v[0]) === key)) {
-            return "direct-to-final";
-        } else if (this.sc.some(v => entryKey(v[0]) === key)) {
-            return "second-chance";
-        } else {
-            return "non-qualifier";
-        }
+        const index = this.groups.findIndex(group =>
+            group.entries.some(entry => entryKey(entry) === key)
+        );
+        if (index === 0) return "direct-to-final";
+        if (index > 0) return "second-chance";
+        return "non-qualifier";
     }
 }
 
@@ -46,9 +40,11 @@ function swapReveal(type, a, b) {
         bParent.replaceChild(a,bHolder);
     }
 
-    const arr = revealOrder[type];
-    const indexA = arr.findIndex(v => entryKey(v[0]) === a);
-    const indexB = arr.findIndex(v => entryKey(v[0]) === b);
+    const group = revealOrder.groups.find(item => String(item.target_show_id) === String(type));
+    if (!group) return;
+    const arr = group.entries;
+    const indexA = arr.findIndex(v => entryKey(v) === a);
+    const indexB = arr.findIndex(v => entryKey(v) === b);
     console.log(`Swapping ${a} (${indexA}) with ${b} (${indexB})`);
     if (indexA === -1 || indexB === -1) return;
     const vA = arr[indexA];
@@ -78,17 +74,12 @@ let clicked = false;
 async function loadVotes(year, show) {
     const res = await fetch(window.location.pathname + '/votes');
     const json = await res.json();
-    nTop = json.dtf;
-    nSecondChance = json.sc;
-    nSpecial = json.special;
     isSpecial = !!json.is_special;
     allCountries = json.countries;
-    for (const country of json.reveal_order.dtf) {
-        revealOrder.dtf.push([country, false]);
-    }
-    for (const country of json.reveal_order.sc) {
-        revealOrder.sc.push([country, true]);
-    }
+    revealOrder.groups = json.progressions.map(progression => ({
+        ...progression,
+        entries: json.reveal_order[String(progression.target_show_id)] || []
+    }));
 }
 
 /**
@@ -278,6 +269,7 @@ function createEnvelope(n, country, isSecondChance) {
     envelope.dataset.id = entryKey(country);
     envelope.dataset.cc = code;
     envelope.dataset.song = id;
+    if (country.is_special) envelope.title = "Special qualifier";
 
     envelope.onclick = async () => {
         await putInPlace(envelope);
@@ -347,16 +339,15 @@ function createCountry(country, countryClass) {
 }
 
 function createEnvelopes() {
-    const envelopesDtf = document.querySelector("#envelopes-dtf");
-    const envelopesSc = document.querySelector("#envelopes-sc");
-    let n = 1;
-    for (const [country, isSecondChance] of revealOrder.data()) {
-        const envelope = createEnvelope(n++ - isSecondChance * nTop, country, isSecondChance);
-        if (isSecondChance) {
-            envelopesSc.appendChild(envelope);
-        } else {
-            envelopesDtf.appendChild(envelope);
+    const wrapper = document.querySelector("#envelopes");
+    for (const [groupIndex, group] of revealOrder.groups.entries()) {
+        const container = document.createElement("div");
+        container.dataset.targetShow = group.target_show_id;
+        container.title = group.target_name;
+        for (const [index, country] of group.entries.entries()) {
+            container.appendChild(createEnvelope(index + 1, country, groupIndex > 0));
         }
+        wrapper.appendChild(container);
     }
 }
 
@@ -396,13 +387,20 @@ function toggleHeader() {
 }
 
 async function save() {
-    const dtf = revealOrder.dtf.map(v => v[0].id);
-    const sc = revealOrder.sc.map(v => v[0].id);
+    const progressions = Object.fromEntries(
+        revealOrder.groups.map(group => [
+            String(group.target_show_id),
+            group.entries.map(entry => ({
+                song_id: entry.id,
+                is_special: entry.is_special === true
+            }))
+        ])
+    );
     await fetch(window.location.pathname, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ action: "save", dtf, sc })
+        body: JSON.stringify({ action: "save", progressions })
     });
 }

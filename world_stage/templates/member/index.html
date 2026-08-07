@@ -2,6 +2,13 @@
 {% block title %}Homepage: {{ username }}{% endblock %}
 {% block content %}
 <div class="cards-container">
+    {% if owns_national_finals %}
+    <a href="{{ url_for('year.index') }}" class="card">
+        <h3>National Finals</h3>
+        <img src="{{ static('images/history.png') }}" alt="National Finals Icon">
+        <p>Manage the national finals assigned to you from their year pages.</p>
+    </a>
+    {% endif %}
     <a href="{{ url_for('member.submit') }}" class="card">
         <h3>Submit/Edit</h3>
         <img src="{{ static('images/submit.png') }}" alt="Submit Icon">

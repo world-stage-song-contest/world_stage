@@ -72,7 +72,7 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
         pred_by_set[row["set_id"]][row["song_id"]] = row["position"]
 
     n_predictors = len(pred_sets)
-    n_qualifiers = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
+    n_qualifiers = show_data.total_qualifiers
 
     is_final = n_qualifiers <= 0
     if is_final:
@@ -123,8 +123,8 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
                 predicted_class[songs[2].id] = "third"
             predicted_class[songs[-1].id] = "last"
         else:
-            dtf_n = show_data.dtf or 0
-            sc_n = show_data.sc or 0
+            dtf_n = show_data.primary_qualifiers
+            sc_n = show_data.total_qualifiers - dtf_n
             for i, song in enumerate(songs):
                 if i < dtf_n:
                     predicted_class[song.id] = "direct-to-final"
@@ -485,7 +485,7 @@ def show_predictions(year: int, show: str, permissions: UserPermissions):
         pred_by_set[row["set_id"]][row["song_id"]] = row["position"]
 
     n_predictors = len(pred_sets)
-    n_qualifiers = (show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0)
+    n_qualifiers = show_data.total_qualifiers
 
     # Finals (no qualifier cutoff) get a winning-probability distribution;
     # semifinals get an independent per-song qualification probability.
@@ -544,8 +544,8 @@ def show_predictions(year: int, show: str, permissions: UserPermissions):
                 predicted_class[songs[2].id] = "third"
             predicted_class[songs[-1].id] = "last"
         else:
-            dtf_n = show_data.dtf or 0
-            sc_n = show_data.sc or 0
+            dtf_n = show_data.primary_qualifiers
+            sc_n = show_data.total_qualifiers - dtf_n
             for i, song in enumerate(songs):
                 if i < dtf_n:
                     predicted_class[song.id] = "direct-to-final"

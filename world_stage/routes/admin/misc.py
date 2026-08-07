@@ -185,9 +185,12 @@ def predictions_index():
         SELECT show.id, show.show_name, show.short_name, show.year_id AS year,
                COUNT(prediction_set.id) AS prediction_count
         FROM show
+        JOIN show_types ON show_types.id = show.show_type
         LEFT JOIN prediction_set ON prediction_set.show_id = show.id
-        GROUP BY show.id, show.show_name, show.short_name, show.year_id
-        ORDER BY show.id
+        GROUP BY show.id, show.show_name, show.short_name, show.year_id,
+                 show_types.sort_order
+        ORDER BY show.year_id DESC, show_types.sort_order,
+                 show.show_number NULLS FIRST, show.id
     """)
     shows = cursor.fetchall()
 

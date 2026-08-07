@@ -7,19 +7,20 @@ from ...utils import (
     RandomVoteSequencer,
     SuspensefulVoteSequencer,
     UserPermissions,
+    can_manage_show,
     dt_now,
     get_show_id,
     get_show_songs,
     render_template,
-    with_permissions,
+    with_auth,
 )
 from .common import bp, resolve_special
 from .penalty import _show_penalties
 
 
 @bp.get("/special/<short_name>/<show>/scoreboard")
-@with_permissions
-def special_scoreboard(short_name: str, show: str, permissions: UserPermissions):
+@with_auth
+def special_scoreboard(short_name: str, show: str, user, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -30,7 +31,8 @@ def special_scoreboard(short_name: str, show: str, permissions: UserPermissions)
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status != "full" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status != "full" and not elevated:
         return render_template(
             "error.html", error="You aren't allowed to access the scoreboard yet"
         ), 400
@@ -38,7 +40,7 @@ def special_scoreboard(short_name: str, show: str, permissions: UserPermissions)
     if (
         show_data.voting_closes
         and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
+        and not elevated
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
@@ -53,8 +55,8 @@ def special_scoreboard(short_name: str, show: str, permissions: UserPermissions)
 
 
 @bp.get("/special/<short_name>/<show>/scoreboard/votes")
-@with_permissions
-def special_scores(short_name: str, show: str, permissions: UserPermissions):
+@with_auth
+def special_scores(short_name: str, show: str, user, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return {"error": "Special not found"}, 404
@@ -65,13 +67,14 @@ def special_scores(short_name: str, show: str, permissions: UserPermissions):
     if not show_data:
         return {"error": "Show not found"}, 404
 
-    if show_data.status != "full" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status != "full" and not elevated:
         return {"error": "You aren't allowed to access the scoreboard"}, 400
 
     if (
         show_data.voting_closes
         and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
+        and not elevated
     ):
         return {"error": "Voting hasn't closed yet."}, 400
 
@@ -145,15 +148,16 @@ def special_scores(short_name: str, show: str, permissions: UserPermissions):
     }
 
 @bp.get("/<int:year>/<show>/scoreboard")
-@with_permissions
-def scoreboard(year: int, show: str, permissions: UserPermissions):
+@with_auth
+def scoreboard(year: int, show: str, user, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status != "full" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status != "full" and not elevated:
         return render_template(
             "error.html", error="You aren't allowed to access the scoreboard yet"
         ), 400
@@ -161,7 +165,7 @@ def scoreboard(year: int, show: str, permissions: UserPermissions):
     if (
         show_data.voting_closes
         and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
+        and not elevated
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
@@ -169,21 +173,22 @@ def scoreboard(year: int, show: str, permissions: UserPermissions):
 
 
 @bp.get("/<int:year>/<show>/scoreboard/votes")
-@with_permissions
-def scores(year: int, show: str, permissions: UserPermissions):
+@with_auth
+def scores(year: int, show: str, user, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return {"error": "Show not found"}, 404
 
-    if show_data.status != "full" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status != "full" and not elevated:
         return {"error": "You aren't allowed to access the scoreboard"}, 400
 
     if (
         show_data.voting_closes
         and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
+        and not elevated
     ):
         return {"error": "Voting hasn't closed yet."}, 400
 

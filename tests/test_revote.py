@@ -19,8 +19,10 @@ def test_revote_keeps_official_results_unchanged(client, db):
         )
         cursor.execute(
             """
-            INSERT INTO show (year_id, point_system_id, show_name, short_name, status, dtf)
-            VALUES (2024, 30, 'Revote test', 'rv', 'full', 1)
+            INSERT INTO show (
+                year_id, point_system_id, show_type, show_number, status
+            )
+            VALUES (2024, 30, 'sf', 82, 'full')
             RETURNING id, revote_eligible_at
             """
         )
@@ -29,9 +31,9 @@ def test_revote_keeps_official_results_unchanged(client, db):
         show_id = show["id"]
 
         song_ids = []
-        for country, title, submitter_id in (
-            ("US", "Original winner", 3),
-            ("ES", "Revote winner", 1),
+        for country, title in (
+            ("US", "Original winner"),
+            ("ES", "Revote winner"),
         ):
             cursor.execute(
                 """
@@ -44,9 +46,9 @@ def test_revote_keeps_official_results_unchanged(client, db):
             song_id = cursor.fetchone()["id"]
             song_ids.append(song_id)
             cursor.execute(
-                """INSERT INTO song_data (song_id, title, artist, submitter_id)
-                   VALUES (%s, %s, 'Artist', %s)""",
-                (song_id, title, submitter_id),
+                """INSERT INTO song_data (song_id, title, artist)
+                   VALUES (%s, %s, 'Artist')""",
+                (song_id, title),
             )
         cursor.executemany(
             "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
@@ -81,7 +83,7 @@ def test_revote_keeps_official_results_unchanged(client, db):
             ("ES", 10),
         ]
 
-    response = client.get("/revote/2024/rv", headers={"Accept": "text/html"})
+    response = client.get("/revote/2024/sf82", headers={"Accept": "text/html"})
     assert response.status_code == 200
 
     with db.cursor() as cursor:
@@ -127,10 +129,12 @@ def test_revote_keeps_official_results_unchanged(client, db):
             ("US", 10),
         ]
 
-    response = client.get("/revote/2024/rv", headers={"Accept": "text/html"})
+    response = client.get("/revote/2024/sf82", headers={"Accept": "text/html"})
     assert response.status_code == 200
 
-    response = client.get("/revote/2024/rv?revoters_only=true", headers={"Accept": "text/html"})
+    response = client.get(
+        "/revote/2024/sf82?revoters_only=true", headers={"Accept": "text/html"}
+    )
     assert response.status_code == 200
 
     response = client.get("/user/bob/revotes", headers={"Accept": "text/html"})
@@ -166,13 +170,20 @@ def test_revote_keeps_official_results_unchanged(client, db):
         )
     db.commit()
 
-    response = client.get(f"/revote/2024/rv/song/{song_ids[0]}", headers={"Accept": "text/html"})
+    response = client.get(
+        f"/revote/2024/sf82/song/{song_ids[0]}", headers={"Accept": "text/html"}
+    )
     assert response.status_code == 200
 
-    response = client.get(f"/revote/2024/rv/song/{song_ids[1]}", headers={"Accept": "text/html"})
+    response = client.get(
+        f"/revote/2024/sf82/song/{song_ids[1]}",
+        headers={"Accept": "application/json"},
+    )
     assert response.status_code == 200
 
-    response = client.get("/revote/2024/rv/detailed", headers={"Accept": "text/html"})
+    response = client.get(
+        "/revote/2024/sf82/detailed", headers={"Accept": "text/html"}
+    )
     assert response.status_code == 200
 
     response = client.get("/revote", headers={"Accept": "text/html"})
@@ -181,7 +192,7 @@ def test_revote_keeps_official_results_unchanged(client, db):
     response = client.get("/revote/2024", headers={"Accept": "text/html"})
     assert response.status_code == 200
 
-    response = client.get("/year/2024/rv", headers={"Accept": "text/html"})
+    response = client.get("/year/2024/sf82", headers={"Accept": "text/html"})
     assert response.status_code == 200
 
     session_id = uuid4()
@@ -196,7 +207,7 @@ def test_revote_keeps_official_results_unchanged(client, db):
     db.commit()
     client.set_cookie("session", str(session_id))
     response = client.post(
-        "/revote/2024/rv/vote",
+        "/revote/2024/sf82/vote",
         data={
             "nickname": "Carol",
             "country": "ES",
@@ -222,5 +233,7 @@ def test_revote_keeps_official_results_unchanged(client, db):
         create_song_revision(cursor, song_ids[0], {"submitter_id": 3}, changed_by=None)
     db.commit()
 
-    response = client.get("/revote/2024/rv/vote", headers={"Accept": "text/html"})
+    response = client.get(
+        "/revote/2024/sf82/vote", headers={"Accept": "text/html"}
+    )
     assert response.status_code == 200

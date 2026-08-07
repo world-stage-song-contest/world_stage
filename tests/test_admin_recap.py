@@ -14,8 +14,8 @@ def test_cytube_playlist_inserts_and_labels_the_host(client, db):
         )
         cur.execute(
             """
-            INSERT INTO show (year_id, show_name, short_name)
-            VALUES (2025, 'Playlist Semi-Final 1', 'sf1')
+            INSERT INTO show (year_id, show_type, show_number)
+            VALUES (2025, 'sf', 1)
             RETURNING id
             """
         )
@@ -147,10 +147,13 @@ def test_cytube_playlist_adds_opening_act_by_prior_year_placement(client, db):
             )
             cur.execute(
                 """
-                INSERT INTO show (year_id, show_name, short_name)
+                INSERT INTO show (year_id, show_type, show_number)
                 VALUES (2026, %s, %s)
                 """,
-                (f"Opening Act {short_name}", short_name),
+                (
+                    "sf" if short_name.startswith("sf") else short_name,
+                    int(short_name[2:]) if short_name.startswith("sf") else None,
+                ),
             )
     db.commit()
     client.set_cookie("session", session_id)
@@ -187,8 +190,8 @@ def test_all_recap_data_variants_include_submitter(client, db):
         )
         cur.execute(
             """
-            INSERT INTO show (year_id, show_name, short_name, date)
-            VALUES (2027, 'Recap Export', 'f', '2027-05-01')
+            INSERT INTO show (year_id, show_type, date)
+            VALUES (2027, 'f', '2027-05-01')
             RETURNING id
             """
         )

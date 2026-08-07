@@ -47,8 +47,8 @@ def test_history_filters_country_and_user_lists_to_voted_shows(
         if cursor.fetchone()["generated"]:
             cursor.execute(
                 """
-                INSERT INTO show_types (id, name)
-                VALUES ('sf', 'Semi-Final')
+                INSERT INTO show_types (id, name, sort_order)
+                VALUES ('sf', 'Semi-Final', 1)
                 ON CONFLICT DO NOTHING
                 """
             )

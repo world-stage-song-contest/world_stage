@@ -180,11 +180,7 @@ def _vote_data_from_row(song: dict) -> VoteData | None:
     running_order = song.get("running_order")
     total_points = song.get("result_total_points")
     if total_points is None:
-        return (
-            VoteData(running_order, None, None, None)
-            if running_order is not None
-            else None
-        )
+        return VoteData(running_order, None, None, None) if running_order is not None else None
 
     vote_data = VoteData(
         ro=running_order if running_order is not None else 0,
@@ -193,13 +189,9 @@ def _vote_data_from_row(song: dict) -> VoteData | None:
         show_voters=song.get("result_total_voters"),
         max_possible_points=song.get("result_max_possible_points"),
         points_percentage=song.get("result_points_percentage"),
-        adjusted_max_possible_points=song.get(
-            "result_adjusted_max_possible_points"
-        ),
+        adjusted_max_possible_points=song.get("result_adjusted_max_possible_points"),
         points_midpoint=song.get("result_points_midpoint"),
-        adjusted_points_percentage=song.get(
-            "result_adjusted_points_percentage"
-        ),
+        adjusted_points_percentage=song.get("result_adjusted_points_percentage"),
     )
     vote_data.sum = total_points
     vote_data.count = song.get("result_total_votes") or 0
@@ -278,9 +270,7 @@ def get_votes_for_songs(
 
     missing_ids = sorted(song_id for song_id in song_ids if song_id not in result)
     if missing_ids:
-        raise RuntimeError(
-            f"Missing {result_mode} result rows for show {show_id}: {missing_ids}"
-        )
+        raise RuntimeError(f"Missing {result_mode} result rows for show {show_id}: {missing_ids}")
     return result
 
 
@@ -303,9 +293,7 @@ def get_language(lang_id: int) -> Language | None:
     return Language(**lang)
 
 
-_KEY_SIGNATURE_TONIC_ORDER = (
-    "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
-)
+_KEY_SIGNATURE_TONIC_ORDER = ("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
 _KEY_SIGNATURE_TONIC_INDEX = {t: i for i, t in enumerate(_KEY_SIGNATURE_TONIC_ORDER)}
 
 
@@ -614,9 +602,7 @@ def _load_songs(
         running_orders = {
             song.id: song.vote_data.ro for song in songs if song.vote_data is not None
         }
-        votes_by_song = get_votes_for_songs(
-            running_orders, show_id, result_mode=result_mode
-        )
+        votes_by_song = get_votes_for_songs(running_orders, show_id, result_mode=result_mode)
         for song in songs:
             song.vote_data = votes_by_song.get(song.id)
     if select_languages:
@@ -650,15 +636,23 @@ def get_show_songs(
         return None
     show_id = data.id
 
+    joins: LiteralString = """
+JOIN song_show ON song.id = song_show.song_id
+JOIN show ON song_show.show_id = show.id"""
     order_by: LiteralString = "song_show.running_order, song_show.id"
     if sort_reveal:
-        order_by = "song_show.qualifier_order, " + order_by
+        joins += """
+LEFT JOIN show_qualifier
+  ON show_qualifier.target_show_id = show.id
+ AND show_qualifier.song_id = song.id"""
+        order_by = (
+            "show_qualifier.source_show_id NULLS FIRST, "
+            "show_qualifier.qualifier_order NULLS FIRST, " + order_by
+        )
 
     sql = _song_query(
         select="song_show.running_order",
-        joins="""
-JOIN song_show ON song.id = song_show.song_id
-JOIN show ON song_show.show_id = show.id""",
+        joins=joins,
         where="show.id = %s",
         order_by=order_by,
     )
@@ -733,12 +727,19 @@ JOIN LATERAL (
       AND csr.year_id = cyr.year_id
       AND csr.result_mode = 'official'
     ORDER BY
-      CASE
-        WHEN csr.short_name = 'f' THEN 1
-        WHEN csr.short_name = 'sc' THEN 2
-        WHEN csr.short_name = 'sf' OR csr.short_name LIKE 'sf%%' THEN 3
-        ELSE 4
-      END,
+      COALESCE((
+        WITH RECURSIVE downstream(target_show_id, distance) AS (
+          SELECT progression.target_show_id, 1
+          FROM show_progression AS progression
+          WHERE progression.source_show_id = csr.show_id
+          UNION ALL
+          SELECT progression.target_show_id, downstream.distance + 1
+          FROM downstream
+          JOIN show_progression AS progression
+            ON progression.source_show_id = downstream.target_show_id
+        )
+        SELECT MAX(distance) + 1 FROM downstream
+      ), 1),
       csr.place,
       csr.running_order NULLS LAST
     LIMIT 1
@@ -762,18 +763,26 @@ def get_special_winner(show: str, year: int) -> Song | None:
 def get_year_songs(year: int, *, select_languages=False) -> list[Song]:
     sql = _song_query(
         joins=_CYR_JOIN,
-        where="song.year_id = %s",
+        where="song.year_id = %s AND song.main_participant",
         order_by=_YEAR_PLACE_ORDER,
     )
     return _load_songs(sql, (year,), select_languages=select_languages)
 
 
-def get_user_songs(user_id: int, year: int | None = None, *, select_languages=False) -> list[Song]:
+def get_user_songs(
+    user_id: int,
+    year: int | None = None,
+    *,
+    select_languages=False,
+    main_only: bool = False,
+) -> list[Song]:
     where: LiteralString = "song.submitter_id = %(user_id)s AND song.year_id IS NOT NULL"
     params: dict[str, Any] = {"user_id": user_id}
     if year:
         where += " AND song.year_id = %(year)s"
         params["year"] = year
+    if main_only:
+        where += " AND song.main_participant"
 
     sql = _song_query(
         joins=_CYR_JOIN,
@@ -808,7 +817,8 @@ def get_show_results_for_songs(
                csr.place,
                csr.total_countries,
                csr.placement_percentage,
-               csr.show_name
+               csr.show_name,
+               csr.special_qualifier
         FROM country_show_results csr
         JOIN show ON show.id = csr.show_id
         WHERE csr.song_id = ANY(%s)
@@ -842,6 +852,7 @@ def get_show_results_for_songs(
                 "placement_percentage": row["placement_percentage"],
                 "show_name": row["show_name"],
                 "short_name": row["short_name"],
+                "special_qualifier": row["special_qualifier"],
             }
 
     if not include_year:
@@ -874,18 +885,32 @@ def get_show_results_for_songs(
 def get_country_songs(code: str, *, select_languages=False) -> list[Song]:
     sql = _song_query(
         joins=_CYR_JOIN,
-        where="(song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id IS NOT NULL",
+        where="""(song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+AND song.year_id IS NOT NULL AND song.main_participant""",
         order_by="song.year_id," + _YEAR_PLACE_ORDER,
     )
     return _load_songs(sql, {"cc": code}, select_languages=select_languages)
 
 
-def get_song(year: int, code: str, *, select_results=False) -> Song | None:
+def get_song(
+    year: int,
+    code: str,
+    *,
+    entry_number: int | None = None,
+    select_results=False,
+) -> Song | None:
+    entry_filter = (
+        "AND song.entry_number = %(entry)s"
+        if entry_number is not None
+        else "AND song.main_participant"
+    )
     sql = _song_query(
-        where="(song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id = %(year)s",
+        where="""(song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+AND song.year_id = %(year)s """
+        + entry_filter,
         order_by="song.year_id, country.name",
     )
-    songs = _load_songs(sql, {"cc": code, "year": year})
+    songs = _load_songs(sql, {"cc": code, "year": year, "entry": entry_number})
     if not songs:
         return None
     return _enrich_song(songs[0])
@@ -894,7 +919,8 @@ def get_song(year: int, code: str, *, select_results=False) -> Song | None:
 def get_special_songs_for_country(year: int, code: str) -> list[Song]:
     """Get all songs for a country in a special (negative year_id)."""
     sql = _song_query(
-        where="(song.country_id = %(cc)s OR country.cc3 = %(cc)s) AND song.year_id = %(year)s",
+        where="""(song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+AND song.year_id = %(year)s AND song.main_participant""",
         order_by="song.entry_number",
     )
     return _load_songs(sql, {"cc": code, "year": year}, select_languages=True)

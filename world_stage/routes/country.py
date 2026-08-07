@@ -450,13 +450,28 @@ def generate_iframe(url: str, img_url: str | None, vtt_url: str | None = None):
         <a href="{url}" target="_blank">Watch the video here</a>.'''
 
 
-@bp.get("/<code>/<int:year>")
+@bp.get("/<code>/<int:year>", defaults={"entry_number": None})
+@bp.get("/<code>/<int:year>/<int:entry_number>")
 @with_auth
-def details(code: str, year: int, user: tuple[int, str] | None, permissions: UserPermissions):
+def details(
+    code: str,
+    year: int,
+    entry_number: int | None,
+    user: tuple[int, str] | None,
+    permissions: UserPermissions,
+):
     canonical = resolve_country_code(code.upper())
     if canonical and canonical.lower() != code.lower():
-        return redirect(url_for("country.details", code=canonical.lower(), year=year), 301)
-    song = get_song(year, code.upper())
+        return redirect(
+            url_for(
+                "country.details",
+                code=canonical.lower(),
+                year=year,
+                entry_number=entry_number,
+            ),
+            301,
+        )
+    song = get_song(year, code.upper(), entry_number=entry_number)
     if not song:
         return render_template(
             "error.html", error=f"Songs not found for country {code} in year {year}"

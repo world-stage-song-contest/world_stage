@@ -44,8 +44,8 @@ def test_bias_caches_refresh_on_publication_revotes_and_metadata_changes(db):
         )
         cursor.execute(
             """
-            INSERT INTO show (year_id, point_system_id, show_name, short_name, status, dtf)
-            VALUES (2024, %s, 'Analytics cache test', 'analytics', 'draw', 1)
+            INSERT INTO show (year_id, point_system_id, show_type, status)
+            VALUES (2024, %s, 'f', 'draw')
             RETURNING id
             """,
             (point_system_id,),

@@ -348,12 +348,12 @@ def create_app(config: dict | None = None) -> Flask:
         radio,
         results,
         revote,
-        scrobble as scrobble_routes,
         session,
         user,
         vote,
         year,
     )
+    from .routes import scrobble as scrobble_routes
 
     app.register_blueprint(index.bp)
     app.register_blueprint(vote.bp)

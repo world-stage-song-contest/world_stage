@@ -48,9 +48,10 @@ def _other_revote_shows(year_id: int, current_show: str) -> list[dict]:
         """
         SELECT show.short_name
         FROM show
+        JOIN show_types ON show_types.id = show.show_type
         WHERE show.year_id = %s
           AND show.revote_eligible_at IS NOT NULL
-        ORDER BY show.id
+        ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
         """,
         (year_id,),
     )
@@ -164,9 +165,11 @@ def index():
         SELECT show.show_name AS name, show.short_name, show.year_id AS year,
                year.special_name, year.special_short_name
         FROM show
+        JOIN show_types ON show_types.id = show.show_type
         JOIN year ON year.id = show.year_id
         WHERE show.revote_eligible_at IS NOT NULL
-        ORDER BY (show.year_id < 0), show.year_id DESC, show.id
+        ORDER BY (show.year_id < 0), show.year_id DESC,
+                 show_types.sort_order, show.show_number NULLS FIRST, show.id
         """
     )
     years: dict[int, dict] = {}
@@ -200,10 +203,11 @@ def year(year: str):
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT show_name AS name, short_name
+        SELECT show.show_name AS name, show.short_name
         FROM show
+        JOIN show_types ON show_types.id = show.show_type
         WHERE year_id = %s AND revote_eligible_at IS NOT NULL
-        ORDER BY id
+        ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
         """,
         (year_data["id"],),
     )
@@ -400,7 +404,8 @@ def results(year: str, show: str):
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT song_id, place, total_points, total_countries, entry_status
+        SELECT song_id, place, total_points, total_countries, entry_status,
+               special_qualifier
         FROM country_show_results
         WHERE show_id = %s AND result_mode = 'official'
         """,
@@ -525,10 +530,11 @@ def results(year: str, show: str):
         year=show_data.year,
         songs=songs,
         points=show_data.points,
-        qualifiers=show_data.dtf or 0,
-        sc_qualifiers=(show_data.dtf or 0) + (show_data.sc or 0) + (show_data.special or 0),
+        qualifiers=show_data.primary_qualifiers,
+        sc_qualifiers=show_data.total_qualifiers,
         participants=len(songs),
         original_results=original_results,
+        qualifier_class=show_data.qualifier_class,
         voters=songs[0].vote_data.show_voters if songs and songs[0].vote_data else 0,
         showing_original=not has_results and not revoters_only,
         revoters_only=revoters_only,
@@ -548,7 +554,7 @@ def detailed_results(year: str, show: str):
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT song_id, entry_status
+        SELECT song_id, entry_status, special_qualifier
         FROM country_show_results
         WHERE show_id = %s AND result_mode = 'official'
         """,
@@ -624,6 +630,7 @@ def detailed_results(year: str, show: str):
             {"ballots": original_ballots, "revote": False},
         ],
         original_results=original_results,
+        qualifier_class=show_data.qualifier_class,
         other_revote_shows=_other_revote_shows(show_data.year, show),
         revote_year=revote_year["key"],
         original_results_url=_original_results_url(show_data.year, show_data.short_name),

@@ -20,11 +20,11 @@ def draw_setup(db, client):
         cur.execute("UPDATE country SET pot = 1 WHERE id IN ('US', 'ES')")
         cur.execute("UPDATE country SET pot = 2 WHERE id = 'FR'")
         cur.execute("""
-            INSERT INTO show (year_id, show_name, short_name, status)
-            VALUES (2025, 'Semi-Final 1', 'sf1', 'draw'),
-                   (2025, 'Semi-Final 2', 'sf2', 'draw')
-            ON CONFLICT (year_id, show_name) DO UPDATE
-            SET short_name = EXCLUDED.short_name, status = EXCLUDED.status
+            INSERT INTO show (year_id, show_type, show_number, status)
+            VALUES (2025, 'sf', 1, 'draw'),
+                   (2025, 'sf', 2, 'draw')
+            ON CONFLICT (year_id, short_name) WHERE national_final_id IS NULL DO UPDATE
+            SET status = EXCLUDED.status
         """)
         cur.execute(
             """

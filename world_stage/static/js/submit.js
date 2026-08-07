@@ -218,6 +218,10 @@ async function handleSubmit(e) {
 
         if (res.ok) {
             const song = data.result;
+            if (nationalFinalReturnUrl) {
+                window.location.href = nationalFinalReturnUrl;
+                return;
+            }
             const cc = (song.country_id || '').toLowerCase();
             // Specials use /country/<cc>/<short_name>/<entry_number>,
             // regular years use /country/<cc>/<year>.
@@ -736,7 +740,7 @@ function removeLanguageRow() {
 
 async function fetchCountries(yearSelect) {
     const year = yearSelect.value;
-    const url = `/member/submit/${year}`;
+    const url = `/member/submit/${year}${nationalFinalId ? `?national_final_id=${nationalFinalId}` : ''}`;
     const res = await fetch(url);
     const countries = await res.json();
     return countries;

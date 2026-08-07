@@ -19,13 +19,11 @@
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show.short_name)}}"> {{ show.short_name|upper }}</a>
     {% endif %}
     {% endfor %}
-    {% if can_view_voters %}
     <span class="nav-separator"></span>
     {% if special %}
-    <a class="nav-item" href="{{ url_for('year.special_year_voters', short_name=special) }}">Voters</a>
+    <a class="nav-item" href="{{ url_for('year.special_nfs', short_name=special) }}">National Finals</a>
     {% else %}
-    <a class="nav-item" href="{{ url_for('year.year_voters', year=year) }}">Voters</a>
-    {% endif %}
+    <a class="nav-item" href="{{ url_for('year.nfs', year=year) }}">National Finals</a>
     {% endif %}
 {% endblock %}
 {% block content %}
@@ -168,6 +166,35 @@
             {% if has_sf %}
             {{ result_cells(r.get('sf'), 'semifinal') }}
             {% endif %}
+            {% endif %}
+        </tr>
+    {% endfor %}
+    {% for nf in ongoing_national_finals %}
+        <tr data-value="{{ songs|length + loop.index }}" class="placeholder">
+            {% if is_closed %}<td class="number year-result"></td>{% endif %}
+            <td>
+                <a href="{{ url_for('country.country', code=nf.country_id.lower()) }}">
+                    <div class="country">
+                        {{ flag(nf.country_id, 42, nf.country_name) }}
+                        <span>{{ nf.country_name }}</span>
+                    </div>
+                </a>
+            </td>
+            <td><div class="song-artist">[TBD] National Final</div></td>
+            <td><div class="song-title">
+                {% if special %}
+                <a href="{{ url_for('year.special_nf_details', short_name=special, nf_short_name=nf.short_name) }}">[TBD] National Final</a>
+                {% else %}
+                <a href="{{ url_for('year.nf_details', year=year, nf_short_name=nf.short_name) }}">[TBD] National Final</a>
+                {% endif %}
+            </div></td>
+            <td></td>
+            <td>{{ nf.owner_username }}</td>
+            {% if has_sf %}<td class="number"></td>{% endif %}
+            {% if is_closed and multi_show %}
+            <td></td><td></td>
+            {% if has_sc %}<td></td><td></td>{% endif %}
+            {% if has_sf %}<td></td><td></td>{% endif %}
             {% endif %}
         </tr>
     {% endfor %}

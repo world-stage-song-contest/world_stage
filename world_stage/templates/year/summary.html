@@ -59,7 +59,7 @@
     <p><strong>These {{ qualifier_reveal|length }} countries qualified (in the order of reveal):</strong></p>
     <div class="country-list">
         {% for q in qualifier_reveal %}
-        <div class="country-item {{ q.cls }}">
+        <div class="country-item {{ q.cls }}"{% if q.special %} title="Special qualifier"{% endif %}>
             <div class="flag-container">{{ flag(q.cc, 52, q.name, variant=q.variant) }}</div>
             <div class="country-name">{{ q.name }}</div>
         </div>
@@ -111,7 +111,7 @@
     </thead>
     <tbody>
         {% for song in songs %}
-        {% set place = loop.index + offset %}
+        {% set place = result_places.get(song.id, loop.index + offset) %}
         {% set class = {1: 'first', 2: 'second', 3:'third', participants: 'last'}.get(place, '') if access != 'draw' else '' %}
         {% set qclass = ("direct-to-final" if (place <= qualifiers) else "second-chance" if (qualifiers < place <= sc_qualifiers) else "non-qualifier") if access != 'draw' else '' %}
         {% set ro = song.vote_data.ro if song.vote_data.ro is not none and song.vote_data.ro != -1 else '' %}

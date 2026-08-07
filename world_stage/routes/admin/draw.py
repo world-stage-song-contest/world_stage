@@ -36,7 +36,7 @@ def _render_draw(year_id: int, label: str, manage_url: str):
         JOIN country ON song.country_id = country.id
         LEFT JOIN language_set_language sl
                ON sl.language_set_id = song.language_set_id AND sl.priority = 0
-        WHERE song.year_id = %s AND NOT song.is_placeholder
+        WHERE song.year_id = %s AND song.main_participant AND NOT song.is_placeholder
         ORDER BY country.name, song.entry_number
         """,
         (year_id,),
@@ -135,7 +135,7 @@ def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -
         SELECT country.pot, COUNT(*) AS entries
         FROM current_song AS song
         JOIN country ON song.country_id = country.id
-        WHERE song.year_id = %s
+        WHERE song.year_id = %s AND song.main_participant
           AND NOT song.is_placeholder
           AND country.pot IS NOT NULL
         GROUP BY country.pot
@@ -153,7 +153,7 @@ def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -
             SELECT song.id AS song_id, country.pot
             FROM current_song AS song
             JOIN country ON song.country_id = country.id
-            WHERE song.year_id = %s AND song.id = ANY(%s)
+            WHERE song.year_id = %s AND song.main_participant AND song.id = ANY(%s)
             """,
             (year, ro),
         )

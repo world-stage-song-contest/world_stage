@@ -1,53 +1,345 @@
-import contextlib
 import datetime
 import json
+import re
 
 import psycopg
 from flask import redirect, request, url_for
 
 from ...db import get_db
 from ...utils import (
+    get_lineup_issues,
+    get_unassigned_lineup_issue,
     get_years,
     render_template,
 )
 from .common import _resolve_special, bp
 
+NF_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-@bp.get("/manage/<int:year>/createshow")
+
+def _show_creation_context(year: int, **extra):
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT special_name, special_short_name FROM year WHERE id = %s", (year,)
+    )
+    year_data = cursor.fetchone() or {}
+    cursor.execute(
+        """
+        SELECT point_system.id,
+               array_agg(point.score ORDER BY point.place)
+                   FILTER (WHERE point.id IS NOT NULL) AS points
+        FROM point_system
+        LEFT JOIN point ON point.point_system_id = point_system.id
+        GROUP BY point_system.id
+        ORDER BY point_system.id
+        """
+    )
+    point_systems = cursor.fetchall()
+    cursor.execute(
+        """
+        SELECT id, name FROM show_types ORDER BY sort_order
+        """
+    )
+    show_types = cursor.fetchall()
+    cursor.execute(
+        """
+        SELECT national_final.id, national_final.short_name, national_final.name,
+               account.username AS owner, national_final.owner_country_id,
+               COALESCE(MAX(show.show_number)
+                   FILTER (WHERE show.show_type = 'sf'), 0) + 1
+                   AS next_semifinal_number
+        FROM national_final
+        JOIN account ON account.id = national_final.owner_id
+        LEFT JOIN show ON show.national_final_id = national_final.id
+        WHERE national_final.year_id = %s
+          AND national_final.status <> 'cancelled'
+        GROUP BY national_final.id, account.username
+        ORDER BY national_final.name
+        """,
+        (year,),
+    )
+    national_finals = cursor.fetchall()
+    cursor.execute(
+        """
+        SELECT COALESCE(MAX(show_number), 0) + 1 AS next_semifinal_number
+        FROM show
+        WHERE year_id = %s AND national_final_id IS NULL AND show_type = 'sf'
+        """,
+        (year,),
+    )
+    main_next_semifinal_number = cursor.fetchone()["next_semifinal_number"]
+    cursor.execute(
+        """
+        SELECT show.id, show.national_final_id, show.short_name, show.show_name,
+               show.show_type
+        FROM show
+        JOIN show_types ON show_types.id = show.show_type
+        WHERE show.year_id = %s
+        ORDER BY show.national_final_id NULLS FIRST, show_types.sort_order,
+                 show.show_number NULLS FIRST, show.id
+        """,
+        (year,),
+    )
+    progression_targets = cursor.fetchall()
+    return render_template(
+        "admin/create_show.html",
+        years=get_years(),
+        year=year,
+        year_data=year_data,
+        point_systems=point_systems,
+        show_types=show_types,
+        national_finals=national_finals,
+        main_next_semifinal_number=main_next_semifinal_number,
+        progression_targets=progression_targets,
+        **extra,
+    )
+
+
+def _national_final_creation_context(year: int, **extra):
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT special_name, special_short_name FROM year WHERE id = %s", (year,)
+    )
+    year_data = cursor.fetchone() or {}
+    cursor.execute("SELECT id, username FROM account WHERE approved ORDER BY username")
+    users = cursor.fetchall()
+    cursor.execute(
+        """
+        SELECT country.id, country.name
+        FROM country
+        WHERE country.id <> 'XX'
+          AND NOT EXISTS (
+              SELECT 1 FROM national_final
+              WHERE national_final.year_id = %s
+                AND national_final.owner_country_id = country.id
+                AND national_final.status <> 'cancelled'
+          )
+        ORDER BY country.name
+        """,
+        (year,),
+    )
+    return render_template(
+        "admin/create_national_final.html",
+        years=get_years(),
+        year=year,
+        year_data=year_data,
+        users=users,
+        countries=cursor.fetchall(),
+        **extra,
+    )
+
+
+@bp.route("/manage/<int(signed=True):year>/create/show", methods=["GET", "POST"])
 def create_show(year: int):
-    return render_template("admin/create_show.html", years=get_years(), year=year)
+    if request.method == "GET":
+        return _show_creation_context(year)
+    return _create_show_post(year)
 
 
-@bp.post("/manage/<int:year>/createshow")
-def create_show_post(year: int):
-    data: dict[str, int | str | None] = {"year": year}
-    value: int | str | None
-    for key, value_ in request.form.items():
-        value = value_
-        with contextlib.suppress(ValueError):
-            value = int(value)
+@bp.route("/manage/<int(signed=True):year>/create/nf", methods=["GET", "POST"])
+def create_national_final(year: int):
+    if request.method == "GET":
+        return _national_final_creation_context(year)
+    return _create_national_final_post(year)
 
-        if not value:
-            value = None
 
-        data[key] = value
+def _create_national_final_post(year: int):
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        owner_id = int(request.form.get("owner_id", ""))
+        owner_country_id = request.form.get("owner_country_id", "").strip() or None
+        short_name = (
+            owner_country_id.lower()
+            if owner_country_id
+            else request.form.get("short_name", "").strip().lower()
+        )
+        name = request.form.get("name", "").strip()
+        if not name or not NF_SLUG_RE.fullmatch(short_name):
+            raise ValueError("A national-final name and URL-safe identifier are required")
+        cursor.execute(
+            """
+            INSERT INTO national_final (
+                year_id, owner_id, owner_country_id, short_name, name
+            ) VALUES (%s, %s, %s, %s, %s)
+            """,
+            (year, owner_id, owner_country_id, short_name, name),
+        )
+        if owner_country_id:
+            cursor.execute(
+                """
+                UPDATE song SET main_participant = false
+                WHERE year_id = %s AND country_id = %s
+                """,
+                (year, owner_country_id),
+            )
+        db.commit()
+    except (psycopg.Error, ValueError) as exc:
+        db.rollback()
+        return _national_final_creation_context(
+            year, error=str(exc), form=request.form
+        ), 400
 
+    return redirect(url_for("admin.create_show", year=year))
+
+
+def _create_show_post(year: int):
     db = get_db()
     cur = db.cursor()
-
     try:
+        show_type = request.form.get("show_type", "").strip()
+        cur.execute("SELECT 1 FROM show_types WHERE id = %s", (show_type,))
+        if not cur.fetchone():
+            raise ValueError("Unknown show type")
+        show_number_value = request.form.get("show_number", "").strip()
+        show_number = int(show_number_value) if show_number_value else None
+        if show_number is not None and (show_type != "sf" or show_number <= 0):
+            raise ValueError("Only semi-finals can have a positive show number")
+        short_name = f"{show_type}{show_number or ''}"
+
+        point_system_value = request.form.get("point_system_id", "1")
+        if point_system_value == "custom":
+            raw_scores = request.form.get("custom_points", "")
+            try:
+                scores = [
+                    int(value)
+                    for value in re.split(r"[\s,]+", raw_scores.strip())
+                    if value
+                ]
+            except ValueError as exc:
+                raise ValueError(
+                    "Custom points must be comma- or space-separated integers"
+                ) from exc
+            if not scores or any(score <= 0 for score in scores):
+                raise ValueError("Custom points must contain positive integers")
+            if len(set(scores)) != len(scores) or scores != sorted(scores, reverse=True):
+                raise ValueError("Custom points must be unique and in descending order")
+            cur.execute(
+                """
+                SELECT point_system_id
+                FROM point
+                GROUP BY point_system_id
+                HAVING array_agg(score ORDER BY place) = %s
+                LIMIT 1
+                """,
+                (scores,),
+            )
+            existing = cur.fetchone()
+            if existing:
+                point_system_id = existing["point_system_id"]
+            else:
+                cur.execute(
+                    "INSERT INTO point_system (number) VALUES (%s) RETURNING id",
+                    (len(scores),),
+                )
+                point_system_id = cur.fetchone()["id"]
+                cur.executemany(
+                    "INSERT INTO point (point_system_id, place, score) VALUES (%s, %s, %s)",
+                    [(point_system_id, place, score) for place, score in enumerate(scores, 1)],
+                )
+        else:
+            point_system_id = int(point_system_value)
+            cur.execute("SELECT 1 FROM point_system WHERE id = %s", (point_system_id,))
+            if not cur.fetchone():
+                raise ValueError("Unknown point system")
+
+        selected_event = request.form.get("national_final_id", "main").strip()
+        national_final_id = None
+        if selected_event != "main":
+            national_final_id = selected_event
+            national_final_id = int(national_final_id)
+            cur.execute(
+                "SELECT id FROM national_final WHERE id = %s AND year_id = %s "
+                "AND status <> 'cancelled'",
+                (national_final_id, year),
+            )
+            if not cur.fetchone():
+                raise ValueError("National final not found in this year")
+
+        composite_short_name = short_name
+        if national_final_id is not None:
+            cur.execute("SELECT short_name FROM national_final WHERE id = %s", (national_final_id,))
+            composite_short_name = f"{cur.fetchone()['short_name']}-{short_name}"
+        if national_final_id is not None:
+            cur.execute(
+                "SELECT 1 FROM show WHERE year_id = %s "
+                "AND national_final_id IS NULL AND short_name = %s",
+                (year, composite_short_name),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT 1 FROM show
+                JOIN national_final ON national_final.id = show.national_final_id
+                WHERE show.year_id = %s
+                  AND national_final.short_name || '-' || show.short_name = %s
+                """,
+                (year, short_name),
+            )
+        if cur.fetchone():
+            raise ValueError(
+                f"The public show identifier '{composite_short_name}' is already in use"
+            )
+
+        progression_specs: list[tuple[int, int, int]] = []
+        target_values = request.form.getlist("progression_target_id")
+        count_values = request.form.getlist("progression_count")
+        if target_values or count_values:
+            if len(target_values) != len(count_values):
+                raise ValueError("Invalid progression mapping")
+            for target_value, count_value in zip(
+                target_values, count_values, strict=True
+            ):
+                if not target_value and not count_value:
+                    continue
+                if not target_value or not count_value:
+                    raise ValueError(
+                        "Each progression needs a destination and qualifier count"
+                    )
+                count = int(count_value)
+                if count <= 0:
+                    raise ValueError("Qualifier counts must be positive")
+                progression_specs.append(
+                    (int(target_value), count, len(progression_specs) + 1)
+                )
+
+            for target_id, _count, _priority in progression_specs:
+                cur.execute(
+                    """
+                    SELECT 1 FROM show
+                    WHERE id = %s AND year_id = %s
+                      AND national_final_id IS NOT DISTINCT FROM %s
+                    """,
+                    (target_id, year, national_final_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("Progression destination is not in this event")
+
+        date_value = request.form.get("date", "").strip() or None
         cur.execute(
         """
-        INSERT INTO show (year_id, point_system_id, show_name, short_name, dtf, sc, date, status)
-        VALUES (%(year)s, 1, %(show_name)s, %(short_name)s, %(dtf)s, %(sc)s, %(date)s, 'none')
+        INSERT INTO show (
+            year_id, point_system_id, show_type, show_number, date,
+            status, national_final_id
+        ) VALUES (%s, %s, %s, %s, %s, 'none', %s)
+        RETURNING id
         """,
-            data,
+            (year, point_system_id, show_type, show_number, date_value, national_final_id),
         )
+        source_show_id = cur.fetchone()["id"]
+        for target_id, count, priority in progression_specs:
+            cur.execute(
+                """
+                INSERT INTO show_progression (
+                    source_show_id, target_show_id, qualifier_count, priority
+                ) VALUES (%s, %s, %s, %s)
+                """,
+                (source_show_id, target_id, count, priority),
+            )
         db.commit()
-    except psycopg.Error as e:
-        return render_template(
-            "admin/create_show.html", error=str(e), years=get_years(), year=year
-        )
+    except (psycopg.Error, ValueError) as e:
+        db.rollback()
+        return _show_creation_context(year, error=str(e), form=request.form), 400
 
     return redirect(url_for("admin.create_show", year=year))
 
@@ -76,13 +368,21 @@ def _render_manage(year_id: int, year_data: dict):
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT show_name, short_name, date, status, voting_opens, voting_closes, predictions_close
-        FROM show WHERE year_id = %s
-        ORDER BY id
+        SELECT show.id, show.show_name, show.short_name, show.date, show.status,
+               show.voting_opens, show.voting_closes, show.predictions_close
+        FROM show
+        JOIN show_types ON show_types.id = show.show_type
+        WHERE year_id = %s AND national_final_id IS NULL
+        ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
     """,
         (year_id,),
     )
     shows = cursor.fetchall()
+    cursor.execute(
+        "SELECT short_name, name FROM national_final WHERE year_id = %s ORDER BY name",
+        (year_id,),
+    )
+    national_finals = cursor.fetchall()
     cursor.execute(
         "SELECT id, name FROM country WHERE id <> 'XX' ORDER BY name, id"
     )
@@ -92,6 +392,7 @@ def _render_manage(year_id: int, year_data: dict):
         year=year_data,
         shows=shows,
         countries=countries,
+        national_finals=national_finals,
     )
 
 
@@ -137,6 +438,16 @@ def manage_post(year: int):
             status = body.get("year_status")
             if status not in ("open", "closed", "ongoing"):
                 return render_template("error.html", error="Invalid year status"), 400
+
+            if status == "ongoing":
+                issue = get_unassigned_lineup_issue(cursor, year, None)
+                if issue:
+                    error = "The contest cannot start: " + issue["message"]
+                    if is_form:
+                        return render_template(
+                            "error.html", error=error, lineup_issues=[issue]
+                        ), 400
+                    return {"error": error, "lineup_issues": [issue]}, 400
 
             cursor.execute(
                 """
@@ -194,13 +505,10 @@ def manage_post(year: int):
 
                 cursor.execute(
                     """
-                    INSERT INTO song_show (
-                        song_id, show_id, running_order, qualifier_order
-                    )
-                    VALUES (%s, %s, 1, 1)
+                    INSERT INTO song_show (song_id, show_id, running_order)
+                    VALUES (%s, %s, 1)
                     ON CONFLICT (song_id, show_id) DO UPDATE
-                    SET running_order = 1,
-                        qualifier_order = 1
+                    SET running_order = 1
                     """,
                     (host_entry["id"], final["id"]),
                 )
@@ -252,10 +560,29 @@ def manage_show_post(year: int, show: str):
         case "open_voting":
             cursor.execute(
                 """
+                SELECT id FROM show
+                WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
+                """,
+                (year, show),
+            )
+            show_row = cursor.fetchone()
+            if not show_row:
+                return {"error": "Show not found"}, 404
+            issues = get_lineup_issues(cursor, show_row["id"])
+            if issues:
+                return {
+                    "error": "Lineup is not ready: "
+                    + ", ".join(issue["message"] for issue in issues),
+                    "lineup_issues": issues,
+                }, 400
+            cursor.execute(
+                """
                 UPDATE show
                 SET voting_opens = COALESCE(voting_opens, CURRENT_TIMESTAMP)
                   , voting_closes = NULL
                 WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
             """,
                 (year, show),
             )
@@ -265,6 +592,7 @@ def manage_show_post(year: int, show: str):
                 UPDATE show
                 SET voting_closes = CURRENT_TIMESTAMP
                 WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
             """,
                 (year, show),
             )
@@ -274,6 +602,7 @@ def manage_show_post(year: int, show: str):
                 UPDATE show
                 SET predictions_close = CURRENT_TIMESTAMP
                 WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
             """,
                 (year, show),
             )
@@ -283,6 +612,7 @@ def manage_show_post(year: int, show: str):
                 UPDATE show
                 SET predictions_close = NULL
                 WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
             """,
                 (year, show),
             )
@@ -291,11 +621,32 @@ def manage_show_post(year: int, show: str):
             if status not in ("none", "draw", "partial", "full"):
                 return render_template("error.html", error="Invalid show status"), 400
 
+            if status in ("partial", "full"):
+                cursor.execute(
+                    """
+                    SELECT id FROM show
+                    WHERE year_id = %s AND short_name = %s
+                      AND national_final_id IS NULL
+                    """,
+                    (year, show),
+                )
+                show_row = cursor.fetchone()
+                if not show_row:
+                    return {"error": "Show not found"}, 404
+                issues = get_lineup_issues(cursor, show_row["id"])
+                if issues:
+                    return {
+                        "error": "Results cannot be published: "
+                        + ", ".join(issue["message"] for issue in issues),
+                        "lineup_issues": issues,
+                    }, 400
+
             cursor.execute(
                 """
                 UPDATE show
                 SET status = %s
                 WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
             """,
                 (status, year, show),
             )
@@ -315,6 +666,7 @@ def manage_show_post(year: int, show: str):
                 UPDATE show
                 SET date = %s
                 WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
             """,
                 (date, year, show),
             )
