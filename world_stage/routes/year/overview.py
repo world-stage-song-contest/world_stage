@@ -136,7 +136,7 @@ def special(short_name: str, permissions: UserPermissions):
         songs=songs,
         free_countries=[],
         is_closed=cl,
-        is_open=special_year["status"] == "open",
+        submissions_open=special_year["submissions_open"],
         shows=shows,
         total=total_entries,
         placeholders=total_placeholders,
@@ -159,8 +159,8 @@ def year(year: int, permissions: UserPermissions):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("SELECT status FROM year WHERE id = %s", (_year,))
-    year_row = cursor.fetchone() or {"status": "open"}
+    cursor.execute("SELECT status, submissions_open FROM year WHERE id = %s", (_year,))
+    year_row = cursor.fetchone() or {"status": "open", "submissions_open": False}
     cl = year_row["status"] == "closed"
 
     songs = get_year_songs(_year, select_languages=True)
@@ -168,7 +168,7 @@ def year(year: int, permissions: UserPermissions):
 
     free_countries = []
 
-    if year_row["status"] == "open" and _year >= 0:
+    if year_row["submissions_open"] and _year >= 0:
         cursor.execute(
             """
             SELECT id, name FROM country
@@ -249,7 +249,7 @@ def year(year: int, permissions: UserPermissions):
         songs=songs,
         free_countries=free_countries,
         is_closed=cl,
-        is_open=year_row["status"] == "open",
+        submissions_open=year_row["submissions_open"],
         shows=shows,
         total=total_entries,
         placeholders=total_placeholders,

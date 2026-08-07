@@ -16,7 +16,7 @@ def move():
     cursor = db.cursor()
 
     cursor.execute("""
-        SELECT id FROM year WHERE status = 'open' AND id >= 0 ORDER BY id
+        SELECT id FROM year WHERE submissions_open AND id >= 0 ORDER BY id
     """)
     years = cursor.fetchall()
 
@@ -35,7 +35,7 @@ def move_post(user: tuple[int, str]):
     cursor = db.cursor()
 
     cursor.execute("""
-        SELECT id FROM year WHERE status = 'open' AND id >= 0 ORDER BY id
+        SELECT id FROM year WHERE submissions_open AND id >= 0 ORDER BY id
     """)
     years = cursor.fetchall()
 

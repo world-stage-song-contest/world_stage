@@ -686,11 +686,11 @@ def _validate_country(country_code: str) -> tuple[str | None, tuple | None]:
 def _validate_year(cursor, year: int) -> tuple | None:
     """Return an error response if the year doesn't exist or isn't accepting
     new submissions, else None."""
-    cursor.execute("SELECT id, status FROM year WHERE id = %s", (year,))
+    cursor.execute("SELECT id, submissions_open FROM year WHERE id = %s", (year,))
     row = cursor.fetchone()
     if not row:
         return err(ErrorID.NOT_FOUND, f"Year {year} not found")
-    if row["status"] != "open":
+    if not row["submissions_open"]:
         return err(ErrorID.FORBIDDEN, f"Year {year} is no longer accepting new submissions")
     return None
 
@@ -1160,9 +1160,11 @@ def replace_song(id: int, auth: tuple):
     # Claiming a placeholder is effectively a new submission; require the
     # year to still be open.
     if is_claim:
-        cursor.execute("SELECT status FROM year WHERE id = %s", (row["year_id"],))
+        cursor.execute(
+            "SELECT submissions_open FROM year WHERE id = %s", (row["year_id"],)
+        )
         year_row = cursor.fetchone()
-        if year_row and year_row["status"] != "open":
+        if year_row and not year_row["submissions_open"]:
             return err(ErrorID.FORBIDDEN, "This year is no longer accepting new submissions")
 
     # ── Parse languages (required) ───────────────────────────────
@@ -1558,7 +1560,8 @@ def delete_song(id: int, auth: tuple):
 
     cursor.execute(
         """
-        SELECT song.id, song.submitter_id, song.is_placeholder, year.status
+        SELECT song.id, song.submitter_id, song.is_placeholder,
+               year.submissions_open
         FROM current_song AS song
         JOIN year ON song.year_id = year.id
         WHERE song.id = %s
@@ -1570,7 +1573,7 @@ def delete_song(id: int, auth: tuple):
     if not row:
         return "", 204
 
-    if row["status"] != "open" and not permissions.can_edit:
+    if not row["submissions_open"] and not permissions.can_edit:
         return err(ErrorID.FORBIDDEN, "Cannot delete a song for a current or past year")
 
     if not permissions.can_edit and row["submitter_id"] != user_id:

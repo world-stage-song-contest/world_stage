@@ -173,8 +173,8 @@ def _seeded_db(_test_db):
 
         # Year (open for submissions)
         cur.execute("""
-            INSERT INTO year (id, status, host_id)
-            VALUES (2025, 'open', 'US')
+            INSERT INTO year (id, status, submissions_open, host_id)
+            VALUES (2025, 'open', true, 'US')
             ON CONFLICT DO NOTHING
         """)
 

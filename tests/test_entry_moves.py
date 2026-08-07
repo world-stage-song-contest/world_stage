@@ -26,9 +26,11 @@ def move_years(db):
     with db.cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO year (id, status, host_id)
-            VALUES (2026, 'open', 'US'), (2027, 'ongoing', 'FR')
-            ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status
+            INSERT INTO year (id, status, submissions_open, host_id)
+            VALUES (2026, 'open', true, 'US'), (2027, 'ongoing', false, 'FR')
+            ON CONFLICT (id) DO UPDATE
+            SET status = EXCLUDED.status,
+                submissions_open = EXCLUDED.submissions_open
             """
         )
     db.commit()

@@ -27,7 +27,7 @@
     {% endif %}
 {% endblock %}
 {% block content %}
-{% if is_open %}
+{% if submissions_open %}
 <div class="banner compact">
     <p>Placeholders are highlighted in yellow, accepted entries in green, and rejected entries in red.</p>
 </div>
@@ -109,9 +109,9 @@
         {% endif %}
         {% set r = results.get(song.id, {}) %}
         {% set verification_class = '' %}
-        {% if is_open and song.approval_status == 'accepted' %}
+        {% if submissions_open and song.approval_status == 'accepted' %}
             {% set verification_class = 'verification-accepted' %}
-        {% elif is_open and song.approval_status == 'rejected' %}
+        {% elif submissions_open and song.approval_status == 'rejected' %}
             {% set verification_class = 'verification-rejected' %}
         {% endif %}
         <tr data-value="{{ loop.index }}"

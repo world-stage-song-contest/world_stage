@@ -150,6 +150,36 @@ class TestCreateSong:
             )
             assert cursor.fetchone()["changed_by"] == 2
 
+    def test_submission_gate_is_independent_of_year_status(
+        self, client, db, bob_headers
+    ):
+        try:
+            with db.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE year
+                       SET status = 'ongoing', submissions_open = true
+                       WHERE id = 2025"""
+                )
+            db.commit()
+            assert _create_song(client, bob_headers, country="US").status_code == 201
+
+            with db.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE year
+                       SET status = 'open', submissions_open = false
+                       WHERE id = 2025"""
+                )
+            db.commit()
+            assert _create_song(client, bob_headers, country="ES").status_code == 403
+        finally:
+            with db.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE year
+                       SET status = 'open', submissions_open = true
+                       WHERE id = 2025"""
+                )
+            db.commit()
+
     def test_create_cannot_set_approval_status(self, client, db, alice_headers):
         resp = _create_song(client, alice_headers, approval_status="accepted")
         assert resp.status_code == 201

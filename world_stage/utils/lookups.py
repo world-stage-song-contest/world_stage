@@ -196,14 +196,14 @@ def get_closed_years() -> list[int]:
 
 def get_years_grouped() -> dict:
     """Return years split into groups for display in submission forms:
-    - open: status = 'open', ascending
-    - closed: status <> 'open', ascending
+    - open: submissions_open, ascending
+    - closed: not submissions_open, ascending
     - specials: negative IDs with their special_name / special_short_name
     """
     db = get_db()
     cursor = db.cursor()
     cursor.execute("""
-        SELECT id, status, special_name, special_short_name
+        SELECT id, submissions_open, special_name, special_short_name
         FROM year
         ORDER BY id
     """)
@@ -219,7 +219,7 @@ def get_years_grouped() -> dict:
                     "special_short_name": row["special_short_name"],
                 }
             )
-        elif row["status"] == "open":
+        elif row["submissions_open"]:
             open_years.append(row["id"])
         else:
             closed_years.append(row["id"])

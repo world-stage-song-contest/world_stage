@@ -25,7 +25,8 @@ def index():
     if status is not None:
         cursor.execute(
             """
-SELECT year.id, year.status, year.host_id, country.name, country.cc3
+SELECT year.id, year.status, year.submissions_open,
+       year.host_id, country.name, country.cc3
 FROM year
 LEFT OUTER JOIN country ON year.host_id = country.id
 WHERE year.status = %s
@@ -35,7 +36,8 @@ ORDER BY year.id
         )
     else:
         cursor.execute("""
-SELECT year.id, year.status, year.host_id, country.name, country.cc3
+SELECT year.id, year.status, year.submissions_open,
+       year.host_id, country.name, country.cc3
 FROM year
 LEFT OUTER JOIN country ON year.host_id = country.id
 ORDER BY year.id
@@ -45,6 +47,7 @@ ORDER BY year.id
         Year(
             year=val["id"],
             status=val["status"],
+            submissions_open=val["submissions_open"],
             host=Country(id=val["host_id"], cc3=val["cc3"], name=val["name"])
             if val["host_id"] is not None
             else None,
@@ -61,7 +64,8 @@ def year(id: int):
 
     cursor.execute(
         """
-SELECT year.id, year.status, year.host_id, country.name, country.cc3,
+SELECT year.id, year.status, year.submissions_open,
+       year.host_id, country.name, country.cc3,
        COUNT(song.is_placeholder) FILTER(WHERE song.is_placeholder = false) AS entries,
        COUNT(song.is_placeholder) FILTER(WHERE song.is_placeholder = true) AS placeholders
 FROM year
@@ -81,6 +85,7 @@ ORDER BY year.id
     data = Year(
         year=val["id"],
         status=val["status"],
+        submissions_open=val["submissions_open"],
         entry_count=val["entries"],
         placeholder_count=val["placeholders"],
         host=Country(id=val["host_id"], cc3=val["cc3"], name=val["name"])

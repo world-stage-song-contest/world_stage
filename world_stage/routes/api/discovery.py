@@ -286,7 +286,7 @@ def submission_context():
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT id, status, special_name, special_short_name
+        SELECT id, status, submissions_open, special_name, special_short_name
         FROM year
         ORDER BY id
         """
@@ -302,7 +302,7 @@ def submission_context():
                     "special_short_name": row["special_short_name"],
                 }
             )
-        elif row["status"] == "open":
+        elif row["submissions_open"]:
             years["open"].append(row["id"])
         else:
             years["closed"].append(row["id"])

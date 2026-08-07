@@ -400,7 +400,8 @@ def _render_manage(year_id: int, year_data: dict):
 def manage(year: int):
     cursor = get_db().cursor()
     cursor.execute(
-        "SELECT id, status, host_id FROM year WHERE id = %s AND id >= 0",
+        """SELECT id, status, submissions_open, host_id
+           FROM year WHERE id = %s AND id >= 0""",
         (year,),
     )
     year_data = cursor.fetchone()
@@ -457,6 +458,18 @@ def manage_post(year: int):
             """,
                 (status, year),
             )
+        case "set_submissions_open":
+            submissions_open = body.get("submissions_open")
+            if not isinstance(submissions_open, bool):
+                return render_template(
+                    "error.html", error="Invalid submissions status"
+                ), 400
+            cursor.execute(
+                "UPDATE year SET submissions_open = %s WHERE id = %s",
+                (submissions_open, year),
+            )
+            if cursor.rowcount == 0:
+                return render_template("error.html", error=f"Year {year} not found"), 404
         case "set_host":
             if year < 0:
                 return render_template(

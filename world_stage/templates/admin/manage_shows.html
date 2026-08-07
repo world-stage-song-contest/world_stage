@@ -155,5 +155,11 @@
         </select>
     </div>
     <button onclick="changeYearStatus()">Change Year Status</button>
+    <div>
+        <input type="checkbox" id="submissions_open"
+               {% if year.submissions_open %}checked{% endif %}>
+        <label for="submissions_open">Submissions open</label>
+    </div>
+    <button onclick="changeSubmissionsOpen()">Change Submission Status</button>
 </div>
 {% endblock %}

@@ -23,6 +23,7 @@ class Country(Model):
 class Year(Model):
     year: int
     status: str
+    submissions_open: bool
     host: Country | None
     entry_count: int | None = None
     placeholder_count: int | None = None

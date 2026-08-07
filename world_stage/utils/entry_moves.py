@@ -20,7 +20,7 @@ def move_entry(
     changed_by: int,
     submitter_id: int | None = None,
 ) -> dict:
-    """Move a regular entry between open years/countries.
+    """Move a regular entry between years that are open for submissions.
 
     ``submitter_id`` limits the operation to that user's entries. Admin callers
     leave it unset. A placeholder at the destination is withdrawn and parked on
@@ -35,7 +35,7 @@ def move_entry(
     cursor.execute(
         f"""
         SELECT current.id, current.year_id, current.country_id,
-               current.entry_number, source_year.status AS year_status
+               current.entry_number, source_year.submissions_open
         FROM song AS stable
         JOIN current_song AS current ON current.id = stable.id
         JOIN year AS source_year ON source_year.id = current.year_id
@@ -47,16 +47,16 @@ def move_entry(
     source = cursor.fetchone()
     if source is None:
         raise EntryMoveError("Entry not found")
-    if source["year_status"] != "open":
-        raise EntryMoveError("Entries can only be moved from an upcoming year")
+    if not source["submissions_open"]:
+        raise EntryMoveError("Entries can only be moved from a year open for submissions")
 
     cursor.execute(
-        "SELECT id, status FROM year WHERE id = %s FOR UPDATE",
+        "SELECT id, submissions_open FROM year WHERE id = %s FOR UPDATE",
         (to_year,),
     )
     destination_year = cursor.fetchone()
-    if destination_year is None or destination_year["status"] != "open":
-        raise EntryMoveError("Entries can only be moved to an upcoming year")
+    if destination_year is None or not destination_year["submissions_open"]:
+        raise EntryMoveError("Entries can only be moved to a year open for submissions")
 
     cursor.execute(
         "SELECT id FROM country WHERE id = %s AND is_participating",

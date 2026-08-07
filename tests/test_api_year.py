@@ -56,6 +56,7 @@ class TestYearIndex:
         year = data[0]
         assert "year" in year
         assert "status" in year
+        assert "submissions_open" in year
         assert "host" in year
 
 
@@ -80,6 +81,7 @@ class TestYearById:
         data = _result(resp)
         assert data["year"] == 2025
         assert data["status"] == "open"
+        assert data["submissions_open"] is True
         assert data["entry_count"] >= 1
         assert "host" in data
 

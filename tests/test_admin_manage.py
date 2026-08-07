@@ -22,7 +22,11 @@ def admin_session(client, db):
     db.rollback()
     with db.cursor() as cursor:
         cursor.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
-        cursor.execute("UPDATE year SET host_id = 'US' WHERE id = 2025")
+        cursor.execute(
+            """UPDATE year
+               SET host_id = 'US', status = 'open', submissions_open = true
+               WHERE id = 2025"""
+        )
     db.commit()
 
 
@@ -154,3 +158,30 @@ def test_manage_year_can_clear_host(client, db, admin_session):
     with db.cursor() as cursor:
         cursor.execute("SELECT host_id FROM year WHERE id = 2025")
         assert cursor.fetchone()["host_id"] is None
+
+
+def test_manage_year_submission_status_is_independent_of_lifecycle(
+    client, db, admin_session
+):
+    response = client.post(
+        "/admin/manage/2025",
+        json={"action": "set_submissions_open", "submissions_open": False},
+    )
+
+    assert response.status_code == 200
+    with db.cursor() as cursor:
+        cursor.execute(
+            "SELECT status, submissions_open FROM year WHERE id = 2025"
+        )
+        assert cursor.fetchone() == {"status": "open", "submissions_open": False}
+
+    response = client.post(
+        "/admin/manage/2025",
+        json={"action": "change_year_status", "year_status": "closed"},
+    )
+    assert response.status_code == 200
+    with db.cursor() as cursor:
+        cursor.execute(
+            "SELECT status, submissions_open FROM year WHERE id = 2025"
+        )
+        assert cursor.fetchone() == {"status": "closed", "submissions_open": False}

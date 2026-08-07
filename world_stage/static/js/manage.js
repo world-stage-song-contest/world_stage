@@ -126,6 +126,21 @@ async function changeYearStatus() {
     setError(data.error);
 }
 
+async function changeSubmissionsOpen() {
+    const checkbox = document.getElementById('submissions_open');
+    if (!checkbox) {
+        const msg = `Checkbox with ID submissions_open not found.`;
+        setError(msg);
+        console.error(msg);
+        return;
+    }
+    const data = await fetchHelper(window.location.href, {
+        'action': 'set_submissions_open',
+        'submissions_open': checkbox.checked
+    });
+    setError(data.error);
+}
+
 const actionsWhitelist = ['approve', 'unapprove', 'annul_password'];
 async function modifyUser(userId, action, extraData) {
     if (!actionsWhitelist.includes(action)) {

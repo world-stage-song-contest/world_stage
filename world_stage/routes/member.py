@@ -68,12 +68,12 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("SELECT status FROM year WHERE id = %s", (year,))
+    cursor.execute("SELECT submissions_open FROM year WHERE id = %s", (year,))
     year_result = cursor.fetchone()
     if not year_result:
         return {"own": [], "placeholder": [], "force_placeholder": False}
 
-    closed = year_result["status"] != "open"
+    submissions_closed = not year_result["submissions_open"]
     is_special = year < 0
     user_limit = 1 if is_special else MAX_USER_SUBMISSIONS
 
@@ -97,7 +97,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     force_placeholder = (
         not all
         and not is_special
-        and not closed
+        and not submissions_closed
         and (user_count >= MAX_USER_SUBMISSIONS or year_count >= MAX_YEAR_SUBMISSIONS)
     )
     countries: dict[str, Any] = {
@@ -134,7 +134,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     )
 
     if all:
-        if closed and not is_special:
+        if submissions_closed and not is_special:
             cursor.execute(
                 """
                 SELECT country.name, country.id AS cc FROM current_song AS song
@@ -197,7 +197,7 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
             {"year": year, "user": user_id},
         )
         countries["placeholder"] = cursor.fetchall()
-    elif not is_special and not closed:
+    elif not is_special and not submissions_closed:
         cursor.execute(
             f"""
             SELECT c.name, c.id AS cc
@@ -251,7 +251,9 @@ def index(user: tuple[int, str], permissions: UserPermissions):
 
 def _move_page(*, error=None):
     cursor = get_db().cursor()
-    cursor.execute("SELECT id FROM year WHERE status = 'open' AND id >= 0 ORDER BY id")
+    cursor.execute(
+        "SELECT id FROM year WHERE submissions_open AND id >= 0 ORDER BY id"
+    )
     years = cursor.fetchall()
     return render_template(
         "member/move.html",
@@ -277,7 +279,7 @@ def move_entries(year: int, user: tuple[int, str]):
         JOIN country ON country.id = song.country_id
         JOIN year ON year.id = song.year_id
         WHERE song.submitter_id = %s AND song.year_id = %s
-          AND year.status = 'open' AND year.id >= 0
+          AND year.submissions_open AND year.id >= 0
         ORDER BY country.name, song.entry_number
         """,
         (user[0], year),
@@ -300,7 +302,7 @@ def move_destinations(year: int, user: tuple[int, str]):
         FROM current_song AS song
         JOIN year ON year.id = song.year_id
         WHERE song.id = %s AND song.submitter_id = %s
-          AND year.status = 'open' AND year.id >= 0
+          AND year.submissions_open AND year.id >= 0
         """,
         (song_id, user[0]),
     )
@@ -308,10 +310,12 @@ def move_destinations(year: int, user: tuple[int, str]):
     if source is None:
         return {"error": "Entry not found"}, 404
 
-    cursor.execute("SELECT status FROM year WHERE id = %s AND id >= 0", (year,))
+    cursor.execute(
+        "SELECT submissions_open FROM year WHERE id = %s AND id >= 0", (year,)
+    )
     destination_year = cursor.fetchone()
-    if destination_year is None or destination_year["status"] != "open":
-        return {"error": "Destination must be an upcoming year"}, 400
+    if destination_year is None or not destination_year["submissions_open"]:
+        return {"error": "Destination must be open for submissions"}, 400
 
     cursor.execute(
         """

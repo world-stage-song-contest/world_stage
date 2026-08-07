@@ -14,7 +14,7 @@ def get_specials() -> list[dict]:
     cursor = db.cursor()
 
     cursor.execute("""
-        SELECT id, status, special_name, special_short_name
+        SELECT id, status, submissions_open, special_name, special_short_name
         FROM year
         WHERE id < 0
         ORDER BY id DESC
@@ -33,7 +33,7 @@ def resolve_special(short_name: str) -> dict | None:
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT id, status, special_name, special_short_name FROM year
+        SELECT id, status, submissions_open, special_name, special_short_name FROM year
         WHERE special_short_name = %s
         """,
         (short_name,),
