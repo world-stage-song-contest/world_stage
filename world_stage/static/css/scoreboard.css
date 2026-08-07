@@ -39,16 +39,6 @@
     }
 }
 
-:root {
-    --columns: 2;
-}
-
-@media (max-width: 900px) {
-    :root {
-        --columns: 1;
-    }
-}
-
 #container {
     position: relative;
     width: 805px;

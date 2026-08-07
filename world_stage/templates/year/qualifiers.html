@@ -2,8 +2,10 @@
 {% extends "base.html" %}
 {% block title %}Qualifiers: {{ special_name or year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
-<link rel="stylesheet" href="{{ static('css/qualifiers.css') }}">
-<link rel="stylesheet" href="{{ static('css/qualifiers-envelopes.css') }}">
+{% for stylesheet in qualifier_stylesheets %}
+<link rel="stylesheet" href="{{ static(stylesheet) }}">
+{% endfor %}
+<script src="{{ static(qualifier_script) }}"></script>
 <script src="{{ static('js/qualifiers.js') }}"></script>
 {% endblock %}
 {% block navigation %}
@@ -19,6 +21,7 @@
 {% endblock %}
 {% block onload %}onLoad('{{ year }}', '{{ show }}'){% endblock %}
 {% block content %}
+<div id="qualifier-reveal"{% if qualifier_style %} data-style="{{ qualifier_style }}"{% endif %}>
 <svg style="display: none;">
     <symbol id="envelope-top" viewBox="0 0 180 60">
         <polygon points="0,0 90,60 180,0" stroke="#888888" fill="currentColor" style="stroke-width: 1px;"/>
@@ -59,4 +62,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

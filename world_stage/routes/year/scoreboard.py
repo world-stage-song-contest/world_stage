@@ -16,6 +16,12 @@ from ...utils import (
 )
 from .common import bp, resolve_special
 from .penalty import _show_penalties
+from .themes import scoreboard_theme
+
+
+def _scoreboard_theme(year_id: int) -> dict:
+    """Backward-compatible wrapper for scoreboard theme resolution."""
+    return scoreboard_theme(year_id)
 
 
 @bp.get("/special/<short_name>/<show>/scoreboard")
@@ -51,6 +57,7 @@ def special_scoreboard(short_name: str, show: str, user, permissions: UserPermis
         show_name=show_data.name,
         special=short_name,
         special_name=special_year["special_name"],
+        **_scoreboard_theme(_year),
     )
 
 
@@ -169,7 +176,13 @@ def scoreboard(year: int, show: str, user, permissions: UserPermissions):
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
-    return render_template("year/scoreboard.html", show=show, year=year, show_name=show_data.name)
+    return render_template(
+        "year/scoreboard.html",
+        show=show,
+        year=year,
+        show_name=show_data.name,
+        **_scoreboard_theme(_year),
+    )
 
 
 @bp.get("/<int:year>/<show>/scoreboard/votes")

@@ -141,6 +141,19 @@ async function changeSubmissionsOpen() {
     setError(data.error);
 }
 
+async function changeScoreboardStyle() {
+    const select = document.getElementById('scoreboard_style');
+    if (!select) {
+        setError('Scoreboard style selector not found.');
+        return;
+    }
+    const data = await fetchHelper(window.location.href, {
+        'action': 'set_scoreboard_style',
+        'scoreboard_style': select.value || null
+    });
+    setError(data.error);
+}
+
 const actionsWhitelist = ['approve', 'unapprove', 'annul_password'];
 async function modifyUser(userId, action, extraData) {
     if (!actionsWhitelist.includes(action)) {

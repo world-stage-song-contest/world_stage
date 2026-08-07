@@ -400,7 +400,7 @@ def _render_manage(year_id: int, year_data: dict):
 def manage(year: int):
     cursor = get_db().cursor()
     cursor.execute(
-        """SELECT id, status, submissions_open, host_id
+        """SELECT id, status, submissions_open, host_id, scoreboard_style
            FROM year WHERE id = %s AND id >= 0""",
         (year,),
     )
@@ -467,6 +467,18 @@ def manage_post(year: int):
             cursor.execute(
                 "UPDATE year SET submissions_open = %s WHERE id = %s",
                 (submissions_open, year),
+            )
+            if cursor.rowcount == 0:
+                return render_template("error.html", error=f"Year {year} not found"), 404
+        case "set_scoreboard_style":
+            scoreboard_style = body.get("scoreboard_style")
+            if scoreboard_style not in (None, "esc-1997"):
+                return render_template(
+                    "error.html", error="Invalid scoreboard style"
+                ), 400
+            cursor.execute(
+                "UPDATE year SET scoreboard_style = %s WHERE id = %s",
+                (scoreboard_style, year),
             )
             if cursor.rowcount == 0:
                 return render_template("error.html", error=f"Year {year} not found"), 404

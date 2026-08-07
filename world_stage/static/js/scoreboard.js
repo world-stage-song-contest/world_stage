@@ -13,6 +13,27 @@ let isSpecial = false;
 // map have no penalty.
 let penalties = {}
 
+const theme = window.scoreboardTheme;
+if (!theme) {
+    throw new Error("A scoreboard theme script must be loaded before scoreboard.js");
+}
+
+// Themes own markup and presentation. The core only relies on this rendering
+// interface, keeping voting, score animation, sorting, and the two-column split
+// independent of any stylesheet's selectors or geometry.
+const requiredThemeMethods = [
+    "createRow", "createPointsLegend", "createVotingCard", "renderNumber",
+    "renderText", "positionRow", "setActive", "setInactive", "markReceived",
+    "applyPenalty", "stopMoving", "markCannotWin", "markWinner", "markOwnEntry",
+    "setFinalPlace", "showVotingCard", "hideVotingCard", "updateJuryProgress",
+    "completeJuryProgress", "reset", "toggleHeader"
+];
+for (const method of requiredThemeMethods) {
+    if (typeof theme[method] !== "function") {
+        throw new Error(`The scoreboard theme is missing ${method}()`);
+    }
+}
+
 /**
  * Run-generation counter. Bumped by ``reset()``; long-running async
  * functions (vote loop, sortCountries, animatePoints, applyPenaltyStage)
@@ -29,8 +50,11 @@ function sleep(ms) {
 }
 
 function toggleHeader() {
-    const header = document.querySelector("header");
-    header.classList.toggle("hidden");
+    theme.toggleHeader();
+    // Header visibility changes the vertical space available to responsive
+    // themes without producing a native resize event. Wait for the display
+    // change to be laid out, then run the normal positioning pass.
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
 }
 
 async function loadVotes(year, show) {
@@ -50,208 +74,28 @@ async function loadVotes(year, show) {
     penalties = json.penalties || {};
 }
 
-function makeRow(country) {
-    function makePointDisplay(padding, className) {
-        const el = document.createElement("div");
-        // Start with .zero so the initial "0" is dimmed like the
-        // original per-digit zero-value treatment.
-        el.classList.add(className, "number", "point-display", "zero");
-        el.dataset.pad = String(padding);
-        // CSS uses ``data-ghost`` to render the dim "all-segments" LCD
-        // backdrop via a ::before pseudo-element. The cell shows the
-        // absolute value of the score; negativity is conveyed via the
-        // ``negative`` class so the digits change colour instead.
-        el.dataset.ghost = "8".repeat(padding);
-        el.dataset.value = "0";
-        el.textContent = "0".padStart(padding, " ");
-        return el;
-    }
+const displayValues = new WeakMap();
 
-    const superContainer = document.createElement("div");
-    superContainer.classList.add("element", "inactive");
-    //superContainer.classList.add(`background-${country.bg}`, `text-${country.text}`, `foreground-${country.fg1}`, `foreground2-${country.fg2}`);
-    superContainer.dataset.country = country.name;
-    superContainer.dataset.id = country.id;
-
-    const container = document.createElement("div");
-    container.classList.add("inner-container");
-    superContainer.appendChild(container);
-
-    const overlayEl = document.createElement("div");
-    overlayEl.classList.add("element-overlay");
-    container.appendChild(overlayEl);
-
-    const placeEl = document.createElement("div");
-    placeEl.classList.add("element-place", "number");
-    placeEl.textContent = "";
-    container.appendChild(placeEl);
-
-    const flagContainer = document.createElement("div");
-    flagContainer.classList.add("flag-container");
-    container.appendChild(flagContainer);
-
-    const flagEl = document.createElement("img");
-    flagEl.classList.add("flag", "flag-image");
-    flagEl.draggable = false;
-    flagEl.src = window.flagStaticUrl(country.code, 40, "square");
-    flagEl.alt = country.name;
-    flagContainer.appendChild(flagEl);
-
-    const flagOverlayEl = document.createElement("div");
-    flagOverlayEl.classList.add("flag-overlay");
-    flagContainer.appendChild(flagOverlayEl);
-
-    const nameContainer = document.createElement("div");
-    nameContainer.classList.add("name-container");
-    container.appendChild(nameContainer);
-
-    const nameEl = document.createElement("div");
-    nameEl.classList.add("name");
-    nameEl.textContent = country.name;
-    nameContainer.appendChild(nameEl);
-
-    /*
-    const subtitleContainer = document.createElement("div");
-    subtitleContainer.classList.add("subtitle");
-    nameContainer.appendChild(subtitleContainer);
-
-    const titleEl = document.createElement("span");
-    titleEl.classList.add("title");
-    titleEl.textContent = country.title;
-    subtitleContainer.appendChild(titleEl);
-
-    const byNode = document.createTextNode(" by ");
-    subtitleContainer.appendChild(byNode);
-
-    const artistEl = document.createElement("span");
-    artistEl.classList.add("artist");
-    artistEl.textContent = country.artist;
-    subtitleContainer.appendChild(artistEl);
-    */
-
-    const currentlyVotingEl = document.createElement("div");
-    currentlyVotingEl.classList.add("currently-voting");
-    container.appendChild(currentlyVotingEl);
-
-    const currentEl = makePointDisplay(2, "current-points");
-    container.appendChild(currentEl);
-
-    const totalEl = makePointDisplay(3, "total-points");
-    container.appendChild(totalEl);
-
-    return [nameEl, currentEl, totalEl, superContainer, currentlyVotingEl];
+function initialiseDisplay(element) {
+    displayValues.set(element, 0);
+    theme.renderNumber(element, 0);
 }
 
-function makePointsRow() {
-    const row = document.querySelector("#points-row");
-
-    for (const pt of points) {
-        const container = document.createElement("div");
-        container.classList.add("points-container");
-
-        if (pt == points[points.length - 1]) {
-            container.classList.add("gold");
-        } else if (pt == points[points.length - 2]) {
-            container.classList.add("silver");
-        } else if (pt == points[points.length - 3]) {
-            container.classList.add("bronze");
-        }
-
-        const ptEl = document.createElement("div");
-        ptEl.classList.add("points-value", "number");
-        const v = String(pt).padStart(2, "0");
-        ptEl.textContent = v;
-        ptEl.dataset.pad = "2";
-        ptEl.dataset.value = pt;
-        container.appendChild(ptEl);
-
-        const overlayEl = document.createElement("div");
-        overlayEl.classList.add("points-overlay");
-        container.appendChild(overlayEl);
-
-        row.insertBefore(container, row.firstChild);
-    }
-
-    return row;
+function setElementText(element, value) {
+    theme.renderText(element, value);
 }
 
-function makeVotingCard(from, code, country, username = null) {
-    code = code || "XX";
-
-    const container = document.createElement("div");
-    container.classList.add("voting-card", "unloaded");
-
-    const flagEl = document.createElement("img");
-    flagEl.classList.add("voting-card-flag", "flag-image");
-    flagEl.draggable = false;
-    flagEl.src = window.flagStaticUrl(code, 96);
-    flagEl.alt = from;
-    container.appendChild(flagEl);
-
-    const wrapperEl = document.createElement("div");
-    wrapperEl.classList.add("voting-card-user-wrapper");
-    container.appendChild(wrapperEl);
-
-    const nameEl = document.createElement("span");
-    nameEl.classList.add("voting-card-name");
-    nameEl.textContent = from;
-    wrapperEl.appendChild(nameEl);
-
-    // Subtitle: "[username] from [country]" for real jurors, dropping
-    // the username when it matches the displayed name. Synthetic cards
-    // without a country (e.g. the penalty stage) skip the line entirely.
-    if (country) {
-        const countryEl = document.createElement("span");
-        countryEl.classList.add("voting-card-country");
-        if (username && username !== from) {
-            countryEl.textContent = `${username} from ${country}`;
-        } else {
-            countryEl.textContent = `from ${country}`;
-        }
-        wrapperEl.appendChild(countryEl);
-    }
-
-    return container;
-}
-
-/**
- * Replace ``el``'s text with an arbitrary (non-numeric) string,
- * right-aligned within ``data-pad`` chars. Always clears the
- * ``negative`` class.
- */
-function setElementText(el, value) {
-    const pad = +el.dataset.pad || 0;
-    el.classList.remove("negative", "zero");
-    el.textContent = String(value).padStart(pad, " ");
-}
-
-/**
- * Update the numeric value displayed by ``el``. Only the absolute value
- * is rendered — negativity is conveyed via the ``negative`` class
- * (typically a red colour) so the digit count never has to grow to
- * accommodate a sign character.
- *
- * The numeric value is also stashed on ``data-value`` so
- * :func:`animatePoints` doesn't need to parse the formatted text back
- * out.
- */
-function setElementValue(el, value) {
-    const pad = +el.dataset.pad || 0;
-    el.dataset.value = String(value);
-    el.classList.toggle("negative", value < 0);
-    // Mark zero values so CSS can dim the cell — matches the original
-    // per-digit zero-value treatment.
-    el.classList.toggle("zero", value === 0);
-    el.textContent = String(Math.abs(value)).padStart(pad, " ");
+function setElementValue(element, value) {
+    displayValues.set(element, value);
+    theme.renderNumber(element, value);
 }
 
 const duration = 1250;
 
 /**
  * Animate the integer value displayed by ``element`` from its current
- * value to ``end``, one step at a time. The current value is read from
- * ``data-value`` so the formatted text (with a sign char and space
- * padding) doesn't need to be parsed back to a number.
+ * value to ``end``, one step at a time. Values are kept in the core so a
+ * theme can format its display without exposing that formatting back here.
  *
  * @param {HTMLElement} element
  * @param {number} end
@@ -260,7 +104,7 @@ const duration = 1250;
  * Bump and return the per-element animation token. Any in-flight rAF
  * loop or deferred reset captured the previous token, so writing a new
  * one cancels them on their next tick — protecting us from two
- * animations racing on the same dataset.value (which used to leave
+ * animations racing on the same display (which used to leave
  * end-of-show rows stuck on the points-just-received or on 0 when the
  * deferred refresh(null) timeout fired after setPlace finished).
  */
@@ -272,8 +116,7 @@ function bumpAnimToken(element) {
 
 function animatePoints(element, end) {
     end = +end;
-    let current = parseInt(element.dataset.value, 10);
-    if (Number.isNaN(current)) current = 0;
+    let current = displayValues.get(element) || 0;
     // Bump the token even on the early-return path so any pending
     // deferred reset on this element is invalidated.
     const token = bumpAnimToken(element);
@@ -286,14 +129,14 @@ function animatePoints(element, end) {
     let lastTime = performance.now();
     // Capture the run generation so we can abandon this rAF loop if a
     // reset has happened since we started — otherwise the loop keeps
-    // mutating dataset.value on now-detached elements (and worse, can
+    // mutating now-detached elements (and worse, can
     // race with a fresh animation on the same DOM node).
     const gen = runGen;
 
     function update(now) {
         if (gen !== runGen) return;
         // A newer animation (or reset) on this element has superseded
-        // us — bail before mutating dataset.value.
+        // us — bail before updating the display.
         if (token !== element._animToken) return;
         if (now - lastTime >= stepDuration) {
             lastTime = now;
@@ -322,31 +165,13 @@ class Country {
     /** @type {number} */
     id;
     /** @type {string} */
-    country;
-    /** @type {string} */
     code;
     /** @type {boolean} */
     win;
     /** @type {Object<number, number>} */
     votes;
-    /** @type {HTMLElement} */
-    element;
-    /** @type {HTMLElement} */
-    nameEl;
-    /** @type {HTMLElement} */
-    currentEl;
-    /** @type {HTMLElement} */
-    totalEl;
-    /** @type {HTMLElement} */
-    currentlyVotingEl;
-    /** @type {string} */
-    bg;
-    /** @type {string} */
-    fg1;
-    /** @type {string} */
-    fg2;
-    /** @type {string} */
-    text;
+    /** @type {Object} */
+    view;
 
     constructor(data) {
         this.index = data.index;
@@ -356,16 +181,14 @@ class Country {
         this.title = data.title;
         this.id = data.id;
         this.code = data.cc || "XX";
-        this.bg = data.bg;
-        this.fg1 = data.fg1;
-        this.fg2 = data.fg2;
-        this.text = data.text;
         this.win = true;
         this.penalty = 0;
         this.votes = new Proxy({}, {
             get: (target, name) => name in target ? target[name] : 0
         });
-        [this.nameEl, this.currentEl, this.totalEl, this.element, this.currentlyVotingEl] = makeRow(this);
+        this.view = theme.createRow(this);
+        initialiseDisplay(this.view.current);
+        initialiseDisplay(this.view.total);
     }
 
     get points() {
@@ -381,16 +204,16 @@ class Country {
 
     /**
      * Apply a penalty deduction at the end of voting. The total display
-     * is animated downwards and the row is marked with the ``penalised``
-     * class so it can be styled distinctly.
+     * is animated downwards and the theme is notified so it can render the
+     * penalised state.
      * @param {number} amount
      */
     applyPenalty(amount) {
         this.penalty = (this.penalty || 0) + amount;
         this.setActive();
-        this.element.classList.add("penalised");
-        animatePoints(this.totalEl, this.points);
-        animatePoints(this.currentEl, -amount);
+        theme.applyPenalty(this.view);
+        animatePoints(this.view.total, this.points);
+        animatePoints(this.view.current, -amount);
     }
 
     get voters() {
@@ -402,16 +225,8 @@ class Country {
      * @param {number} lim
      */
     setPosition(i, lim) {
-        const col = Math.floor(i / lim);
-        const row = i - lim * col;
-
         this.index = i;
-        const elsz = this.element.getBoundingClientRect();
-        const yoff = elsz.height + 5;
-        const xoff = elsz.width + 5;
-
-        this.element.style.top = `${yoff * row}px`;
-        this.element.style.left = `${xoff * col}px`;
+        theme.positionRow(this.view, i, lim);
     }
 
     /**
@@ -423,15 +238,11 @@ class Country {
     }
 
     setActive() {
-        this.element.classList.remove("inactive", "own-entry");
-        this.currentEl.classList.add("visible");
-        this.element.classList.add("main-moving", "active", "received-points");
+        theme.setActive(this.view);
     }
 
     setInactive() {
-        this.currentEl.classList.remove("visible");
-        this.element.classList.add("inactive");
-        this.element.classList.remove("received-gold", "received-silver", "received-bronze", "received-points", "active", "own-entry");
+        theme.setInactive(this.view);
     }
 
     /**
@@ -445,24 +256,26 @@ class Country {
             // before the timeout fires, that call bumps the token and
             // we skip the reset, leaving the newer animation's value
             // intact.
-            const token = bumpAnimToken(this.currentEl);
+            const token = bumpAnimToken(this.view.current);
             setTimeout(() => {
                 if (gen !== runGen) return;
-                if (token !== this.currentEl._animToken) return;
-                setElementValue(this.currentEl, 0);
+                if (token !== this.view.current._animToken) return;
+                setElementValue(this.view.current, 0);
             }, 1100);
             this.setInactive();
         } else {
-            animatePoints(this.totalEl, this.points);
-            animatePoints(this.currentEl, pt);
+            animatePoints(this.view.total, this.points);
+            animatePoints(this.view.current, pt);
             this.setActive();
+            let rank = null;
             if (pt == points[points.length - 1]) {
-                this.element.classList.add("received-gold");
+                rank = 1;
             } else if (pt == points[points.length - 2]) {
-                this.element.classList.add("received-silver");
+                rank = 2;
             } else if (pt == points[points.length - 3]) {
-                this.element.classList.add("received-bronze");
+                rank = 3;
             }
+            theme.markReceived(this.view, rank);
         }
     }
 
@@ -471,13 +284,12 @@ class Country {
      */
     setPlace(place) {
         this.setActive();
-        const parent = this.element.parentElement;
-        parent.insertBefore(this.element, parent.childNodes[place]);
-        animatePoints(this.currentEl, place);
+        theme.setFinalPlace(this.view, place);
+        animatePoints(this.view.current, place);
     }
 
     finalise() {
-        this.element.classList.remove("main-moving");
+        theme.stopMoving(this.view);
     }
 
     /**
@@ -527,19 +339,18 @@ class Country {
         const left = this.points + leftVotes * Math.max(...points);
         if (left <= leaderPts) {
             this.win = false;
-            this.element.classList.add("no-win");
+            theme.markCannotWin(this.view);
         }
     }
 
     setWinner() {
-        this.element.classList.add("winner");
-        this.element.classList.remove("no-win", "own-entry", "active");
+        theme.markWinner(this.view);
     }
 
     setOwnEntry() {
         this.setActive();
-        this.element.classList.add("own-entry");
-        setElementText(this.currentEl, "()");
+        theme.markOwnEntry(this.view);
+        setElementText(this.view.current, "()");
     }
 
     toString() {
@@ -553,10 +364,8 @@ let perColumn = 0;
 
 function setColumnLimit() {
     const cnt = data.length;
-    const style = window.getComputedStyle(document.body);
-    const lim = style.getPropertyValue('--columns');
-    perColumn = Math.ceil(cnt / lim);
-    return [cnt, lim, perColumn]
+    perColumn = Math.ceil(cnt / 2);
+    return perColumn;
 }
 
 function populate() {
@@ -569,16 +378,12 @@ function populate() {
             ro: c.vote_data.ro,
             id: c.id,
             name: isSpecial ? c.title : c.country.name,
-            cc: c.country.cc,
-            bg: c.country.bg,
-            fg1: c.country.fg1,
-            fg2: c.country.fg2,
-            text: c.country.text
+            cc: c.country.cc
         });
         countries[c.id] = country;
         ro.push(country);
 
-        container.appendChild(country.element);
+        container.appendChild(country.view.element);
 
         country.setPosition(c.vote_data.ro - 1, perColumn);
     }
@@ -586,7 +391,7 @@ function populate() {
 
 function depopulate() {
     for (const c of Object.values(countries)) {
-        c.element.remove();
+        c.view.element.remove();
     }
 
     countries = {};
@@ -607,7 +412,7 @@ async function sortCountries() {
     for (const [i, c] of ro.entries()) {
         setTimeout(() => {
             if (gen !== runGen) return;
-            c.element.classList.remove("main-moving");
+            theme.stopMoving(c.view);
         }, delay * 2.5);
         c.setPosition(i, perColumn);
     }
@@ -619,8 +424,6 @@ async function vote() {
     const gen = runGen;
     const stale = () => gen !== runGen;
 
-    const juryCounter = document.querySelector("#jury-count");
-    const juryBar = document.querySelector("#jury-bar");
     const fromJury = document.querySelector("#from");
 
     let juryCount = 0;
@@ -649,7 +452,12 @@ async function vote() {
             code = assoc.code;
         }
 
-        const card = makeVotingCard(nickname, code, country, from);
+        const card = theme.createVotingCard({
+            name: nickname,
+            code,
+            country,
+            username: from
+        });
         fromJury.appendChild(card);
 
         while (paused) {
@@ -657,17 +465,11 @@ async function vote() {
             if (stale()) return;
         }
 
-        juryCounter.textContent = juryCount;
-        juryBar.classList.add("animating");
-        setTimeout(() => {
-            if (stale()) return;
-            juryBar.classList.remove("animating");
-        }, 2100);
-        juryBar.style.width = `${(juryCount / voterCount) * 100}%`;
+        theme.updateJuryProgress(juryCount, voterCount);
 
         await sleep(50);
         if (stale()) return;
-        card.classList.remove("unloaded");
+        theme.showVotingCard(card);
         await sleep(2000);
         if (stale()) return;
 
@@ -716,7 +518,7 @@ async function vote() {
             if (stale()) return;
         }
 
-        card.classList.add("unloaded2");
+        theme.hideVotingCard(card);
         await sleep(delay * 2.5);
         if (stale()) return;
 
@@ -738,7 +540,7 @@ async function vote() {
         if (stale()) return;
     }
 
-    juryBar.style.width = "100%";
+    theme.completeJuryProgress();
 
     ro[0].setWinner();
     for (const [i, c] of ro.entries()) {
@@ -759,8 +561,7 @@ async function applyPenaltyStage() {
     const stale = () => gen !== runGen;
 
     const fromJury = document.querySelector("#from");
-    const card = makeVotingCard("Penalties", "XX", null);
-    card.classList.add("penalty-card");
+    const card = theme.createVotingCard({name: "Penalties", penalty: true});
     fromJury.appendChild(card);
 
     while (paused) {
@@ -774,7 +575,7 @@ async function applyPenaltyStage() {
 
     await sleep(50);
     if (stale()) return;
-    card.classList.remove("unloaded");
+    theme.showVotingCard(card);
     await sleep(2000);
     if (stale()) return;
 
@@ -792,13 +593,13 @@ async function applyPenaltyStage() {
     await sortCountries();
     if (stale()) return;
 
-    card.classList.add("unloaded2");
+    theme.hideVotingCard(card);
     await sleep(delay * 2.5);
     if (stale()) return;
     card.remove();
 
     // Reset per-row state so the upcoming vote loop starts from a
-    // clean slate (currentEl back to 0, rows inactive).
+    // clean slate (current score back to 0, rows inactive).
     for (const c of ro) {
         c.refresh();
     }
@@ -828,7 +629,7 @@ async function reset() {
     isReset = true;
     paused = true;
 
-    document.querySelector("#from").innerHTML = "";
+    theme.reset();
 
     depopulate();
     populate();
@@ -844,6 +645,9 @@ async function onLoad(year, show, special = false) {
 
     window.addEventListener('resize', () => {
         setColumnLimit();
+        for (const country of ro) {
+            country.setPosition(country.index, perColumn);
+        }
     }, true);
     setColumnLimit();
 
@@ -853,7 +657,7 @@ async function onLoad(year, show, special = false) {
         await reset();
     }
 
-    makePointsRow();
+    theme.createPointsLegend(points);
     populate();
     await vote();
 }

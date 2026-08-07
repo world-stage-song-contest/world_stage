@@ -1,0 +1,15 @@
+@font-face {
+    font-family: 'Trade Gothic Condensed';
+    src: url('../fonts/trade-gothic/Trade_Gothic_Bold_Condensed_No_20.otf') format('opentype');
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Letter Gothic';
+    src: url('../fonts/letter-gothic/Letter_Gothic_Bold.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}

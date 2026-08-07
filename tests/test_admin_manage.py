@@ -24,7 +24,8 @@ def admin_session(client, db):
         cursor.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
         cursor.execute(
             """UPDATE year
-               SET host_id = 'US', status = 'open', submissions_open = true
+               SET host_id = 'US', status = 'open', submissions_open = true,
+                   scoreboard_style = 'esc-1997'
                WHERE id = 2025"""
         )
     db.commit()
@@ -185,3 +186,34 @@ def test_manage_year_submission_status_is_independent_of_lifecycle(
             "SELECT status, submissions_open FROM year WHERE id = 2025"
         )
         assert cursor.fetchone() == {"status": "closed", "submissions_open": False}
+
+
+def test_manage_year_can_change_scoreboard_style(client, db, admin_session):
+    response = client.post(
+        "/admin/manage/2025",
+        json={"action": "set_scoreboard_style", "scoreboard_style": None},
+    )
+
+    assert response.status_code == 200
+    with db.cursor() as cursor:
+        cursor.execute("SELECT scoreboard_style FROM year WHERE id = 2025")
+        assert cursor.fetchone()["scoreboard_style"] is None
+
+    response = client.post(
+        "/admin/manage/2025",
+        json={"action": "set_scoreboard_style", "scoreboard_style": "esc-1997"},
+    )
+
+    assert response.status_code == 200
+    with db.cursor() as cursor:
+        cursor.execute("SELECT scoreboard_style FROM year WHERE id = 2025")
+        assert cursor.fetchone()["scoreboard_style"] == "esc-1997"
+
+
+def test_manage_year_rejects_unknown_scoreboard_style(client, db, admin_session):
+    response = client.post(
+        "/admin/manage/2025",
+        json={"action": "set_scoreboard_style", "scoreboard_style": "unknown"},
+    )
+
+    assert response.status_code == 400

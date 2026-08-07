@@ -225,117 +225,24 @@ async function putInPlace(envelope) {
 }
 
 function createEnvelope(n, country, isSecondChance) {
-    const label = entryLabel(country);
-    const countryName = country.country;
-    const code = country.cc;
-    const id = country.id;
-
-    function createCard() {
-        const card = document.createElement("div");
-        card.classList.add("envelope-card", "hidden", "shrunk");
-
-        const back = document.createElement("div");
-        back.classList.add("card-back");
-        card.appendChild(back);
-
-        const front = document.createElement("div");
-        front.classList.add("card-front", "flipped");
-        card.appendChild(front);
-
-        const flag = document.createElement("img");
-        flag.src = window.flagStaticUrl(code, 54);
-        flag.classList.add("card-flag", "flag-image");
-        flag.draggable = false;
-        flag.title = countryName;
-        front.appendChild(flag);
-
-        // Specials display the song title (multiple entries per country
-        // would otherwise be indistinguishable); regular years display
-        // the country name. The flag's hover tooltip always carries the
-        // country name.
-        const titleEl = document.createElement("h2");
-        titleEl.textContent = label;
-        titleEl.title = label;
-        titleEl.classList.add(isSpecial ? "card-title" : "card-country");
-        front.appendChild(titleEl);
-
-        return card;
-    }
-
-    const envelope = document.createElement("div");
-    envelope.classList.add("envelope", isSecondChance ? "second-chance" : "direct-to-final");
-    // Composite key — uniquely identifies the entry on specials where a
-    // country can have multiple submissions.
-    envelope.dataset.id = entryKey(country);
-    envelope.dataset.cc = code;
-    envelope.dataset.song = id;
-    if (country.is_special) envelope.title = "Special qualifier";
-
+    const envelope = window.qualifiersTheme.createEnvelope(
+        n,
+        country,
+        isSecondChance,
+        {entryKey, entryLabel, isSpecial}
+    );
     envelope.onclick = async () => {
         await putInPlace(envelope);
-    }
-
-    function createEnvelopePart(name, width, height) {
-        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-        use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", `#${name}`);
-        use.setAttribute("width", width);
-        use.setAttribute("height", height);
-
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.appendChild(use);
-        svg.setAttribute("width", width);
-        svg.setAttribute("height", height);
-
-        const part = document.createElement("div");
-        part.classList.add(name, "envelope-part");
-        part.appendChild(svg);
-
-        return part;
-    }
-
-    envelope.appendChild(createEnvelopePart("envelope-bg", 180, 120));
-    envelope.appendChild(createEnvelopePart("envelope-bottom", 180, 120));
-    envelope.appendChild(createEnvelopePart("envelope-top", 180, 60));
-
-    const number = document.createElement("h2");
-    number.textContent = n;
-    number.classList.add("envelope-number");
-    envelope.appendChild(number);
-
-    envelope.appendChild(createCard());
-
+    };
     return envelope;
 }
 
 function createCountry(country, countryClass) {
-    const countryEl = document.createElement("div");
-    countryEl.classList.add("country", countryClass);
-    countryEl.dataset.id = entryKey(country);
-    countryEl.dataset.cc = country.cc;
-
-    const flag = document.createElement("img");
-    flag.classList.add("reveal-flag", "flag-image");
-    flag.draggable = false;
-    flag.src = window.flagStaticUrl(country.cc, 24, "square");
-    flag.title = country.country;
-    countryEl.appendChild(flag);
-
-    // Specials use the song title (a single country can have multiple
-    // entries); regular years use the country name. ``title`` attribute
-    // exposes the full text on hover when truncated.
-    const label = entryLabel(country);
-    const heading = document.createElement("h2");
-    heading.classList.add(isSpecial ? "reveal-title" : "reveal-country");
-    heading.textContent = label;
-    heading.title = label;
-    countryEl.appendChild(heading);
-
-    /*
-    const ro = document.createElement("h2");
-    ro.classList.add("reveal-ro", "transparent");
-    country.appendChild(ro);*/
-
-    return countryEl;
+    return window.qualifiersTheme.createCountry(
+        country,
+        countryClass,
+        {entryKey, entryLabel, isSpecial}
+    );
 }
 
 function createEnvelopes() {
@@ -343,7 +250,8 @@ function createEnvelopes() {
     for (const [groupIndex, group] of revealOrder.groups.entries()) {
         const container = document.createElement("div");
         container.dataset.targetShow = group.target_show_id;
-        container.title = group.target_name;
+        container.dataset.targetName = group.target_name;
+        container.setAttribute("aria-label", group.target_name);
         for (const [index, country] of group.entries.entries()) {
             container.appendChild(createEnvelope(index + 1, country, groupIndex > 0));
         }
@@ -354,7 +262,11 @@ function createEnvelopes() {
 function createRo() {
     console.log(revealOrder);
     const countries = document.querySelector("#results");
-    const lim = allCountries.length / 2;
+    const lim = Math.ceil(allCountries.length / 2);
+    document.querySelector("#qualifier-reveal").style.setProperty(
+        "--qualifier-row-count",
+        String(lim)
+    );
     for (const [i, country] of allCountries.entries()) {
         const col = Math.floor(i / lim);
         const row = i - lim * col;
@@ -374,6 +286,9 @@ let loaded = false;
 
 async function onLoad(year, show) {
     if (loaded) return;
+    if (!window.qualifiersTheme) {
+        throw new Error("Qualifier reveal theme was not loaded");
+    }
     loaded = true;
 
     await loadVotes(year, show);
@@ -384,6 +299,7 @@ async function onLoad(year, show) {
 function toggleHeader() {
     const header = document.querySelector("header");
     header.classList.toggle("hidden");
+    window.scrollTo({top: 0, left: 0});
 }
 
 async function save() {

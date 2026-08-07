@@ -13,6 +13,7 @@ from ...utils import (
     with_auth,
 )
 from .common import bp, resolve_special
+from .themes import qualifier_theme
 
 
 def _manual_special_qualifiers(
@@ -234,6 +235,7 @@ def qualifiers(year: int, show: str, user, permissions: UserPermissions):
         year=year,
         show_name=show_data.name,
         progressions=show_data.progressions,
+        **qualifier_theme(_year),
     )
 
 
@@ -497,6 +499,7 @@ def special_qualifiers(short_name: str, show: str, user, permissions: UserPermis
         special=short_name,
         special_name=special_year["special_name"],
         progressions=show_data.progressions,
+        **qualifier_theme(_year),
     )
 
 

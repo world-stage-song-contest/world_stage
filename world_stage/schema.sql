@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS year (
     status text REFERENCES year_status (name) ON UPDATE RESTRICT ON DELETE RESTRICT,
     submissions_open boolean NOT NULL DEFAULT false,
     host_id text REFERENCES country (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    scoreboard_style text,
     special_name text,
     special_short_name text,
     CONSTRAINT year_special_name_check
