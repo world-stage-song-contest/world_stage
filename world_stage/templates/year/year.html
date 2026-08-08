@@ -27,6 +27,14 @@
     <a class="nav-item" href="{{ url_for('year.year_voters', year=year) }}">Voters</a>
     <a class="nav-item" href="{{ url_for('year.nfs', year=year) }}">National Finals</a>
     {% endif %}
+    {% if can_view_verifications %}
+    <span class="nav-separator"></span>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('admin.verifications_special', short_name=special) }}">Verifications</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('admin.verifications', year=year) }}">Verifications</a>
+    {% endif %}
+    {% endif %}
 {% endblock %}
 {% block content %}
 {% if submissions_open %}

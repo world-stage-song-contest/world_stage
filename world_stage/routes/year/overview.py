@@ -150,6 +150,7 @@ def special(short_name: str, permissions: UserPermissions):
         special=short_name,
         special_name=special_year["special_name"],
         ongoing_national_finals=ongoing_national_finals,
+        can_view_verifications=permissions.can_view_restricted,
     )
 
 @bp.get("/<int:year>")
@@ -261,4 +262,5 @@ def year(year: int, permissions: UserPermissions):
         sf_numbers=sf_numbers,
         can_view_voters=can_view_voters,
         ongoing_national_finals=ongoing_national_finals,
+        can_view_verifications=permissions.can_view_restricted,
     )

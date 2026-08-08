@@ -642,3 +642,21 @@ def test_verifications_require_admin_access(client):
 
     assert response.status_code == 302
     assert response.headers["Location"] == "/"
+
+
+def test_year_navbar_links_to_verifications_for_admin(client, db):
+    _login(client, db, 1)
+
+    response = client.get("/year/2025", headers=HTML_HEADERS)
+
+    assert response.status_code == 200
+    assert 'href="/admin/manage/2025/verifications"' in response.text
+
+
+def test_year_navbar_hides_verifications_from_non_admin(client, db):
+    _login(client, db, 2)
+
+    response = client.get("/year/2025", headers=HTML_HEADERS)
+
+    assert response.status_code == 200
+    assert 'href="/admin/manage/2025/verifications"' not in response.text
