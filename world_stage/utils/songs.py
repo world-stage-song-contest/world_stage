@@ -322,9 +322,11 @@ def get_song_key_signatures(song_id: int) -> list[str]:
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT tonic, mode, microtonal, notes
-        FROM song_key_signature
-        WHERE song_id = %s
+        SELECT member.tonic, member.mode, member.microtonal, member.notes
+        FROM current_song AS song
+        JOIN key_signature_set_key_signature AS member
+          ON member.key_signature_set_id = song.key_signature_set_id
+        WHERE song.id = %s
           AND (tonic IS NOT NULL OR mode IS NOT NULL)
     """,
         (song_id,),
@@ -364,10 +366,12 @@ def get_song_time_signatures(song_id: int) -> list[str]:
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT numerator, denominator
-        FROM song_time_signature
-        WHERE song_id = %s
-        ORDER BY start_seconds
+        SELECT member.numerator, member.denominator
+        FROM current_song AS song
+        JOIN time_signature_set_time_signature AS member
+          ON member.time_signature_set_id = song.time_signature_set_id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -392,10 +396,12 @@ def get_song_subgenres_display(song_id: int) -> list[str]:
     cursor.execute(
         """
         SELECT subgenre.name
-        FROM song_subgenre
-        JOIN subgenre ON subgenre.id = song_subgenre.subgenre_id
-        WHERE song_subgenre.song_id = %s
-        ORDER BY song_subgenre.priority
+        FROM current_song AS song
+        JOIN genre_set_subgenre AS member
+          ON member.genre_set_id = song.genre_set_id
+        JOIN subgenre ON subgenre.id = member.subgenre_id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -412,10 +418,13 @@ def get_song_time_signature_timeline(song_id: int) -> list[dict]:
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT start_seconds, numerator, denominator, notes
-        FROM song_time_signature
-        WHERE song_id = %s
-        ORDER BY start_seconds
+        SELECT member.start_seconds, member.numerator, member.denominator,
+               member.notes
+        FROM current_song AS song
+        JOIN time_signature_set_time_signature AS member
+          ON member.time_signature_set_id = song.time_signature_set_id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -444,10 +453,13 @@ def get_song_key_signature_timeline(song_id: int) -> list[dict]:
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT start_seconds, tonic, mode, microtonal, notes
-        FROM song_key_signature
-        WHERE song_id = %s
-        ORDER BY start_seconds
+        SELECT member.start_seconds, member.tonic, member.mode,
+               member.microtonal, member.notes
+        FROM current_song AS song
+        JOIN key_signature_set_key_signature AS member
+          ON member.key_signature_set_id = song.key_signature_set_id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )

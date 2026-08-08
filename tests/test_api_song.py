@@ -516,6 +516,102 @@ class TestUpdateSong:
             )
             assert [row["language_ids"] for row in cursor] == [[20], [30, 40]]
 
+    def test_collection_sets_are_deduplicated_and_audited(
+        self, client, db, bob_headers
+    ):
+        with db.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO genre (id, name)
+                   SELECT COALESCE(MAX(id), 0) + 1, 'Audit set genre' FROM genre
+                   RETURNING id"""
+            )
+            genre_id = cursor.fetchone()["id"]
+            cursor.execute(
+                """WITH next_id AS (
+                       SELECT COALESCE(MAX(id), 0) + 1 AS id FROM subgenre
+                   )
+                   INSERT INTO subgenre (id, genre_id, name)
+                   SELECT id, %s, 'First' FROM next_id
+                   UNION ALL
+                   SELECT id + 1, %s, 'Second' FROM next_id
+                   RETURNING id""",
+                (genre_id, genre_id),
+            )
+            subgenre_ids = [row["id"] for row in cursor.fetchall()]
+        db.commit()
+
+        collections = {
+            "subgenres": subgenre_ids,
+            "key_signatures": [
+                {
+                    "start_seconds": 0,
+                    "tonic": "C",
+                    "mode": "major",
+                    "microtonal": False,
+                    "notes": None,
+                }
+            ],
+            "time_signatures": [
+                {
+                    "start_seconds": 0,
+                    "numerator": 4,
+                    "denominator": 4,
+                    "notes": None,
+                }
+            ],
+        }
+        first_id = _result(
+            _create_song(client, bob_headers, country="US", **collections)
+        )["id"]
+        second_id = _result(
+            _create_song(client, bob_headers, country="ES", **collections)
+        )["id"]
+
+        with db.cursor() as cursor:
+            cursor.execute(
+                """SELECT genre_set_id, key_signature_set_id, time_signature_set_id
+                   FROM current_song WHERE id = ANY(%s) ORDER BY id""",
+                ([first_id, second_id],),
+            )
+            set_ids = cursor.fetchall()
+        assert set_ids[0] == set_ids[1]
+
+        response = client.patch(
+            f"/api/song/{first_id}",
+            json={
+                "subgenres": list(reversed(subgenre_ids)),
+                "key_signatures": [{"start_seconds": 0, "tonic": "D", "mode": "minor"}],
+                "time_signatures": [
+                    {"start_seconds": 0, "numerator": 3, "denominator": 4}
+                ],
+            },
+            headers=bob_headers,
+        )
+
+        assert response.status_code == 200
+        with db.cursor() as cursor:
+            cursor.execute(
+                """SELECT changed_fields FROM song_change
+                   WHERE song_id = %s AND event_type = 'song_modification'
+                   ORDER BY id DESC LIMIT 1""",
+                (first_id,),
+            )
+            changed_fields = cursor.fetchone()["changed_fields"]
+            cursor.execute(
+                """SELECT genre_set_id, key_signature_set_id, time_signature_set_id
+                   FROM song_data WHERE song_id = %s ORDER BY id""",
+                (first_id,),
+            )
+            revisions = cursor.fetchall()
+
+        assert set(changed_fields) >= {
+            "genre_set_id",
+            "key_signature_set_id",
+            "time_signature_set_id",
+        }
+        assert len(revisions) == 2
+        assert revisions[0] != revisions[1]
+
     def test_requires_auth(self, client, bob_headers):
         song_id = _result(_create_song(client, bob_headers))["id"]
 

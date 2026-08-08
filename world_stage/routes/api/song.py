@@ -1,4 +1,5 @@
 import contextlib
+import json
 import unicodedata
 
 from flask import Blueprint, make_response, redirect, request, url_for
@@ -214,6 +215,95 @@ def _get_or_create_language_set(cursor, language_ids: list[int]) -> int:
     return language_set_id
 
 
+def _get_or_create_genre_set(cursor, subgenre_ids: list[int]) -> int | None:
+    if not subgenre_ids:
+        return None
+    cursor.execute(
+        """
+        INSERT INTO genre_set (subgenre_ids)
+        VALUES (%s)
+        ON CONFLICT (subgenre_ids) DO UPDATE
+        SET subgenre_ids = EXCLUDED.subgenre_ids
+        RETURNING id
+        """,
+        (subgenre_ids,),
+    )
+    set_id = cursor.fetchone()["id"]
+    cursor.execute(
+        """
+        INSERT INTO genre_set_subgenre (genre_set_id, subgenre_id, priority)
+        SELECT %s, member.subgenre_id, member.ordinality - 1
+        FROM unnest(%s::bigint[]) WITH ORDINALITY
+            AS member(subgenre_id, ordinality)
+        ON CONFLICT DO NOTHING
+        """,
+        (set_id, subgenre_ids),
+    )
+    return set_id
+
+
+def _get_or_create_key_signature_set(cursor, rows: list[dict]) -> int | None:
+    if not rows:
+        return None
+    rows = sorted(rows, key=lambda row: row["start_seconds"])
+    payload = json.dumps(rows, separators=(",", ":"), sort_keys=True)
+    cursor.execute(
+        """
+        INSERT INTO key_signature_set (signatures)
+        VALUES (%s::jsonb)
+        ON CONFLICT (signatures) DO UPDATE
+        SET signatures = EXCLUDED.signatures
+        RETURNING id
+        """,
+        (payload,),
+    )
+    set_id = cursor.fetchone()["id"]
+    for priority, row in enumerate(rows):
+        cursor.execute(
+            """
+            INSERT INTO key_signature_set_key_signature (
+                key_signature_set_id, priority, start_seconds, tonic,
+                mode, microtonal, notes
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (set_id, priority, row["start_seconds"], row["tonic"], row["mode"],
+             row["microtonal"], row.get("notes")),
+        )
+    return set_id
+
+
+def _get_or_create_time_signature_set(cursor, rows: list[dict]) -> int | None:
+    if not rows:
+        return None
+    rows = sorted(rows, key=lambda row: row["start_seconds"])
+    payload = json.dumps(rows, separators=(",", ":"), sort_keys=True)
+    cursor.execute(
+        """
+        INSERT INTO time_signature_set (signatures)
+        VALUES (%s::jsonb)
+        ON CONFLICT (signatures) DO UPDATE
+        SET signatures = EXCLUDED.signatures
+        RETURNING id
+        """,
+        (payload,),
+    )
+    set_id = cursor.fetchone()["id"]
+    for priority, row in enumerate(rows):
+        cursor.execute(
+            """
+            INSERT INTO time_signature_set_time_signature (
+                time_signature_set_id, priority, start_seconds,
+                numerator, denominator, notes
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (set_id, priority, row["start_seconds"], row["numerator"],
+             row["denominator"], row.get("notes")),
+        )
+    return set_id
+
+
 def _resolve_language_ids(
     language_ids: list[int],
     is_translation: bool,
@@ -285,7 +375,8 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
         SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
                song.title, song.native_title, song.artist, song.is_placeholder,
                song.title_language_id, song.native_language_id,
-               song.language_set_id,
+               song.language_set_id, song.genre_set_id,
+               song.key_signature_set_id, song.time_signature_set_id,
                song.video_link, song.poster_link, song.vtt_link,
                song.snippet_start, song.snippet_end,
                song.snippet2_start, song.snippet2_end,
@@ -338,10 +429,13 @@ def _fetch_song_languages(cursor, song_id: int) -> list[dict]:
 def _fetch_song_key_signatures(cursor, song_id: int) -> list[dict]:
     cursor.execute(
         """
-        SELECT start_seconds, tonic, mode, microtonal, notes
-        FROM song_key_signature
-        WHERE song_id = %s
-        ORDER BY start_seconds
+        SELECT member.start_seconds, member.tonic, member.mode,
+               member.microtonal, member.notes
+        FROM current_song AS song
+        JOIN key_signature_set_key_signature AS member
+          ON member.key_signature_set_id = song.key_signature_set_id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -470,26 +564,6 @@ def _parse_key_signatures(data: dict) -> tuple[list[dict] | None, list[str]]:
     return rows, []
 
 
-def _replace_song_key_signatures(cursor, song_id: int, rows: list[dict]) -> None:
-    cursor.execute("DELETE FROM song_key_signature WHERE song_id = %s", (song_id,))
-    for r in rows:
-        cursor.execute(
-            """
-            INSERT INTO song_key_signature
-                (song_id, start_seconds, tonic, mode, microtonal, notes)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """,
-            (
-                song_id,
-                r["start_seconds"],
-                r["tonic"],
-                r["mode"],
-                r["microtonal"],
-                r.get("notes"),
-            ),
-        )
-
-
 # ── Time signatures ──────────────────────────────────────────────────
 
 _ALLOWED_DENOMINATORS = frozenset({1, 2, 4, 8, 16, 32})
@@ -498,10 +572,13 @@ _ALLOWED_DENOMINATORS = frozenset({1, 2, 4, 8, 16, 32})
 def _fetch_song_time_signatures(cursor, song_id: int) -> list[dict]:
     cursor.execute(
         """
-        SELECT start_seconds, numerator, denominator, notes
-        FROM song_time_signature
-        WHERE song_id = %s
-        ORDER BY start_seconds
+        SELECT member.start_seconds, member.numerator, member.denominator,
+               member.notes
+        FROM current_song AS song
+        JOIN time_signature_set_time_signature AS member
+          ON member.time_signature_set_id = song.time_signature_set_id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -599,11 +676,13 @@ def _fetch_song_subgenres(cursor, song_id: int) -> list[dict]:
         """
         SELECT subgenre.id, subgenre.name AS subgenre_name,
                genre.id AS genre_id, genre.name AS genre_name
-        FROM song_subgenre
-        JOIN subgenre ON subgenre.id = song_subgenre.subgenre_id
+        FROM current_song AS song
+        JOIN genre_set_subgenre AS member
+          ON member.genre_set_id = song.genre_set_id
+        JOIN subgenre ON subgenre.id = member.subgenre_id
         JOIN genre ON genre.id = subgenre.genre_id
-        WHERE song_subgenre.song_id = %s
-        ORDER BY song_subgenre.priority
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -645,34 +724,6 @@ def _parse_subgenres(data: dict) -> tuple[list[int] | None, list[str]]:
         seen.add(sid)
         ids.append(sid)
     return ids, []
-
-
-def _replace_song_subgenres(cursor, song_id: int, ids: list[int]) -> None:
-    cursor.execute("DELETE FROM song_subgenre WHERE song_id = %s", (song_id,))
-    for i, sid in enumerate(ids):
-        cursor.execute(
-            "INSERT INTO song_subgenre (song_id, subgenre_id, priority) VALUES (%s, %s, %s)",
-            (song_id, sid, i),
-        )
-
-
-def _replace_song_time_signatures(cursor, song_id: int, rows: list[dict]) -> None:
-    cursor.execute("DELETE FROM song_time_signature WHERE song_id = %s", (song_id,))
-    for r in rows:
-        cursor.execute(
-            """
-            INSERT INTO song_time_signature
-                (song_id, start_seconds, numerator, denominator, notes)
-            VALUES (%s, %s, %s, %s, %s)
-        """,
-            (
-                song_id,
-                r["start_seconds"],
-                r["numerator"],
-                r["denominator"],
-                r.get("notes"),
-            ),
-        )
 
 
 def _validate_country(country_code: str) -> tuple[str | None, tuple | None]:
@@ -1055,6 +1106,13 @@ def create_song(auth: tuple):
 
     # ── Insert ───────────────────────────────────────────────────
     language_set_id = _get_or_create_language_set(cursor, language_ids)
+    genre_set_id = _get_or_create_genre_set(cursor, subgenre_ids or [])
+    key_signature_set_id = _get_or_create_key_signature_set(
+        cursor, key_signatures or []
+    )
+    time_signature_set_id = _get_or_create_time_signature_set(
+        cursor, time_signatures or []
+    )
 
     cursor.execute(
         """
@@ -1075,6 +1133,7 @@ def create_song(auth: tuple):
         INSERT INTO song_data (
             song_id, title, native_title, artist,
             title_language_id, native_language_id, language_set_id,
+            genre_set_id, key_signature_set_id, time_signature_set_id,
             video_link, duration,
             poster_link, vtt_link, snippet_start, snippet_end,
             snippet2_start, snippet2_end, translated_lyrics,
@@ -1082,12 +1141,13 @@ def create_song(auth: tuple):
             changed_by
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         """,
         (
             song_id, text["title"], text["native_title"], text["artist"],
             title_language_id, native_language_id, language_set_id,
+            genre_set_id, key_signature_set_id, time_signature_set_id,
             text["video_link"], duration_for_link(text["video_link"]),
             text["poster_link"], text["vtt_link"],
             parse_seconds(text["snippet_start"]), parse_seconds(text["snippet_end"]),
@@ -1104,15 +1164,6 @@ def create_song(auth: tuple):
     except NonPlaceholderLimitError as exc:
         db.rollback()
         return err(ErrorID.FORBIDDEN, str(exc))
-
-    if key_signatures:
-        _replace_song_key_signatures(cursor, song_id, key_signatures)
-
-    if time_signatures:
-        _replace_song_time_signatures(cursor, song_id, time_signatures)
-
-    if subgenre_ids:
-        _replace_song_subgenres(cursor, song_id, subgenre_ids)
 
     db.commit()
 
@@ -1261,6 +1312,13 @@ def replace_song(id: int, auth: tuple):
 
     # ── Execute ──────────────────────────────────────────────────
     language_set_id = _get_or_create_language_set(cursor, language_ids)
+    genre_set_id = _get_or_create_genre_set(cursor, subgenre_ids or [])
+    key_signature_set_id = _get_or_create_key_signature_set(
+        cursor, key_signatures or []
+    )
+    time_signature_set_id = _get_or_create_time_signature_set(
+        cursor, time_signatures or []
+    )
 
     revision_changes = {
         "title": text["title"],
@@ -1269,6 +1327,9 @@ def replace_song(id: int, auth: tuple):
         "title_language_id": title_language_id,
         "native_language_id": native_language_id,
         "language_set_id": language_set_id,
+        "genre_set_id": genre_set_id,
+        "key_signature_set_id": key_signature_set_id,
+        "time_signature_set_id": time_signature_set_id,
         "video_link": text["video_link"],
         "duration": duration_for_link(
             text["video_link"], row["video_link"], row["duration"]
@@ -1298,12 +1359,6 @@ def replace_song(id: int, auth: tuple):
     except NonPlaceholderLimitError as exc:
         db.rollback()
         return err(ErrorID.FORBIDDEN, str(exc))
-
-    # PUT is full replacement: absent collection fields mean clear
-    # them rather than preserve.
-    _replace_song_key_signatures(cursor, id, key_signatures or [])
-    _replace_song_time_signatures(cursor, id, time_signatures or [])
-    _replace_song_subgenres(cursor, id, subgenre_ids or [])
 
     db.commit()
 
@@ -1487,8 +1542,8 @@ def update_song(id: int, auth: tuple):
         return limit_err
 
     # ── Execute ──────────────────────────────────────────────────
+    changes = {}
     if sets:
-        changes = {}
         for field in MUTABLE_TEXT_FIELDS:
             if field in data:
                 value = _normalize_text(data[field])
@@ -1513,6 +1568,18 @@ def update_song(id: int, auth: tuple):
             changes["submitter_id"] = (
                 None if raw_submitter is None else int(raw_submitter)
             )
+    if key_signatures is not None:
+        changes["key_signature_set_id"] = _get_or_create_key_signature_set(
+            cursor, key_signatures
+        )
+    if time_signatures is not None:
+        changes["time_signature_set_id"] = _get_or_create_time_signature_set(
+            cursor, time_signatures
+        )
+    if subgenre_ids is not None:
+        changes["genre_set_id"] = _get_or_create_genre_set(cursor, subgenre_ids)
+    changes = {field: value for field, value in changes.items() if row[field] != value}
+    if changes:
         create_song_revision(cursor, id, changes, changed_by=user_id)
 
     if "is_placeholder" in data:
@@ -1526,15 +1593,6 @@ def update_song(id: int, auth: tuple):
         except NonPlaceholderLimitError as exc:
             db.rollback()
             return err(ErrorID.FORBIDDEN, str(exc))
-
-    if key_signatures is not None:
-        _replace_song_key_signatures(cursor, id, key_signatures)
-
-    if time_signatures is not None:
-        _replace_song_time_signatures(cursor, id, time_signatures)
-
-    if subgenre_ids is not None:
-        _replace_song_subgenres(cursor, id, subgenre_ids)
 
     db.commit()
 
@@ -1581,9 +1639,6 @@ def delete_song(id: int, auth: tuple):
 
     if row["is_placeholder"]:
         withdraw_song(cursor, id, changed_by=user_id)
-        cursor.execute("DELETE FROM song_key_signature WHERE song_id = %s", (id,))
-        cursor.execute("DELETE FROM song_time_signature WHERE song_id = %s", (id,))
-        cursor.execute("DELETE FROM song_subgenre WHERE song_id = %s", (id,))
     else:
         withdraw_song(cursor, id, changed_by=user_id)
     db.commit()

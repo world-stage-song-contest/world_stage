@@ -35,6 +35,9 @@ FILTER_FIELDS = {
     "snippet2_start": "numeric",
     "snippet2_end": "numeric",
     "language_set_id": "numeric",
+    "genre_set_id": "numeric",
+    "key_signature_set_id": "numeric",
+    "time_signature_set_id": "numeric",
     "title_language_id": "numeric",
     "native_language_id": "numeric",
     "submitter_id": "numeric",
@@ -47,6 +50,9 @@ CHOICE_FIELDS = {
     "country_id",
     "year_id",
     "language_set_id",
+    "genre_set_id",
+    "key_signature_set_id",
+    "time_signature_set_id",
     "title_language_id",
     "native_language_id",
     "submitter_id",
@@ -125,6 +131,31 @@ def _filter_field_config(cursor):
     config["language_set_id"]["choices"] = [
         {"value": row["id"], "label": row["label"]} for row in cursor.fetchall()
     ]
+
+    cursor.execute(
+        """
+        SELECT genre_set.id,
+               STRING_AGG(subgenre.name, ', ' ORDER BY member.priority) AS label
+        FROM genre_set
+        JOIN genre_set_subgenre AS member ON member.genre_set_id = genre_set.id
+        JOIN subgenre ON subgenre.id = member.subgenre_id
+        GROUP BY genre_set.id ORDER BY label, genre_set.id
+        """
+    )
+    config["genre_set_id"]["choices"] = [
+        {"value": row["id"], "label": row["label"]} for row in cursor.fetchall()
+    ]
+
+    for field, table in (
+        ("key_signature_set_id", "key_signature_set"),
+        ("time_signature_set_id", "time_signature_set"),
+    ):
+        cursor.execute(
+            f"SELECT id, signatures::text AS label FROM {table} ORDER BY id"
+        )
+        config[field]["choices"] = [
+            {"value": row["id"], "label": row["label"]} for row in cursor.fetchall()
+        ]
 
     cursor.execute("SELECT id, name FROM language ORDER BY name, id")
     language_choices = [
@@ -340,8 +371,18 @@ def _describe_change(entry, username_map):
             new = str(change["new"]).lower()
             details.append(f"{field}: {old} → {new}")
 
+    collection_labels = {
+        "genre_set_id": "Genres",
+        "key_signature_set_id": "Key signatures",
+        "time_signature_set_id": "Time signatures",
+    }
+    for field, label in collection_labels.items():
+        if field in changed_fields:
+            details.append(label)
+
     elaborated_fields = {
-        "title", "artist", "submitter_id", "approval_status", "is_placeholder"
+        "title", "artist", "submitter_id", "approval_status", "is_placeholder",
+        *collection_labels,
     }
     simple_fields = sorted(
         field for field in changed_fields if field not in elaborated_fields

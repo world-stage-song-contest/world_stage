@@ -569,10 +569,13 @@ def get_country_data(year: int, country: str):
 
     cursor.execute(
         """
-        SELECT start_seconds, tonic, mode, microtonal, notes
-        FROM song_key_signature
-        WHERE song_id = %s
-        ORDER BY start_seconds
+        SELECT member.start_seconds, member.tonic, member.mode,
+               member.microtonal, member.notes
+        FROM current_song AS song
+        JOIN key_signature_set_key_signature AS member
+          ON member.key_signature_set_id = song.key_signature_set_id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -589,10 +592,13 @@ def get_country_data(year: int, country: str):
 
     cursor.execute(
         """
-        SELECT start_seconds, numerator, denominator, notes
-        FROM song_time_signature
-        WHERE song_id = %s
-        ORDER BY start_seconds
+        SELECT member.start_seconds, member.numerator, member.denominator,
+               member.notes
+        FROM current_song AS song
+        JOIN time_signature_set_time_signature AS member
+          ON member.time_signature_set_id = song.time_signature_set_id
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
@@ -610,11 +616,13 @@ def get_country_data(year: int, country: str):
         """
         SELECT subgenre.id, subgenre.name AS subgenre_name,
                genre.id AS genre_id, genre.name AS genre_name
-        FROM song_subgenre
-        JOIN subgenre ON subgenre.id = song_subgenre.subgenre_id
+        FROM current_song AS song
+        JOIN genre_set_subgenre AS member
+          ON member.genre_set_id = song.genre_set_id
+        JOIN subgenre ON subgenre.id = member.subgenre_id
         JOIN genre ON genre.id = subgenre.genre_id
-        WHERE song_subgenre.song_id = %s
-        ORDER BY song_subgenre.priority
+        WHERE song.id = %s
+        ORDER BY member.priority
     """,
         (song_id,),
     )
