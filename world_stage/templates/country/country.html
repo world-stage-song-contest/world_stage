@@ -12,6 +12,7 @@
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('country.country', code=country.lower()) }}">{{ country_name }}</a>
     <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('playlist.country_play', key=country.lower()) }}">Play</a>
     <a class="nav-item" href="{{ url_for('country.bias', code=country.lower()) }}">Received biases</a>
 {% endblock %}
 {% block content %}

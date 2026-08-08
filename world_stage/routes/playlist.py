@@ -2,12 +2,14 @@ import re
 import unicodedata
 import urllib.parse
 
-from flask import Blueprint, Response
+from flask import Blueprint, Response, request, url_for
 
+from .. import scrobble
 from ..db import get_db
 from ..utils import (
     UserPermissions,
     get_show_id,
+    get_user_id_from_session,
     render_template,
     resolve_country_code,
     with_permissions,
@@ -16,6 +18,74 @@ from ..utils import (
 from .year import generate_playlist
 
 bp = Blueprint("playlist", __name__, url_prefix="/playlist")
+
+
+def _scrobble_enabled() -> bool:
+    user = get_user_id_from_session(request.cookies.get("session"))
+    return bool(user) and scrobble.has_enabled_account(user[0])
+
+
+def _play_entries(rows: list[dict], postcards: bool) -> tuple[list[dict], list[str]]:
+    """Turn the same catalog rows used by an M3U into browser-player entries."""
+    entries: list[dict] = []
+    bad_countries: list[str] = []
+    for row in rows:
+        cc = (row.get("cc") or "").lower()
+        url = row.get("video_link") or ""
+        if "media.world-stage.org" not in url:
+            bad_countries.append(cc)
+        if postcards:
+            entries.append(
+                {
+                    "kind": "postcard",
+                    "cc": cc,
+                    "country": row.get("country") or "",
+                    "title": "",
+                    "artist": "",
+                    "url": f"https://media.world-stage.org/postcards/{cc}.mov",
+                    "poster": None,
+                    "vtt": None,
+                }
+            )
+        entries.append(
+            {
+                "kind": "song",
+                "id": row["id"],
+                "cc": cc,
+                "country": row.get("country") or "",
+                "title": row.get("title") or "",
+                "artist": row.get("artist") or "",
+                "duration": row.get("duration"),
+                "url": url,
+                "poster": row.get("poster_link") or None,
+                "vtt": row.get("vtt_link") or None,
+            }
+        )
+    return entries, bad_countries
+
+
+def _render_player(
+    *,
+    rows: list[dict],
+    permissions: UserPermissions,
+    title: str,
+    back_url: str,
+    download_url: str,
+):
+    postcards = request.args.get("postcards", "false") == "true"
+    entries, bad_countries = _play_entries(rows, postcards)
+    err = _bad_links_error(bad_countries, permissions)
+    if err:
+        return err
+    return render_template(
+        "year/play.html",
+        collection_title=title,
+        collection_back_url=back_url,
+        collection_download_url=download_url,
+        entries=entries,
+        postcards=postcards,
+        scrobble_enabled=_scrobble_enabled(),
+    )
 
 
 def _split_np(stem: str) -> tuple[str, bool]:
@@ -109,20 +179,14 @@ def _resolve_year(stem: str) -> int | None:
     return row["id"] if row else None
 
 
-@bp.get("/year/<key>.m3u")
-@with_permissions
-def year(key: str, permissions: UserPermissions):
-    stem, postcards = _split_np(key)
-
-    year_id = _resolve_year(stem)
-    if year_id is None:
-        return render_template("error.html", error=f"Year not found: {stem}"), 404
-
+def _year_rows(year_id: int) -> list[dict]:
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT LOWER(country.id) AS cc, song.video_link
+        SELECT song.id, LOWER(country.id) AS cc, country.name AS country,
+               song.title, song.artist, song.duration, song.video_link,
+               song.poster_link, song.vtt_link
         FROM current_song AS song
         JOIN country ON song.country_id = country.id
         LEFT JOIN alternative_name an
@@ -134,16 +198,52 @@ def year(key: str, permissions: UserPermissions):
         """,
         (year_id,),
     )
-    entries = [(r["cc"], r["video_link"]) for r in cursor.fetchall()]
-    if not entries:
+    return cursor.fetchall()
+
+
+@bp.get("/year/<key>.m3u")
+@with_permissions
+def year(key: str, permissions: UserPermissions):
+    stem, postcards = _split_np(key)
+
+    year_id = _resolve_year(stem)
+    if year_id is None:
+        return render_template("error.html", error=f"Year not found: {stem}"), 404
+
+    rows = _year_rows(year_id)
+    if not rows:
         return render_template("error.html", error=f"No entries for {stem}"), 404
 
+    entries = [(r["cc"], r["video_link"]) for r in rows]
     value, bad_countries = write_m3u(entries, postcards=postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:
         return err
 
     return _m3u(value, key)
+
+
+@bp.get("/year/<key>/play")
+@with_permissions
+def year_play(key: str, permissions: UserPermissions):
+    year_id = _resolve_year(key)
+    if year_id is None:
+        return render_template("error.html", error=f"Year not found: {key}"), 404
+    rows = _year_rows(year_id)
+    if not rows:
+        return render_template("error.html", error=f"No entries for {key}"), 404
+
+    if year_id < 0:
+        back_url = url_for("year.special", short_name=key)
+    else:
+        back_url = url_for("year.year", year=year_id)
+    return _render_player(
+        rows=rows,
+        permissions=permissions,
+        title=f"{key}",
+        back_url=back_url,
+        download_url=url_for("playlist.year", key=key),
+    )
 
 
 @bp.get("/country/<key>.m3u")
@@ -154,11 +254,27 @@ def country(key: str, permissions: UserPermissions):
     if not canonical:
         return render_template("error.html", error=f"Country not found: {stem}"), 404
 
+    rows = _country_rows(canonical)
+    if not rows:
+        return render_template("error.html", error=f"No published entries for {canonical}"), 404
+
+    entries = [(r["cc"], r["video_link"]) for r in rows]
+    value, bad_countries = write_m3u(entries, postcards=postcards)
+    err = _bad_links_error(bad_countries, permissions)
+    if err:
+        return err
+
+    return _m3u(value, key)
+
+
+def _country_rows(canonical: str) -> list[dict]:
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT LOWER(country.id) AS cc, song.video_link
+        SELECT song.id, LOWER(country.id) AS cc, country.name AS country,
+               song.title, song.artist, song.duration, song.video_link,
+               song.poster_link, song.vtt_link
         FROM current_song AS song
         JOIN country ON song.country_id = country.id
         JOIN year ON year.id = song.year_id
@@ -169,10 +285,38 @@ def country(key: str, permissions: UserPermissions):
         """,
         {"cc": canonical},
     )
-    entries = [(r["cc"], r["video_link"]) for r in cursor.fetchall()]
-    if not entries:
-        return render_template("error.html", error=f"No published entries for {canonical}"), 404
+    return cursor.fetchall()
 
+
+@bp.get("/country/<key>/play")
+@with_permissions
+def country_play(key: str, permissions: UserPermissions):
+    canonical = resolve_country_code(key.upper())
+    if not canonical:
+        return render_template("error.html", error=f"Country not found: {key}"), 404
+    rows = _country_rows(canonical)
+    if not rows:
+        return render_template("error.html", error=f"No published entries for {canonical}"), 404
+    return _render_player(
+        rows=rows,
+        permissions=permissions,
+        title=f"{rows[0]['country']}",
+        back_url=url_for("country.country", code=canonical.lower()),
+        download_url=url_for("playlist.country", key=canonical.lower()),
+    )
+
+
+@bp.get("/user/<key>.m3u")
+@with_permissions
+def user(key: str, permissions: UserPermissions):
+    stem, postcards = _split_np(key)
+    stem, normalized = _normalize_user_key(stem)
+
+    rows = _user_rows(normalized)
+    if not rows:
+        return render_template("error.html", error=f"No published entries for {stem}"), 404
+
+    entries = [(r["cc"], r["video_link"]) for r in rows]
     value, bad_countries = write_m3u(entries, postcards=postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:
@@ -181,18 +325,19 @@ def country(key: str, permissions: UserPermissions):
     return _m3u(value, key)
 
 
-@bp.get("/user/<key>.m3u")
-@with_permissions
-def user(key: str, permissions: UserPermissions):
-    stem, postcards = _split_np(key)
+def _normalize_user_key(stem: str) -> tuple[str, str]:
     stem = unicodedata.normalize("NFKC", urllib.parse.unquote(stem))
-    normalized = re.sub(r"\s+", "_", stem).lower()
+    return stem, re.sub(r"\s+", "_", stem).lower()
 
+
+def _user_rows(normalized: str) -> list[dict]:
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT LOWER(country.id) AS cc, song.video_link, account.username
+        SELECT song.id, LOWER(country.id) AS cc, country.name AS country,
+               song.title, song.artist, song.duration, song.video_link,
+               song.poster_link, song.vtt_link, account.username
         FROM current_song AS song
         JOIN country ON song.country_id = country.id
         JOIN year ON year.id = song.year_id
@@ -204,14 +349,21 @@ def user(key: str, permissions: UserPermissions):
         """,
         (normalized,),
     )
-    rows = cursor.fetchall()
+    return cursor.fetchall()
+
+
+@bp.get("/user/<key>/play")
+@with_permissions
+def user_play(key: str, permissions: UserPermissions):
+    stem, normalized = _normalize_user_key(key)
+    rows = _user_rows(normalized)
     if not rows:
         return render_template("error.html", error=f"No published entries for {stem}"), 404
-
-    entries = [(r["cc"], r["video_link"]) for r in rows]
-    value, bad_countries = write_m3u(entries, postcards=postcards)
-    err = _bad_links_error(bad_countries, permissions)
-    if err:
-        return err
-
-    return _m3u(value, key)
+    username = rows[0]["username"]
+    return _render_player(
+        rows=rows,
+        permissions=permissions,
+        title=f"{username}",
+        back_url=url_for("user.submissions", username=username),
+        download_url=url_for("playlist.user", key=username),
+    )

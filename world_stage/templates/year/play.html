@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Play: {{ year }} {{ show_name }}{% endblock %}
+{% block title %}Play: {{ collection_title or (year ~ ' ' ~ show_name) }}{% endblock %}
 {% block headercontents %}
     <link href="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video-js.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video.min.js"></script>
@@ -83,6 +83,11 @@
     </style>
 {% endblock %}
 {% block navigation %}
+    {% if collection_title %}
+    <a class="nav-item" href="{{ collection_back_url }}">{{ collection_title }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ collection_download_url }}">Download .m3u</a>
+    {% else %}
     {% if special %}
     <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
     {% else %}
@@ -123,6 +128,7 @@
     {% endif %}
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('playlist.show', key='%04d'|format(year|abs) ~ show) }}">Download .m3u</a>
+    {% endif %}
     {% endif %}
 {% endblock %}
 {% block content %}
