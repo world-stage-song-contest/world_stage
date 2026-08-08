@@ -93,6 +93,17 @@
 
     {% if user %}
     <hr>
+    <h2>Email</h2>
+    <p>Your email is used for new-message notifications and password resets.</p>
+    <form method="POST" action="{{ url_for('main.update_email') }}">
+        <fieldset class="grid">
+            <label for="email">Email address</label>
+            <input id="email" name="email" type="email" maxlength="254" value="{{ email }}">
+        </fieldset>
+        <input type="submit" value="Save email">
+    </form>
+
+    <hr>
     <h2>Avatar</h2>
     <form method="POST" action="{{ url_for('main.update_avatar') }}" enctype="multipart/form-data">
         <fieldset class="nongrid">

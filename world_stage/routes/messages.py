@@ -8,7 +8,7 @@ import psycopg
 from flask import Blueprint, current_app, redirect, request, url_for
 
 from ..db import get_db
-from ..messaging import mark_conversation_read, message_preview
+from ..messaging import mark_conversation_read, message_preview, notify_new_message
 from ..utils import (
     UserPermissions,
     get_markdown_parser,
@@ -233,12 +233,24 @@ def _render_new(
     values: dict | None = None,
     status: int = 200,
 ):
+    if values is None:
+        cursor = get_db().cursor()
+        cursor.execute(
+            "SELECT NULLIF(BTRIM(email), '') IS NOT NULL AS has_email FROM account WHERE id = %s",
+            (user_id,),
+        )
+        account = cursor.fetchone()
+        values = {
+            "email_notifications": bool(
+                permissions.can_view_restricted and account and account["has_email"]
+            )
+        }
     return (
         render_template(
             "messages/new.html",
             recipients=_available_recipients(user_id),
             error=error,
-            values=values or {},
+            values=values,
             created_by_admin=permissions.can_view_restricted,
             max_subject_length=MAX_SUBJECT_LENGTH,
             max_message_length=MAX_MESSAGE_LENGTH,
@@ -459,7 +471,11 @@ def new_post(user: tuple[int, str] | None, permissions: UserPermissions):
                     conversation_id,
                     participant_id,
                     "owner" if participant_id == user_id else "participant",
-                    participant_id == user_id and values["email_notifications"],
+                    (
+                        values["email_notifications"]
+                        if participant_id == user_id
+                        else created_by_admin
+                    ),
                 )
                 for participant_id in participant_ids
             ],
@@ -469,9 +485,13 @@ def new_post(user: tuple[int, str] | None, permissions: UserPermissions):
             """
             INSERT INTO message (conversation_id, sender_id, sender_kind, body)
             VALUES (%s, %s, %s, %s)
+            RETURNING id
             """,
             (conversation_id, user_id, sender_kind, body),
         )
+        inserted = cursor.fetchone()
+        assert inserted is not None
+        message_id = inserted["id"]
         db.commit()
     except psycopg.Error:
         db.rollback()
@@ -484,6 +504,7 @@ def new_post(user: tuple[int, str] | None, permissions: UserPermissions):
             status=400,
         )
 
+    notify_new_message(conversation_id, message_id)
     return redirect(url_for("messages.thread", conversation_id=conversation_id))
 
 
@@ -592,12 +613,19 @@ def edit_post(
         )
         cursor.executemany(
             """
-            INSERT INTO conversation_participant (conversation_id, account_id, role)
-            VALUES (%s, %s, 'participant')
+            INSERT INTO conversation_participant (
+                conversation_id, account_id, role, email_notifications
+            )
+            VALUES (%s, %s, 'participant', %s)
             ON CONFLICT DO NOTHING
             """,
             [
-                (conversation_id, participant_id)
+                (
+                    conversation_id,
+                    participant_id,
+                    conversation["created_by_admin"]
+                    or conversation["system_conversation"],
+                )
                 for participant_id in desired_participant_ids
             ],
         )
@@ -829,12 +857,17 @@ def reply(
             cursor.execute(
                 """
                 INSERT INTO conversation_participant (
-                    conversation_id, account_id, role
+                    conversation_id, account_id, role, email_notifications
                 )
-                VALUES (%s, %s, 'admin')
+                VALUES (%s, %s, 'admin', %s)
                 ON CONFLICT (conversation_id, account_id) DO NOTHING
                 """,
-                (conversation_id, user_id),
+                (
+                    conversation_id,
+                    user_id,
+                    conversation["created_by_admin"]
+                    or conversation["system_conversation"],
+                ),
             )
         elif participant_role == "admin" and not acting_as_admin:
             cursor.execute(
@@ -862,6 +895,7 @@ def reply(
         current_app.logger.exception("Could not reply to conversation %s", conversation_id)
         return render_template("error.html", error="The reply could not be sent"), 400
 
+    notify_new_message(conversation_id, message_id)
     return redirect(
         url_for("messages.thread", conversation_id=conversation_id, _anchor=f"message-{message_id}")
     )

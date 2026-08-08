@@ -1,12 +1,15 @@
 import datetime
 import hashlib
 import os
+import secrets
+import smtplib
 import unicodedata
 import uuid
 
-from flask import Blueprint, Response, make_response, redirect, request, url_for
+from flask import Blueprint, Response, current_app, make_response, redirect, request, url_for
 
 from ..db import get_db
+from ..email import external_url, is_configured, send_email, validate_email
 from ..utils import get_user_id_from_session, render_template
 
 bp = Blueprint("session", __name__, url_prefix="/")
@@ -165,7 +168,8 @@ def set_password_post():
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
-        "SELECT id, approved FROM account WHERE LOWER(username) = LOWER(%s)", (username,)
+        "SELECT id, approved, password FROM account WHERE LOWER(username) = LOWER(%s)",
+        (username,),
     )
     user = cursor.fetchone()
     if not user:
@@ -174,6 +178,14 @@ def set_password_post():
         return render_template(
             "session/set_password.html",
             message="Your account is not approved yet. Please ping a moderator.",
+        )
+    if user["password"]:
+        return render_template(
+            "session/set_password.html",
+            message=(
+                "This account already has a password. "
+                "Use the password reset form instead."
+            ),
         )
     hashed, salt = hash_password(password)
     cursor.execute(
@@ -211,6 +223,7 @@ def sign_up_post():
     username = unicodedata.normalize("NFKC", username)
     password = request.form.get("password", "")
     password2 = request.form.get("password2", "")
+    email = request.form.get("email", "").strip()
 
     username_valid, username_message = validate_username(username)
     if not username_valid:
@@ -220,6 +233,14 @@ def sign_up_post():
         return render_template("session/request_account.html", message=password_message)
     if password != password2:
         return render_template("session/request_account.html", message="Passwords do not match.")
+    email_valid, email_message = validate_email(email)
+    if not email_valid:
+        return render_template(
+            "session/request_account.html",
+            message=email_message,
+            username=username,
+            email=email,
+        )
 
     db = get_db()
     cursor = db.cursor()
@@ -238,15 +259,144 @@ def sign_up_post():
     hashed, salt = hash_password(password)
     cursor.execute(
         """
-        INSERT INTO account (username, password, salt, approved)
-        VALUES (%s, %s, %s, false)
+        INSERT INTO account (username, email, password, salt, approved)
+        VALUES (%s, %s, %s, %s, false)
     """,
-        (username, hashed, salt),
+        (username, email or None, hashed, salt),
     )
 
     db.commit()
 
     return render_template("session/request_account_success.html", state="success")
+
+
+@bp.get("/forgot-password")
+def forgot_password():
+    return render_template("session/forgot_password.html")
+
+
+@bp.post("/forgot-password")
+def forgot_password_post():
+    email = request.form.get("email", "").strip()
+    valid, message = validate_email(email, required=True)
+    if not valid:
+        return render_template("session/forgot_password.html", error=message), 400
+
+    if is_configured():
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            SELECT id, username
+            FROM account
+            WHERE LOWER(email) = LOWER(%s) AND approved
+            ORDER BY id
+            LIMIT 1
+            """,
+            (email,),
+        )
+        user = cursor.fetchone()
+        if user is not None:
+            token = secrets.token_urlsafe(32)
+            token_hash = hashlib.sha256(token.encode()).digest()
+            cursor.execute(
+                """
+                UPDATE password_reset_token
+                SET used_at = CURRENT_TIMESTAMP
+                WHERE account_id = %s AND used_at IS NULL
+                """,
+                (user["id"],),
+            )
+            cursor.execute(
+                """
+                INSERT INTO password_reset_token (account_id, token_hash, expires_at)
+                VALUES (
+                    %s, %s,
+                    CURRENT_TIMESTAMP + (%s * INTERVAL '1 second')
+                )
+                """,
+                (user["id"], token_hash, current_app.config["PASSWORD_RESET_MAX_AGE"]),
+            )
+            db.commit()
+            reset_url = external_url(url_for("session.reset_password", token=token))
+            try:
+                send_email(
+                    email,
+                    "Reset your World Stage password",
+                    f"Hello {user['username']},\n\n"
+                    f"Reset your password using this link:\n{reset_url}\n\n"
+                    "If you did not request this, you can ignore this email.\n",
+                )
+            except (OSError, RuntimeError, ValueError, smtplib.SMTPException):
+                current_app.logger.exception("Could not send password reset email")
+
+    return render_template("session/forgot_password_sent.html")
+
+
+def _reset_account(token: str) -> dict | None:
+    try:
+        token_hash = hashlib.sha256(token.encode()).digest()
+    except UnicodeError:
+        return None
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT password_reset_token.id, password_reset_token.account_id,
+               account.username
+        FROM password_reset_token
+        JOIN account ON account.id = password_reset_token.account_id
+        WHERE password_reset_token.token_hash = %s
+          AND password_reset_token.used_at IS NULL
+          AND password_reset_token.expires_at > CURRENT_TIMESTAMP
+          AND account.approved
+        """,
+        (token_hash,),
+    )
+    return cursor.fetchone()
+
+
+@bp.get("/reset-password/<token>")
+def reset_password(token: str):
+    reset = _reset_account(token)
+    if reset is None:
+        return render_template("session/reset_password.html", invalid=True), 400
+    return render_template("session/reset_password.html", username=reset["username"])
+
+
+@bp.post("/reset-password/<token>")
+def reset_password_post(token: str):
+    reset = _reset_account(token)
+    if reset is None:
+        return render_template("session/reset_password.html", invalid=True), 400
+
+    password = request.form.get("password", "")
+    password2 = request.form.get("password2", "")
+    valid, message = validate_password(password)
+    if not valid:
+        return render_template(
+            "session/reset_password.html", username=reset["username"], error=message
+        ), 400
+    if password != password2:
+        return render_template(
+            "session/reset_password.html",
+            username=reset["username"],
+            error="Passwords do not match.",
+        ), 400
+
+    hashed, salt = hash_password(password)
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "UPDATE account SET password = %s, salt = %s WHERE id = %s",
+        (hashed, salt, reset["account_id"]),
+    )
+    cursor.execute(
+        "UPDATE password_reset_token SET used_at = CURRENT_TIMESTAMP WHERE id = %s",
+        (reset["id"],),
+    )
+    cursor.execute("DELETE FROM session WHERE user_id = %s", (reset["account_id"],))
+    db.commit()
+    return render_template("session/set_password_success.html", state="reset")
 
 
 @bp.get("/logout")

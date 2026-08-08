@@ -247,7 +247,21 @@ def create_app(config: dict | None = None) -> Flask:
         SECRET_KEY="dev",
         DATABASE=os.path.join(app.instance_path, "songs.db"),
         LOCAL_ASSETS=_environment_boolean("LOCAL_ASSETS"),
-        MESSAGING_TIMEZONE="Europe/Warsaw",
+        MESSAGING_TIMEZONE="Europe/London",
+        MAIL_SERVER=os.environ.get("MAIL_SERVER", ""),
+        MAIL_PORT=int(os.environ.get("MAIL_PORT", "587")),
+        MAIL_USERNAME=os.environ.get("MAIL_USERNAME", ""),
+        MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD", ""),
+        MAIL_USE_TLS=_environment_boolean("MAIL_USE_TLS", True),
+        MAIL_USE_SSL=_environment_boolean("MAIL_USE_SSL"),
+        MAIL_DEFAULT_SENDER=os.environ.get("MAIL_DEFAULT_SENDER", ""),
+        MAIL_SENDER_NAME=os.environ.get("MAIL_SENDER_NAME", "World Stage"),
+        MAIL_TIMEOUT=float(os.environ.get("MAIL_TIMEOUT", "10")),
+        MAIL_SUPPRESS_SEND=_environment_boolean("MAIL_SUPPRESS_SEND"),
+        SITE_URL=os.environ.get("SITE_URL", ""),
+        PASSWORD_RESET_MAX_AGE=int(
+            os.environ.get("PASSWORD_RESET_MAX_AGE", str(60 * 60))
+        ),
         PERFORMANCE_HEADERS=_environment_boolean("PERFORMANCE_HEADERS"),
         STATIC_ROOT="/opt/worldstage/static",
         STATIC_URL_PREFIX="/static",
@@ -331,9 +345,10 @@ def create_app(config: dict | None = None) -> Flask:
     with contextlib.suppress(OSError):
         os.makedirs(app.instance_path)
 
-    from . import db, media, scrobble
+    from . import db, email, media, scrobble
 
     db.init_app(app)
+    email.init_app(app)
     media.init_app(app)
     scrobble.init_app(app)
 

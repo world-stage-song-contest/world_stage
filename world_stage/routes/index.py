@@ -11,6 +11,7 @@ from ..avatar import (
     normalize_avatar,
 )
 from ..db import get_db
+from ..email import validate_email
 from ..messaging import (
     banner_conversations,
     has_unread_admin_messages,
@@ -110,6 +111,13 @@ def _has_custom_avatar(user_id: int) -> bool:
     return cursor.fetchone() is not None
 
 
+def _user_email(user_id: int) -> str:
+    cursor = get_db().cursor()
+    cursor.execute("SELECT email FROM account WHERE id = %s", (user_id,))
+    row = cursor.fetchone()
+    return row["email"] or "" if row else ""
+
+
 def _settings_template(
     user: tuple[int, str] | None,
     *,
@@ -129,6 +137,7 @@ def _settings_template(
         tokens=_get_user_tokens(user_id) if user_id else [],
         scrobble_services=_scrobble_services(user_id) if user_id else [],
         has_custom_avatar=_has_custom_avatar(user_id) if user_id else False,
+        email=_user_email(user_id) if user_id else "",
         message=message,
         error=error,
         max_avatar_dimension=MAX_AVATAR_DIMENSION,
@@ -169,6 +178,37 @@ def settings_post(user: tuple[int, str] | None):
     )
     resp.set_cookie("preferences", create_cookie(**settings), max_age=60 * 60 * 24 * 30)
     return resp
+
+
+@bp.post("/settings/email")
+@require_user(redirect_to_login=True)
+def update_email(user: tuple[int, str]):
+    user_id, _username = user
+    email = request.form.get("email", "").strip()
+    valid, error = validate_email(email)
+    if not valid:
+        return _settings_template(user, error=error), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("UPDATE account SET email = %s WHERE id = %s", (email or None, user_id))
+    if email:
+        cursor.execute(
+            """
+            UPDATE conversation_participant
+            SET email_notifications = true
+            FROM conversation
+            WHERE conversation.id = conversation_participant.conversation_id
+              AND conversation_participant.account_id = %s
+              AND (conversation.created_by_admin OR conversation.system_conversation)
+            """,
+            (user_id,),
+        )
+    db.commit()
+    return _settings_template(
+        user,
+        message="Email address updated." if email else "Email address removed.",
+    )
 
 
 @bp.get("/avatars/<int:user_id>")

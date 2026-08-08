@@ -172,7 +172,7 @@ def test_admin_creation_is_recorded_and_includes_owner_as_participant(client, db
 
         cursor.execute(
             """
-            SELECT account_id, role
+            SELECT account_id, role, email_notifications
             FROM conversation_participant
             WHERE conversation_id = %s
             ORDER BY account_id
@@ -180,9 +180,9 @@ def test_admin_creation_is_recorded_and_includes_owner_as_participant(client, db
             (conversation["id"],),
         )
         assert cursor.fetchall() == [
-            {"account_id": 1, "role": "owner"},
-            {"account_id": 2, "role": "participant"},
-            {"account_id": 3, "role": "participant"},
+            {"account_id": 1, "role": "owner", "email_notifications": False},
+            {"account_id": 2, "role": "participant", "email_notifications": True},
+            {"account_id": 3, "role": "participant", "email_notifications": True},
         ]
 
         cursor.execute(

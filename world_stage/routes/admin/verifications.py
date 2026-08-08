@@ -3,6 +3,7 @@ from collections import defaultdict
 from flask import redirect, request, url_for
 
 from ...db import get_db
+from ...messaging import notify_new_message
 from ...utils import render_template, require_user
 from ...utils.song_revisions import set_song_status
 from .common import _resolve_special, bp
@@ -24,10 +25,10 @@ def _notify_submitter(
     status: str,
     moderator_id: int,
     body: str,
-) -> None:
+) -> tuple[int, int] | None:
     submitter_id = song["submitter_id"]
     if submitter_id is None:
-        return
+        return None
 
     cursor.execute(
         """
@@ -51,8 +52,8 @@ def _notify_submitter(
     cursor.execute(
         """
         INSERT INTO conversation_participant (
-            conversation_id, account_id, role
-        ) VALUES (%s, %s, 'owner')
+            conversation_id, account_id, role, email_notifications
+        ) VALUES (%s, %s, 'owner', true)
         """,
         (conversation_id, moderator_id),
     )
@@ -60,8 +61,8 @@ def _notify_submitter(
         cursor.execute(
             """
             INSERT INTO conversation_participant (
-                conversation_id, account_id, role
-            ) VALUES (%s, %s, 'participant')
+                conversation_id, account_id, role, email_notifications
+            ) VALUES (%s, %s, 'participant', true)
             """,
             (conversation_id, submitter_id),
         )
@@ -69,9 +70,12 @@ def _notify_submitter(
         """
         INSERT INTO message (conversation_id, sender_id, sender_kind, body)
         VALUES (%s, %s, 'admin', %s)
+        RETURNING id
         """,
         (conversation_id, moderator_id, body),
     )
+    message_id = cursor.fetchone()["id"]
+    return conversation_id, message_id
 
 
 def _render_verifications(year: dict):
@@ -343,10 +347,13 @@ def _set_verification(
         approval_status=status,
         changed_by=user[0],
     )
+    notification = None
     if status_change is not None and status in NOTIFICATION_STATUSES:
-        _notify_submitter(cursor, song, status, user[0], message)
+        notification = _notify_submitter(cursor, song, status, user[0], message)
 
     db.commit()
+    if notification is not None:
+        notify_new_message(*notification)
     return redirect(f"{redirect_url}#song-{song_id}")
 
 
