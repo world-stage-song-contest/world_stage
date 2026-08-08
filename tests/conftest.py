@@ -285,6 +285,7 @@ def _clean_songs(_seeded_db):
     conn = psycopg.connect(_seeded_db)
     with conn.cursor() as cur:
         cur.execute("DELETE FROM account_avatar")
+        cur.execute("DELETE FROM year_spot_watch")
         cur.execute("DELETE FROM message")
         cur.execute("DELETE FROM conversation_participant")
         cur.execute("DELETE FROM conversation")

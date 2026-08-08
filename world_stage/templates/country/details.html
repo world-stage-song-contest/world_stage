@@ -89,7 +89,7 @@
 {% block onload%}onLoad(){% endblock %}
 {% block content %}
 
-{% if can_edit or can_update_duration or (song.video_link and song.video_link != 'N/A') %}
+{% if current_user or can_edit or can_update_duration or (song.video_link and song.video_link != 'N/A') %}
 <div>
     {% if can_edit %}
     {% if special %}
@@ -98,11 +98,24 @@
     <a class="button" href="{{ url_for('member.submit', country=song.country.cc.lower(), year=song.year.id) }}">Edit</a>
     {% endif %}
     {% endif %}
-    {% if can_update_duration %}
-    <form method="post" action="{{ url_for('country.update_duration', song_id=song.id) }}" style="float: right;">
-        <button type="submit">Update duration</button>
-    </form>
-    {% endif %}
+    <div style="float: right;">
+        {% if current_user and spot_watch_available %}
+        <form class="spot-watch" method="POST"
+            action="{{ url_for('year.update_spot_watch', year_id=song.year.id) }}">
+            <input type="hidden" name="country_id" value="{{ song.country.cc }}">
+            <input type="hidden" name="entry_number" value="{{ song.entry_number }}">
+            <input type="hidden" name="action" value="{{ 'unwatch' if spot_watched else 'watch' }}">
+            <button type="submit" aria-pressed="{{ 'true' if spot_watched else 'false' }}">
+                {{ 'Watching spot' if spot_watched else 'Watch spot' }}
+            </button>
+        </form>
+        {% endif %}
+        {% if can_update_duration %}
+        <form method="post" action="{{ url_for('country.update_duration', song_id=song.id) }}">
+            <button type="submit">Update duration</button>
+        </form>
+        {% endif %}
+    </div>
 </div>
 {% endif %}
 

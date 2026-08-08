@@ -27,7 +27,8 @@ def notify_new_message(conversation_id: int, message_id: int) -> None:
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT conversation.subject, message.body, message.sender_id,
+        SELECT conversation.subject, conversation.system_conversation,
+               message.body, message.sender_id,
                COALESCE(sender.username, 'World Stage') AS sender_username
         FROM message
         JOIN conversation ON conversation.id = message.conversation_id
@@ -62,12 +63,19 @@ def notify_new_message(conversation_id: int, message_id: int) -> None:
         current_app.logger.exception("Could not build message notification URL")
         return
 
-    subject = f"New message: {message['subject']}"
-    body = (
-        f"{message['sender_username']} posted a new message in "
-        f"\"{message['subject']}\":\n\n{message_preview(message['body'])}\n\n"
-        f"Read and reply: {link}\n"
-    )
+    if message["system_conversation"]:
+        subject = f"Notification: {message['subject']}"
+        body = (
+            f"{message_preview(message['body'])}\n\n"
+            f"View notification: {link}\n"
+        )
+    else:
+        subject = f"New message: {message['subject']}"
+        body = (
+            f"{message['sender_username']} posted a new message in "
+            f"\"{message['subject']}\":\n\n{message_preview(message['body'])}\n\n"
+            f"Read and reply: {link}\n"
+        )
     for recipient in recipients:
         try:
             send_email(recipient, subject, body)
@@ -75,6 +83,118 @@ def notify_new_message(conversation_id: int, message_id: int) -> None:
             current_app.logger.exception(
                 "Could not email message notification to %s", recipient
             )
+
+
+def create_spot_watch_notifications(
+    cursor,
+    song_id: int,
+    event: str,
+) -> list[tuple[int, int]]:
+    """Create one private system notification for each watcher of a song's spot.
+
+    The caller owns the transaction and should call ``notify_new_message`` for
+    each returned pair only after committing it.
+    """
+    if event not in {"deleted", "placeholder"}:
+        raise ValueError(f"Unknown watched-spot event: {event}")
+
+    cursor.execute(
+        """
+        SELECT stable.year_id, stable.country_id,
+               COALESCE(stable.entry_number, 1) AS entry_number,
+               country.name AS country_name,
+               latest.title, latest.artist
+        FROM song AS stable
+        JOIN country ON country.id = stable.country_id
+        LEFT JOIN LATERAL (
+            SELECT data.title, data.artist
+            FROM song_data AS data
+            WHERE data.song_id = stable.id
+              AND data.title IS NOT NULL
+              AND data.artist IS NOT NULL
+            ORDER BY data.created_at DESC, data.id DESC
+            LIMIT 1
+        ) AS latest ON true
+        WHERE stable.id = %s
+        """,
+        (song_id,),
+    )
+    spot = cursor.fetchone()
+    if spot is None:
+        return []
+
+    cursor.execute(
+        """
+        SELECT account_id
+        FROM year_spot_watch
+        WHERE year_id = %s
+          AND country_id = %s
+          AND entry_number = %s
+        ORDER BY account_id
+        """,
+        (spot["year_id"], spot["country_id"], spot["entry_number"]),
+    )
+    watcher_ids = [row["account_id"] for row in cursor.fetchall()]
+    if not watcher_ids:
+        return []
+
+    song_label = (
+        f"{spot['artist']} – {spot['title']}"
+        if spot["artist"] and spot["title"]
+        else "The song"
+    )
+    action = "was deleted" if event == "deleted" else "became a placeholder"
+    subject = f"Watched spot changed: {spot['country_name']} in {spot['year_id']}"[:200]
+    body = (
+        f"{song_label} {action} in the {spot['country_name']} spot for "
+        f"{spot['year_id']}. You are receiving this because you watch this spot."
+    )
+
+    notifications = []
+    for watcher_id in watcher_ids:
+        cursor.execute(
+            """
+            INSERT INTO conversation (
+                subject, metadata, system_conversation
+            ) VALUES (
+                %s,
+                jsonb_build_object(
+                    'year_id', %s::bigint,
+                    'country_id', %s::text,
+                    'entry_number', %s::integer,
+                    'spot_watch_event', %s::text
+                ),
+                true
+            )
+            RETURNING id
+            """,
+            (
+                subject,
+                spot["year_id"],
+                spot["country_id"],
+                spot["entry_number"],
+                event,
+            ),
+        )
+        conversation_id = cursor.fetchone()["id"]
+        cursor.execute(
+            """
+            INSERT INTO conversation_participant (
+                conversation_id, account_id, role, email_notifications
+            ) VALUES (%s, %s, 'participant', true)
+            """,
+            (conversation_id, watcher_id),
+        )
+        cursor.execute(
+            """
+            INSERT INTO message (conversation_id, sender_id, sender_kind, body)
+            VALUES (%s, NULL, 'system', %s)
+            RETURNING id
+            """,
+            (conversation_id, body),
+        )
+        notifications.append((conversation_id, cursor.fetchone()["id"]))
+    return notifications
 
 
 def has_unread_messages(user_id: int, permissions: UserPermissions) -> bool:

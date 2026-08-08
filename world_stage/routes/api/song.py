@@ -7,6 +7,7 @@ from psycopg import sql
 
 from world_stage.db import fetchone, get_db
 from world_stage.media import duration_for_link
+from world_stage.messaging import create_spot_watch_notifications, notify_new_message
 from world_stage.utils import (
     ErrorID,
     err,
@@ -79,6 +80,25 @@ REQUIRED_FIELDS = {
 REQUIRED_IDENTITY_FIELDS = {
     field: REQUIRED_FIELDS[field] for field in ("artist", "title")
 }
+
+
+def _remove_submitter_spot_watches(
+    cursor,
+    submitter_id: int | None,
+    year_id: int,
+    country_id: str,
+) -> None:
+    if submitter_id is None:
+        return
+    cursor.execute(
+        """
+        DELETE FROM year_spot_watch
+        WHERE account_id = %s
+          AND year_id = %s
+          AND country_id = %s
+        """,
+        (submitter_id, year_id, country_id),
+    )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -1165,6 +1185,11 @@ def create_song(auth: tuple):
         db.rollback()
         return err(ErrorID.FORBIDDEN, str(exc))
 
+    # Once the user occupies this country/year slot, changes to their own
+    # submission are no longer useful watch events. This applies equally to
+    # regular entries and placeholders.
+    _remove_submitter_spot_watches(cursor, submitter_id, year, cc)
+
     db.commit()
 
     row = _fetch_song(cursor, song_id)
@@ -1355,12 +1380,28 @@ def replace_song(id: int, auth: tuple):
     if revision_changes:
         create_song_revision(cursor, id, revision_changes, changed_by=user_id)
     try:
-        set_song_status(cursor, id, changed_by=user_id, is_placeholder=is_placeholder)
+        status_change = set_song_status(
+            cursor, id, changed_by=user_id, is_placeholder=is_placeholder
+        )
     except NonPlaceholderLimitError as exc:
         db.rollback()
         return err(ErrorID.FORBIDDEN, str(exc))
 
+    if is_claim:
+        _remove_submitter_spot_watches(
+            cursor,
+            submitter_id,
+            row["year_id"],
+            row["country_id"],
+        )
+
+    notifications = []
+    if status_change is not None and not row["is_placeholder"] and is_placeholder:
+        notifications = create_spot_watch_notifications(cursor, id, "placeholder")
+
     db.commit()
+    for notification in notifications:
+        notify_new_message(*notification)
 
     updated = _fetch_song(cursor, id)
     assert updated is not None  # existence verified at the top of the handler
@@ -1584,7 +1625,7 @@ def update_song(id: int, auth: tuple):
 
     if "is_placeholder" in data:
         try:
-            set_song_status(
+            status_change = set_song_status(
                 cursor,
                 id,
                 changed_by=user_id,
@@ -1593,8 +1634,20 @@ def update_song(id: int, auth: tuple):
         except NonPlaceholderLimitError as exc:
             db.rollback()
             return err(ErrorID.FORBIDDEN, str(exc))
+    else:
+        status_change = None
+
+    notifications = []
+    if (
+        status_change is not None
+        and not row["is_placeholder"]
+        and bool(data.get("is_placeholder"))
+    ):
+        notifications = create_spot_watch_notifications(cursor, id, "placeholder")
 
     db.commit()
+    for notification in notifications:
+        notify_new_message(*notification)
 
     updated = _fetch_song(cursor, id)
     assert updated is not None  # existence verified at the top of the handler
@@ -1637,10 +1690,10 @@ def delete_song(id: int, auth: tuple):
     if not permissions.can_edit and row["submitter_id"] != user_id:
         return err(ErrorID.FORBIDDEN, "You can only delete your own submissions")
 
-    if row["is_placeholder"]:
-        withdraw_song(cursor, id, changed_by=user_id)
-    else:
-        withdraw_song(cursor, id, changed_by=user_id)
+    withdraw_song(cursor, id, changed_by=user_id)
+    notifications = create_spot_watch_notifications(cursor, id, "deleted")
     db.commit()
+    for notification in notifications:
+        notify_new_message(*notification)
 
     return "", 204

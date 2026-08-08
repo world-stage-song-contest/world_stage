@@ -450,6 +450,31 @@ def generate_iframe(url: str, img_url: str | None, vtt_url: str | None = None):
         <a href="{url}" target="_blank">Watch the video here</a>.'''
 
 
+def _spot_watch_state(user_id: int | None, song) -> tuple[bool, bool]:
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT submissions_open,
+               EXISTS (
+                   SELECT 1
+                   FROM year_spot_watch
+                   WHERE account_id = %s
+                     AND year_id = year.id
+                     AND country_id = %s
+                     AND entry_number = %s
+               ) AS watched
+        FROM year
+        WHERE id = %s
+        """,
+        (user_id, song.country.cc, song.entry_number, song.year.id),
+    )
+    row = cursor.fetchone()
+    return (
+        bool(row and row["submissions_open"]),
+        bool(user_id is not None and row and row["watched"]),
+    )
+
+
 @bp.get("/<code>/<int:year>", defaults={"entry_number": None})
 @bp.get("/<code>/<int:year>/<int:entry_number>")
 @with_auth
@@ -510,6 +535,7 @@ def details(
     revote_results = get_show_results_for_songs(
         [song.id], result_mode="revote", include_year=False
     ).get(song.id, {})
+    spot_watch_available, spot_watched = _spot_watch_state(user_id, song)
 
     return render_template(
         "country/details.html",
@@ -529,6 +555,9 @@ def details(
         song_results=song_results,
         revote_results=revote_results,
         scrobble_enabled=bool(user_id) and scrobble.has_enabled_account(user_id),
+        current_user=user,
+        spot_watch_available=spot_watch_available,
+        spot_watched=spot_watched,
     )
 
 
@@ -608,6 +637,7 @@ def _render_song_details(
     revote_results = get_show_results_for_songs(
         [song.id], result_mode="revote", include_year=False
     ).get(song.id, {})
+    spot_watch_available, spot_watched = _spot_watch_state(user_id, song)
 
     return render_template(
         "country/details.html",
@@ -629,6 +659,9 @@ def _render_song_details(
         special=special_short_name,
         special_name=special_name,
         scrobble_enabled=bool(user_id) and scrobble.has_enabled_account(user_id),
+        current_user=user,
+        spot_watch_available=spot_watch_available,
+        spot_watched=spot_watched,
     )
 
 

@@ -2,6 +2,14 @@ th, td {
     padding: 0.25em;
 }
 
+.spot-watch {
+    display: inline-block;
+}
+
+.spot-watch button {
+    white-space: nowrap;
+}
+
 .line {
     min-height: 1em;
     line-height: 1.2;

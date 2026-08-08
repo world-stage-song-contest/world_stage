@@ -1,5 +1,7 @@
 
 
+from flask import redirect, request, url_for
+
 from ...db import fetchone, get_db
 from ...utils import (
     Show,
@@ -9,6 +11,7 @@ from ...utils import (
     get_year_songs,
     get_year_winner,
     render_template,
+    require_user,
     with_permissions,
 )
 from .common import bp, get_specials, resolve_special
@@ -31,6 +34,86 @@ def _ongoing_national_finals(year_id: int) -> list[dict]:
         (year_id,),
     )
     return cursor.fetchall()
+
+
+@bp.post("/<int(signed=True):year_id>/spot-watch")
+@require_user()
+def update_spot_watch(year_id: int, user: tuple[int, str]):
+    country_id = request.form.get("country_id", "").strip().upper()
+    entry_number = request.form.get("entry_number", type=int)
+    action = request.form.get("action")
+    if not country_id or entry_number is None or action not in {"watch", "unwatch"}:
+        return render_template("error.html", error="Invalid spot watch request"), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT special_short_name, submissions_open FROM year WHERE id = %s",
+        (year_id,),
+    )
+    year_row = cursor.fetchone()
+    if year_row is None:
+        return render_template("error.html", error="Year not found"), 404
+
+    if action == "watch":
+        if not year_row["submissions_open"]:
+            return (
+                render_template(
+                    "error.html",
+                    error="Spot watches are only available while submissions are open",
+                ),
+                403,
+            )
+        cursor.execute(
+            """
+            INSERT INTO year_spot_watch (
+                account_id, year_id, country_id, entry_number
+            )
+            SELECT %s, year_id, country_id, COALESCE(entry_number, 1)
+            FROM current_song
+            WHERE year_id = %s
+              AND country_id = %s
+              AND COALESCE(entry_number, 1) = %s
+              AND main_participant
+            ON CONFLICT (account_id, year_id, country_id, entry_number)
+            DO UPDATE SET created_at = year_spot_watch.created_at
+            RETURNING account_id
+            """,
+            (user[0], year_id, country_id, entry_number),
+        )
+        if cursor.fetchone() is None:
+            db.rollback()
+            return render_template("error.html", error="Spot not found"), 404
+    else:
+        cursor.execute(
+            """
+            DELETE FROM year_spot_watch
+            WHERE account_id = %s
+              AND year_id = %s
+              AND country_id = %s
+              AND entry_number = %s
+            """,
+            (user[0], year_id, country_id, entry_number),
+        )
+    db.commit()
+
+    if year_row["special_short_name"]:
+        return redirect(
+            url_for(
+                "country.special_details",
+                code=country_id.lower(),
+                special_short_name=year_row["special_short_name"],
+                entry_number=entry_number,
+            )
+        )
+    return redirect(
+        url_for(
+            "country.details",
+            code=country_id.lower(),
+            year=year_id,
+            entry_number=entry_number,
+        )
+    )
 
 
 @bp.get("/")
