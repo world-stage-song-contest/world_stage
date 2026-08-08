@@ -262,7 +262,12 @@ function createEnvelopes() {
 function createRo() {
     console.log(revealOrder);
     const countries = document.querySelector("#results");
-    const lim = Math.ceil(allCountries.length / 2);
+    const columnCount = window.qualifiersTheme.resultColumns || 2;
+    const lim = Math.ceil(allCountries.length / columnCount);
+    document.querySelector("#qualifier-reveal").style.setProperty(
+        "--qualifier-column-count",
+        String(columnCount)
+    );
     document.querySelector("#qualifier-reveal").style.setProperty(
         "--qualifier-row-count",
         String(lim)

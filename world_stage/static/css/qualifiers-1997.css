@@ -30,7 +30,7 @@ body {
     --qr97-panel: #8eb2cf;
     --qr97-ink: #f4f7ff;
     --qualifier-row-height: clamp(
-        32px,
+        24px,
         calc((100vh - 12rem) / var(--qualifier-row-count, 10) - 2px),
         58px
     );
@@ -66,8 +66,8 @@ body {
 
 #qualifier-reveal #wrapper {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(220px, 1fr) minmax(220px, 0.65fr);
-    gap: 10px;
+    grid-template-columns: minmax(240px, 0.65fr) minmax(280px, 1.08fr) minmax(260px, 1fr);
+    gap: 7px;
     height: calc(100vh - 8.5rem);
     min-height: 430px;
     padding: 8px;
@@ -97,7 +97,7 @@ body:has(#page-header.hidden) #qualifier-reveal #wrapper {
 
 #qualifier-reveal #results {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--qualifier-column-count, 1), minmax(0, 1fr));
     grid-auto-rows: var(--qualifier-row-height);
     gap: 2px 4px;
     width: 100%;
@@ -114,18 +114,16 @@ body:has(#page-header.hidden) #qualifier-reveal #wrapper {
     padding: 0;
     box-sizing: border-box;
     overflow: hidden;
-    color: #a9b7cc;
-    background: #182846;
+    color: var(--qr97-ink);
+    background: var(--qr97-row);
     border: 2px solid var(--qr97-grid);
-    transition: color 0.8s ease, background-color 0.8s ease;
+    opacity: 1;
+    transition: opacity 0.8s ease;
 }
 
 #qualifier-reveal .country.revealed {
-    color: var(--qr97-ink);
-    background: var(--qr97-row);
+    opacity: 0.42;
 }
-
-#qualifier-reveal .country.second-chance.revealed { background: #294b62; }
 
 #qualifier-reveal .reveal-flag-frame {
     width: auto;
@@ -136,11 +134,8 @@ body:has(#page-header.hidden) #qualifier-reveal #wrapper {
     padding: 0;
     background: #d8e5ec;
     border-right: 3px solid var(--qr97-grid);
-    opacity: 0.25;
-    transition: opacity 0.8s ease;
+    opacity: 1;
 }
-
-#qualifier-reveal .country.revealed .reveal-flag-frame { opacity: 1; }
 
 #qualifier-reveal .country .reveal-flag {
     display: block;
@@ -181,7 +176,7 @@ body:has(#page-header.hidden) #qualifier-reveal #wrapper {
 #qualifier-reveal #envelopes > div {
     display: grid;
     grid-template-columns: repeat(2, minmax(84px, 1fr));
-    gap: clamp(5px, 1vw, 12px);
+    gap: clamp(3px, 0.5vw, 7px);
     align-items: center;
     justify-items: center;
     overflow: visible;
@@ -219,8 +214,8 @@ body:has(#page-header.hidden) #qualifier-reveal #wrapper {
 #qualifier-reveal .envelope,
 #qualifier-reveal .pseudo-envelope {
     position: relative;
-    width: clamp(84px, 8vw, 132px);
-    height: clamp(56px, 5.33vw, 88px);
+    width: clamp(105px, 10.5vw, 170px);
+    height: clamp(70px, 7vw, 113px);
 }
 
 #qualifier-reveal .envelope {
@@ -352,8 +347,8 @@ body:has(#page-header.hidden) #qualifier-reveal #wrapper {
 }
 
 #qualifier-reveal .envelope-card.shrunk { scale: 0.5; }
-#qualifier-reveal .envelope-card.grow { scale: 2; }
-#qualifier-reveal .envelope-card.move-up { translate: 0 -225%; }
+#qualifier-reveal .envelope-card.grow { scale: 2.5; }
+#qualifier-reveal .envelope-card.move-up { translate: 0 -250%; }
 #qualifier-reveal .flipped.flipped.flipped { rotate: y 180deg; }
 #qualifier-reveal .envelope-card.hidden { opacity: 0; }
 #qualifier-reveal .envelope-top.bottom { z-index: 1; }
@@ -374,7 +369,7 @@ body:has(#page-header.hidden) #qualifier-reveal #wrapper {
     }
 
     #qualifier-reveal #wrapper {
-        grid-template-columns: minmax(0, 1.2fr) minmax(160px, 0.9fr) minmax(180px, 0.65fr);
+        grid-template-columns: minmax(180px, 0.65fr) minmax(200px, 1.08fr) minmax(180px, 1fr);
     }
 
     #qualifier-reveal #results { grid-template-columns: 1fr; }

@@ -93,5 +93,5 @@
         return element;
     }
 
-    window.qualifiersTheme = {createEnvelope, createCountry};
+    window.qualifiersTheme = {createEnvelope, createCountry, resultColumns: 1};
 })();
