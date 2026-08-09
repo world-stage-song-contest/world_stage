@@ -104,7 +104,7 @@
         </select>
 
         <label class="hidable" for="country">Country</label>
-        <select class="hidable" id="country" name="country" onchange="populateSongData()">
+        <select class="hidable" id="country" name="country" onchange="populateSongData()" disabled>
             <option value="">Select a country</option>
             <optgroup id="own-countries" label="Your submissions">
                 {% for c in countries.own %}
@@ -119,7 +119,7 @@
         </select>
     </fieldset>
 
-    <fieldset class="grid hidable">
+    <fieldset class="grid hidable" disabled>
         <legend>Song information</legend>
         <label class="req" for="artist">Artist</label>
         <input type="text" id="artist" name="artist" placeholder="Artist name" required maxlength="150" minlength="1" value="{{ data.artist }}">
@@ -157,10 +157,11 @@
                 <label for="is_placeholder">Placeholder?</label>
             </div>
         </div>
+        <div id="placeholder-requirement-message" class="span-fieldset banner compact hidden" role="status"></div>
     </fieldset>
 
     {% if elevated %}
-    <fieldset class="grid hidable">
+    <fieldset class="grid hidable" disabled>
         <legend>Admin options</legend>
         <label for="force_submitter">Replacement submitter</label>
         <select id="force_submitter" name="force_submitter">
@@ -172,7 +173,7 @@
     </fieldset>
     {% endif %}
 
-    <fieldset class="nongrid hidable">
+    <fieldset class="nongrid hidable" disabled>
         <legend>Sources</legend>
         <div class="banner long-text">
             <div>
@@ -188,7 +189,7 @@
             placeholder="Sources for the release date and originality of the song">{{ data.sources }}</textarea>
     </fieldset>
 
-    <fieldset class="grid hidable">
+    <fieldset class="grid hidable" disabled>
         <legend>Languages</legend>
         {% for lang_id in selected_languages or [''] %}
             <label data-n="{{loop.index}}" class="req language-label" for="language{{loop.index}}">Language {{loop.index}}</label>
@@ -205,7 +206,7 @@
         </div>
     </fieldset>
 
-    <fieldset class="hidable nongrid" id="genres-fieldset">
+    <fieldset class="hidable nongrid" id="genres-fieldset" disabled>
         <legend>Genres</legend>
         <details id="genres-details">
             <summary>Genres (optional)</summary>
@@ -232,7 +233,7 @@
         </details>
     </fieldset>
 
-    <fieldset class="grid hidable">
+    <fieldset class="grid hidable" disabled>
         <legend>Song video</legend>
         <label for="video">Video URL</label>
         <input class="stretchable" id="video_link" name="video_link"
@@ -270,7 +271,7 @@
         </div>
     </fieldset>
 
-    <fieldset class="hidable nongrid">
+    <fieldset class="hidable nongrid" disabled>
         <legend>Lyrics</legend>
         {{ formatting_guide("the lyrics", include_footnotes=true, include_lyrics=true) }}
         <div class="banner long-text">
@@ -315,7 +316,7 @@
         </details>
     </fieldset>
 
-    <fieldset class="hidable nongrid" id="time-signatures-fieldset">
+    <fieldset class="hidable nongrid" id="time-signatures-fieldset" disabled>
         <legend>Time signatures</legend>
         <details id="time-signatures-details">
             <summary>Time signatures (optional)</summary>
@@ -360,7 +361,7 @@
         </details>
     </fieldset>
 
-    <fieldset class="hidable nongrid" id="key-signatures-fieldset">
+    <fieldset class="hidable nongrid" id="key-signatures-fieldset" disabled>
         <legend>Key signatures</legend>
         <details id="key-signatures-details">
             <summary>Key signatures (optional)</summary>
@@ -432,8 +433,8 @@
     </fieldset>
 
     <div class="hidable buttons">
-        <button type="submit" name="action" value="submit">Submit</button>
-        <button type="submit" name="action" value="delete" formnovalidate>
+        <button type="submit" name="action" value="submit" disabled>Submit</button>
+        <button type="submit" name="action" value="delete" formnovalidate disabled>
             DELETE
         </button>
     </div>

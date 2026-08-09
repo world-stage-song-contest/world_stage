@@ -71,7 +71,12 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
     cursor.execute("SELECT submissions_open FROM year WHERE id = %s", (year,))
     year_result = cursor.fetchone()
     if not year_result:
-        return {"own": [], "placeholder": [], "force_placeholder": False}
+        return {
+            "own": [],
+            "placeholder": [],
+            "force_placeholder": False,
+            "force_placeholder_reason": None,
+        }
 
     submissions_closed = not year_result["submissions_open"]
     is_special = year < 0
@@ -100,10 +105,24 @@ def get_countries(year: int, user_id: int | None, all: bool = False) -> dict[str
         and not submissions_closed
         and (user_count >= MAX_USER_SUBMISSIONS or year_count >= MAX_YEAR_SUBMISSIONS)
     )
+    force_placeholder_reason = None
+    if force_placeholder:
+        if user_count >= MAX_USER_SUBMISSIONS:
+            force_placeholder_reason = (
+                f"You already have {MAX_USER_SUBMISSIONS} entries in this year, "
+                "which is the maximum per user. Any additional submissions "
+                "must be placeholders."
+            )
+        else:
+            force_placeholder_reason = (
+                f"This year has reached its limit of {MAX_YEAR_SUBMISSIONS} entries. "
+                "Any additional submissions must be placeholders."
+            )
     countries: dict[str, Any] = {
         "own": [],
         "placeholder": [],
         "force_placeholder": force_placeholder,
+        "force_placeholder_reason": force_placeholder_reason,
     }
 
     # Get user's own submissions
@@ -477,7 +496,12 @@ def get_countries_for_year(year: int):
         else:
             cursor.execute("SELECT id AS cc, name FROM country WHERE id <> 'XX' ORDER BY name")
         return {
-            "countries": {"own": [], "placeholder": cursor.fetchall(), "force_placeholder": False}
+            "countries": {
+                "own": [],
+                "placeholder": cursor.fetchall(),
+                "force_placeholder": False,
+                "force_placeholder_reason": None,
+            }
         }
     countries = get_countries(year, user_id, all=permissions.can_edit)
     return {"countries": countries}

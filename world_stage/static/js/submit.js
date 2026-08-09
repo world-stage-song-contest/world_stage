@@ -1,6 +1,7 @@
 // ── State ────────────────────────────────────────────────────────────
 let currentSongId = null;   // non-null when editing an existing song
 let yearRequiresPlaceholder = false;
+let placeholderRequirementReason = '';
 
 // ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -9,13 +10,17 @@ async function onLoad() {
     document.getElementById('remove-language-button').disabled = languageCount == 1;
     const yearSelect = document.getElementById('year');
     const countrySelect = document.getElementById('country');
+    setSubmissionStage();
     const yearVal = parseInt(year, 10);
     const countryVal = country + '';
     if (yearVal) {
         yearSelect.value = yearVal;
         await populateCountries(yearSelect);
         countrySelect.value = countryVal.toUpperCase();
-        await populateSongData(entryNumber);
+        setSubmissionStage();
+        if (countrySelect.value) {
+            await populateSongData(entryNumber);
+        }
     } else {
         yearSelect.value = '';
         clearFormFields();
@@ -59,6 +64,20 @@ async function onLoad() {
 
     // Intercept form submission
     document.getElementById('submit-song').addEventListener('submit', handleSubmit);
+}
+
+function setSubmissionStage() {
+    const form = document.forms.submit_song;
+    const hasYear = !!form.year.value;
+    const hasCountry = hasYear && !!form.country.value;
+
+    form.country.disabled = !hasYear;
+    for (const fieldset of form.querySelectorAll('fieldset.hidable')) {
+        fieldset.disabled = !hasCountry;
+    }
+    for (const button of form.querySelectorAll('.buttons button')) {
+        button.disabled = !hasCountry;
+    }
 }
 
 function attachTimeInputHandler(el) {
@@ -305,8 +324,11 @@ function clearFormFields() {
 
 function setPlaceholderRequirement(required) {
     const checkbox = document.getElementById('is_placeholder');
+    const message = document.getElementById('placeholder-requirement-message');
     checkbox.checked = !!required;
     checkbox.disabled = !!required;
+    message.textContent = required ? placeholderRequirementReason : '';
+    message.classList.toggle('hidden', !required || !placeholderRequirementReason);
 }
 
 function resetLanguageRows() {
@@ -754,6 +776,16 @@ function clearCountriesSelect() {
 }
 
 async function populateCountries(yearSelect) {
+    const countrySelect = document.getElementById('country');
+    countrySelect.value = '';
+    yearRequiresPlaceholder = false;
+    placeholderRequirementReason = '';
+    clearCountriesSelect();
+    clearFormFields();
+    setSubmissionStage();
+
+    if (!yearSelect.value) return;
+
     const countriesData = await fetchCountries(yearSelect);
     if (countriesData.error) {
         handleError(countriesData.error);
@@ -764,9 +796,7 @@ async function populateCountries(yearSelect) {
 
     const countries = countriesData.countries;
     yearRequiresPlaceholder = !!countries.force_placeholder;
-    clearCountriesSelect();
-    const countrySelect = document.getElementById('country');
-    countrySelect.value = '';
+    placeholderRequirementReason = countries.force_placeholder_reason || '';
     clearFormFields();
 
     const ownGroup = document.getElementById('own-countries');
@@ -804,8 +834,10 @@ async function populateSongData(entryNumberOverride) {
     const country = countrySelect.value;
     if (year === '' || country === '') {
         clearFormFields();
+        setSubmissionStage();
         return;
     }
+    setSubmissionStage();
     const songData = await fetchSongData(year, country, entryNumberOverride);
 
     // Clear form before populating with new data
