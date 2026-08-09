@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 
-def test_revote_keeps_official_results_unchanged(client, db):
+def test_revote_keeps_official_results_unchanged(client, db, rendered_templates):
     with db.cursor() as cursor:
         cursor.execute("UPDATE year SET status = 'closed' WHERE id = 2024")
         cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
@@ -237,3 +237,46 @@ def test_revote_keeps_official_results_unchanged(client, db):
         "/revote/2024/sf82/vote", headers={"Accept": "text/html"}
     )
     assert response.status_code == 200
+
+    # Bob's revote now leaves the first song blank.  The song breakdown must
+    # not fall back to the 12 points on his superseded official ballot.
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            DELETE FROM vote
+            WHERE song_id = %s AND vote_set_id = (
+                SELECT id FROM vote_set
+                WHERE voter_id = 2 AND show_id = %s AND result_mode = 'revote'
+            )
+            """,
+            (song_ids[0], show_id),
+        )
+    db.commit()
+
+    response = client.get(
+        f"/revote/2024/sf82/song/{song_ids[0]}", headers={"Accept": "text/html"}
+    )
+    assert response.status_code == 200
+    template_name, context = rendered_templates[-1]
+    assert template_name == "year/song_votes.html"
+    assert context["total_points"] == 22
+    assert context["voters_who_gave"] == 2
+    assert [voter["username"] for voter in context["no_points_voters"]] == ["bob"]
+    assert context["no_points_voters"][0]["vote_change"] == -12
+    point_voters = {
+        voter["username"]: voter
+        for group in context["point_groups"]
+        for voter in group["voters"]
+    }
+    assert point_voters["carol"]["vote_change"] == 0
+    assert point_voters["carol"]["revoted"] is True
+    assert point_voters["alice"]["vote_change"] is None
+    assert point_voters["alice"]["revoted"] is False
+    assert "(-12)" in response.get_data(as_text=True)
+    assert "(0)" in response.get_data(as_text=True)
+
+    response = client.get(
+        f"/revote/2024/sf82/song/{song_ids[1]}", headers={"Accept": "text/html"}
+    )
+    assert response.status_code == 200
+    assert "(+2)" in response.get_data(as_text=True)

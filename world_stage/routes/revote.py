@@ -343,20 +343,32 @@ def song_votes(year: str, show: str, song_id: int):
 
     original_scores = scores_for_mode("official")
     revote_scores = scores_for_mode("revote") if has_revotes else {}
-    scores = original_scores | revote_scores
+    # A revote replaces the entire original ballot, not only the entries that
+    # still receive points.  Remove every score from superseded ballots before
+    # adding their revote scores so an omitted entry is treated as zero.
+    scores = {
+        voter_id: score
+        for voter_id, score in original_scores.items()
+        if voter_id not in revote_voter_ids
+    }
+    scores.update(revote_scores)
     groups: dict[int, list[dict]] = defaultdict(list)
     no_points_voters: list[dict] = []
     for voter in voters:
-        score = scores.get(voter["voter_id"], 0)
+        voter_id = voter["voter_id"]
+        score = scores.get(voter_id, 0)
+        vote_change = (
+            score - original_scores.get(voter_id, 0)
+            if voter_id in revote_voter_ids
+            else None
+        )
         voter_entry = {
             "username": voter["username"],
             "code": voter["code"],
             "country_name": voter["country_name"] or "",
-            "is_submitter": voter["voter_id"] == song["submitter_id"],
-            "changed": (
-                voter["voter_id"] in revote_voter_ids
-                and score != original_scores.get(voter["voter_id"], 0)
-            ),
+            "is_submitter": voter_id == song["submitter_id"],
+            "vote_change": vote_change,
+            "revoted": voter_id in revote_voter_ids,
         }
         if score:
             groups[score].append(voter_entry)
