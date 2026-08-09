@@ -228,7 +228,7 @@ def has_unread_messages(user_id: int, permissions: UserPermissions) -> bool:
         (
             user_id,
             user_id,
-            permissions.can_view_restricted,
+            permissions.can_moderate,
             user_id,
         ),
     )

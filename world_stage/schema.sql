@@ -1102,7 +1102,7 @@ BEGIN
             FROM account
             JOIN account_role ON account_role.name = account.role
             WHERE account.id = NEW.account_id
-              AND account_role.can_view_restricted
+              AND (account.role = 'editor' OR account_role.can_view_restricted)
         ) THEN
             RAISE EXCEPTION 'admin participant does not have admin access';
         END IF;
@@ -1157,7 +1157,7 @@ BEGIN
             FROM account
             JOIN account_role ON account_role.name = account.role
             WHERE account.id = NEW.sender_id
-              AND account_role.can_view_restricted
+              AND (account.role = 'editor' OR account_role.can_view_restricted)
         ) THEN
             RAISE EXCEPTION 'admin sender does not have admin access';
         END IF;

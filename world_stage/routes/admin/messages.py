@@ -21,7 +21,7 @@ def messages_inbox(
     user: tuple[int, str] | None,
     permissions: UserPermissions,
 ):
-    assert user is not None and permissions.can_view_restricted
+    assert user is not None and permissions.can_moderate
     user_id, _username = user
     page = _positive_page(request.args.get("page"))
 

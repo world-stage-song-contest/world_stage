@@ -64,10 +64,11 @@ def home(user: tuple[int, str] | None, permissions: UserPermissions):
         has_pending_vote = cursor.fetchone() is not None
         has_unread = has_unread_messages(user_id, permissions)
         banners = banner_conversations(user_id)
-        if permissions.can_view_restricted:
+        if permissions.can_moderate:
             has_admin_unread = has_unread_admin_messages(user_id)
 
     is_admin = permissions.can_view_restricted
+    is_moderator = permissions.can_moderate
 
     return render_template(
         "index.html",
@@ -76,6 +77,7 @@ def home(user: tuple[int, str] | None, permissions: UserPermissions):
         has_unread_admin_messages=has_admin_unread,
         banner_conversations=banners,
         is_admin=is_admin,
+        is_moderator=is_moderator,
     )
 
 

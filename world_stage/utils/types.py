@@ -63,6 +63,11 @@ class UserPermissions:
     def __str__(self) -> str:
         return self.role
 
+    @property
+    def can_moderate(self) -> bool:
+        """Whether the account may handle verifications and moderator messages."""
+        return self.role == "editor" or self.can_view_restricted
+
 
 def can_manage_show(
     show: ShowData, user: tuple[int, str] | None, permissions: UserPermissions

@@ -411,6 +411,57 @@ def test_admin_messaging_interface_shows_only_shared_conversations(
     assert compose.status_code == 200
 
 
+def test_editor_can_use_moderator_inbox_and_reply_as_moderator(client, db):
+    conversation_id = _insert_conversation(
+        db,
+        owner_account_id=2,
+        subject="Shared with moderators",
+        participants=[2],
+        admin_accessible=True,
+    )
+    with db.cursor() as cursor:
+        cursor.execute("UPDATE account SET role = 'editor' WHERE id = 3")
+        cursor.execute(
+            """
+            INSERT INTO message (conversation_id, sender_id, sender_kind, body)
+            VALUES (%s, 2, 'participant', 'Please review this')
+            """,
+            (conversation_id,),
+        )
+    db.commit()
+    _login(client, db, 3)
+
+    home = client.get("/", headers={"Accept": "text/html"})
+    inbox = client.get("/admin/messages", headers={"Accept": "text/html"})
+    thread = client.get(
+        f"/messages/{conversation_id}", headers={"Accept": "text/html"}
+    )
+    reply = client.post(
+        f"/messages/{conversation_id}/reply",
+        data={"body": "Reviewed by an editor"},
+    )
+
+    assert home.status_code == 200
+    assert 'href="/admin/messages"' in home.text
+    assert inbox.status_code == 200
+    assert thread.status_code == 200
+    assert reply.status_code == 302
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT message.sender_kind, participant.role
+            FROM message
+            JOIN conversation_participant AS participant
+              ON participant.conversation_id = message.conversation_id
+             AND participant.account_id = message.sender_id
+            WHERE message.conversation_id = %s
+              AND message.sender_id = 3
+            """,
+            (conversation_id,),
+        )
+        assert cursor.fetchone() == {"sender_kind": "admin", "role": "admin"}
+
+
 def test_search_can_filter_messages_sent_by_current_user(client, db, rendered_templates):
     conversation_id = _insert_conversation(
         db,

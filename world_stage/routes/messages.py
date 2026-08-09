@@ -140,7 +140,7 @@ def _conversation_for_user(
         (
             user_id,
             conversation_id,
-            permissions.can_view_restricted,
+            permissions.can_moderate,
         ),
     )
     return cursor.fetchone()
@@ -154,7 +154,7 @@ def _can_edit_conversation(
     if conversation["system_conversation"]:
         return False
     return conversation["participant_role"] == "owner" or (
-        conversation["created_by_admin"] and permissions.can_view_restricted
+        conversation["created_by_admin"] and permissions.can_moderate
     )
 
 
@@ -242,7 +242,7 @@ def _render_new(
         account = cursor.fetchone()
         values = {
             "email_notifications": bool(
-                permissions.can_view_restricted and account and account["has_email"]
+                permissions.can_moderate and account and account["has_email"]
             )
         }
     return (
@@ -251,7 +251,7 @@ def _render_new(
             recipients=_available_recipients(user_id),
             error=error,
             values=values,
-            created_by_admin=permissions.can_view_restricted,
+            created_by_admin=permissions.can_moderate,
             max_subject_length=MAX_SUBJECT_LENGTH,
             max_message_length=MAX_MESSAGE_LENGTH,
         ),
@@ -368,7 +368,7 @@ def inbox(user: tuple[int, str] | None, permissions: UserPermissions):
             user_id,
             user_id,
             user_id,
-            permissions.can_view_restricted,
+            permissions.can_moderate,
             INBOX_PAGE_SIZE + 1,
             (page - 1) * INBOX_PAGE_SIZE,
         ),
@@ -385,7 +385,7 @@ def inbox(user: tuple[int, str] | None, permissions: UserPermissions):
     return render_template(
         "messages/inbox.html",
         conversations=conversations,
-        is_admin=permissions.can_view_restricted,
+        is_admin=permissions.can_moderate,
         page=page,
         has_next=has_next,
     )
@@ -413,7 +413,7 @@ def new_post(user: tuple[int, str] | None, permissions: UserPermissions):
     subject = request.form.get("subject", "").strip()
     body = request.form.get("body", "")
     participant_values = request.form.getlist("participant_id")
-    created_by_admin = permissions.can_view_restricted
+    created_by_admin = permissions.can_moderate
     admin_accessible = created_by_admin or (
         request.form.get("admin_accessible", "").lower()
         in {"1", "true", "yes", "on"}
@@ -530,7 +530,7 @@ def edit(
     return _render_edit(
         conversation,
         values=_edit_values(conversation, participants),
-        is_admin=permissions.can_view_restricted,
+        is_admin=permissions.can_moderate,
     )[0]
 
 
@@ -576,7 +576,7 @@ def edit_post(
         return _render_edit(
             conversation,
             values=values,
-            is_admin=permissions.can_view_restricted,
+            is_admin=permissions.can_moderate,
             error=error,
             status=400,
         )
@@ -636,7 +636,7 @@ def edit_post(
         return _render_edit(
             conversation,
             values=values,
-            is_admin=permissions.can_view_restricted,
+            is_admin=permissions.can_moderate,
             error="The conversation could not be updated.",
             status=400,
         )
@@ -678,7 +678,7 @@ def thread(
         can_reply=can_reply,
         can_edit=_can_edit_conversation(conversation, user_id, permissions),
         can_leave=_can_leave_conversation(conversation),
-        is_admin=permissions.can_view_restricted,
+        is_admin=permissions.can_moderate,
         page=page,
         has_older=has_older,
         max_message_length=MAX_MESSAGE_LENGTH,
@@ -832,7 +832,7 @@ def reply(
                 can_reply=True,
                 can_edit=_can_edit_conversation(conversation, user_id, permissions),
                 can_leave=_can_leave_conversation(conversation),
-                is_admin=permissions.can_view_restricted,
+                is_admin=permissions.can_moderate,
                 error=error,
                 reply_body=body,
                 page=1,
@@ -844,7 +844,7 @@ def reply(
         )
 
     participant_role = conversation["participant_role"]
-    acting_as_admin = permissions.can_view_restricted and (
+    acting_as_admin = permissions.can_moderate and (
         participant_role == "admin"
         or (participant_role == "owner" and conversation["created_by_admin"])
         or participant_role is None
@@ -999,7 +999,7 @@ def _search_filter_accounts(
             approved_only,
             user_id,
             user_id,
-            permissions.can_view_restricted,
+            permissions.can_moderate,
         ),
     )
     return cursor.fetchall()
@@ -1057,7 +1057,7 @@ def search(user: tuple[int, str] | None, permissions: UserPermissions):
                 OR (conversation.admin_accessible AND %s)
             )"""
         ]
-        params: list = [user_id, permissions.can_view_restricted]
+        params: list = [user_id, permissions.can_moderate]
 
         if query:
             clauses.append(
@@ -1149,7 +1149,7 @@ def search(user: tuple[int, str] | None, permissions: UserPermissions):
             approved_only=True,
         ),
         current_username=username,
-        is_admin=permissions.can_view_restricted,
+        is_admin=permissions.can_moderate,
         filters=request.args,
         error=error,
         page=page,

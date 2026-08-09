@@ -665,8 +665,34 @@ def test_verifications_require_admin_access(client):
     assert response.headers["Location"] == "/"
 
 
+def test_editor_can_access_verifications_but_not_other_admin_pages(client, db):
+    with db.cursor() as cursor:
+        cursor.execute("UPDATE account SET role = 'editor' WHERE id = 3")
+    db.commit()
+    _login(client, db, 3)
+
+    response = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+    restricted_response = client.get("/admin/users", headers=HTML_HEADERS)
+
+    assert response.status_code == 200
+    assert restricted_response.status_code == 302
+    assert restricted_response.headers["Location"] == "/"
+
+
 def test_year_navbar_links_to_verifications_for_admin(client, db):
     _login(client, db, 1)
+
+    response = client.get("/year/2025", headers=HTML_HEADERS)
+
+    assert response.status_code == 200
+    assert 'href="/admin/manage/2025/verifications"' in response.text
+
+
+def test_year_navbar_links_to_verifications_for_editor(client, db):
+    with db.cursor() as cursor:
+        cursor.execute("UPDATE account SET role = 'editor' WHERE id = 3")
+    db.commit()
+    _login(client, db, 3)
 
     response = client.get("/year/2025", headers=HTML_HEADERS)
 

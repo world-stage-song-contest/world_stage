@@ -56,6 +56,13 @@
         <img src="{{ static('images/administrator.png') }}" alt="Administrator Icon">
         <p>Administrator utilities.</p>
     </a>
+    {% elif is_moderator %}
+    <a href="{{ url_for('admin.messages_inbox') }}" class="card{% if has_unread_admin_messages %} card-attention{% endif %}"
+       {% if has_unread_admin_messages %}title="The moderator inbox has unread messages"{% endif %}>
+        <h3>Moderator Messages</h3>
+        <img src="{{ static('images/message.png') }}" alt="Message Icon">
+        <p>Read and send shared moderator messages.</p>
+    </a>
     {% endif %}
 </div>
 {% endblock %}
