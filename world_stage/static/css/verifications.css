@@ -2,6 +2,24 @@
     font-size: 1.1rem;
 }
 
+.verification-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.verification-filters fieldset {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin: 0;
+}
+
+.verification-filters label {
+    white-space: nowrap;
+}
+
 .verification-table-wrapper {
     overflow-x: auto;
 }

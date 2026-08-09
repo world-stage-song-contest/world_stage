@@ -5,6 +5,69 @@ function initializeVerifications() {
             button.hidden = preview.scrollHeight <= preview.clientHeight + 1;
         });
     };
+    const hidePlaceholders = document.getElementById('hide-verification-placeholders');
+    const hideHistorical = document.getElementById('hide-verification-historical');
+    const statusFilters = document.querySelectorAll('.verification-status-filter');
+    const verificationRows = document.querySelectorAll('tr[data-verification-kind]');
+    const filterEmpty = document.getElementById('verification-filter-empty');
+    const filterStorageKeys = {
+        placeholders: 'verifications.hidePlaceholders',
+        historical: 'verifications.hideHistorical',
+    };
+
+    const loadFilterPreference = (key) => {
+        try {
+            return window.localStorage.getItem(key) === 'true';
+        } catch (_error) {
+            return false;
+        }
+    };
+    const saveFilterPreference = (key, value) => {
+        try {
+            window.localStorage.setItem(key, String(value));
+        } catch (_error) {
+            // Filtering still works when storage is unavailable.
+        }
+    };
+    const applyFilters = () => {
+        const visibleStatuses = new Set(
+            Array.from(statusFilters)
+                .filter((checkbox) => checkbox.checked)
+                .map((checkbox) => checkbox.value),
+        );
+        let visibleRows = 0;
+
+        verificationRows.forEach((row) => {
+            const kind = row.dataset.verificationKind;
+            const hiddenByKind = (kind === 'placeholder' && hidePlaceholders.checked)
+                || (kind === 'historical' && hideHistorical.checked);
+            const hiddenByStatus = kind !== 'placeholder'
+                && !visibleStatuses.has(row.dataset.verificationStatus);
+            row.hidden = hiddenByKind || hiddenByStatus;
+            if (!row.hidden) visibleRows += 1;
+        });
+
+        if (filterEmpty) filterEmpty.hidden = visibleRows !== 0;
+        updateSourceButtons();
+    };
+
+    if (hidePlaceholders && hideHistorical) {
+        hidePlaceholders.checked = loadFilterPreference(filterStorageKeys.placeholders);
+        hideHistorical.checked = loadFilterPreference(filterStorageKeys.historical);
+        hidePlaceholders.addEventListener('change', () => {
+            saveFilterPreference(filterStorageKeys.placeholders, hidePlaceholders.checked);
+            applyFilters();
+        });
+        hideHistorical.addEventListener('change', () => {
+            saveFilterPreference(filterStorageKeys.historical, hideHistorical.checked);
+            applyFilters();
+        });
+        statusFilters.forEach((checkbox) => {
+            checkbox.addEventListener('change', applyFilters);
+        });
+        applyFilters();
+    }
+
     updateSourceButtons();
     window.addEventListener('resize', updateSourceButtons);
 

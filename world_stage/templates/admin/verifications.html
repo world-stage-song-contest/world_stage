@@ -57,7 +57,8 @@
 </td>
 {% endmacro %}
 {% macro render_historical_entry(entry, year) %}
-<tr id="historical-song-{{ entry.id }}" class="withdrawn-or-replaced">
+<tr id="historical-song-{{ entry.id }}" class="withdrawn-or-replaced"
+    data-verification-kind="historical" data-verification-status="{{ entry.approval_status }}">
     <td class="verification-entry">
         <strong class="country">{{ flag(entry.country_id, 21, entry.country_name or entry.country_id) }}{{ entry.country_name or entry.country_id }}</strong>
         {% if entry.entry_number and entry.entry_number > 1 %} (entry {{ entry.entry_number }}){% endif %}
@@ -117,6 +118,20 @@
 </p>
 
 {% if verification_groups %}
+<div class="verification-filters" aria-label="Verification filters">
+    <fieldset>
+        <legend>Visibility</legend>
+        <label><input type="checkbox" id="hide-verification-placeholders"> Hide placeholders</label>
+        <label><input type="checkbox" id="hide-verification-historical"> Hide deleted/replaced entries</label>
+    </fieldset>
+    <fieldset>
+        <legend>Status</legend>
+        <label><input type="checkbox" class="verification-status-filter" value="pending" checked> Pending</label>
+        <label><input type="checkbox" class="verification-status-filter" value="accepted" checked> Accepted</label>
+        <label><input type="checkbox" class="verification-status-filter" value="rejected" checked> Rejected</label>
+        <label><input type="checkbox" class="verification-status-filter" value="more-info" checked> Waiting for information</label>
+    </fieldset>
+</div>
 <div class="verification-table-wrapper">
     <table class="verification-table">
         <thead>
@@ -134,7 +149,9 @@
             {% endfor %}
             {% if group.song %}
             {% set song = group.song %}
-            <tr id="song-{{ song.id }}"{% if song.is_placeholder %} class="placeholder"{% endif %}>
+            <tr id="song-{{ song.id }}"{% if song.is_placeholder %} class="placeholder"{% endif %}
+                data-verification-kind="{{ 'placeholder' if song.is_placeholder else 'entry' }}"
+                data-verification-status="{{ song.approval_status }}">
                 <td class="verification-entry">
                     <strong class="country">{{ flag(song.country_id, 21, song.country_name) }} {{ song.country_name }}</strong>
                     {% if song.entry_number and song.entry_number > 1 %} (entry {{ song.entry_number }}){% endif %}
@@ -217,6 +234,7 @@
         </tbody>
     </table>
 </div>
+<p id="verification-filter-empty" hidden><em>No entries match the selected filters.</em></p>
 {% else %}
 <p>There are no entries for this year.</p>
 {% endif %}
