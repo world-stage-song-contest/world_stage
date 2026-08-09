@@ -12,8 +12,9 @@ from ..utils import (
     get_ballot_entry_rules,
     get_countries,
     get_show_id,
-    get_show_songs,
-    get_user_songs,
+    get_show_lineup,
+    get_show_result_entries,
+    get_user_submission_countries,
     render_template,
     require_user,
 )
@@ -67,9 +68,7 @@ def _original_results_url(year_id: int, short_name: str) -> str:
     cursor.execute("SELECT special_short_name FROM year WHERE id = %s", (year_id,))
     special_short_name = cursor.fetchone()["special_short_name"]
     if special_short_name:
-        return url_for(
-            "year.special_results", short_name=special_short_name, show=short_name
-        )
+        return url_for("year.special_results", short_name=special_short_name, show=short_name)
     return url_for("year.results", year=year_id, show=short_name)
 
 
@@ -86,9 +85,13 @@ def _eligible_show(year_key: str, short_name: str):
     cursor.execute("SELECT revote_eligible_at FROM show WHERE id = %s", (show.id,))
     row = cursor.fetchone()
     if not row or not row["revote_eligible_at"]:
-        return None, None, (
-            render_template("error.html", error="Re-voting is not available for this show"),
-            400,
+        return (
+            None,
+            None,
+            (
+                render_template("error.html", error="Re-voting is not available for this show"),
+                400,
+            ),
         )
     return show, year, None
 
@@ -225,8 +228,7 @@ def vote(year: str, show: str, user: tuple[int, str]):
     voter_id, username = user
     cursor = get_db().cursor()
     ballot, ballot_mode = _existing_ballot(cursor, voter_id, show_data.id)
-    user_songs = get_user_songs(voter_id, show_data.year)
-    countries = list({song.country.cc: song.country for song in user_songs}.values())
+    countries = get_user_submission_countries(voter_id, show_data.year)
     if not countries:
         countries = get_countries()
     cursor.execute(
@@ -236,9 +238,9 @@ def vote(year: str, show: str, user: tuple[int, str]):
     revote_count = fetchone(cursor)["count"]
     selected = _ballot_selection(cursor, ballot)
     selected_country = ballot["country_id"] if ballot else None
-    if not selected_country and user_songs:
-        selected_country = user_songs[0].country.cc
-    all_songs = get_show_songs(show_data.year, show_data.short_name) or []
+    if not selected_country and countries:
+        selected_country = countries[0].cc
+    all_songs = get_show_lineup(show_data.year, show_data.short_name) or []
     song_rules = get_ballot_entry_rules(
         show_data.id,
         "revote",
@@ -246,9 +248,7 @@ def vote(year: str, show: str, user: tuple[int, str]):
         selected_country,
         [song.id for song in all_songs],
     )
-    songs = [
-        song for song in all_songs if song_rules[song.id].kind != "FORBIDDEN"
-    ]
+    songs = [song for song in all_songs if song_rules[song.id].kind != "FORBIDDEN"]
 
     return render_template(
         "vote/vote.html",
@@ -424,12 +424,14 @@ def results(year: str, show: str):
     has_results = fetchone(cursor)["has_results"]
     revoters_only = request.args.get("revoters_only") == "true"
     result_mode = "revote" if has_results else "official"
-    songs = get_show_songs(
-        show_data.year,
-        show_data.short_name,
-        select_votes=True,
-        result_mode=result_mode,
-    ) or []
+    songs = (
+        get_show_result_entries(
+            show_data.year,
+            show_data.short_name,
+            result_mode=result_mode,
+        )
+        or []
+    )
     if revoters_only:
         cursor.execute(
             "SELECT COUNT(*) AS count FROM vote_set WHERE show_id = %s AND result_mode = 'revote'",
@@ -465,9 +467,7 @@ def results(year: str, show: str):
             song.vote_data = data
 
         midpoint = (
-            Decimal(sum(show_data.points)) * revote_voters / len(songs)
-            if songs
-            else Decimal(0)
+            Decimal(sum(show_data.points)) * revote_voters / len(songs) if songs else Decimal(0)
         )
         adjusted_caps = {song.id: 0 for song in songs}
         if revote_voters:
@@ -487,9 +487,7 @@ def results(year: str, show: str):
                 """,
                 (show_data.id,),
             )
-            adjusted_caps.update(
-                {row["song_id"]: row["score_cap"] for row in cursor.fetchall()}
-            )
+            adjusted_caps.update({row["song_id"]: row["score_cap"] for row in cursor.fetchall()})
 
         if songs:
             cursor.execute(
@@ -509,18 +507,13 @@ def results(year: str, show: str):
                 ),
             )
             adjusted_percentages = {
-                row["song_id"]: row["adjusted_percentage"]
-                for row in cursor.fetchall()
+                row["song_id"]: row["adjusted_percentage"] for row in cursor.fetchall()
             }
             for song in songs:
-                song.vote_data.max_possible_points = (
-                    song.vote_data.max_pts * revote_voters
-                )
+                song.vote_data.max_possible_points = song.vote_data.max_pts * revote_voters
                 song.vote_data.adjusted_max_possible_points = adjusted_caps[song.id]
                 song.vote_data.points_midpoint = midpoint
-                song.vote_data.adjusted_points_percentage = adjusted_percentages[
-                    song.id
-                ]
+                song.vote_data.adjusted_points_percentage = adjusted_percentages[song.id]
     songs.sort(reverse=True)
 
     return render_template(
@@ -571,12 +564,14 @@ def detailed_results(year: str, show: str):
         (show_data.id,),
     )
     has_results = fetchone(cursor)["has_results"]
-    songs = get_show_songs(
-        show_data.year,
-        show_data.short_name,
-        select_votes=True,
-        result_mode="revote" if has_results else "official",
-    ) or []
+    songs = (
+        get_show_result_entries(
+            show_data.year,
+            show_data.short_name,
+            result_mode="revote" if has_results else "official",
+        )
+        or []
+    )
     songs.sort(reverse=True)
 
     def ballots_for_mode(result_mode: str) -> list[dict]:
@@ -646,10 +641,9 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
         return error
 
     voter_id, username = user
-    songs = get_show_songs(show_data.year, show_data.short_name) or []
+    songs = get_show_lineup(show_data.year, show_data.short_name) or []
     songs_by_id = {song.id: song for song in songs}
-    user_songs = get_user_songs(voter_id, show_data.year)
-    countries = list({song.country.cc: song.country for song in user_songs}.values())
+    countries = get_user_submission_countries(voter_id, show_data.year)
     if not countries:
         countries = get_countries()
     allowed_country_ids = {country.cc for country in countries}
@@ -701,16 +695,12 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
             errors.append(message)
         if score is not None:
             invalid.append(score)
-    selectable_songs = [
-        song for song in songs if song_rules[song.id].kind != "FORBIDDEN"
-    ]
+    selectable_songs = [song for song in songs if song_rules[song.id].kind != "FORBIDDEN"]
 
     if not errors:
         action = _save_revote(voter_id, show_data.id, nickname, country_id, votes)
         return make_response(
-            render_template(
-                "vote/success.html", action=action, what="revote", what_act="revoting"
-            )
+            render_template("vote/success.html", action=action, what="revote", what_act="revoting")
         )
 
     selected: dict[int, dict[str, Any]] = defaultdict(dict)

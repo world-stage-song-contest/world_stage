@@ -9,7 +9,7 @@ from ...utils import (
     draw_running_order,
     draw_semifinals,
     get_show_id,
-    get_show_songs,
+    get_show_reveal_entries,
     get_year_shows,
     render_template,
 )
@@ -261,7 +261,7 @@ def draw_final(
     if not show_data:
         return render_template("error.html", error=f"Invalid show '{show}' for {year}"), 404
 
-    songs = get_show_songs(year, show, sort_reveal=True)
+    songs = get_show_reveal_entries(year, show)
 
     if not songs:
         return render_template("error.html", error="No show '{show}' found for {year}"), 404

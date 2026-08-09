@@ -475,6 +475,8 @@ CREATE TABLE IF NOT EXISTS song_verification_hidden_revision (
     created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Deprecated compatibility view. New read paths should start from their small,
+-- task-specific ID set and join the latest song_data/song_status rows directly.
 CREATE OR REPLACE VIEW current_song AS
 SELECT song.id, song.country_id, song.year_id, song.entry_number,
        data.submitter_id, data.title, data.artist, data.created_at, data.changed_by,

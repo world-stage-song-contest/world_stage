@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from functools import lru_cache, total_ordering
-from typing import Any, LiteralString, Self
+from typing import LiteralString, Self
 
 from ..db import get_db
 from .lookups import get_show_id
@@ -89,10 +89,10 @@ class Song:
     @classmethod
     def from_row(cls, song: dict) -> Self:
         """Build a Song from an already-hydrated query row without database I/O."""
-        recap_start_seconds = song["snippet_start"]
-        recap_end_seconds = song["snippet_end"]
-        recap2_start_seconds = song["snippet2_start"]
-        recap2_end_seconds = song["snippet2_end"]
+        recap_start_seconds = song.get("snippet_start")
+        recap_end_seconds = song.get("snippet_end")
+        recap2_start_seconds = song.get("snippet2_start")
+        recap2_end_seconds = song.get("snippet2_end")
         year = Year(
             id=song["year_id"],
             special_name=song.get("special_name"),
@@ -102,10 +102,10 @@ class Song:
         return cls(
             id=song["id"],
             title=song["title"],
-            native_title=song["native_title"],
+            native_title=song.get("native_title"),
             artist=song["artist"],
-            video_link=song["video_link"],
-            poster_link=song["poster_link"],
+            video_link=song.get("video_link"),
+            poster_link=song.get("poster_link"),
             vtt_link=song.get("vtt_link"),
             duration=song.get("duration"),
             country=Country(
@@ -115,19 +115,19 @@ class Song:
                 cc3=song["cc3"],
                 flag_variant=song.get("flag_variant"),
             ),
-            placeholder=bool(song["is_placeholder"]),
-            approval_status=song["approval_status"],
+            placeholder=bool(song.get("is_placeholder", False)),
+            approval_status=song.get("approval_status", "pending"),
             year=year,
-            entry_number=song["entry_number"],
+            entry_number=song.get("entry_number") or 1,
             title_lang=_language_from_row(song, "title_language"),
-            submitter_id=song["submitter_id"],
+            submitter_id=song.get("submitter_id"),
             native_lang=_language_from_row(song, "native_language"),
-            translated_lyrics=song["translated_lyrics"],
-            latin_lyrics=song["romanized_lyrics"],
-            native_lyrics=song["native_lyrics"],
-            lyrics_notes=song["notes"],
-            sources=song["sources"],
-            submitter=song["username"],
+            translated_lyrics=song.get("translated_lyrics"),
+            latin_lyrics=song.get("romanized_lyrics"),
+            native_lyrics=song.get("native_lyrics"),
+            lyrics_notes=song.get("notes"),
+            sources=song.get("sources"),
+            submitter=song.get("username"),
             languages=[],
             vote_data=_vote_data_from_row(song),
             recap_start_seconds=recap_start_seconds,
@@ -323,9 +323,22 @@ def get_song_key_signatures(song_id: int) -> list[str]:
     cursor.execute(
         """
         SELECT member.tonic, member.mode, member.microtonal, member.notes
-        FROM current_song AS song
+        FROM song
+        JOIN LATERAL (
+            SELECT song_data.key_signature_set_id
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
         JOIN key_signature_set_key_signature AS member
-          ON member.key_signature_set_id = song.key_signature_set_id
+          ON member.key_signature_set_id = data.key_signature_set_id
         WHERE song.id = %s
           AND (tonic IS NOT NULL OR mode IS NOT NULL)
     """,
@@ -367,9 +380,22 @@ def get_song_time_signatures(song_id: int) -> list[str]:
     cursor.execute(
         """
         SELECT member.numerator, member.denominator
-        FROM current_song AS song
+        FROM song
+        JOIN LATERAL (
+            SELECT song_data.time_signature_set_id
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
         JOIN time_signature_set_time_signature AS member
-          ON member.time_signature_set_id = song.time_signature_set_id
+          ON member.time_signature_set_id = data.time_signature_set_id
         WHERE song.id = %s
         ORDER BY member.priority
     """,
@@ -396,9 +422,22 @@ def get_song_subgenres_display(song_id: int) -> list[str]:
     cursor.execute(
         """
         SELECT subgenre.name
-        FROM current_song AS song
+        FROM song
+        JOIN LATERAL (
+            SELECT song_data.genre_set_id
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
         JOIN genre_set_subgenre AS member
-          ON member.genre_set_id = song.genre_set_id
+          ON member.genre_set_id = data.genre_set_id
         JOIN subgenre ON subgenre.id = member.subgenre_id
         WHERE song.id = %s
         ORDER BY member.priority
@@ -420,9 +459,22 @@ def get_song_time_signature_timeline(song_id: int) -> list[dict]:
         """
         SELECT member.start_seconds, member.numerator, member.denominator,
                member.notes
-        FROM current_song AS song
+        FROM song
+        JOIN LATERAL (
+            SELECT song_data.time_signature_set_id
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
         JOIN time_signature_set_time_signature AS member
-          ON member.time_signature_set_id = song.time_signature_set_id
+          ON member.time_signature_set_id = data.time_signature_set_id
         WHERE song.id = %s
         ORDER BY member.priority
     """,
@@ -455,9 +507,22 @@ def get_song_key_signature_timeline(song_id: int) -> list[dict]:
         """
         SELECT member.start_seconds, member.tonic, member.mode,
                member.microtonal, member.notes
-        FROM current_song AS song
+        FROM song
+        JOIN LATERAL (
+            SELECT song_data.key_signature_set_id
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
         JOIN key_signature_set_key_signature AS member
-          ON member.key_signature_set_id = song.key_signature_set_id
+          ON member.key_signature_set_id = data.key_signature_set_id
         WHERE song.id = %s
         ORDER BY member.priority
     """,
@@ -492,9 +557,22 @@ def get_song_languages(song_id: int) -> list[Language]:
         """
         SELECT language.name, language.tag, language.extlang, language.region, language.subvariant,
                language.suppress_script
-        FROM current_song AS song
+        FROM song
+        JOIN LATERAL (
+            SELECT song_data.language_set_id
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
         JOIN language_set_language AS member
-          ON member.language_set_id = song.language_set_id
+          ON member.language_set_id = data.language_set_id
         JOIN language ON member.language_id = language.id
         WHERE song.id = %s
         ORDER BY member.priority
@@ -518,9 +596,22 @@ def get_languages_for_songs(song_ids: list[int]) -> dict[int, list[Language]]:
         SELECT song.id AS song_id,
                language.name, language.tag, language.extlang,
                language.region, language.subvariant, language.suppress_script
-        FROM current_song AS song
+        FROM song
+        JOIN LATERAL (
+            SELECT song_data.language_set_id
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
         JOIN language_set_language AS member
-          ON member.language_set_id = song.language_set_id
+          ON member.language_set_id = data.language_set_id
         JOIN language ON member.language_id = language.id
         WHERE song.id = ANY(%s)
         ORDER BY song.id, member.priority
@@ -539,16 +630,17 @@ def get_languages_for_songs(song_ids: list[int]) -> dict[int, list[Language]]:
 # LiteralString so pyright rejects any runtime string reaching
 # cursor.execute; bind values always go through query parameters.
 _SONG_COLUMNS: LiteralString = """
-    song.id, song.title, song.artist, song.native_title,
+    song.id, data.title, data.artist, data.native_title,
     song.country_id, COALESCE(an.name, country.name) AS name,
     country.is_participating, country.cc3, an.flag_variant,
-    song.is_placeholder, song.approval_status,
-    song.native_language_id, song.title_language_id,
-    song.native_lyrics, song.romanized_lyrics, song.translated_lyrics,
-    account.username, song.year_id, song.poster_link, song.vtt_link,
-    song.video_link, song.duration, song.snippet_start, song.snippet_end,
-    song.snippet2_start, song.snippet2_end,
-    song.submitter_id, song.notes, song.sources, song.entry_number,
+    COALESCE(status.is_placeholder, false) AS is_placeholder,
+    COALESCE(status.approval_status, 'pending') AS approval_status,
+    data.native_language_id, data.title_language_id,
+    data.native_lyrics, data.romanized_lyrics, data.translated_lyrics,
+    account.username, song.year_id, data.poster_link, data.vtt_link,
+    data.video_link, data.duration, data.snippet_start, data.snippet_end,
+    data.snippet2_start, data.snippet2_end,
+    data.submitter_id, data.notes, data.sources, song.entry_number,
     year.special_name, year.special_short_name, year.status AS year_status,
     title_language.name AS title_language_name,
     title_language.tag AS title_language_tag,
@@ -564,12 +656,32 @@ _SONG_COLUMNS: LiteralString = """
     native_language.suppress_script AS native_language_suppress_script"""
 
 _SONG_JOINS: LiteralString = """
-FROM current_song AS song
+FROM song
+JOIN LATERAL (
+    SELECT song_data.*
+    FROM song_data
+    WHERE song_data.song_id = song.id
+       OR (
+           song_data.song_id IS NULL
+           AND song_data.country_id = song.country_id
+           AND song_data.year_id = song.year_id
+           AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+       )
+    ORDER BY song_data.created_at DESC, song_data.id DESC
+    LIMIT 1
+) AS data ON true
+LEFT JOIN LATERAL (
+    SELECT song_status.approval_status, song_status.is_placeholder
+    FROM song_status
+    WHERE song_status.song_id = song.id
+    ORDER BY song_status.created_at DESC, song_status.id DESC
+    LIMIT 1
+) AS status ON true
 JOIN country ON song.country_id = country.id
 LEFT JOIN year ON year.id = song.year_id
-LEFT OUTER JOIN account ON song.submitter_id = account.id
-LEFT JOIN language title_language ON title_language.id = song.title_language_id
-LEFT JOIN language native_language ON native_language.id = song.native_language_id
+LEFT OUTER JOIN account ON data.submitter_id = account.id
+LEFT JOIN language title_language ON title_language.id = data.title_language_id
+LEFT JOIN language native_language ON native_language.id = data.native_language_id
 LEFT JOIN alternative_name an ON an.country_id = song.country_id
     AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
     AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)"""
@@ -582,226 +694,476 @@ _YEAR_PLACE_ORDER: LiteralString = """
     country.name"""
 
 
-def _song_query(
-    *,
-    select: LiteralString = "",
-    joins: LiteralString = "",
-    where: LiteralString,
-    order_by: LiteralString = "",
-) -> LiteralString:
-    sql: LiteralString = "SELECT" + _SONG_COLUMNS
-    if select:
-        sql += ",\n    " + select
-    sql += _SONG_JOINS + joins
-    sql += "\nWHERE " + where
-    if order_by:
-        sql += "\nORDER BY " + order_by
-    return sql
+def _songs_from_rows(rows: list[dict]) -> list[Song]:
+    """Map already-fetched rows without performing database work."""
+    return [Song.from_row(row) for row in rows]
 
 
-def _load_songs(
-    sql: LiteralString,
-    params: tuple | dict[str, Any],
-    *,
-    show_id: int | None = None,
-    select_languages: bool = False,
-    result_mode: str = "official",
-) -> list[Song]:
-    cursor = get_db().cursor()
-    cursor.execute(sql, params)
-    songs = [Song.from_row(row) for row in cursor.fetchall()]
-    if show_id is not None:
+def _attach_languages(songs: list[Song]) -> None:
+    languages_by_song = get_languages_for_songs([song.id for song in songs])
+    for song in songs:
+        song.languages = languages_by_song.get(song.id, [])
+
+
+def _attach_show_results(songs: list[Song], show_id: int, result_mode: str) -> None:
+    if songs:
         running_orders = {
             song.id: song.vote_data.ro for song in songs if song.vote_data is not None
         }
         votes_by_song = get_votes_for_songs(running_orders, show_id, result_mode=result_mode)
         for song in songs:
             song.vote_data = votes_by_song.get(song.id)
-    if select_languages:
-        languages_by_song = get_languages_for_songs([s.id for s in songs])
-        for song in songs:
-            song.languages = languages_by_song.get(song.id, [])
-    return songs
 
 
-def _enrich_song(song: Song) -> Song:
-    song.languages = get_song_languages(song.id)
-    song.key_signatures = get_song_key_signatures(song.id)
-    song.key_signature_timeline = get_song_key_signature_timeline(song.id)
-    song.time_signatures = get_song_time_signatures(song.id)
-    song.time_signature_timeline = get_song_time_signature_timeline(song.id)
-    song.subgenres = get_song_subgenres_display(song.id)
+def _enrich_entry_details(song: Song) -> Song:
+    """Load all metadata needed by the entry detail page in one query."""
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        WITH data AS MATERIALIZED (
+            SELECT song_data.*
+            FROM song
+            JOIN LATERAL (
+                SELECT revision.*
+                FROM song_data AS revision
+                WHERE revision.song_id = song.id
+                   OR (
+                       revision.song_id IS NULL
+                       AND revision.country_id = song.country_id
+                       AND revision.year_id = song.year_id
+                       AND revision.entry_number IS NOT DISTINCT FROM song.entry_number
+                   )
+                ORDER BY revision.created_at DESC, revision.id DESC
+                LIMIT 1
+            ) AS song_data ON true
+            WHERE song.id = %s
+        )
+        SELECT
+            COALESCE((
+                SELECT jsonb_agg(jsonb_build_object(
+                    'name', language.name,
+                    'tag', language.tag,
+                    'extlang', language.extlang,
+                    'region', language.region,
+                    'subvariant', language.subvariant,
+                    'suppress_script', language.suppress_script
+                ) ORDER BY member.priority)
+                FROM language_set_language AS member
+                JOIN language ON language.id = member.language_id
+                WHERE member.language_set_id = data.language_set_id
+            ), '[]'::jsonb) AS languages,
+            COALESCE((
+                SELECT jsonb_agg(jsonb_build_object(
+                    'start_seconds', member.start_seconds,
+                    'tonic', member.tonic,
+                    'mode', member.mode,
+                    'microtonal', member.microtonal,
+                    'notes', member.notes
+                ) ORDER BY member.priority)
+                FROM key_signature_set_key_signature AS member
+                WHERE member.key_signature_set_id = data.key_signature_set_id
+            ), '[]'::jsonb) AS key_signatures,
+            COALESCE((
+                SELECT jsonb_agg(jsonb_build_object(
+                    'start_seconds', member.start_seconds,
+                    'numerator', member.numerator,
+                    'denominator', member.denominator,
+                    'notes', member.notes
+                ) ORDER BY member.priority)
+                FROM time_signature_set_time_signature AS member
+                WHERE member.time_signature_set_id = data.time_signature_set_id
+            ), '[]'::jsonb) AS time_signatures,
+            COALESCE((
+                SELECT jsonb_agg(subgenre.name ORDER BY member.priority)
+                FROM genre_set_subgenre AS member
+                JOIN subgenre ON subgenre.id = member.subgenre_id
+                WHERE member.genre_set_id = data.genre_set_id
+            ), '[]'::jsonb) AS subgenres
+        FROM data
+        """,
+        (song.id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return song
+
+    song.languages = [Language(**language) for language in row["languages"]]
+
+    key_rows = row["key_signatures"]
+    seen_keys: dict[tuple[str | None, str | None], dict[str, bool]] = {}
+    for key in key_rows:
+        identity = (key["tonic"], key["mode"])
+        flags = seen_keys.setdefault(identity, {"microtonal": False, "has_notes": False})
+        flags["microtonal"] = flags["microtonal"] or bool(key["microtonal"])
+        flags["has_notes"] = flags["has_notes"] or bool(key["notes"])
+
+    def key_sort(item):
+        tonic, mode = item[0]
+        index = _KEY_SIGNATURE_TONIC_INDEX.get(tonic, len(_KEY_SIGNATURE_TONIC_ORDER))
+        return (index, (tonic or "").lower(), (mode or "").lower())
+
+    for (tonic, mode), flags in sorted(seen_keys.items(), key=key_sort):
+        label = " ".join(part for part in (_display_tonic(tonic), mode) if part)
+        if flags["microtonal"]:
+            label += " (microtonal)"
+        if flags["has_notes"]:
+            label += "*"
+        song.key_signatures.append(label)
+
+    for key in key_rows:
+        tonic, mode = key["tonic"], key["mode"]
+        label = (
+            "atonal"
+            if tonic is None and mode is None
+            else " ".join(part for part in (_display_tonic(tonic), mode) if part)
+        )
+        if key["microtonal"]:
+            label += " (microtonal)"
+        song.key_signature_timeline.append(
+            {
+                "start_seconds": key["start_seconds"],
+                "start_label": format_seconds(key["start_seconds"]) or "0:00",
+                "label": label,
+                "notes": key["notes"],
+            }
+        )
+
+    seen_times: set[tuple[int | None, int | None]] = set()
+    for signature in row["time_signatures"]:
+        numerator = signature["numerator"]
+        denominator = signature["denominator"]
+        identity = (numerator, denominator)
+        label = "mixed meter" if identity == (None, None) else f"{numerator}⁄{denominator}"
+        if identity not in seen_times:
+            seen_times.add(identity)
+            song.time_signatures.append(label)
+        song.time_signature_timeline.append(
+            {
+                "start_seconds": signature["start_seconds"],
+                "start_label": format_seconds(signature["start_seconds"]) or "0:00",
+                "label": label,
+                "notes": signature["notes"],
+            }
+        )
+
+    song.subgenres = row["subgenres"]
     return song
 
 
-def get_show_songs(
-    year: int | None,
-    short_name: str,
-    *,
-    select_languages=False,
-    select_votes=False,
-    sort_reveal=False,
-    result_mode: str = "official",
-) -> list[Song] | None:
-    data = get_show_id(short_name, year)
-    if not data:
-        return None
-    show_id = data.id
-
-    joins: LiteralString = """
-JOIN song_show ON song.id = song_show.song_id
-JOIN show ON song_show.show_id = show.id"""
-    order_by: LiteralString = "song_show.running_order, song_show.id"
-    if sort_reveal:
-        joins += """
-LEFT JOIN show_qualifier
-  ON show_qualifier.target_show_id = show.id
- AND show_qualifier.song_id = song.id"""
-        order_by = (
-            "show_qualifier.source_show_id NULLS FIRST, "
-            "show_qualifier.qualifier_order NULLS FIRST, " + order_by
-        )
-
-    sql = _song_query(
-        select="song_show.running_order",
-        joins=joins,
-        where="show.id = %s",
-        order_by=order_by,
-    )
-    return _load_songs(
-        sql,
-        (show_id,),
-        show_id=show_id if select_votes else None,
-        select_languages=select_languages,
-        result_mode=result_mode,
-    )
-
-
-def get_show_winner(year: int | None, show: str) -> Song | None:
-    if year is None:
-        where: LiteralString = """winner_result.year_id IS NULL
-  AND winner_result.short_name = %s
-  AND winner_result.result_mode = 'official'
-  AND winner_result.place = 1"""
-        params = (show,)
-    else:
-        where = """winner_result.year_id = %s
-  AND winner_result.short_name = %s
-  AND winner_result.result_mode = 'official'
-  AND winner_result.place = 1"""
-        params = (year, show)
-
-    sql = _song_query(
-        select="""winner_result.running_order,
-    winner_result.total_points AS result_total_points,
-    winner_result.total_votes_received AS result_total_votes,
-    winner_result.point_distribution AS result_point_distribution,
-    winner_result.max_pts AS result_max_pts,
-    winner_result.total_voters AS result_total_voters,
-    winner_result.max_possible_points AS result_max_possible_points,
-    winner_result.points_percentage AS result_points_percentage,
-    winner_result.adjusted_max_possible_points AS result_adjusted_max_possible_points,
-    winner_result.points_midpoint AS result_points_midpoint,
-    winner_result.adjusted_points_percentage AS result_adjusted_points_percentage,
-    COALESCE(winner_song_show.penalty, 0) AS result_penalty""",
-        joins="""
-JOIN country_show_results winner_result ON winner_result.song_id = song.id
-LEFT JOIN song_show winner_song_show
-  ON winner_song_show.song_id = winner_result.song_id
- AND winner_song_show.show_id = winner_result.show_id""",
-        where=where,
-        order_by="winner_result.running_order NULLS LAST, winner_result.song_id LIMIT 1",
-    )
-    songs = _load_songs(sql, params, select_languages=True)
-    return songs[0] if songs else None
-
-
-def get_year_winner(year: int) -> Song | None:
-    sql = _song_query(
-        select="""winner_result.running_order,
-    winner_result.total_points AS result_total_points,
-    winner_result.total_votes_received AS result_total_votes,
-    winner_result.point_distribution AS result_point_distribution,
-    winner_result.max_pts AS result_max_pts,
-    winner_result.total_voters AS result_total_voters,
-    winner_result.max_possible_points AS result_max_possible_points,
-    winner_result.points_percentage AS result_points_percentage,
-    winner_result.adjusted_max_possible_points AS result_adjusted_max_possible_points,
-    winner_result.points_midpoint AS result_points_midpoint,
-    winner_result.adjusted_points_percentage AS result_adjusted_points_percentage,
-    COALESCE(winner_song_show.penalty, 0) AS result_penalty""",
-        joins="""
-JOIN country_year_results cyr ON cyr.song_id = song.id
+_SHOW_ENTRY_QUERY: LiteralString = """
+WITH selected AS MATERIALIZED (
+    SELECT song_show.song_id, song_show.show_id,
+           song_show.running_order, song_show.id AS song_show_id
+    FROM song_show
+    WHERE song_show.show_id = %s
+)
+SELECT
+    song.id, data.title, data.artist, data.native_title,
+    song.country_id, COALESCE(an.name, country.name) AS name,
+    country.is_participating, country.cc3, an.flag_variant,
+    data.submitter_id, song.year_id, song.entry_number,
+    year.special_name, year.special_short_name, year.status AS year_status,
+    selected.running_order
+FROM selected
+JOIN song ON song.id = selected.song_id
 JOIN LATERAL (
-    SELECT csr.*
-    FROM country_show_results csr
-    WHERE csr.song_id = cyr.song_id
-      AND csr.year_id = cyr.year_id
-      AND csr.result_mode = 'official'
-    ORDER BY
-      COALESCE((
-        WITH RECURSIVE downstream(target_show_id, distance) AS (
-          SELECT progression.target_show_id, 1
-          FROM show_progression AS progression
-          WHERE progression.source_show_id = csr.show_id
-          UNION ALL
-          SELECT progression.target_show_id, downstream.distance + 1
-          FROM downstream
-          JOIN show_progression AS progression
-            ON progression.source_show_id = downstream.target_show_id
-        )
-        SELECT MAX(distance) + 1 FROM downstream
-      ), 1),
-      csr.place,
-      csr.running_order NULLS LAST
+    SELECT song_data.title, song_data.artist, song_data.native_title,
+           song_data.submitter_id
+    FROM song_data
+    WHERE song_data.song_id = song.id
+       OR (
+           song_data.song_id IS NULL
+           AND song_data.country_id = song.country_id
+           AND song_data.year_id = song.year_id
+           AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+       )
+    ORDER BY song_data.created_at DESC, song_data.id DESC
     LIMIT 1
-) winner_result ON true
-LEFT JOIN song_show winner_song_show
-  ON winner_song_show.song_id = winner_result.song_id
- AND winner_song_show.show_id = winner_result.show_id""",
-        where="""cyr.year_id = %s
-  AND cyr.place = 1
-  AND year.status = 'closed'""",
-        order_by="winner_result.running_order NULLS LAST, cyr.song_id LIMIT 1",
+) AS data ON true
+JOIN country ON country.id = song.country_id
+LEFT JOIN year ON year.id = song.year_id
+LEFT JOIN alternative_name AS an ON an.country_id = song.country_id
+    AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+    AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
+"""
+
+_SHOW_LINEUP_SQL: LiteralString = (
+    _SHOW_ENTRY_QUERY
+    + """WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+ORDER BY selected.running_order, selected.song_show_id"""
+)
+
+_SHOW_REVEAL_SQL: LiteralString = (
+    _SHOW_ENTRY_QUERY
+    + """LEFT JOIN show_qualifier
+  ON show_qualifier.target_show_id = selected.show_id
+ AND show_qualifier.song_id = song.id
+WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+ORDER BY show_qualifier.source_show_id NULLS FIRST,
+         show_qualifier.qualifier_order NULLS FIRST,
+         selected.running_order, selected.song_show_id"""
+)
+
+
+def get_show_lineup(year: int | None, short_name: str) -> list[Song] | None:
+    """Load lightweight entries in running order for ballots and predictions."""
+    show = get_show_id(short_name, year)
+    if not show:
+        return None
+    cursor = get_db().cursor()
+    cursor.execute(_SHOW_LINEUP_SQL, (show.id,))
+    return _songs_from_rows(cursor.fetchall())
+
+
+def get_show_result_entries(
+    year: int | None, short_name: str, *, result_mode: str = "official"
+) -> list[Song] | None:
+    """Load show entries with their cached result data."""
+    show = get_show_id(short_name, year)
+    if not show:
+        return None
+    cursor = get_db().cursor()
+    cursor.execute(_SHOW_LINEUP_SQL, (show.id,))
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_show_results(songs, show.id, result_mode)
+    return songs
+
+
+def get_show_reveal_entries(year: int | None, short_name: str) -> list[Song] | None:
+    """Load lightweight entries in qualifier-aware reveal order."""
+    show = get_show_id(short_name, year)
+    if not show:
+        return None
+    cursor = get_db().cursor()
+    cursor.execute(_SHOW_REVEAL_SQL, (show.id,))
+    return _songs_from_rows(cursor.fetchall())
+
+
+def get_year_index_winners() -> dict[int, Song]:
+    """Load every closed year's winner as one specialized bulk operation.
+
+    ``country_year_results`` is authoritative for the winning song. Starting
+    from that small set lets PostgreSQL hydrate only winners instead of
+    expanding ``current_song`` once for every year on the index page.
+    """
+    sql: LiteralString = """
+WITH RECURSIVE winners AS (
+    SELECT cyr.year_id, MIN(cyr.song_id) AS song_id
+    FROM country_year_results AS cyr
+    JOIN year AS winner_year ON winner_year.id = cyr.year_id
+    WHERE cyr.place = 1
+      AND winner_year.status = 'closed'
+    GROUP BY cyr.year_id
+), progression_paths(source_show_id, target_show_id, distance) AS (
+    SELECT source_show_id, target_show_id, 1
+    FROM show_progression
+    UNION ALL
+    SELECT paths.source_show_id, progression.target_show_id, paths.distance + 1
+    FROM progression_paths AS paths
+    JOIN show_progression AS progression
+      ON progression.source_show_id = paths.target_show_id
+), show_tiers AS (
+    SELECT show.id AS show_id, COALESCE(MAX(paths.distance), 0) + 1 AS tier
+    FROM show
+    LEFT JOIN progression_paths AS paths ON paths.source_show_id = show.id
+    WHERE show.national_final_id IS NULL
+    GROUP BY show.id
+), ranked_results AS (
+    SELECT csr.*,
+           ROW_NUMBER() OVER (
+               PARTITION BY csr.song_id
+               ORDER BY show_tiers.tier, csr.place, csr.show_id
+           ) AS result_number
+    FROM country_show_results AS csr
+    JOIN winners ON winners.song_id = csr.song_id
+                AND winners.year_id = csr.year_id
+    JOIN show_tiers ON show_tiers.show_id = csr.show_id
+    WHERE csr.result_mode = 'official'
+)
+SELECT
+    song.id, data.title, data.artist, data.native_title,
+    song.country_id, COALESCE(an.name, country.name) AS name,
+    country.is_participating, country.cc3, an.flag_variant,
+    COALESCE(status.is_placeholder, false) AS is_placeholder,
+    COALESCE(status.approval_status, 'pending') AS approval_status,
+    data.native_language_id, data.title_language_id,
+    data.native_lyrics, data.romanized_lyrics, data.translated_lyrics,
+    account.username, song.year_id, data.poster_link, data.vtt_link,
+    data.video_link, data.duration, data.snippet_start, data.snippet_end,
+    data.snippet2_start, data.snippet2_end,
+    data.submitter_id, data.notes, data.sources, song.entry_number,
+    year.special_name, year.special_short_name, year.status AS year_status,
+    title_language.name AS title_language_name,
+    title_language.tag AS title_language_tag,
+    title_language.extlang AS title_language_extlang,
+    title_language.region AS title_language_region,
+    title_language.subvariant AS title_language_subvariant,
+    title_language.suppress_script AS title_language_suppress_script,
+    native_language.name AS native_language_name,
+    native_language.tag AS native_language_tag,
+    native_language.extlang AS native_language_extlang,
+    native_language.region AS native_language_region,
+    native_language.subvariant AS native_language_subvariant,
+    native_language.suppress_script AS native_language_suppress_script,
+    result.running_order,
+    result.total_points AS result_total_points,
+    result.total_votes_received AS result_total_votes,
+    result.point_distribution AS result_point_distribution,
+    result.max_pts AS result_max_pts,
+    result.total_voters AS result_total_voters,
+    result.max_possible_points AS result_max_possible_points,
+    result.points_percentage AS result_points_percentage,
+    result.adjusted_max_possible_points AS result_adjusted_max_possible_points,
+    result.points_midpoint AS result_points_midpoint,
+    result.adjusted_points_percentage AS result_adjusted_points_percentage,
+    COALESCE(winner_song_show.penalty, 0) AS result_penalty
+FROM winners
+JOIN song ON song.id = winners.song_id
+JOIN LATERAL (
+    SELECT song_data.*
+    FROM song_data
+    WHERE song_data.song_id = song.id
+       OR (
+           song_data.song_id IS NULL
+           AND song_data.country_id = song.country_id
+           AND song_data.year_id = song.year_id
+           AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+       )
+    ORDER BY song_data.created_at DESC, song_data.id DESC
+    LIMIT 1
+) AS data ON true
+LEFT JOIN LATERAL (
+    SELECT song_status.approval_status, song_status.is_placeholder
+    FROM song_status
+    WHERE song_status.song_id = song.id
+    ORDER BY song_status.created_at DESC, song_status.id DESC
+    LIMIT 1
+) AS status ON true
+JOIN ranked_results AS result
+  ON result.song_id = song.id AND result.result_number = 1
+LEFT JOIN song_show AS winner_song_show
+  ON winner_song_show.song_id = result.song_id
+ AND winner_song_show.show_id = result.show_id
+JOIN country ON country.id = song.country_id
+JOIN year ON year.id = song.year_id
+LEFT JOIN account ON account.id = data.submitter_id
+LEFT JOIN language AS title_language ON title_language.id = data.title_language_id
+LEFT JOIN language AS native_language ON native_language.id = data.native_language_id
+LEFT JOIN alternative_name AS an ON an.country_id = song.country_id
+    AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+    AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
+WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+ORDER BY song.year_id
+"""
+    cursor = get_db().cursor()
+    cursor.execute(sql)
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_languages(songs)
+    return {song.year.id: song for song in songs}
+
+
+_YEAR_OVERVIEW_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + _CYR_JOIN
+    + """
+WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+  AND song.year_id = %s
+  AND song.main_participant
+ORDER BY """
+    + _YEAR_PLACE_ORDER
+)
+
+_USER_SUBMISSION_HISTORY_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + _CYR_JOIN
+    + """
+WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+  AND data.submitter_id = %s
+  AND song.year_id IS NOT NULL
+ORDER BY song.year_id,"""
+    + _YEAR_PLACE_ORDER
+)
+
+
+def get_year_overview_songs(year: int) -> list[Song]:
+    """Load the complete song rows required by the year overview."""
+    cursor = get_db().cursor()
+    cursor.execute(_YEAR_OVERVIEW_SQL, (year,))
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_languages(songs)
+    return songs
+
+
+def get_user_submission_history(user_id: int) -> list[Song]:
+    """Load the rich song rows used by a user's submissions page."""
+    cursor = get_db().cursor()
+    cursor.execute(_USER_SUBMISSION_HISTORY_SQL, (user_id,))
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_languages(songs)
+    return songs
+
+
+def get_user_submission_countries(
+    user_id: int, year: int, *, main_only: bool = False
+) -> list[Country]:
+    """Load only the countries a user may represent on a year's ballot."""
+    main_filter: LiteralString = " AND song.main_participant" if main_only else ""
+    sql: LiteralString = (
+        """
+SELECT country.id, COALESCE(an.name, country.name) AS name,
+       country.is_participating, country.cc3, an.flag_variant
+FROM song
+JOIN LATERAL (
+    SELECT song_data.submitter_id, song_data.title, song_data.artist
+    FROM song_data
+    WHERE song_data.song_id = song.id
+       OR (
+           song_data.song_id IS NULL
+           AND song_data.country_id = song.country_id
+           AND song_data.year_id = song.year_id
+           AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+       )
+    ORDER BY song_data.created_at DESC, song_data.id DESC
+    LIMIT 1
+) AS data ON true
+JOIN country ON country.id = song.country_id
+JOIN year ON year.id = song.year_id
+LEFT JOIN country_year_results AS cyr ON cyr.song_id = song.id
+LEFT JOIN alternative_name AS an ON an.country_id = song.country_id
+    AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
+    AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
+WHERE data.submitter_id = %s
+  AND song.year_id = %s
+  AND data.title IS NOT NULL
+  AND data.artist IS NOT NULL"""
+        + main_filter
+        + """
+ORDER BY CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
+         country.name, song.id
+"""
     )
-    songs = _load_songs(sql, (year,), select_languages=True)
-    return songs[0] if songs else None
-
-
-def get_special_winner(show: str, year: int) -> Song | None:
-    return get_show_winner(year, show)
-
-
-def get_year_songs(year: int, *, select_languages=False) -> list[Song]:
-    sql = _song_query(
-        joins=_CYR_JOIN,
-        where="song.year_id = %s AND song.main_participant",
-        order_by=_YEAR_PLACE_ORDER,
-    )
-    return _load_songs(sql, (year,), select_languages=select_languages)
-
-
-def get_user_songs(
-    user_id: int,
-    year: int | None = None,
-    *,
-    select_languages=False,
-    main_only: bool = False,
-) -> list[Song]:
-    where: LiteralString = "song.submitter_id = %(user_id)s AND song.year_id IS NOT NULL"
-    params: dict[str, Any] = {"user_id": user_id}
-    if year:
-        where += " AND song.year_id = %(year)s"
-        params["year"] = year
-    if main_only:
-        where += " AND song.main_participant"
-
-    sql = _song_query(
-        joins=_CYR_JOIN,
-        where=where,
-        order_by="song.year_id," + _YEAR_PLACE_ORDER,
-    )
-    return _load_songs(sql, params, select_languages=select_languages)
+    cursor = get_db().cursor()
+    cursor.execute(sql, (user_id, year))
+    countries: list[Country] = []
+    seen: set[str] = set()
+    for row in cursor.fetchall():
+        if row["id"] in seen:
+            continue
+        seen.add(row["id"])
+        countries.append(
+            Country(
+                cc=row["id"],
+                name=row["name"],
+                is_participating=bool(row["is_participating"]),
+                cc3=row["cc3"],
+                flag_variant=row["flag_variant"],
+            )
+        )
+    return countries
 
 
 def get_show_results_for_songs(
@@ -894,57 +1256,83 @@ def get_show_results_for_songs(
     return results
 
 
-def get_country_songs(code: str, *, select_languages=False) -> list[Song]:
-    sql = _song_query(
-        joins=_CYR_JOIN,
-        where="""(song.country_id = %(cc)s OR country.cc3 = %(cc)s)
-AND song.year_id IS NOT NULL AND song.main_participant""",
-        order_by="song.year_id," + _YEAR_PLACE_ORDER,
-    )
-    return _load_songs(sql, {"cc": code}, select_languages=select_languages)
+_COUNTRY_HISTORY_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + _CYR_JOIN
+    + """
+WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+  AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+  AND song.year_id IS NOT NULL
+  AND song.main_participant
+ORDER BY song.year_id,"""
+    + _YEAR_PLACE_ORDER
+)
+
+_MAIN_ENTRY_DETAILS_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + """
+WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+  AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+  AND song.year_id = %(year)s
+  AND song.main_participant
+ORDER BY song.id
+LIMIT 1"""
+)
+
+_NUMBERED_ENTRY_DETAILS_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + """
+WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+  AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+  AND song.year_id = %(year)s
+  AND song.entry_number = %(entry)s
+ORDER BY song.id
+LIMIT 1"""
+)
+
+_SPECIAL_COUNTRY_ENTRIES_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + """
+WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+  AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+  AND song.year_id = %(year)s
+  AND song.main_participant
+ORDER BY song.entry_number, song.id"""
+)
 
 
-def get_song(
-    year: int,
-    code: str,
-    *,
-    entry_number: int | None = None,
-    select_results=False,
-) -> Song | None:
-    entry_filter = (
-        "AND song.entry_number = %(entry)s"
-        if entry_number is not None
-        else "AND song.main_participant"
-    )
-    sql = _song_query(
-        where="""(song.country_id = %(cc)s OR country.cc3 = %(cc)s)
-AND song.year_id = %(year)s """
-        + entry_filter,
-        order_by="song.year_id, country.name",
-    )
-    songs = _load_songs(sql, {"cc": code, "year": year, "entry": entry_number})
+def get_country_history(code: str) -> list[Song]:
+    """Load the rich rows displayed on one country's history page."""
+    cursor = get_db().cursor()
+    cursor.execute(_COUNTRY_HISTORY_SQL, {"cc": code})
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_languages(songs)
+    return songs
+
+
+def get_entry_details(year: int, code: str, *, entry_number: int | None = None) -> Song | None:
+    """Load one entry and all metadata required by its detail page."""
+    sql = _NUMBERED_ENTRY_DETAILS_SQL if entry_number is not None else _MAIN_ENTRY_DETAILS_SQL
+    cursor = get_db().cursor()
+    cursor.execute(sql, {"cc": code, "year": year, "entry": entry_number})
+    songs = _songs_from_rows(cursor.fetchall())
     if not songs:
         return None
-    return _enrich_song(songs[0])
+    return _enrich_entry_details(songs[0])
 
 
-def get_special_songs_for_country(year: int, code: str) -> list[Song]:
-    """Get all songs for a country in a special (negative year_id)."""
-    sql = _song_query(
-        where="""(song.country_id = %(cc)s OR country.cc3 = %(cc)s)
-AND song.year_id = %(year)s AND song.main_participant""",
-        order_by="song.entry_number",
-    )
-    return _load_songs(sql, {"cc": code, "year": year}, select_languages=True)
-
-
-def get_special_song(year: int, code: str, entry_number: int) -> Song | None:
-    """Get a specific song by country and entry_number in a special."""
-    sql = _song_query(
-        where="""(song.country_id = %(cc)s OR country.cc3 = %(cc)s)
-    AND song.year_id = %(year)s AND song.entry_number = %(entry)s""",
-    )
-    songs = _load_songs(sql, {"cc": code, "year": year, "entry": entry_number})
-    if not songs:
-        return None
-    return _enrich_song(songs[0])
+def get_special_country_entries(year: int, code: str) -> list[Song]:
+    """Load the rows used to resolve a country's entries in one special."""
+    cursor = get_db().cursor()
+    cursor.execute(_SPECIAL_COUNTRY_ENTRIES_SQL, {"cc": code, "year": year})
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_languages(songs)
+    return songs

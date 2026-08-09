@@ -12,13 +12,12 @@ from ..utils import (
     UserPermissions,
     get_closed_years,
     get_countries,
+    get_country_history,
     get_country_name,
-    get_country_songs,
+    get_entry_details,
     get_markdown_parser,
     get_show_results_for_songs,
-    get_song,
-    get_special_song,
-    get_special_songs_for_country,
+    get_special_country_entries,
     render_lyrics,
     render_template,
     require_permissions,
@@ -32,11 +31,7 @@ bp = Blueprint("country", __name__, url_prefix="/country")
 
 
 def _ordinal(n: int) -> str:
-    suffix = (
-        "th"
-        if 10 <= n % 100 <= 20
-        else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-    )
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suffix}"
 
 
@@ -183,9 +178,7 @@ def _best_streak(periods: list[dict], success_key: str) -> int:
 def _most_frequent_submitters(songs: list) -> list[dict]:
     counted_statuses = {"closed", "ongoing"}
     counts = Counter(
-        song.submitter
-        for song in songs
-        if song.submitter and song.year.status in counted_statuses
+        song.submitter for song in songs if song.submitter and song.year.status in counted_statuses
     )
     if not counts:
         return []
@@ -200,11 +193,7 @@ def _most_frequent_submitters(songs: list) -> list[dict]:
 
 def _eligible_participation_entries(entries: list[dict]) -> list[dict]:
     counted_statuses = {"closed", "ongoing"}
-    return [
-        entry
-        for entry in entries
-        if entry["song"].year.status in counted_statuses
-    ]
+    return [entry for entry in entries if entry["song"].year.status in counted_statuses]
 
 
 def _country_stats(
@@ -362,7 +351,7 @@ def country(code: str):
     canonical = resolve_country_code(code.upper())
     if canonical and canonical.lower() != code.lower():
         return redirect(url_for("country.country", code=canonical.lower()), 301)
-    songs = get_country_songs(code.upper(), select_languages=True)
+    songs = get_country_history(code.upper())
     if not songs:
         return render_template("error.html", error=f"Songs not found for country {code}")
     name = get_country_name(code.upper())
@@ -402,17 +391,21 @@ mime_types = {
 def generate_iframe(url: str, img_url: str | None, vtt_url: str | None = None):
     if "youtu.be" in url:
         video_id = url.split("/")[-1].split("?", 1)[0]
-        return (f'<iframe id="youtube-player" '
-                f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1"'
-                ' frameborder="0" allowfullscreen></iframe>')
+        return (
+            f'<iframe id="youtube-player" '
+            f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1"'
+            ' frameborder="0" allowfullscreen></iframe>'
+        )
 
     elif "youtube.com/watch" in url:
         match = re.search(r"v=([^&]+)", url)
         if match:
             video_id = match.group(1)
-            return (f'<iframe id="youtube-player" '
-                    f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1"'
-                    ' frameborder="0" allowfullscreen></iframe>')
+            return (
+                f'<iframe id="youtube-player" '
+                f'src="https://www.youtube.com/embed/{video_id}?enablejsapi=1"'
+                ' frameborder="0" allowfullscreen></iframe>'
+            )
 
     elif "drive.google.com/file/d/" in url:
         match = re.search(r"/d/([^/]+)", url)
@@ -496,7 +489,7 @@ def details(
             ),
             301,
         )
-    song = get_song(year, code.upper(), entry_number=entry_number)
+    song = get_entry_details(year, code.upper(), entry_number=entry_number)
     if not song:
         return render_template(
             "error.html", error=f"Songs not found for country {code} in year {year}"
@@ -704,7 +697,7 @@ def special_details(
 
     if entry_number is not None:
         # Direct song lookup by entry number
-        song = get_special_song(year_id, code.upper(), entry_number)
+        song = get_entry_details(year_id, code.upper(), entry_number=entry_number)
         if not song:
             return render_template(
                 "error.html",
@@ -713,7 +706,7 @@ def special_details(
         return _render_song_details(song, name, special_short_name, special_name, user, permissions)
 
     # No entry number — find all songs for this country in this special
-    songs = get_special_songs_for_country(year_id, code.upper())
+    songs = get_special_country_entries(year_id, code.upper())
     if not songs:
         return render_template(
             "error.html", error=f"No songs found for {name} in {special_name}"

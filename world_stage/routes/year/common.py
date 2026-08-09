@@ -1,30 +1,8 @@
-
 from flask import Blueprint
 
 from ...db import get_db
-from ...utils import (
-    get_year_winner,
-)
 
 bp = Blueprint("year", __name__, url_prefix="/year")
-
-
-def get_specials() -> list[dict]:
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute("""
-        SELECT id, status, submissions_open, special_name, special_short_name
-        FROM year
-        WHERE id < 0
-        ORDER BY id DESC
-    """)
-    specials = [row for row in cursor.fetchall()]
-
-    for special in specials:
-        special["winner"] = get_year_winner(special["id"])
-
-    return specials
 
 
 def resolve_special(short_name: str) -> dict | None:

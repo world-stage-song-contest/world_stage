@@ -84,11 +84,11 @@
                 {% endfor %}
                 {% endfor %}
                 {% else %}
-                {% for voter, result in results.items() %}
+                {% for voter in voters %}
                 <th class="user-vote">
-                    <div class="user-vote-container" title="{{ voter }}">
-                        {{ flag(result.code, 24, result.country, class="vote-flag") }}
-                        <div class="voter-name">{{ voter }}</div>
+                    <div class="user-vote-container" title="{{ voter.username }}">
+                        {{ flag(voter.code, 24, voter.country, class="vote-flag") }}
+                        <div class="voter-name">{{ voter.username }}</div>
                     </div>
                 </th>
                 {% endfor %}
@@ -129,8 +129,8 @@
                 {% endfor %}
                 {% endfor %}
                 {% else %}
-                {% for voter in results.keys() %}
-                {% set pts = results[voter].get(song.id, 0) %}
+                {% for voter in voters %}
+                {% set pts = scores.get((voter.id, song.id), 0) %}
                 <td class="number">{{ pts if pts != 0 else '' }}</td>
                 {% endfor %}
                 {% endif %}

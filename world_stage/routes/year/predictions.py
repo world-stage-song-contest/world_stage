@@ -6,7 +6,7 @@ from ...utils import (
     UserPermissions,
     dt_now,
     get_show_id,
-    get_show_songs,
+    get_show_lineup,
     render_template,
     with_permissions,
 )
@@ -38,7 +38,7 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
-    songs = get_show_songs(_year, show, select_votes=True)
+    songs = get_show_lineup(_year, show)
     if not songs:
         return render_template("error.html", error="No songs found for this show."), 404
 
@@ -146,8 +146,8 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
     predictor_breakdown: dict[str, list[dict]] = {}
     predictor_penalty: dict[str, dict[int, int]] = {}
     if real_positions:
-        predictor_scores, predictor_breakdown, predictor_penalty = (
-            _compute_prediction_scores(real_positions, songs, predictors)
+        predictor_scores, predictor_breakdown, predictor_penalty = _compute_prediction_scores(
+            real_positions, songs, predictors
         )
 
     return render_template(
@@ -173,6 +173,7 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
         predictor_penalty=predictor_penalty,
         real_positions=real_positions,
     )
+
 
 def _compute_qualification_odds(
     songs: list,
@@ -372,8 +373,7 @@ def _compute_winning_odds(
 
     raw = {
         song.id: (
-            alpha * (top1[song.id] / n_predictors)
-            + (1 - alpha) * (pl_acc[song.id] / n_predictors)
+            alpha * (top1[song.id] / n_predictors) + (1 - alpha) * (pl_acc[song.id] / n_predictors)
         )
         for song in songs
     }
@@ -416,12 +416,14 @@ def _compute_prediction_scores(
             penalty = (real - predicted) ** 2
             total += penalty
             per_song[sid] = penalty
-            rows.append({
-                "song": song,
-                "predicted": predicted,
-                "real": real,
-                "penalty": penalty,
-            })
+            rows.append(
+                {
+                    "song": song,
+                    "predicted": predicted,
+                    "real": real,
+                    "penalty": penalty,
+                }
+            )
         rows.sort(key=lambda r: r["penalty"], reverse=True)
         scores[username] = total
         breakdown[username] = rows
@@ -450,8 +452,7 @@ def show_predictions(year: int, show: str, permissions: UserPermissions):
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
-    # select_votes=True populates song.vote_data, which carries the running order
-    songs = get_show_songs(_year, show, select_votes=True)
+    songs = get_show_lineup(_year, show)
     if not songs:
         return render_template("error.html", error="No songs found for this show."), 404
 
@@ -569,8 +570,8 @@ def show_predictions(year: int, show: str, permissions: UserPermissions):
     predictor_breakdown: dict[str, list[dict]] = {}
     predictor_penalty: dict[str, dict[int, int]] = {}
     if real_positions:
-        predictor_scores, predictor_breakdown, predictor_penalty = (
-            _compute_prediction_scores(real_positions, songs, predictors)
+        predictor_scores, predictor_breakdown, predictor_penalty = _compute_prediction_scores(
+            real_positions, songs, predictors
         )
 
     return render_template(

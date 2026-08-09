@@ -1,5 +1,3 @@
-
-
 from ...db import fetchone, get_db
 from ...utils import (
     LCG,
@@ -7,11 +5,52 @@ from ...utils import (
     can_manage_show,
     dt_now,
     get_show_id,
-    get_show_songs,
+    get_show_lineup,
+    get_show_result_entries,
     render_template,
     with_auth,
 )
 from .common import bp, get_other_shows, resolve_special
+
+
+def _get_detailed_votes(show_id: int) -> tuple[list[dict], dict[tuple[int, int], int]]:
+    """Fetch voter metadata and the complete score matrix for one show."""
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT vote_set.voter_id, account.username,
+               COALESCE(vote_set.country_id, 'XX') AS code,
+               country.name AS country,
+               vote.song_id, vote.score
+        FROM vote_set
+        JOIN account ON account.id = vote_set.voter_id
+        LEFT JOIN country ON country.id = vote_set.country_id
+        LEFT JOIN vote ON vote.vote_set_id = vote_set.id
+        WHERE vote_set.show_id = %s
+          AND vote_set.result_mode = 'official'
+        ORDER BY vote_set.created_at, vote_set.id
+        """,
+        (show_id,),
+    )
+
+    voters = []
+    seen_voters: set[int] = set()
+    scores: dict[tuple[int, int], int] = {}
+    for row in cursor.fetchall():
+        voter_id = row["voter_id"]
+        if voter_id not in seen_voters:
+            seen_voters.add(voter_id)
+            voters.append(
+                {
+                    "id": voter_id,
+                    "username": row["username"],
+                    "code": row["code"],
+                    "country": row["country"],
+                }
+            )
+        if row["song_id"] is not None:
+            scores[(voter_id, row["song_id"])] = row["score"]
+    return voters, scores
 
 
 def _qualification_groups(show_data, songs):
@@ -75,10 +114,7 @@ def _prepare_qualification_results(show_data, songs, access: str, reveal: str):
 
     if access == "partial":
         placeholder = max(qualifiers, key=lambda song: result_places[song.id], default=None)
-        songs = [
-            song for song in songs
-            if song.id not in qualifier_ids or song is placeholder
-        ]
+        songs = [song for song in songs if song.id not in qualifier_ids or song is placeholder]
         if reveal:
             for song in songs:
                 song.hidden = True
@@ -127,9 +163,9 @@ def special_results(short_name: str, show: str, user, permissions: UserPermissio
             access = "full"
 
     if access == "draw":
-        songs = get_show_songs(_year, show, select_votes=False)
+        songs = get_show_lineup(_year, show)
     else:
-        songs = get_show_songs(_year, show, select_votes=True)
+        songs = get_show_result_entries(_year, show)
 
     if not songs:
         return render_template("error.html", error="No songs found for this show."), 404
@@ -205,48 +241,14 @@ def special_detailed_results(short_name: str, show: str, user, permissions: User
             "error.html", error="You aren't allowed to access the detailed results yet"
         ), 400
 
-    if (
-        show_data.voting_closes
-        and show_data.voting_closes > dt_now()
-        and not elevated
-    ):
+    if show_data.voting_closes and show_data.voting_closes > dt_now() and not elevated:
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
-    songs = get_show_songs(_year, show, select_votes=True)
+    songs = get_show_result_entries(_year, show)
     if not songs:
         return render_template("error.html", error="No songs found for this show."), 404
 
-    db = get_db()
-    cursor = db.cursor()
-
-    results: dict = {}
-    cursor.execute(
-        """
-        SELECT username, COALESCE(country_id, 'XX') as code, country.name AS country FROM vote_set
-        JOIN account ON vote_set.voter_id = account.id
-        LEFT OUTER JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
-        ORDER BY created_at
-    """,
-        (show_data.id,),
-    )
-    for row in cursor.fetchall():
-        results[row["username"]] = row
-
-    for song in songs:
-        cursor.execute(
-            """
-            SELECT score, username FROM vote
-            JOIN vote_set ON vote.vote_set_id = vote_set.id
-            JOIN account ON vote_set.voter_id = account.id
-            WHERE song_id = %s AND show_id = %s AND vote_set.result_mode = 'official'
-            ORDER BY created_at
-        """,
-            (song.id, show_data.id),
-        )
-
-        for row in cursor.fetchall():
-            results[row["username"]][song.id] = row["score"]
+    voters, scores = _get_detailed_votes(show_data.id)
 
     songs.sort(reverse=True)
 
@@ -259,7 +261,8 @@ def special_detailed_results(short_name: str, show: str, user, permissions: User
         sc_qualifiers=sc_qualifiers,
         other_shows=get_other_shows(_year, show),
         songs=songs,
-        results=results,
+        voters=voters,
+        scores=scores,
         show_name=show_data.name,
         show=show,
         year=short_name,
@@ -270,6 +273,7 @@ def special_detailed_results(short_name: str, show: str, user, permissions: User
         special=short_name,
         special_name=special_year["special_name"],
     )
+
 
 @bp.get("/<int:year>/<show>")
 @with_auth
@@ -298,9 +302,9 @@ def results(year: int, show: str, user, permissions: UserPermissions):
             access = "full"
 
     if access == "draw":
-        songs = get_show_songs(_year, show, select_votes=False)
+        songs = get_show_lineup(_year, show)
     else:
-        songs = get_show_songs(_year, show, select_votes=True)
+        songs = get_show_result_entries(_year, show)
 
     if not songs:
         return render_template("error.html", error="No songs found for this show."), 404
@@ -370,48 +374,14 @@ def detailed_results(year: int, show: str, user, permissions: UserPermissions):
             "error.html", error="You aren't allowed to access the detailed results yet"
         ), 400
 
-    if (
-        show_data.voting_closes
-        and show_data.voting_closes > dt_now()
-        and not elevated
-    ):
+    if show_data.voting_closes and show_data.voting_closes > dt_now() and not elevated:
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
-    songs = get_show_songs(_year, show, select_votes=True)
+    songs = get_show_result_entries(_year, show)
     if not songs:
         return render_template("error.html", error="No songs found for this show."), 404
 
-    db = get_db()
-    cursor = db.cursor()
-
-    results: dict = {}
-    cursor.execute(
-        """
-        SELECT username, COALESCE(country_id, 'XX') as code, country.name AS country FROM vote_set
-        JOIN account ON vote_set.voter_id = account.id
-        LEFT OUTER JOIN country ON vote_set.country_id = country.id
-        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
-        ORDER BY created_at
-    """,
-        (show_data.id,),
-    )
-    for row in cursor.fetchall():
-        results[row["username"]] = row
-
-    for song in songs:
-        cursor.execute(
-            """
-            SELECT score, username FROM vote
-            JOIN vote_set ON vote.vote_set_id = vote_set.id
-            JOIN account ON vote_set.voter_id = account.id
-            WHERE song_id = %s AND show_id = %s AND vote_set.result_mode = 'official'
-            ORDER BY created_at
-        """,
-            (song.id, show_data.id),
-        )
-
-        for row in cursor.fetchall():
-            results[row["username"]][song.id] = row["score"]
+    voters, scores = _get_detailed_votes(show_data.id)
 
     songs.sort(reverse=True)
 
@@ -424,7 +394,8 @@ def detailed_results(year: int, show: str, user, permissions: UserPermissions):
         sc_qualifiers=sc_qualifiers,
         other_shows=get_other_shows(_year, show),
         songs=songs,
-        results=results,
+        voters=voters,
+        scores=scores,
         show_name=show_data.name,
         show=show,
         year=year,

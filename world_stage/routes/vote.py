@@ -12,9 +12,9 @@ from ..utils import (
     get_ballot_entry_rules,
     get_countries,
     get_show_id,
-    get_show_songs,
+    get_show_lineup,
     get_user_id_from_session,
-    get_user_songs,
+    get_user_submission_countries,
     get_vote_count_for_show,
     render_template,
     require_user,
@@ -262,8 +262,7 @@ def vote(show: str, user: tuple[int, str]):
         cursor.execute("SELECT id FROM account WHERE LOWER(username) = LOWER(%s)", (username,))
         user_id = cursor.fetchone()
         if user_id:
-            user_songs = get_user_songs(user_id["id"], show_data.year, main_only=True)
-            countries = list(map(lambda s: s.country, user_songs))
+            countries = get_user_submission_countries(user_id["id"], show_data.year, main_only=True)
             cursor.execute(
                 """
                 SELECT vote_set.id AS vsid, vote_set.nickname, vote_set.country_id AS cid
@@ -299,7 +298,7 @@ def vote(show: str, user: tuple[int, str]):
             selected[row["score"]]["sid"] = row["song_id"]
             selected[row["score"]]["cc"] = row["cc"]
 
-    all_songs = get_show_songs(show_data.year, show_data.short_name) or []
+    all_songs = get_show_lineup(show_data.year, show_data.short_name) or []
     song_rules = get_ballot_entry_rules(
         show_data.id,
         "official",
@@ -307,9 +306,7 @@ def vote(show: str, user: tuple[int, str]):
         country_id or None,
         [song.id for song in all_songs],
     )
-    songs = [
-        song for song in all_songs if song_rules[song.id].kind != "FORBIDDEN"
-    ]
+    songs = [song for song in all_songs if song_rules[song.id].kind != "FORBIDDEN"]
     songs_by_id = {song.id: song for song in songs}
     for song_id, rule in song_rules.items():
         if rule.kind == "FORCED" and rule.required_score is not None:
@@ -362,8 +359,8 @@ def ballot_rules(show: str, user: tuple[int, str]):
 
     voter_id, _ = user
     country_id = request.args.get("country") or None
-    user_songs = get_user_songs(voter_id, show_data.year)
-    submitted_country_ids = {song.country.cc for song in user_songs}
+    countries = get_user_submission_countries(voter_id, show_data.year)
+    submitted_country_ids = {country.cc for country in countries}
     if submitted_country_ids and country_id not in submitted_country_ids:
         return {"error": "Country is not available to this voter"}, 400
     if not submitted_country_ids:
@@ -371,7 +368,7 @@ def ballot_rules(show: str, user: tuple[int, str]):
         if country_id not in valid_country_ids:
             return {"error": "Country is not available to this voter"}, 400
 
-    songs = get_show_songs(show_data.year, show_data.short_name) or []
+    songs = get_show_lineup(show_data.year, show_data.short_name) or []
     rules = get_ballot_entry_rules(
         show_data.id,
         "official",
@@ -414,7 +411,7 @@ def vote_post(show: str, user: tuple[int, str]):
     ):
         return render_template("error.html", error="Voting is closed"), 400
 
-    songs = get_show_songs(show_data.year, show_data.short_name) or []
+    songs = get_show_lineup(show_data.year, show_data.short_name) or []
 
     errors = []
 
@@ -428,8 +425,7 @@ def vote_post(show: str, user: tuple[int, str]):
     country_codes = []
     country_names = []
 
-    user_songs = get_user_songs(voter_id, show_data.year)
-    countries = [s.country for s in user_songs]
+    countries = get_user_submission_countries(voter_id, show_data.year)
     country_codes = [c.cc for c in countries]
     country_names = [c.name for c in countries]
 
@@ -465,9 +461,7 @@ def vote_post(show: str, user: tuple[int, str]):
     invalid.extend(item for sublist in invalid_votes.values() for item in sublist)
 
     if invalid_votes:
-        dupes = '; '.join(
-            f'{", ".join(map(str, v))} points' for v in invalid_votes.values()
-        )
+        dupes = "; ".join(f"{', '.join(map(str, v))} points" for v in invalid_votes.values())
         errors.append(f"Duplicate votes: {dupes}")
 
     songs_by_id = {s.id: s for s in songs}
@@ -547,7 +541,7 @@ def predict(show: str, user: tuple[int, str]):
     ):
         return render_template("error.html", error="Predictions are closed for this show"), 400
 
-    songs = get_show_songs(show_data.year, show_data.short_name)
+    songs = get_show_lineup(show_data.year, show_data.short_name)
     if not songs:
         return render_template("error.html", error="No songs found for this show"), 404
 
@@ -617,7 +611,7 @@ def predict_post(show: str, user: tuple[int, str]):
     ):
         return render_template("error.html", error="Predictions are closed for this show"), 400
 
-    songs = get_show_songs(show_data.year, show_data.short_name)
+    songs = get_show_lineup(show_data.year, show_data.short_name)
     if not songs:
         return render_template("error.html", error="No songs found for this show"), 404
 

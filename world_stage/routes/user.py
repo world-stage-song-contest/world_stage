@@ -5,14 +5,14 @@ from typing import Literal, overload
 
 from flask import Blueprint, request
 
-from ..db import fetchone, get_db
+from ..db import get_db
 from ..utils import (
     Song,
     UserPermissions,
     get_closed_years,
     get_countries,
     get_show_results_for_songs,
-    get_user_songs,
+    get_user_submission_history,
     render_template,
     with_auth,
 )
@@ -87,42 +87,6 @@ def _user_submission_stats(
     )
     stats["most_frequent_countries"] = _most_frequent_submission_countries(songs)
     return stats
-
-
-def redact_song_if_show(
-    song: dict, year: int, show_short_name: str, status: str, blank: bool = True
-) -> tuple[bool, bool]:
-    db = get_db()
-    cursor = db.cursor()
-    show_exists = False
-    song_modified = False
-
-    cursor.execute(
-        """
-        SELECT id FROM show WHERE year_id = %s AND short_name = %s
-    """,
-        (year, show_short_name),
-    )
-    show = cursor.fetchone()
-    if show:
-        show_exists = True
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS c FROM song_show
-            WHERE show_id = %s AND song_id = %s
-        """,
-            (show["id"], song["id"]),
-        )
-        if fetchone(cursor)["c"] > 0:
-            song_modified = True
-            song["class"] = f"qualifier {show_short_name}-qualifier"
-            if blank and status == "partial":
-                song["title"] = ""
-                song["artist"] = ""
-                song["country"] = ""
-                song["code"] = "XX"
-
-    return (show_exists, song_modified)
 
 
 # Map a show's short_name to the aggregated column its points belong in.
@@ -445,6 +409,183 @@ def _medal_table(cursor, user_id: int, username: str, *, revote=False):
         is_revote=revote,
         history_endpoint="user.revotes" if revote else "user.votes",
     )
+
+
+def _load_vote_history_points(cursor, votes: list[dict], *, unredacted: bool) -> None:
+    """Attach every ballot's entries using one metadata-complete query."""
+    vote_set_ids = [vote["id"] for vote in votes]
+    points_by_vote_set: dict[int, list[dict]] = {
+        vote_set_id: [] for vote_set_id in vote_set_ids
+    }
+    if not vote_set_ids:
+        return
+
+    cursor.execute(
+        """
+        SELECT vote.vote_set_id, vote.score AS pts,
+               data.title, data.artist,
+               song.country_id AS code, country.name, song.id,
+               source_show.short_name AS source_short_name,
+               source_show.status AS source_status,
+               final_membership.song_id IS NOT NULL AS in_final,
+               sc_membership.song_id IS NOT NULL AS in_sc,
+               result.place AS result_place
+        FROM vote
+        JOIN vote_set ON vote_set.id = vote.vote_set_id
+        JOIN show AS source_show ON source_show.id = vote_set.show_id
+        JOIN song ON song.id = vote.song_id
+        JOIN LATERAL (
+            SELECT song_data.title, song_data.artist
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
+        JOIN country ON country.id = song.country_id
+        LEFT JOIN show AS final_show
+          ON final_show.year_id = source_show.year_id
+         AND final_show.short_name = 'f'
+         AND final_show.national_final_id IS NULL
+        LEFT JOIN song_show AS final_membership
+          ON final_membership.show_id = final_show.id
+         AND final_membership.song_id = song.id
+        LEFT JOIN show AS sc_show
+          ON sc_show.year_id = source_show.year_id
+         AND sc_show.short_name = 'sc'
+         AND sc_show.national_final_id IS NULL
+        LEFT JOIN song_show AS sc_membership
+          ON sc_membership.show_id = sc_show.id
+         AND sc_membership.song_id = song.id
+        LEFT JOIN country_show_results AS result
+          ON result.show_id = vote_set.show_id
+         AND result.song_id = song.id
+         AND result.result_mode = 'official'
+        WHERE vote.vote_set_id = ANY(%s)
+          AND data.title IS NOT NULL
+          AND data.artist IS NOT NULL
+        ORDER BY vote.vote_set_id, vote.score DESC
+        """,
+        (vote_set_ids,),
+    )
+
+    for row in cursor.fetchall():
+        in_hidden_show = False
+        if row["source_short_name"] != "f":
+            if row["in_final"]:
+                row["class"] = "qualifier f-qualifier"
+                in_hidden_show = row["source_status"] == "partial"
+            if row["source_short_name"] != "sc" and row["in_sc"]:
+                row["class"] = "qualifier sc-qualifier"
+                in_hidden_show |= row["source_status"] == "partial"
+
+        if in_hidden_show and not unredacted:
+            row["title"] = ""
+            row["artist"] = ""
+            row["name"] = ""
+            row["code"] = "XX"
+        if in_hidden_show or row["code"] == "XX":
+            row["result_place"] = None
+
+        row.pop("source_short_name")
+        row.pop("source_status")
+        row.pop("in_final")
+        row.pop("in_sc")
+        points_by_vote_set[row.pop("vote_set_id")].append(row)
+
+    for vote in votes:
+        vote["points"] = points_by_vote_set[vote["id"]]
+
+
+def _load_revote_history_points(cursor, votes: list[dict]) -> None:
+    """Attach revote entries, original scores, and result metadata in bulk."""
+    vote_set_ids = [vote["id"] for vote in votes]
+    points_by_vote_set: dict[int, list[dict]] = {
+        vote_set_id: [] for vote_set_id in vote_set_ids
+    }
+    has_original_vote: dict[int, bool] = {
+        vote_set_id: False for vote_set_id in vote_set_ids
+    }
+    if not vote_set_ids:
+        return
+
+    cursor.execute(
+        """
+        SELECT revote_set.id AS vote_set_id,
+               revote_vote.score AS pts,
+               data.title, song.country_id AS code, song.id,
+               official_set.id IS NOT NULL AS has_original_vote,
+               official_vote.score AS original_score,
+               result.place AS result_place,
+               result.special_qualifier,
+               progression.priority AS progression_priority
+        FROM vote_set AS revote_set
+        JOIN vote AS revote_vote ON revote_vote.vote_set_id = revote_set.id
+        JOIN song ON song.id = revote_vote.song_id
+        JOIN LATERAL (
+            SELECT song_data.title, song_data.artist
+            FROM song_data
+            WHERE song_data.song_id = song.id
+               OR (
+                   song_data.song_id IS NULL
+                   AND song_data.country_id = song.country_id
+                   AND song_data.year_id = song.year_id
+                   AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+               )
+            ORDER BY song_data.created_at DESC, song_data.id DESC
+            LIMIT 1
+        ) AS data ON true
+        LEFT JOIN vote_set AS official_set
+          ON official_set.voter_id = revote_set.voter_id
+         AND official_set.show_id = revote_set.show_id
+         AND official_set.result_mode = 'official'
+        LEFT JOIN vote AS official_vote
+          ON official_vote.vote_set_id = official_set.id
+         AND official_vote.song_id = song.id
+        LEFT JOIN country_show_results AS result
+          ON result.show_id = revote_set.show_id
+         AND result.song_id = song.id
+         AND result.result_mode = 'revote'
+        LEFT JOIN LATERAL (
+            SELECT progression.priority
+            FROM show_progression AS progression
+            JOIN show AS target ON target.id = progression.target_show_id
+            WHERE progression.source_show_id = revote_set.show_id
+              AND target.short_name = result.entry_status
+            LIMIT 1
+        ) AS progression ON true
+        WHERE revote_set.id = ANY(%s)
+          AND data.title IS NOT NULL
+          AND data.artist IS NOT NULL
+        ORDER BY revote_set.id, revote_vote.score DESC
+        """,
+        (vote_set_ids,),
+    )
+
+    for row in cursor.fetchall():
+        vote_set_id = row.pop("vote_set_id")
+        has_original_vote[vote_set_id] = row.pop("has_original_vote")
+        original_score = row.pop("original_score") or 0
+        progression_priority = row.pop("progression_priority")
+        row["special_qualifier"] = bool(row["special_qualifier"])
+        row["points_difference"] = row["pts"] - original_score
+        row["class"] = (
+            "qualifier"
+            if progression_priority == 1
+            else "sc-qualifier" if progression_priority is not None else ""
+        )
+        points_by_vote_set[vote_set_id].append(row)
+
+    for vote in votes:
+        vote["has_original_vote"] = has_original_vote[vote["id"]]
+        vote["points"] = points_by_vote_set[vote["id"]]
+
+
 @bp.get("/<username>/votes")
 @with_auth
 def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissions):
@@ -514,57 +655,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         }
         votes.append(val)
 
-    # Batch-fetch show results for all shows this user voted in,
-    # keyed by (show_id, song_id) → place.
-    show_ids = list({v["show_id"] for v in votes})
-    show_results: dict[tuple[int, int], int] = {}
-    if show_ids:
-        cursor.execute(
-            """
-            SELECT show_id, song_id, place
-            FROM country_show_results
-            WHERE show_id = ANY(%s) AND result_mode = 'official'
-        """,
-            (show_ids,),
-        )
-        for row in cursor.fetchall():
-            show_results[(row["show_id"], row["song_id"])] = row["place"]
-
-    for vote in votes:
-        cursor.execute(
-            """
-            SELECT score AS pts, song.title, song.artist,
-                   song.country_id AS code, country.name, song.id
-            FROM vote
-            JOIN current_song AS song ON vote.song_id = song.id
-            JOIN country ON song.country_id = country.id
-            WHERE vote.vote_set_id = %s
-            ORDER BY score DESC
-        """,
-            (vote["id"],),
-        )
-        songs = []
-        for val in cursor.fetchall():
-            # A song is in a not-yet-revealed show when it qualifies into a
-            # partial 'f'/'sc' show. Track this independently of blanking so
-            # results stay hidden even when the viewer reveals vote details.
-            in_hidden_show = False
-            if vote["short_name"] != "f":
-                _, mod = redact_song_if_show(val, vote["year"], "f", vote["status"],
-                                             blank=not unredacted)
-                in_hidden_show |= mod and vote["status"] == "partial"
-                if vote["short_name"] != "sc":
-                    _, mod = redact_song_if_show(val, vote["year"], "sc", vote["status"],
-                                                 blank=not unredacted)
-                    in_hidden_show |= mod and vote["status"] == "partial"
-            # Only show result placement for shows that aren't hidden.
-            if in_hidden_show or val.get("code") == "XX":
-                val["result_place"] = None
-            else:
-                val["result_place"] = show_results.get((vote["show_id"], val["id"]))
-            songs.append(val)
-
-        vote["points"] = songs
+    _load_vote_history_points(cursor, votes, unredacted=unredacted)
 
     return render_template(
         "user/votes.html", votes=votes, username=username, view="shows",
@@ -623,90 +714,7 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         }
         for row in cursor.fetchall()
     ]
-    show_ids = list({vote["show_id"] for vote in votes})
-    original_scores: dict[tuple[int, int], int] = {}
-    original_vote_show_ids: set[int] = set()
-    show_results: dict[tuple[int, int], dict] = {}
-    progression_priorities: dict[tuple[int, str], int] = {}
-    if show_ids:
-        cursor.execute(
-            """
-            SELECT show_id FROM vote_set
-            WHERE voter_id = %s AND result_mode = 'official' AND show_id = ANY(%s)
-            """,
-            (user_id, show_ids),
-        )
-        original_vote_show_ids = {row["show_id"] for row in cursor.fetchall()}
-        cursor.execute(
-            """
-            SELECT vote_set.show_id, vote.song_id, vote.score
-            FROM vote
-            JOIN vote_set ON vote_set.id = vote.vote_set_id
-            WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
-              AND vote_set.show_id = ANY(%s)
-            """,
-            (user_id, show_ids),
-        )
-        original_scores = {
-            (row["show_id"], row["song_id"]): row["score"] for row in cursor.fetchall()
-        }
-        cursor.execute(
-            """
-            SELECT show_id, song_id, place, entry_status, special_qualifier
-            FROM country_show_results
-            WHERE show_id = ANY(%s) AND result_mode = 'revote'
-            """,
-            (show_ids,),
-        )
-        show_results = {
-            (row["show_id"], row["song_id"]): row for row in cursor.fetchall()
-        }
-        cursor.execute(
-            """
-            SELECT progression.source_show_id, target.short_name,
-                   progression.priority
-            FROM show_progression AS progression
-            JOIN show AS target ON target.id = progression.target_show_id
-            WHERE progression.source_show_id = ANY(%s)
-            """,
-            (show_ids,),
-        )
-        progression_priorities = {
-            (row["source_show_id"], row["short_name"]): row["priority"]
-            for row in cursor.fetchall()
-        }
-
-    for vote in votes:
-        vote["has_original_vote"] = vote["show_id"] in original_vote_show_ids
-        cursor.execute(
-            """
-            SELECT vote.score AS pts, song.title, song.country_id AS code, song.id
-            FROM vote
-            JOIN current_song AS song ON song.id = vote.song_id
-            WHERE vote.vote_set_id = %s
-            ORDER BY vote.score DESC
-            """,
-            (vote["id"],),
-        )
-        points = []
-        for row in cursor.fetchall():
-            result = show_results.get((vote["show_id"], row["id"]))
-            entry_status = result["entry_status"] if result else None
-            row["result_place"] = result["place"] if result else None
-            row["special_qualifier"] = bool(result and result["special_qualifier"])
-            row["points_difference"] = row["pts"] - original_scores.get(
-                (vote["show_id"], row["id"]), 0
-            )
-            progression_priority = progression_priorities.get(
-                (vote["show_id"], entry_status)
-            )
-            row["class"] = (
-                "qualifier"
-                if progression_priority == 1
-                else "sc-qualifier" if progression_priority is not None else ""
-            )
-            points.append(row)
-        vote["points"] = points
+    _load_revote_history_points(cursor, votes)
 
     return render_template(
         "user/votes.html",
@@ -765,20 +773,8 @@ def predictions(username: str):
         })
 
     show_ids = list({p["show_id"] for p in predictions})
-    show_results: dict[tuple[int, int], int] = {}
     set_rank: dict[int, tuple[int, int]] = {}  # set_id -> (rank, total predictors)
     if show_ids:
-        cursor.execute(
-            """
-            SELECT show_id, song_id, place
-            FROM country_show_results
-            WHERE show_id = ANY(%s) AND result_mode = 'official'
-        """,
-            (show_ids,),
-        )
-        for row in cursor.fetchall():
-            show_results[(row["show_id"], row["song_id"])] = row["place"]
-
         # Per-set total score, computed in SQL across every predictor for these shows.
         # Ties broken by last-submission time — updated_at if present, else created_at.
         cursor.execute(
@@ -811,31 +807,56 @@ def predictions(username: str):
             for i, (set_id, _score, _ts) in enumerate(rows, start=1):
                 set_rank[set_id] = (i, total)
 
-    for ps in predictions:
+    points_by_set: dict[int, list[dict]] = {ps["id"]: [] for ps in predictions}
+    prediction_set_ids = list(points_by_set)
+    if prediction_set_ids:
         cursor.execute(
             """
-            SELECT prediction.position AS pos, song.title, song.artist,
-                   song.country_id AS code, country.name, song.id
+            SELECT prediction.set_id, prediction.position AS pos,
+                   data.title, data.artist,
+                   song.country_id AS code, country.name, song.id,
+                   result.place AS result_place
             FROM prediction
-            JOIN current_song AS song ON prediction.song_id = song.id
-            JOIN country ON song.country_id = country.id
-            WHERE prediction.set_id = %s
-            ORDER BY prediction.position
-        """,
-            (ps["id"],),
+            JOIN prediction_set ON prediction_set.id = prediction.set_id
+            JOIN song ON song.id = prediction.song_id
+            JOIN LATERAL (
+                SELECT song_data.title, song_data.artist
+                FROM song_data
+                WHERE song_data.song_id = song.id
+                   OR (
+                       song_data.song_id IS NULL
+                       AND song_data.country_id = song.country_id
+                       AND song_data.year_id = song.year_id
+                       AND song_data.entry_number IS NOT DISTINCT FROM song.entry_number
+                   )
+                ORDER BY song_data.created_at DESC, song_data.id DESC
+                LIMIT 1
+            ) AS data ON true
+            JOIN country ON country.id = song.country_id
+            LEFT JOIN country_show_results AS result
+              ON result.show_id = prediction_set.show_id
+             AND result.song_id = song.id
+             AND result.result_mode = 'official'
+            WHERE prediction.set_id = ANY(%s)
+              AND data.title IS NOT NULL
+              AND data.artist IS NOT NULL
+            ORDER BY prediction.set_id, prediction.position
+            """,
+            (prediction_set_ids,),
         )
-        items = []
+        for row in cursor.fetchall():
+            points_by_set[row.pop("set_id")].append(row)
+
+    for ps in predictions:
+        items = points_by_set[ps["id"]]
         score = 0
-        for val in cursor.fetchall():
-            real = show_results.get((ps["show_id"], val["id"]))
-            val["result_place"] = real
+        for val in items:
+            real = val["result_place"]
             if real is not None:
                 val["penalty"] = (real - val["pos"]) ** 2
                 score += val["penalty"]
             else:
                 val["penalty"] = None
-            items.append(val)
-        items.sort(key=lambda x: x["pos"])
         ps["points"] = items
         ps["score"] = score
         rank_info = set_rank.get(ps["id"])
@@ -869,7 +890,7 @@ def submissions(username: str):
         return render_template("error.html", error="User not found"), 404
     user_id = user_id_g["id"]
 
-    songs = get_user_songs(user_id, select_languages=True)
+    songs = get_user_submission_history(user_id)
     results = get_show_results_for_songs([s.id for s in songs])
 
     regular_songs = [s for s in songs if s.year.id >= 0]

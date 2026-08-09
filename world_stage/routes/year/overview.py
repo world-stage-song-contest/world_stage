@@ -7,14 +7,14 @@ from ...utils import (
     Show,
     UserPermissions,
     get_show_results_for_songs,
+    get_year_index_winners,
+    get_year_overview_songs,
     get_year_placements,
-    get_year_songs,
-    get_year_winner,
     render_template,
     require_user,
     with_permissions,
 )
-from .common import bp, get_specials, resolve_special
+from .common import bp, resolve_special
 
 
 def _ongoing_national_finals(year_id: int) -> list[dict]:
@@ -125,9 +125,18 @@ def index():
     upcoming = []
     ongoing = []
 
-    cursor.execute("SELECT id, status FROM year WHERE id >= 0 ORDER BY id DESC")
+    cursor.execute(
+        """
+        SELECT id, status, submissions_open, special_name, special_short_name
+        FROM year
+        ORDER BY id DESC
+        """
+    )
+    specials = []
     for data in cursor.fetchall():
-        if data["status"] == "closed":
+        if data["id"] < 0:
+            specials.append(data)
+        elif data["status"] == "closed":
             years.append(data)
         elif data["status"] == "ongoing":
             ongoing.append(data)
@@ -136,10 +145,9 @@ def index():
 
     upcoming.reverse()
 
-    for year in years:
-        year["winner"] = get_year_winner(year["id"])
-
-    specials = get_specials()
+    winners = get_year_index_winners()
+    for item in (*years, *specials):
+        item["winner"] = winners.get(item["id"])
 
     return render_template(
         "year/index.html", years=years, upcoming=upcoming, specials=specials, ongoing=ongoing
@@ -157,7 +165,7 @@ def special(short_name: str, permissions: UserPermissions):
     db = get_db()
     cursor = db.cursor()
 
-    songs = get_year_songs(_year, select_languages=True)
+    songs = get_year_overview_songs(_year)
     ongoing_national_finals = _ongoing_national_finals(_year)
 
     cursor.execute(
@@ -247,7 +255,7 @@ def year(year: int, permissions: UserPermissions):
     year_row = cursor.fetchone() or {"status": "open", "submissions_open": False}
     cl = year_row["status"] == "closed"
 
-    songs = get_year_songs(_year, select_languages=True)
+    songs = get_year_overview_songs(_year)
     ongoing_national_finals = _ongoing_national_finals(_year)
 
     free_countries = []

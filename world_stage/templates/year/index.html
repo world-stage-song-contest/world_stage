@@ -59,6 +59,7 @@
         {% set winner = year.winner %}
             <tr data-value="{{ loop.index }}">
                 <td class="year"><a href="{{ url_for('year.year', year=year.id) }}"><b>{{ year.id }}</b></a></td>
+                {% if winner %}
                 <td><a href="{{ url_for('country.country', code=winner.country.cc) }}"><div class="country">
                     {{ flag(winner.country.cc, 42, winner.country.name, variant=winner.country.flag_variant) }}
                     {{ winner.country.name }}
@@ -81,6 +82,9 @@
                 <td class="percent">{{ winner.vote_data.pct() }}</td>
                 <td class="percent detail-col">{{ winner.vote_data.adjusted_pct() }}</td>
                 <td class="submitter">{{ winner.submitter }}</td>
+                {% else %}
+                <td colspan="8"></td>
+                {% endif %}
             </tr>
         {% endfor %}
         </tbody>

@@ -83,9 +83,19 @@ def test_watching_spot_is_on_details_page_and_can_be_toggled(client, db, bob_hea
         assert cursor.fetchone()["count"] == 0
 
 
-def test_watch_button_and_new_watches_are_disabled_when_submissions_close(
-    client, db, bob_headers
-):
+def test_entry_details_loads_all_song_metadata_in_two_queries(client, app, bob_headers):
+    _create_song(client, bob_headers)
+    app.config["PERFORMANCE_HEADERS"] = True
+
+    response = client.get("/country/us/2025", headers={"Accept": "text/html"})
+
+    assert response.status_code == 200
+    assert response.headers["X-SQL-Query-Count"] == "8"
+    assert b"Watched Song" in response.data
+    assert b"English" in response.data
+
+
+def test_watch_button_and_new_watches_are_disabled_when_submissions_close(client, db, bob_headers):
     _create_song(client, bob_headers)
     _login(client, db)
     with db.cursor() as cursor:
@@ -112,9 +122,7 @@ def test_watch_button_and_new_watches_are_disabled_when_submissions_close(
         db.commit()
 
 
-def test_placeholder_change_creates_system_notification_and_email(
-    client, app, db, bob_headers
-):
+def test_placeholder_change_creates_system_notification_and_email(client, app, db, bob_headers):
     _configure_email(app)
     song_id = _create_song(client, bob_headers)
     _watch_us_spot(client, db)
@@ -157,9 +165,7 @@ def test_placeholder_change_creates_system_notification_and_email(
     assert "became a placeholder" in email.get_content()
 
 
-def test_deleting_song_creates_system_notification_and_email(
-    client, app, db, bob_headers
-):
+def test_deleting_song_creates_system_notification_and_email(client, app, db, bob_headers):
     _configure_email(app)
     song_id = _create_song(client, bob_headers)
     _watch_us_spot(client, db)
@@ -183,9 +189,7 @@ def test_deleting_song_creates_system_notification_and_email(
     assert "was deleted" in app.extensions["mail_outbox"][0].get_content()
 
 
-def test_submitting_placeholder_removes_submitters_watch(
-    client, db, bob_headers, carol_headers
-):
+def test_submitting_placeholder_removes_submitters_watch(client, db, bob_headers, carol_headers):
     song_id = _create_song(client, carol_headers)
     _watch_us_spot(client, db, user_id=2)
     assert client.delete(f"/api/song/{song_id}", headers=carol_headers).status_code == 204
@@ -217,9 +221,7 @@ def test_submitting_placeholder_removes_submitters_watch(
         assert cursor.fetchone()["count"] == 0
 
 
-def test_claiming_placeholder_removes_submitters_watch(
-    client, db, bob_headers, carol_headers
-):
+def test_claiming_placeholder_removes_submitters_watch(client, db, bob_headers, carol_headers):
     song_id = _create_song(client, carol_headers, is_placeholder=True)
     _watch_us_spot(client, db, user_id=2)
 
