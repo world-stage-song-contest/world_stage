@@ -6,6 +6,9 @@ HOST_DEPLOY_SCRIPT="scripts/host-deploy.sh"
 PUBLIC_ASSET_DEPLOY_SCRIPT="scripts/deploy-public-assets.sh"
 ASSET_RELEASE="${ASSET_RELEASE:-$(git rev-parse --verify HEAD)}"
 
+# shellcheck source=scripts/deploy-ssh.sh
+source scripts/deploy-ssh.sh
+
 # Public files are deployed separately from the application wheel. Publish
 # them first so the following application release never references a missing
 # static asset release.
@@ -20,5 +23,5 @@ REMOTE_WHEEL="/tmp/$(basename "$WHEEL")"
 
 echo "Deploying $WHEEL to $SERVER"
 
-rsync "$WHEEL" "$HOST_DEPLOY_SCRIPT" "$SERVER:/tmp/"
-ssh -t "$SERVER" "sudo install -o worldstage -g worldstage -m 0755 /tmp/host-deploy.sh /opt/worldstage/deploy.sh && /opt/worldstage/deploy.sh $REMOTE_WHEEL && rm $REMOTE_WHEEL /tmp/host-deploy.sh"
+"${DEPLOY_RSYNC[@]}" "$WHEEL" "$HOST_DEPLOY_SCRIPT" "$SERVER:/tmp/"
+"${DEPLOY_SSH[@]}" -t "$SERVER" "sudo install -o worldstage -g worldstage -m 0755 /tmp/host-deploy.sh /opt/worldstage/deploy.sh && /opt/worldstage/deploy.sh $REMOTE_WHEEL && rm $REMOTE_WHEEL /tmp/host-deploy.sh"
