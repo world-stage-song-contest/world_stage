@@ -280,3 +280,10 @@ def test_revote_keeps_official_results_unchanged(client, db, rendered_templates)
     )
     assert response.status_code == 200
     assert "(+2)" in response.get_data(as_text=True)
+
+    # The breakdown template is shared with official results; revote-only
+    # metadata must not be accessed when rendering an ordinary breakdown.
+    response = client.get(
+        "/year/2024/sf82/song/us", headers={"Accept": "text/html"}
+    )
+    assert response.status_code == 200

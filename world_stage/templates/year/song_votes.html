@@ -135,9 +135,9 @@
                 <div class="voters-cell">
                 {% if group.voters %}
                     {% for voter in group.voters %}
-                    <span class="voter-entry{% if voter.revoted %} changed-vote{% endif %}">
+                    <span class="voter-entry{% if is_revote and voter.revoted %} changed-vote{% endif %}">
                         {{ flag(voter.code, 21, voter.country_name) }}
-                        {% if voter.is_submitter %}<em>{% endif %}<a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>{% if voter.is_submitter %}</em>{% endif %}{% if voter.vote_change is not none %} ({{ '+' if voter.vote_change > 0 else '' }}{{ voter.vote_change }}){% endif %}
+                        {% if voter.is_submitter %}<em>{% endif %}<a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>{% if voter.is_submitter %}</em>{% endif %}{% if is_revote and voter.vote_change is not none %} ({{ '+' if voter.vote_change > 0 else '' }}{{ voter.vote_change }}){% endif %}
                     </span>
                     {% endfor %}
                 {% endif %}
@@ -154,9 +154,9 @@
                 <div class="voters-cell">
                 {% if no_points_voters %}
                     {% for voter in no_points_voters %}
-                    <span class="voter-entry{% if voter.revoted %} changed-vote{% endif %}">
+                    <span class="voter-entry{% if is_revote and voter.revoted %} changed-vote{% endif %}">
                         {{ flag(voter.code, 21, voter.country_name) }}
-                        <a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>{% if voter.vote_change is not none %} ({{ '+' if voter.vote_change > 0 else '' }}{{ voter.vote_change }}){% endif %}
+                        <a href="{{ url_for('user.profile', username=voter.username) }}">{{ voter.username }}</a>{% if is_revote and voter.vote_change is not none %} ({{ '+' if voter.vote_change > 0 else '' }}{{ voter.vote_change }}){% endif %}
                     </span>
                     {% endfor %}
                 {% else %}

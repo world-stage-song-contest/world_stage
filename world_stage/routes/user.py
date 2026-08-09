@@ -517,16 +517,36 @@ def _load_revote_history_points(cursor, votes: list[dict]) -> None:
     cursor.execute(
         """
         SELECT revote_set.id AS vote_set_id,
-               revote_vote.score AS pts,
+               ballot_vote.pts,
                data.title, song.country_id AS code, song.id,
                official_set.id IS NOT NULL AS has_original_vote,
-               official_vote.score AS original_score,
+               ballot_vote.original_score,
                result.place AS result_place,
                result.special_qualifier,
                progression.priority AS progression_priority
         FROM vote_set AS revote_set
-        JOIN vote AS revote_vote ON revote_vote.vote_set_id = revote_set.id
-        JOIN song ON song.id = revote_vote.song_id
+        LEFT JOIN vote_set AS official_set
+          ON official_set.voter_id = revote_set.voter_id
+         AND official_set.show_id = revote_set.show_id
+         AND official_set.result_mode = 'official'
+        JOIN LATERAL (
+            SELECT ballot_song.song_id,
+                   COALESCE(MAX(ballot_song.revote_score), 0) AS pts,
+                   MAX(ballot_song.original_score) AS original_score
+            FROM (
+                SELECT vote.song_id, vote.score AS revote_score,
+                       NULL::integer AS original_score
+                FROM vote
+                WHERE vote.vote_set_id = revote_set.id
+                UNION ALL
+                SELECT vote.song_id, NULL::integer AS revote_score,
+                       vote.score AS original_score
+                FROM vote
+                WHERE vote.vote_set_id = official_set.id
+            ) AS ballot_song
+            GROUP BY ballot_song.song_id
+        ) AS ballot_vote ON true
+        JOIN song ON song.id = ballot_vote.song_id
         JOIN LATERAL (
             SELECT song_data.title, song_data.artist
             FROM song_data
@@ -540,13 +560,6 @@ def _load_revote_history_points(cursor, votes: list[dict]) -> None:
             ORDER BY song_data.created_at DESC, song_data.id DESC
             LIMIT 1
         ) AS data ON true
-        LEFT JOIN vote_set AS official_set
-          ON official_set.voter_id = revote_set.voter_id
-         AND official_set.show_id = revote_set.show_id
-         AND official_set.result_mode = 'official'
-        LEFT JOIN vote AS official_vote
-          ON official_vote.vote_set_id = official_set.id
-         AND official_vote.song_id = song.id
         LEFT JOIN country_show_results AS result
           ON result.show_id = revote_set.show_id
          AND result.song_id = song.id
@@ -562,7 +575,10 @@ def _load_revote_history_points(cursor, votes: list[dict]) -> None:
         WHERE revote_set.id = ANY(%s)
           AND data.title IS NOT NULL
           AND data.artist IS NOT NULL
-        ORDER BY revote_set.id, revote_vote.score DESC
+        ORDER BY revote_set.id, ballot_vote.pts DESC,
+                 CASE WHEN ballot_vote.pts = 0
+                      THEN ballot_vote.original_score END DESC,
+                 song.id
         """,
         (vote_set_ids,),
     )

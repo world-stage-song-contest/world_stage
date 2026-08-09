@@ -512,6 +512,50 @@ def test_user_revote_history_fetches_all_metadata_once(app, db):
     assert "revotes-with-difference" in response.text
 
 
+def test_user_revote_history_shows_omitted_original_scores_as_ordered_zeroes(app, db):
+    song_ids = _seed_show_and_songs(db)
+    show_id = _seed_official_ballot(db, song_ids)
+    with db.cursor() as cursor:
+        cursor.execute(
+            "UPDATE show SET revote_eligible_at = CURRENT_TIMESTAMP WHERE id = %s",
+            (show_id,),
+        )
+        cursor.execute(
+            """
+            INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
+            VALUES (2, %s, 'US', 'revote')
+            RETURNING id
+            """,
+            (show_id,),
+        )
+        revote_set_id = cursor.fetchone()["id"]
+        cursor.execute(
+            "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, 12)",
+            (revote_set_id, song_ids[3]),
+        )
+    db.commit()
+
+    response = app.test_client().get("/user/bob/revotes", headers={"Accept": "text/html"})
+
+    assert response.status_code == 200
+    html = response.text
+    second_spanish = html.index('<div class="song-title">Second Spanish Entry</div>')
+    omitted_spanish = html.index('<div class="song-title">Spanish Entry</div>')
+    omitted_french = html.index('<div class="song-title">French Entry</div>')
+    assert second_spanish < omitted_spanish < omitted_french
+    rows = html.split("<tr")
+    spanish_row = next(
+        row for row in rows if '<div class="song-title">Spanish Entry</div>' in row
+    )
+    french_row = next(
+        row for row in rows if '<div class="song-title">French Entry</div>' in row
+    )
+    assert '<td class="points-data">0p</td>' in spanish_row
+    assert '<td class="points-data points-difference">-12</td>' in spanish_row
+    assert '<td class="points-data">0p</td>' in french_row
+    assert '<td class="points-data points-difference">-10</td>' in french_row
+
+
 def test_scoreboard_fetches_owned_songs_once(app, db):
     song_ids = _seed_show_and_songs(db)
     _seed_official_ballot(db, song_ids)
