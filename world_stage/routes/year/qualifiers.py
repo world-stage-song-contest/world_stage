@@ -404,6 +404,7 @@ def qualifiers_scores(year: int, show: str, user, permissions: UserPermissions):
             "country": row["country"],
             "cc": row["cc"],
             "entry_number": row["entry_number"],
+            "running_order": row["running_order"],
             "points": votes_by_song[row["id"]],
         }
         countries.append(val)

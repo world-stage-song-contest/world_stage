@@ -125,6 +125,23 @@ body:has(#page-header.hidden) #qualifier-reveal #wrapper {
     opacity: 0.42;
 }
 
+#qualifier-reveal .reveal-running-order {
+    display: flex;
+    width: 2.15em;
+    flex: 0 0 2.15em;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    color: var(--qr97-ink);
+    background: var(--qr97-panel-dark);
+    border-right: 3px solid var(--qr97-grid);
+    font-family: 'Trade Gothic Condensed', Impact, 'Arial Narrow', sans-serif;
+    font-size: clamp(0.75rem, 1.2vw, 1.25rem);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1;
+}
+
 #qualifier-reveal .reveal-flag-frame {
     width: auto;
     height: 100%;

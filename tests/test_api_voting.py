@@ -111,6 +111,28 @@ def _seed_official_ballot(db, song_ids):
     return show_id
 
 
+def test_cached_places_use_running_order_for_unresolved_tie(db):
+    song_ids = _seed_show_and_songs(db)
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT csr.song_id, csr.place
+            FROM country_show_results AS csr
+            JOIN song_show AS ss
+              ON ss.show_id = csr.show_id AND ss.song_id = csr.song_id
+            WHERE csr.song_id = ANY(%s) AND csr.result_mode = 'official'
+            ORDER BY ss.running_order
+            """,
+            (song_ids,),
+        )
+        places = cursor.fetchall()
+
+    assert [(row["song_id"], row["place"]) for row in places] == list(
+        zip(song_ids, range(1, len(song_ids) + 1), strict=True)
+    )
+
+
 def test_show_results_are_rebuilt_once_after_a_complete_ballot(db):
     song_ids = _seed_show_and_songs(db)
     refresh_notices = []

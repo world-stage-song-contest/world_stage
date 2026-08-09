@@ -49,6 +49,20 @@ function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
 }
 
+function totalVoteCount(votes) {
+    return Object.values(votes).reduce((total, count) => total + count, 0);
+}
+
+function comparePointCounts(first, second) {
+    const allPoints = new Set([...Object.keys(first), ...Object.keys(second)]);
+    const descendingPoints = [...allPoints].map(Number).sort((a, b) => b - a);
+    for (const point of descendingPoints) {
+        const difference = (first[point] || 0) - (second[point] || 0);
+        if (difference !== 0) return difference;
+    }
+    return 0;
+}
+
 function toggleHeader() {
     theme.toggleHeader();
     // Header visibility changes the vertical space available to responsive
@@ -217,7 +231,7 @@ class Country {
     }
 
     get voters() {
-        return Object.keys(this.votes).length;
+        return totalVoteCount(this.votes);
     }
 
     /**
@@ -297,29 +311,13 @@ class Country {
      * @returns {number}
      */
     compare(other) {
-        function compareDicts(dict1, dict2) {
-            const keys1 = Object.keys(dict1);
-            const keys2 = Object.keys(dict2);
-            const allKeys = [...new Set([...keys1, ...keys2])];
-            allKeys.sort((a, b) => b - a);
-            for (const key of allKeys) {
-                const val1 = dict1[key];
-                const val2 = dict2[key];
-
-                if (val1 !== val2) {
-                    return val1 - val2;
-                }
-            }
-            return 0;
-        }
-
         const ptsDiff = this.points - other.points;
         if (ptsDiff != 0) return ptsDiff;
 
         const votersDiff = this.voters - other.voters;
         if (votersDiff != 0) return votersDiff;
 
-        const vtsDiff = compareDicts(this.votes, other.votes);
+        const vtsDiff = comparePointCounts(this.votes, other.votes);
         if (vtsDiff != 0) return vtsDiff;
 
         return other.ro - this.ro;

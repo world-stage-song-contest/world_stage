@@ -119,16 +119,9 @@ class VoteData:
             return self.sum < other.sum
         if self.count != other.count:
             return self.count < other.count
-        this_keys = sorted(self.pts.keys())
-        other_keys = sorted(other.pts.keys())
-        this_max = max(this_keys, default=0)
-        other_max = max(other_keys, default=0)
-        if this_max != other_max:
-            return this_max < other_max
-        overall_max = max(this_max, other_max)
-        for i in range(overall_max, 0, -1):
-            this_v = self.pts.get(i, 0)
-            other_v = other.pts.get(i, 0)
+        for points in sorted(self.pts.keys() | other.pts.keys(), reverse=True):
+            this_v = self.pts.get(points, 0)
+            other_v = other.pts.get(points, 0)
             if this_v != other_v:
                 return this_v < other_v
         if self.ro is None or other.ro is None:

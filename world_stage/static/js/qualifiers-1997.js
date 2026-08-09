@@ -72,6 +72,12 @@
         element.dataset.id = context.entryKey(country);
         element.dataset.cc = country.cc;
 
+        const runningOrder = document.createElement("div");
+        runningOrder.classList.add("reveal-running-order");
+        runningOrder.textContent = country.running_order;
+        runningOrder.setAttribute("aria-label", `Running order ${country.running_order}`);
+        element.appendChild(runningOrder);
+
         const flagFrame = document.createElement("div");
         flagFrame.classList.add("reveal-flag-frame");
         element.appendChild(flagFrame);

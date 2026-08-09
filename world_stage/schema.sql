@@ -1683,11 +1683,13 @@ BEGIN
     ranked AS (
         SELECT
             a.*,
-            DENSE_RANK() OVER (
+            ROW_NUMBER() OVER (
                 ORDER BY
                     total_points DESC,
                     total_votes_received DESC,
-                    countback_string DESC
+                    countback_string DESC,
+                    running_order ASC NULLS LAST,
+                    song_id ASC
             ) AS place,
             COUNT(*) OVER () AS total_countries
         FROM aggregated a
