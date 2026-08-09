@@ -8,6 +8,26 @@ def render(value: str) -> str:
     return get_markdown_parser().renderInline(value)
 
 
+def test_autolink_parser_combines_links_with_formatting():
+    rendered = get_markdown_parser(autolink=True).renderInline(
+        "[b]Source:[/b] https://example.com/release_(song)."
+    )
+
+    assert rendered == (
+        '<strong>Source:</strong> '
+        '<a href="https://example.com/release_(song)" rel="noopener">'
+        "https://example.com/release_(song)</a>."
+    )
+
+
+def test_autolink_parser_does_not_link_urls_in_code():
+    rendered = get_markdown_parser(autolink=True).renderInline(
+        "[code]https://example.com[/code]"
+    )
+
+    assert rendered == "<code>https://example.com</code>"
+
+
 @pytest.mark.parametrize(
     "value",
     [

@@ -4,12 +4,16 @@ from html import escape
 
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline import StateInline
+from markdown_it.token import Token
 
 BBCODE_COLOURS = frozenset({"red", "green", "blue", "yellow", "magenta", "cyan", "white", "black"})
 LANGUAGE_TAG_PATTERN = r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*"
 LYRICS_LANGUAGE_MARKER_RE = re.compile(
     rf"^\s*\{{lang=(?P<language>{LANGUAGE_TAG_PATTERN})?\}}[ \t]*"
 )
+URL_RE = re.compile(r"https?://[^\s<>'\"]+", re.I)
+URL_TRAILING_PUNCTUATION = ".,;:!?"
+URL_BRACKET_PAIRS = {")": "(", "]": "[", "}": "{"}
 
 FONT_OPEN_TAG_RE = re.compile(
     r"""\[font(?P<attributes>(?:\s+[A-Za-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s\]]+))+\s*)\]"""
@@ -64,6 +68,72 @@ FONT_WEIGHT_ALIASES = {
     "ultra-black": "950",
 }
 FONT_STYLES = frozenset({"normal", "italic", "oblique"})
+
+
+def _trim_url_trailing_punctuation(value: str) -> str:
+    value = value.rstrip(URL_TRAILING_PUNCTUATION)
+    changed = True
+    while changed and value:
+        changed = False
+        if (opener := URL_BRACKET_PAIRS.get(value[-1])) and value.count(
+            value[-1]
+        ) > value.count(opener):
+            value = value[:-1].rstrip(URL_TRAILING_PUNCTUATION)
+            changed = True
+    return value
+
+
+def autolink_plugin(md: MarkdownIt):
+    """Turn bare HTTP(S) URLs in rendered inline text into safe links."""
+
+    def autolink_text(state):
+        for block_token in state.tokens:
+            if block_token.type != "inline" or not block_token.children:
+                continue
+
+            children = []
+            literal_depth = 0
+            for token in block_token.children:
+                if token.type in {"bb_code_open", "bb_pre_open"}:
+                    literal_depth += 1
+
+                if token.type != "text" or literal_depth:
+                    children.append(token)
+                else:
+                    last = 0
+                    for match in URL_RE.finditer(token.content):
+                        url = _trim_url_trailing_punctuation(match.group(0))
+                        if not url:
+                            continue
+                        if match.start() > last:
+                            text_token = Token("text", "", 0)
+                            text_token.content = token.content[last : match.start()]
+                            children.append(text_token)
+
+                        open_token = Token("link_open", "a", 1)
+                        open_token.attrs = {"href": url, "rel": "noopener"}
+                        children.append(open_token)
+                        link_text = Token("text", "", 0)
+                        link_text.content = url
+                        children.append(link_text)
+                        children.append(Token("link_close", "a", -1))
+                        last = match.start() + len(url)
+
+                    if last:
+                        if last < len(token.content):
+                            text_token = Token("text", "", 0)
+                            text_token.content = token.content[last:]
+                            children.append(text_token)
+                    else:
+                        children.append(token)
+
+                if token.type in {"bb_code_close", "bb_pre_close"}:
+                    literal_depth -= 1
+
+            block_token.children = children
+
+    md.core.ruler.after("inline", "autolink_text", autolink_text)
+    return md
 
 
 def _normalise_font_colour(value: str, allowed_colours: set[str]) -> str | None:
@@ -541,8 +611,8 @@ def make_entity_plugin(entities=None):
     return entity_plugin
 
 
-@lru_cache(maxsize=1)
-def get_markdown_parser():
+@lru_cache(maxsize=2)
+def get_markdown_parser(*, autolink: bool = False):
     md = (
         MarkdownIt("zero")
         .enable(["emphasis"])
@@ -550,6 +620,8 @@ def get_markdown_parser():
         .use(make_bbcode_plugin(BBCODE_COLOURS))
         .use(make_entity_plugin())
     )
+    if autolink:
+        md.use(autolink_plugin)
     return md
 
 

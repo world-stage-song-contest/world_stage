@@ -232,6 +232,27 @@ def test_multiple_comments_are_appended_and_attributed_to_each_moderator(client,
         ]
 
 
+def test_verification_comments_render_formatting_and_links(
+    client, db, rendered_templates
+):
+    song_id = _add_song(db, "ES")
+    _login(client, db, 1)
+    client.post(
+        f"/admin/manage/2025/verifications/{song_id}/comments",
+        data={"comment": "[b]Evidence:[/b] https://example.com/release."},
+    )
+
+    response = client.get("/admin/manage/2025/verifications", headers=HTML_HEADERS)
+
+    assert response.status_code == 200
+    comment = _context(rendered_templates)["comments_by_song"][song_id][0]
+    assert comment["rendered_body"] == (
+        '<strong>Evidence:</strong> '
+        '<a href="https://example.com/release" rel="noopener">'
+        "https://example.com/release</a>."
+    )
+
+
 def test_moderator_can_set_all_four_verification_states(client, db):
     song_id = _add_song(db, "ES", sources="https://example.com")
     _login(client, db, 1)

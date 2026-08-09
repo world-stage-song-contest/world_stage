@@ -4,7 +4,7 @@ from flask import redirect, request, url_for
 
 from ...db import get_db
 from ...messaging import notify_new_message
-from ...utils import render_template, require_user
+from ...utils import get_markdown_parser, render_template, require_user
 from ...utils.song_revisions import set_song_status
 from .common import _resolve_special, bp
 
@@ -182,7 +182,9 @@ def _render_verifications(year: dict):
         """,
         (year["id"],),
     )
+    markdown = get_markdown_parser(autolink=True)
     for comment in cursor.fetchall():
+        comment["rendered_body"] = markdown.renderInline(comment["body"])
         comments_by_data[comment["song_data_id"]].append(comment)
 
     songs = []

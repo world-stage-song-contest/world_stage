@@ -15,7 +15,7 @@
 {% macro render_comment_items(comments) %}
 {% for comment in comments %}
 <div class="verification-comment">
-    <div class="verification-comment-body">{{ comment.body }}</div>
+    <div class="verification-comment-body">{{ comment.rendered_body|safe }}</div>
     <div class="verification-comment-attribution">&ndash; <strong>{{ comment.author_username }}</strong>, <time datetime="{{ comment.created_at.isoformat() }}">{{ comment.created_at.strftime('%Y-%m-%d %H:%M') }}</time></div>
 </div>
 {% endfor %}
