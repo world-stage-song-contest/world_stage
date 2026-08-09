@@ -104,6 +104,25 @@ def _rule(
     return cursor.fetchone()
 
 
+def _add_vote_set(
+    cursor,
+    *,
+    show_id: int,
+    voter_id: int,
+    country_id: str,
+    result_mode: str,
+) -> int:
+    cursor.execute(
+        """
+        INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id
+        """,
+        (voter_id, show_id, country_id, result_mode),
+    )
+    return cursor.fetchone()["id"]
+
+
 def test_new_show_snapshots_current_ruleset(db):
     with db.cursor() as cursor:
         show_id = _create_show(cursor, version=None, scores=[12, 10, 8])
@@ -119,6 +138,70 @@ def test_new_show_snapshots_current_ruleset(db):
             "voting_ruleset_version": "v5",
             "revote_ruleset_version": "v6",
         }
+
+
+def test_result_rule_matrix_matches_authoritative_entry_rules(db):
+    with db.cursor() as cursor:
+        show_id = _create_show(cursor, version="v3", scores=[12, 10, 1])
+        for position, (country_id, submitter_id) in enumerate(
+            [("US", 1), ("ES", 1), ("FR", 2)],
+            start=1,
+        ):
+            _add_entry(
+                cursor,
+                show_id=show_id,
+                country_id=country_id,
+                submitter_id=submitter_id,
+                position=position,
+            )
+        vote_set_id = _add_vote_set(
+            cursor,
+            show_id=show_id,
+            voter_id=1,
+            country_id="US",
+            result_mode="official",
+        )
+
+        cursor.execute(
+            """
+            SELECT
+                matrix.song_id,
+                matrix.rule_kind,
+                matrix.rule_reason,
+                matrix.required_score,
+                matrix.score_cap,
+                scalar.rule_kind AS scalar_kind,
+                scalar.rule_reason AS scalar_reason,
+                scalar.required_score AS scalar_required_score,
+                scalar.score_cap AS scalar_score_cap
+            FROM ballot_entry_rule_matrix(%s, 'official') matrix
+            CROSS JOIN LATERAL ballot_entry_rule(
+                %s,
+                'official',
+                matrix.voter_id,
+                matrix.country_id,
+                matrix.song_id
+            ) scalar
+            WHERE matrix.vote_set_id = %s
+            ORDER BY matrix.song_id
+            """,
+            (show_id, show_id, vote_set_id),
+        )
+        rules = cursor.fetchall()
+
+    assert len(rules) == 3
+    for rule in rules:
+        assert (
+            rule["rule_kind"],
+            rule["rule_reason"],
+            rule["required_score"],
+            rule["score_cap"],
+        ) == (
+            rule["scalar_kind"],
+            rule["scalar_reason"],
+            rule["scalar_required_score"],
+            rule["scalar_score_cap"],
+        )
 
 
 def test_v5_and_v6_penalize_non_voters(db):

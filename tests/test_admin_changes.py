@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from flask import template_rendered
@@ -439,6 +440,77 @@ def test_changes_page_keeps_boundary_timestamp_together(client, db):
     assert response.status_code == 200
     assert len(context["changes"]) == 27
     assert context["next_before"] is None
+
+
+def test_changes_page_keeps_cross_table_boundary_timestamp_together(
+    app, client, db
+):
+    song_id = _add_song(db, title="Revision 0")
+    _login_admin(client, db)
+    app.config["PERFORMANCE_HEADERS"] = True
+
+    with db.cursor() as cursor:
+        cursor.execute(
+            "SELECT song_data_id FROM current_song WHERE id = %s",
+            (song_id,),
+        )
+        revision_ids = [cursor.fetchone()["song_data_id"]]
+        for revision in range(1, 26):
+            row = create_song_revision(
+                cursor,
+                song_id,
+                {"title": f"Revision {revision}"},
+                changed_by=2,
+            )
+            revision_ids.append(row["id"])
+
+        cursor.execute(
+            """
+            UPDATE song_data
+            SET created_at = CASE
+                WHEN id = %s THEN TIMESTAMPTZ '2025-01-01 00:00:00+00'
+                WHEN id = %s THEN TIMESTAMPTZ '2025-01-01 00:00:05+00'
+                ELSE TIMESTAMPTZ '2025-01-01 00:00:10+00'
+                     + array_position(%s::bigint[], id) * INTERVAL '1 second'
+            END
+            WHERE id = ANY(%s)
+            """,
+            (
+                revision_ids[0],
+                revision_ids[1],
+                revision_ids,
+                revision_ids,
+            ),
+        )
+        cursor.execute(
+            """
+            UPDATE song_status
+            SET created_at = TIMESTAMPTZ '2025-01-01 00:00:00+00'
+            WHERE song_id = %s
+            """,
+            (song_id,),
+        )
+        set_song_status(cursor, song_id, changed_by=2, is_placeholder=True)
+        cursor.execute(
+            """
+            UPDATE song_status
+            SET created_at = TIMESTAMPTZ '2025-01-01 00:00:05+00'
+            WHERE song_id = %s AND is_placeholder
+            """,
+            (song_id,),
+        )
+    db.commit()
+
+    response, context = _get_changes(client)
+
+    assert response.status_code == 200
+    assert response.headers["X-SQL-Query-Count"] == "3"
+    assert len(context["changes"]) == 26
+    boundary = context["changes"][-1]["changed_at"]
+    assert boundary == datetime.fromisoformat("2025-01-01T00:00:05+00:00")
+    assert sum(change["changed_at"] == boundary for change in context["changes"]) == 2
+    assert {change["source"] for change in context["changes"][-2:]} == {"d", "s"}
+    assert context["next_before"] == boundary.isoformat()
 
 
 def test_changes_page_includes_verification_decisions(client, db):

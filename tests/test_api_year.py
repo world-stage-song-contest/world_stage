@@ -113,7 +113,8 @@ class TestYearById:
 
 
 class TestYearSongs:
-    def test_returns_songs_for_year(self, client, alice_headers):
+    def test_returns_songs_for_year(self, app, client, alice_headers):
+        app.config["PERFORMANCE_HEADERS"] = True
         client.post(
             "/api/song",
             json={
@@ -141,6 +142,7 @@ class TestYearSongs:
 
         resp = client.get("/api/year/2025/songs")
         assert resp.status_code == 200
+        assert resp.headers["X-SQL-Query-Count"] == "1"
         data = _result(resp)
         assert isinstance(data, list)
         assert len(data) >= 2

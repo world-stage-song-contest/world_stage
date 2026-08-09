@@ -4,7 +4,7 @@ from world_stage.db import get_db
 from world_stage.models import Country, Year
 from world_stage.utils import ErrorID, err, resp
 
-from .song import _song_rows_to_json
+from .song import _fetch_year_song_list, _song_list_rows_to_json
 
 bp = Blueprint("year", __name__, url_prefix="/year")
 
@@ -99,27 +99,4 @@ ORDER BY year.id
 def songs(id: int):
     db = get_db()
     cursor = db.cursor()
-
-    cursor.execute(
-        """
-        SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
-               song.title, song.native_title, song.artist, song.is_placeholder,
-               song.title_language_id, song.native_language_id,
-               song.video_link, song.poster_link, song.vtt_link,
-               song.snippet_start, song.snippet_end,
-               song.snippet2_start, song.snippet2_end,
-               song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
-               song.notes, song.sources,
-               song.submitter_id, account.username, song.entry_number,
-               song.duration, year.special_short_name
-        FROM current_song AS song
-        JOIN country ON song.country_id = country.id
-        LEFT JOIN year ON year.id = song.year_id
-        LEFT JOIN account ON song.submitter_id = account.id
-        WHERE song.year_id IS NOT NULL AND song.year_id = %(year)s
-        ORDER BY song.year_id, country.name, song.entry_number
-    """,
-        {"year": id},
-    )
-
-    return resp(_song_rows_to_json(cursor, cursor.fetchall()))
+    return resp(_song_list_rows_to_json(_fetch_year_song_list(cursor, id)))

@@ -104,11 +104,13 @@ class TestGetSongById:
 
 
 class TestGetSongByCountryYear:
-    def test_returns_song_by_cc2(self, client, alice_headers):
+    def test_returns_song_by_cc2(self, app, client, alice_headers):
+        app.config["PERFORMANCE_HEADERS"] = True
         _create_song(client, alice_headers, country="US", year=2025)
 
         resp = client.get("/api/song/us/2025")
         assert resp.status_code == 200
+        assert resp.headers["X-SQL-Query-Count"] == "1"
         data = _result(resp)
         assert data["country_id"] == "US"
         assert data["year"] == 2025

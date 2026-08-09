@@ -97,7 +97,8 @@ class TestCountryById:
 
 
 class TestCountrySongs:
-    def test_returns_songs_for_country(self, client, alice_headers):
+    def test_returns_songs_for_country(self, app, client, alice_headers):
+        app.config["PERFORMANCE_HEADERS"] = True
         # Create a song via the song API
         client.post(
             "/api/song",
@@ -114,6 +115,7 @@ class TestCountrySongs:
 
         resp = client.get("/api/country/US/songs")
         assert resp.status_code == 200
+        assert resp.headers["X-SQL-Query-Count"] == "1"
         data = _result(resp)
         assert isinstance(data, list)
         assert len(data) >= 1

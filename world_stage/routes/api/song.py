@@ -40,6 +40,11 @@ def _resolve_year_token(token) -> int | None:
     return row["id"] if row else None
 
 
+def _resolve_country_token(token: str) -> str | None:
+    code = token.upper()
+    return code if len(code) == 2 else resolve_country_code(code)
+
+
 bp = Blueprint("song", __name__, url_prefix="/song")
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -416,18 +421,164 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
     return cursor.fetchone()
 
 
-def _song_rows_to_json(cursor, rows: list[dict]) -> list[dict]:
-    results = []
-    for row in rows:
-        song_id = row["id"]
-        languages = _fetch_song_languages(cursor, song_id)
-        key_signatures = _fetch_song_key_signatures(cursor, song_id)
-        time_signatures = _fetch_song_time_signatures(cursor, song_id)
-        subgenres = _fetch_song_subgenres(cursor, song_id)
-        results.append(
-            _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
+_SONG_LIST_QUERY = sql.SQL(
+    """
+    WITH selected_song AS MATERIALIZED (
+        SELECT song.*
+        FROM song
+        WHERE {selection}
+    )
+    SELECT
+        song.id,
+        song.year_id,
+        song.country_id,
+        country.name AS country_name,
+        data.title,
+        data.native_title,
+        data.artist,
+        COALESCE(status.is_placeholder, false) AS is_placeholder,
+        data.title_language_id,
+        data.native_language_id,
+        data.video_link,
+        data.poster_link,
+        data.vtt_link,
+        data.snippet_start,
+        data.snippet_end,
+        data.snippet2_start,
+        data.snippet2_end,
+        data.translated_lyrics,
+        data.romanized_lyrics,
+        data.native_lyrics,
+        data.notes,
+        data.sources,
+        data.submitter_id,
+        account.username,
+        song.entry_number,
+        data.duration,
+        year.special_short_name,
+        COALESCE(languages.items, '[]'::jsonb) AS languages,
+        COALESCE(key_signatures.items, '[]'::jsonb) AS key_signatures,
+        COALESCE(time_signatures.items, '[]'::jsonb) AS time_signatures,
+        COALESCE(subgenres.items, '[]'::jsonb) AS subgenres
+    FROM selected_song song
+    JOIN LATERAL (
+        SELECT revision.*
+        FROM song_data revision
+        WHERE revision.song_id = song.id
+           OR (
+               revision.song_id IS NULL
+               AND revision.country_id = song.country_id
+               AND revision.year_id = song.year_id
+               AND revision.entry_number IS NOT DISTINCT FROM song.entry_number
+           )
+        ORDER BY revision.created_at DESC, revision.id DESC
+        LIMIT 1
+    ) data ON data.title IS NOT NULL AND data.artist IS NOT NULL
+    LEFT JOIN LATERAL (
+        SELECT revision_status.is_placeholder
+        FROM song_status revision_status
+        WHERE revision_status.song_id = song.id
+        ORDER BY revision_status.created_at DESC, revision_status.id DESC
+        LIMIT 1
+    ) status ON true
+    JOIN country ON country.id = song.country_id
+    LEFT JOIN year ON year.id = song.year_id
+    LEFT JOIN account ON account.id = data.submitter_id
+    LEFT JOIN LATERAL (
+        SELECT jsonb_agg(
+            jsonb_build_object('id', language.id, 'name', language.name)
+            ORDER BY member.priority
+        ) AS items
+        FROM language_set_language member
+        JOIN language ON language.id = member.language_id
+        WHERE member.language_set_id = data.language_set_id
+    ) languages ON true
+    LEFT JOIN LATERAL (
+        SELECT jsonb_agg(
+            jsonb_build_object(
+                'start_seconds', member.start_seconds,
+                'tonic', member.tonic,
+                'mode', member.mode,
+                'microtonal', member.microtonal,
+                'notes', member.notes
+            ) ORDER BY member.priority
+        ) AS items
+        FROM key_signature_set_key_signature member
+        WHERE member.key_signature_set_id = data.key_signature_set_id
+    ) key_signatures ON true
+    LEFT JOIN LATERAL (
+        SELECT jsonb_agg(
+            jsonb_build_object(
+                'start_seconds', member.start_seconds,
+                'numerator', member.numerator,
+                'denominator', member.denominator,
+                'notes', member.notes
+            ) ORDER BY member.priority
+        ) AS items
+        FROM time_signature_set_time_signature member
+        WHERE member.time_signature_set_id = data.time_signature_set_id
+    ) time_signatures ON true
+    LEFT JOIN LATERAL (
+        SELECT jsonb_agg(
+            jsonb_build_object(
+                'id', subgenre.id,
+                'name', subgenre.name,
+                'genre_id', genre.id,
+                'genre_name', genre.name
+            ) ORDER BY member.priority
+        ) AS items
+        FROM genre_set_subgenre member
+        JOIN subgenre ON subgenre.id = member.subgenre_id
+        JOIN genre ON genre.id = subgenre.genre_id
+        WHERE member.genre_set_id = data.genre_set_id
+    ) subgenres ON true
+    ORDER BY song.year_id, country.name, song.entry_number
+    """
+)
+
+
+def _fetch_year_song_list(cursor, year_id: int) -> list[dict]:
+    cursor.execute(
+        _SONG_LIST_QUERY.format(selection=sql.SQL("song.year_id = %s")),
+        (year_id,),
+    )
+    return cursor.fetchall()
+
+
+def _fetch_country_song_list(cursor, country_id: str) -> list[dict]:
+    cursor.execute(
+        _SONG_LIST_QUERY.format(selection=sql.SQL("song.country_id = %s")),
+        (country_id,),
+    )
+    return cursor.fetchall()
+
+
+def _fetch_country_year_song_list(
+    cursor,
+    country_id: str,
+    year_id: int,
+    entry_number: int | None = None,
+) -> list[dict]:
+    selection = sql.SQL("song.country_id = %s AND song.year_id = %s")
+    params: tuple[object, ...] = (country_id, year_id)
+    if entry_number is not None:
+        selection += sql.SQL(" AND song.entry_number = %s")
+        params += (entry_number,)
+    cursor.execute(_SONG_LIST_QUERY.format(selection=selection), params)
+    return cursor.fetchall()
+
+
+def _song_list_rows_to_json(rows: list[dict]) -> list[dict]:
+    return [
+        _song_row_to_json(
+            row,
+            row["languages"],
+            row["key_signatures"],
+            row["time_signatures"],
+            row["subgenres"],
         )
-    return results
+        for row in rows
+    ]
 
 
 def _fetch_song_languages(cursor, song_id: int) -> list[dict]:
@@ -824,39 +975,9 @@ def get_song(id: int):
 # ── GET /api/song/<cc>/<year> ─────────────────────────────────────────
 
 
-def _select_song_by_country(cursor, cc: str, year: int, entry_number: int | None = None):
-    params: dict = {"cc": cc, "year": year}
-    extra = ""
-    if entry_number is not None:
-        extra = "AND song.entry_number = %(entry)s"
-        params["entry"] = entry_number
-    cursor.execute(
-        f"""
-        SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
-               song.title, song.native_title, song.artist, song.is_placeholder,
-               song.title_language_id, song.native_language_id,
-               song.video_link, song.poster_link, song.vtt_link,
-               song.snippet_start, song.snippet_end,
-               song.snippet2_start, song.snippet2_end,
-               song.translated_lyrics, song.romanized_lyrics, song.native_lyrics,
-               song.notes, song.sources,
-               song.submitter_id, account.username, song.entry_number,
-               song.duration, year.special_short_name
-        FROM current_song AS song
-        JOIN country ON song.country_id = country.id
-        LEFT JOIN year ON year.id = song.year_id
-        LEFT JOIN account ON song.submitter_id = account.id
-        WHERE (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
-          AND song.year_id = %(year)s {extra}
-        ORDER BY song.entry_number
-    """,
-        params,
-    )
-
-
 @bp.get("/<cc>/<year>")
 def get_song_by_country(cc: str, year: str):
-    canonical = resolve_country_code(cc.upper())
+    canonical = _resolve_country_token(cc)
     if canonical and canonical.lower() != cc.lower():
         return redirect(
             url_for("api.song.get_song_by_country", cc=canonical.lower(), year=year), 301
@@ -878,49 +999,33 @@ def get_song_by_country(cc: str, year: str):
                 entry_number = int(entry_raw)
             except (ValueError, TypeError):
                 return err(ErrorID.BAD_REQUEST, "entry_number must be an integer")
-            _select_song_by_country(cursor, cc.upper(), year_id, entry_number)
-            row = cursor.fetchone()
+            rows = _fetch_country_year_song_list(
+                cursor, canonical or cc.upper(), year_id, entry_number
+            )
+            row = rows[0] if rows else None
             if not row:
                 return err(
                     ErrorID.NOT_FOUND,
                     f"No song found for {cc} in special {year} entry {entry_number}",
                 )
-            languages = _fetch_song_languages(cursor, row["id"])
-            key_signatures = _fetch_song_key_signatures(cursor, row["id"])
-            time_signatures = _fetch_song_time_signatures(cursor, row["id"])
-            subgenres = _fetch_song_subgenres(cursor, row["id"])
-            return resp(
-                _song_row_to_json(row, languages, key_signatures, time_signatures, subgenres)
-            )
+            return resp(_song_list_rows_to_json([row])[0])
 
-        _select_song_by_country(cursor, cc.upper(), year_id)
-        rows = cursor.fetchall()
+        rows = _fetch_country_year_song_list(cursor, canonical or cc.upper(), year_id)
         if not rows:
             return err(ErrorID.NOT_FOUND, f"No song found for {cc} in special {year}")
-        results = []
-        for r in rows:
-            langs = _fetch_song_languages(cursor, r["id"])
-            ks = _fetch_song_key_signatures(cursor, r["id"])
-            ts = _fetch_song_time_signatures(cursor, r["id"])
-            sg = _fetch_song_subgenres(cursor, r["id"])
-            results.append(_song_row_to_json(r, langs, ks, ts, sg))
-        return resp(results)
+        return resp(_song_list_rows_to_json(rows))
 
-    _select_song_by_country(cursor, cc.upper(), year_id)
-    row = cursor.fetchone()
+    rows = _fetch_country_year_song_list(cursor, canonical or cc.upper(), year_id)
+    row = rows[0] if rows else None
     if not row:
         return err(ErrorID.NOT_FOUND, f"No song found for {cc} in {year}")
 
-    languages = _fetch_song_languages(cursor, row["id"])
-    key_signatures = _fetch_song_key_signatures(cursor, row["id"])
-    time_signatures = _fetch_song_time_signatures(cursor, row["id"])
-    subgenres = _fetch_song_subgenres(cursor, row["id"])
-    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures, subgenres))
+    return resp(_song_list_rows_to_json([row])[0])
 
 
 @bp.get("/<cc>/<year>/<int:entry_number>")
 def get_song_by_country_entry(cc: str, year: str, entry_number: int):
-    canonical = resolve_country_code(cc.upper())
+    canonical = _resolve_country_token(cc)
     if canonical and canonical.lower() != cc.lower():
         return redirect(
             url_for(
@@ -938,15 +1043,13 @@ def get_song_by_country_entry(cc: str, year: str, entry_number: int):
 
     db = get_db()
     cursor = db.cursor()
-    _select_song_by_country(cursor, cc.upper(), year_id, entry_number)
-    row = cursor.fetchone()
+    rows = _fetch_country_year_song_list(
+        cursor, canonical or cc.upper(), year_id, entry_number
+    )
+    row = rows[0] if rows else None
     if not row:
         return err(ErrorID.NOT_FOUND, f"No song found for {cc} in {year} entry {entry_number}")
-    languages = _fetch_song_languages(cursor, row["id"])
-    key_signatures = _fetch_song_key_signatures(cursor, row["id"])
-    time_signatures = _fetch_song_time_signatures(cursor, row["id"])
-    subgenres = _fetch_song_subgenres(cursor, row["id"])
-    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures, subgenres))
+    return resp(_song_list_rows_to_json([row])[0])
 
 
 # ── POST /api/song ───────────────────────────────────────────────────

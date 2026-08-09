@@ -82,94 +82,119 @@ TEXT_OPERATORS = {
 
 def _filter_field_config(cursor):
     config = {field: {"type": field_type} for field, field_type in FILTER_FIELDS.items()}
-
-    cursor.execute("SELECT id, name FROM country ORDER BY name, id")
-    config["country_id"].update(
-        identity=True,
-        choices=[
-            {"value": row["id"], "label": row["name"] or row["id"]}
-            for row in cursor.fetchall()
-        ],
-    )
-
     cursor.execute(
         """
-        SELECT id, special_name
-        FROM year
-        ORDER BY id DESC
+        SELECT
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'value', country.id,
+                        'label', COALESCE(country.name, country.id)
+                    ) ORDER BY country.name, country.id
+                )
+                FROM country
+            ), '[]'::jsonb) AS countries,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'value', year.id,
+                        'label', COALESCE(year.special_name, year.id::text)
+                    ) ORDER BY year.id DESC
+                )
+                FROM year
+            ), '[]'::jsonb) AS years,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'value', account.id,
+                        'label', COALESCE(
+                            account.username,
+                            'Account ' || account.id::text
+                        )
+                    ) ORDER BY account.username, account.id
+                )
+                FROM account
+            ), '[]'::jsonb) AS accounts,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object('value', choices.id, 'label', choices.label)
+                    ORDER BY choices.label, choices.id
+                )
+                FROM (
+                    SELECT language_set.id,
+                           STRING_AGG(
+                               language.name, ', ' ORDER BY member.priority
+                           ) AS label
+                    FROM language_set
+                    JOIN language_set_language member
+                      ON member.language_set_id = language_set.id
+                    JOIN language ON language.id = member.language_id
+                    GROUP BY language_set.id
+                ) choices
+            ), '[]'::jsonb) AS language_sets,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object('value', choices.id, 'label', choices.label)
+                    ORDER BY choices.label, choices.id
+                )
+                FROM (
+                    SELECT genre_set.id,
+                           STRING_AGG(
+                               subgenre.name, ', ' ORDER BY member.priority
+                           ) AS label
+                    FROM genre_set
+                    JOIN genre_set_subgenre member
+                      ON member.genre_set_id = genre_set.id
+                    JOIN subgenre ON subgenre.id = member.subgenre_id
+                    GROUP BY genre_set.id
+                ) choices
+            ), '[]'::jsonb) AS genre_sets,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'value', key_signature_set.id,
+                        'label', key_signature_set.signatures::text
+                    ) ORDER BY key_signature_set.id
+                )
+                FROM key_signature_set
+            ), '[]'::jsonb) AS key_signature_sets,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'value', time_signature_set.id,
+                        'label', time_signature_set.signatures::text
+                    ) ORDER BY time_signature_set.id
+                )
+                FROM time_signature_set
+            ), '[]'::jsonb) AS time_signature_sets,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object('value', language.id, 'label', language.name)
+                    ORDER BY language.name, language.id
+                )
+                FROM language
+            ), '[]'::jsonb) AS languages,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object('value', status.name, 'label', status.name)
+                    ORDER BY status.name
+                )
+                FROM song_approval_status status
+            ), '[]'::jsonb) AS approval_statuses
         """
     )
-    config["year_id"].update(
-        identity=True,
-        choices=[
-            {
-                "value": row["id"],
-                "label": row["special_name"] or str(row["id"]),
-            }
-            for row in cursor.fetchall()
-        ],
-    )
-
-    cursor.execute("SELECT id, username FROM account ORDER BY username, id")
-    config["submitter_id"]["choices"] = [
-        {"value": row["id"], "label": row["username"] or f"Account {row['id']}"}
-        for row in cursor.fetchall()
-    ]
-
-    cursor.execute(
-        """
-        SELECT language_set.id,
-               STRING_AGG(language.name, ', ' ORDER BY member.priority) AS label
-        FROM language_set
-        JOIN language_set_language AS member
-          ON member.language_set_id = language_set.id
-        JOIN language ON language.id = member.language_id
-        GROUP BY language_set.id
-        ORDER BY label, language_set.id
-        """
-    )
-    config["language_set_id"]["choices"] = [
-        {"value": row["id"], "label": row["label"]} for row in cursor.fetchall()
-    ]
-
-    cursor.execute(
-        """
-        SELECT genre_set.id,
-               STRING_AGG(subgenre.name, ', ' ORDER BY member.priority) AS label
-        FROM genre_set
-        JOIN genre_set_subgenre AS member ON member.genre_set_id = genre_set.id
-        JOIN subgenre ON subgenre.id = member.subgenre_id
-        GROUP BY genre_set.id ORDER BY label, genre_set.id
-        """
-    )
-    config["genre_set_id"]["choices"] = [
-        {"value": row["id"], "label": row["label"]} for row in cursor.fetchall()
-    ]
-
-    for field, table in (
-        ("key_signature_set_id", "key_signature_set"),
-        ("time_signature_set_id", "time_signature_set"),
-    ):
-        cursor.execute(
-            f"SELECT id, signatures::text AS label FROM {table} ORDER BY id"
-        )
-        config[field]["choices"] = [
-            {"value": row["id"], "label": row["label"]} for row in cursor.fetchall()
-        ]
-
-    cursor.execute("SELECT id, name FROM language ORDER BY name, id")
-    language_choices = [
-        {"value": row["id"], "label": row["name"]} for row in cursor.fetchall()
-    ]
-    config["title_language_id"]["choices"] = language_choices
-    config["native_language_id"]["choices"] = language_choices
-
-    cursor.execute("SELECT name FROM song_approval_status ORDER BY name")
-    config["approval_status"]["choices"] = [
-        {"value": row["name"], "label": row["name"]} for row in cursor.fetchall()
-    ]
+    choices = cursor.fetchone()
+    config["country_id"].update(identity=True, choices=choices["countries"])
+    config["year_id"].update(identity=True, choices=choices["years"])
+    config["submitter_id"]["choices"] = choices["accounts"]
+    config["language_set_id"]["choices"] = choices["language_sets"]
+    config["genre_set_id"]["choices"] = choices["genre_sets"]
+    config["key_signature_set_id"]["choices"] = choices["key_signature_sets"]
+    config["time_signature_set_id"]["choices"] = choices["time_signature_sets"]
+    config["title_language_id"]["choices"] = choices["languages"]
+    config["native_language_id"]["choices"] = choices["languages"]
+    config["approval_status"]["choices"] = choices["approval_statuses"]
     return config
-
 
 def _parse_filters():
     selected_categories = [
@@ -422,17 +447,7 @@ def changes():
 
     cursor.execute(
         """
-        WITH status_history AS (
-            SELECT status.*,
-                   LAG(status.approval_status) OVER status_order AS previous_approval,
-                   LAG(status.is_placeholder) OVER status_order AS previous_placeholder,
-                   ROW_NUMBER() OVER status_order AS status_number
-            FROM song_status AS status
-            WINDOW status_order AS (
-                PARTITION BY status.song_id
-                ORDER BY status.created_at, status.id
-            )
-        ), raw_changes AS (
+        WITH raw_changes AS NOT MATERIALIZED (
             SELECT
                 'd'::text AS source,
                 0 AS source_order,
@@ -469,37 +484,45 @@ def changes():
                 JSONB_STRIP_NULLS(JSONB_BUILD_OBJECT(
                     'approval_status', CASE
                         WHEN status.approval_status
-                             IS DISTINCT FROM status.previous_approval
+                             IS DISTINCT FROM previous.approval_status
                         THEN JSONB_BUILD_OBJECT(
-                            'old', status.previous_approval,
+                            'old', previous.approval_status,
                             'new', status.approval_status
                         ) END,
                     'is_placeholder', CASE
                         WHEN status.is_placeholder
-                             IS DISTINCT FROM status.previous_placeholder
+                             IS DISTINCT FROM previous.is_placeholder
                         THEN JSONB_BUILD_OBJECT(
-                            'old', status.previous_placeholder,
+                            'old', previous.is_placeholder,
                             'new', status.is_placeholder
                         ) END
                 )) AS changed_fields,
                 status.changed_by,
                 ARRAY_REMOVE(ARRAY[
                     CASE WHEN status.approval_status
-                                   IS DISTINCT FROM status.previous_approval
+                                   IS DISTINCT FROM previous.approval_status
                          THEN 'status_change' END,
                     CASE WHEN status.is_placeholder
-                                   IS DISTINCT FROM status.previous_placeholder
+                                   IS DISTINCT FROM previous.is_placeholder
                          THEN 'placeholder' END
                 ], NULL) AS event_categories
-            FROM status_history AS status
+            FROM song_status AS status
+            JOIN LATERAL (
+                SELECT older.approval_status, older.is_placeholder
+                FROM song_status older
+                WHERE older.song_id = status.song_id
+                  AND (older.created_at, older.id)
+                      < (status.created_at, status.id)
+                ORDER BY older.created_at DESC, older.id DESC
+                LIMIT 1
+            ) previous ON true
             JOIN song_data AS data ON data.id = status.song_data_id
-            WHERE status.status_number > 1
-              AND status.changed_by IS NOT NULL
+            WHERE status.changed_by IS NOT NULL
               AND (
-                  status.approval_status IS DISTINCT FROM status.previous_approval
-                  OR status.is_placeholder IS DISTINCT FROM status.previous_placeholder
+                  status.approval_status IS DISTINCT FROM previous.approval_status
+                  OR status.is_placeholder IS DISTINCT FROM previous.is_placeholder
               )
-        ), filtered_changes AS (
+        ), filtered_changes AS NOT MATERIALIZED (
             SELECT raw.*
             FROM raw_changes AS raw
             WHERE raw.event_categories && %s::text[]
@@ -509,26 +532,29 @@ def changes():
               AND ("""
         + filter_expression
         + """)
-        ), ranked_changes AS (
-            SELECT filtered_changes.*,
-                   ROW_NUMBER() OVER (
-                       ORDER BY changed_at DESC, id DESC, source_order DESC
-                   ) AS position,
-                   COUNT(*) OVER () AS total_count
+        ), page_changes AS MATERIALIZED (
+            SELECT filtered_changes.*
             FROM filtered_changes
+            ORDER BY changed_at DESC
+            FETCH FIRST %s ROWS WITH TIES
+        ), page_boundary AS (
+            SELECT MIN(changed_at) AS changed_at
+            FROM page_changes
+        ), paging AS (
+            SELECT EXISTS (
+                SELECT 1
+                FROM filtered_changes older
+                CROSS JOIN page_boundary boundary
+                WHERE older.changed_at < boundary.changed_at
+            ) AS has_older
         )
-        SELECT ranked.*, a.username AS changed_by_username,
-               c.name AS country_name
-        FROM ranked_changes AS ranked
-        LEFT JOIN account a ON a.id = ranked.changed_by
-        LEFT JOIN country c ON c.id = ranked.song_country_id
-        WHERE ranked.position <= %s
-           OR ranked.changed_at = (
-               SELECT boundary.changed_at
-               FROM ranked_changes AS boundary
-               WHERE boundary.position = %s
-           )
-        ORDER BY ranked.changed_at DESC, ranked.id DESC, ranked.source_order DESC
+        SELECT page.*, a.username AS changed_by_username,
+               c.name AS country_name, paging.has_older
+        FROM page_changes AS page
+        CROSS JOIN paging
+        LEFT JOIN account a ON a.id = page.changed_by
+        LEFT JOIN country c ON c.id = page.song_country_id
+        ORDER BY page.changed_at DESC, page.id DESC, page.source_order DESC
         """,
         (
             selected_categories,
@@ -540,29 +566,17 @@ def changes():
             to_time_at,
             *filter_params,
             per_page,
-            per_page,
         ),
     )
     audit_changes = cursor.fetchall()
-    has_older = bool(audit_changes) and audit_changes[0]["total_count"] > len(
-        audit_changes
-    )
+    has_older = bool(audit_changes) and audit_changes[0]["has_older"]
     next_before = audit_changes[-1]["changed_at"].isoformat() if has_older else None
 
-    submitter_ids = set()
-    for entry in audit_changes:
-        change = (entry["changed_fields"] or {}).get("submitter_id")
-        if change:
-            submitter_ids.update(value for value in change.values() if value is not None)
+    filter_fields = _filter_field_config(cursor)
     username_map = {}
-    if submitter_ids:
-        cursor.execute(
-            "SELECT id, username FROM account WHERE id = ANY(%s)",
-            ([int(value) for value in submitter_ids],),
-        )
-        for row in cursor.fetchall():
-            username_map[row["id"]] = row["username"]
-            username_map[str(row["id"])] = row["username"]
+    for choice in filter_fields["submitter_id"]["choices"]:
+        username_map[choice["value"]] = choice["label"]
+        username_map[str(choice["value"])] = choice["label"]
 
     for entry in audit_changes:
         entry["change_details"] = _describe_change(entry, username_map)
@@ -575,7 +589,7 @@ def changes():
         from_time=from_time,
         to_time=to_time,
         event_categories=EVENT_CATEGORIES,
-        filter_fields=_filter_field_config(cursor),
+        filter_fields=filter_fields,
         selected_events=selected_categories,
         selected_filters=selected_filters,
         serialized_filters=serialized_filters,
