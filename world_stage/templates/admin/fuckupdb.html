@@ -1,39 +1,180 @@
 {% extends "admin/base.html" %}
 {% block title %}Fuck Up The Database{% endblock %}
 {% block admin_navigation %}<a class="nav-item" href="{{ url_for('admin.fuckup_db') }}">Database</a>{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="{{ static('css/database.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="{{ static('js/database.js') }}"></script>
+{% endblock %}
+{% block onload %}initializeDatabaseWorkbench(){% endblock %}
 {% block content %}
-
-<div class="error" id="error">{{error}}</div>
-
-<form method="POST">
-    <div>
-        <textarea id="query" name="query" cols="80" rows="25">{{query}}</textarea>
+<div id="database-workbench" data-api-root="{{ url_for('admin.database_schema')|replace('/schema', '') }}">
+    <div class="db-heading">
+        <div id="db-global-status" class="db-status" role="status"></div>
     </div>
 
-    <div>
-        <button type="submit" name="kind" value="html">Submit query</button>
-        <button type="submit" name="kind" value="csv">Download as CSV</button>
-    </div>
-</form>
+    <nav class="db-tabs" aria-label="Database workbench sections">
+        <button type="button" class="active" data-db-tab="builder">Query builder</button>
+        <button type="button" data-db-tab="sql">SQL editor</button>
+        <button type="button" data-db-tab="saved">Saved queries</button>
+        <button type="button" data-db-tab="explorer">Schema explorer</button>
+    </nav>
 
-<table id="result">
-{% if headers %}
-    <thead>
-        <tr>
-        {% for header in headers %}
-            <th>{{ header }}</th>
-        {% endfor %}
-        </tr>
-    </thead>
-    <tbody>
-    {% for row in rows %}
-        <tr>
-        {% for header in headers %}
-            <td>{{ row[header] }}</td>
-        {% endfor %}
-        </tr>
-    {% endfor %}
-    </tbody>
-{% endif %}
-</table>
+    <section class="db-panel active" data-db-panel="builder">
+        <div class="db-builder-layout">
+            <div class="db-builder-main">
+                <section class="db-block">
+                    <h3>Operation</h3>
+                    <div class="db-segmented" id="db-operation">
+                        <button type="button" class="active" data-operation="select">Select</button>
+                        <button type="button" data-operation="update">Update</button>
+                        <button type="button" data-operation="insert">Insert</button>
+                    </div>
+                </section>
+
+                <section class="db-block">
+                    <h3>Table</h3>
+                    <div class="db-inline-fields">
+                        <label><span id="db-table-label">From</span> <select id="db-base-table"></select></label>
+                        <label id="db-alias-field">Alias <input id="db-base-alias" type="text"></label>
+                    </div>
+                </section>
+
+                <section class="db-block" id="db-joins-block">
+                    <h3>Joins</h3>
+                    <div id="db-joins"></div>
+                    <button type="button" id="db-add-join">Add join</button>
+                </section>
+
+                <section class="db-block" id="db-results-block">
+                    <h3>Results</h3>
+                    <label class="db-summary-toggle">
+                        <input id="db-summary-enabled" type="checkbox">
+                        <span><strong>Summarize results</strong><small>Combine rows and calculate counts, totals, or averages.</small></span>
+                    </label>
+                    <div id="db-plain-results">
+                        <div id="db-result-columns"></div>
+                        <button type="button" id="db-add-result">Add result column</button>
+                    </div>
+                    <div id="db-summary-results" hidden>
+                        <h4>Group rows by</h4>
+                        <p class="db-help">One row is returned for each unique combination.</p>
+                        <div id="db-group-fields"></div>
+                        <button type="button" id="db-add-group">Add grouping field</button>
+                        <h4>Calculations</h4>
+                        <div id="db-aggregates"></div>
+                        <button type="button" id="db-add-aggregate">Add calculation</button>
+                    </div>
+                </section>
+
+                <section class="db-block" id="db-values-block" hidden>
+                    <h3>Values</h3>
+                    <p class="db-help">Enter a value directly or use <code>@parameter_name</code> to ask for it when the query runs. Escape literal at signs and backslashes as <code>\@</code> and <code>\\</code>.</p>
+                    <div id="db-values"></div>
+                    <button type="button" id="db-add-value">Add value</button>
+                </section>
+
+                <section class="db-block" id="db-filters-block">
+                    <h3>Filters <small>WHERE</small></h3>
+                    <p class="db-help">Enter a value directly or use <code>@parameter_name</code> to ask for it when the query runs. Escape literal at signs and backslashes as <code>\@</code> and <code>\\</code>.</p>
+                    <div id="db-filters"></div>
+                    <button type="button" id="db-add-filter">Add filter</button>
+                </section>
+
+                <section class="db-block" id="db-having-block" hidden>
+                    <h3>Filter summarized results <small>HAVING</small></h3>
+                    <p class="db-help">Filter aggregate results or add a custom aggregate calculation. Use WHERE for ordinary columns.</p>
+                    <p class="db-help">Use <code>@parameter_name</code> for a value supplied at execution time. Escape literal at signs and backslashes as <code>\@</code> and <code>\\</code>.</p>
+                    <div id="db-having"></div>
+                    <button type="button" id="db-add-having">Add summary filter</button>
+                </section>
+
+                <section class="db-block" id="db-sort-block">
+                    <h3>Sort and pagination</h3>
+                    <div id="db-order"></div>
+                    <button type="button" id="db-add-order">Add sorting</button>
+                    <div class="db-inline-fields db-pagination-fields">
+                        <label>Limit <input id="db-limit" type="number" min="1"></label>
+                        <label>Offset <input id="db-offset" type="number" min="0"></label>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="db-preview">
+                <h3>Query preview</h3>
+                <pre id="db-query-preview">Choose a table to begin.</pre>
+                <div class="db-actions">
+                    <button type="button" id="db-save-builder">Save query</button>
+                    <button type="button" id="db-run-builder">Run query</button>
+                    <button type="button" id="db-csv-builder">Download CSV</button>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="db-panel" data-db-panel="sql">
+        <div class="db-sql-layout">
+            <div>
+                <label for="db-sql-text"><strong>SQL</strong></label>
+                <textarea id="db-sql-text" spellcheck="false" placeholder="Enter a SELECT, INSERT, UPDATE, or DELETE statement"></textarea>
+                <div class="db-actions">
+                    <button type="button" id="db-save-sql">Save query</button>
+                    <button type="button" id="db-run-sql">Run query</button>
+                    <button type="button" id="db-csv-sql">Download CSV</button>
+                </div>
+            </div>
+            <aside class="db-sql-parameters">
+                <h3>Parameters</h3>
+                <p class="db-help">Use <code>@parameter_name</code> in SQL.</p>
+                <div id="db-sql-parameters"></div>
+                <button type="button" id="db-add-sql-parameter">Define parameter</button>
+            </aside>
+        </div>
+    </section>
+
+    <section class="db-panel" data-db-panel="saved">
+        <table class="db-saved-table">
+            <thead><tr><th>Name</th><th>Type</th><th>Parameters</th><th>Updated</th><th>Actions</th></tr></thead>
+            <tbody id="db-saved-queries"><tr><td colspan="5">Loading…</td></tr></tbody>
+        </table>
+    </section>
+
+    <section class="db-panel" data-db-panel="explorer">
+        <div class="db-explorer-toolbar">
+            <label>Search <input id="db-schema-search" type="search" placeholder="Table, view, or column"></label>
+            <button type="button" id="db-schema-fit">Fit graph</button>
+            <span id="db-schema-zoom">100%</span>
+        </div>
+        <div class="db-explorer-layout">
+            <div class="db-schema-canvas-wrap">
+                <svg id="db-schema-canvas" aria-label="Database schema relationship graph"></svg>
+                <p>Drag to pan · scroll or pinch to zoom · drag tables to adjust</p>
+            </div>
+            <aside id="db-schema-detail"><p>Select a table or view.</p></aside>
+        </div>
+    </section>
+
+    <section id="db-results-section" hidden>
+        <div class="db-results-heading"><h2>Results</h2><span id="db-results-meta"></span></div>
+        <div class="db-table-scroll"><table id="db-results"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <dialog id="db-parameter-dialog">
+        <form method="dialog">
+            <h2>Query parameters</h2>
+            <p id="db-parameter-description"></p>
+            <div id="db-parameter-fields"></div>
+            <div class="db-dialog-actions"><button value="cancel">Cancel</button><button id="db-confirm-run" value="default" class="primary">Run query</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="db-save-dialog">
+        <form method="dialog">
+            <h2>Save query</h2>
+            <label>Name <input id="db-save-name" required maxlength="200"></label>
+            <label>Description <textarea id="db-save-description" maxlength="2000"></textarea></label>
+            <div class="db-dialog-actions"><button value="cancel">Cancel</button><button id="db-confirm-save" value="default" class="primary">Save</button></div>
+        </form>
+    </dialog>
+</div>
 {% endblock %}
