@@ -77,10 +77,20 @@ def test_saved_parameterized_query_executes_and_is_logged(client, db):
                 "query_kind": "builder",
                 "definition": definition,
                 "parameters": parameters,
+                "tags": [" Accounts ", "Test", "accounts"],
             },
         )
         assert saved.status_code == 201, saved.get_data(as_text=True)
-        query_id = saved.get_json()["query"]["id"]
+        saved_query = saved.get_json()["query"]
+        query_id = saved_query["id"]
+        assert saved_query["tags"] == ["Accounts", "Test"]
+        assert saved_query["created_by"] == 1
+        assert saved_query["created_by_username"] == "alice"
+
+        listed = client.get("/admin/fuckupdb/api/saved-queries")
+        listed_query = next(item for item in listed.get_json()["queries"] if item["id"] == query_id)
+        assert listed_query["tags"] == ["Accounts", "Test"]
+        assert listed_query["created_by_username"] == "alice"
 
         response = client.post(
             "/admin/fuckupdb/api/execute",

@@ -9,12 +9,14 @@ function initializeDatabaseWorkbench() {
         objectMap: new Map(),
         operation: "select",
         savedQueries: [],
+        disabledSavedTags: new Set(),
         editingSavedId: null,
         pendingExecution: null,
         pendingSave: null,
         explorer: null
     };
     let valueControlId = 0;
+    const tabNames = new Set(["builder", "sql", "saved", "explorer"]);
 
     const byId = id => document.getElementById(id);
     const status = byId("db-global-status");
@@ -759,11 +761,18 @@ function initializeDatabaseWorkbench() {
         })).filter(item => item.name);
     }
 
-    function switchTab(name) {
+    function tabFromUrl() {
+        const name = window.location.hash.slice(1);
+        return tabNames.has(name) ? name : "builder";
+    }
+
+    function switchTab(name, updateUrl = true) {
+        if (!tabNames.has(name)) name = "builder";
         root.querySelectorAll("[data-db-tab]").forEach(button => button.classList.toggle("active", button.dataset.dbTab === name));
         root.querySelectorAll("[data-db-panel]").forEach(panel => panel.classList.toggle("active", panel.dataset.dbPanel === name));
+        if (updateUrl && window.location.hash !== `#${name}`) window.history.pushState(null, "", `#${name}`);
         if (name === "saved") loadSavedQueries();
-        if (name === "explorer" && !state.explorer) renderSchemaExplorer();
+        if (name === "explorer" && !state.explorer && state.schema.objects.length) renderSchemaExplorer();
     }
 
     async function beginExecution(payload, parameters, format, operation = payload.definition?.operation) {
@@ -870,12 +879,14 @@ function initializeDatabaseWorkbench() {
         const existing = state.savedQueries.find(item => item.id === state.editingSavedId);
         byId("db-save-name").value = existing?.name || "";
         byId("db-save-description").value = existing?.description || "";
+        byId("db-save-tags").value = (existing?.tags || []).join(", ");
         byId("db-save-dialog").showModal();
     }
 
     async function savePending() {
         if (!state.pendingSave) return;
-        const payload = { ...state.pendingSave, name: byId("db-save-name").value, description: byId("db-save-description").value };
+        const tags = byId("db-save-tags").value.split(",").map(tag => tag.trim()).filter(Boolean);
+        const payload = { ...state.pendingSave, name: byId("db-save-name").value, description: byId("db-save-description").value, tags };
         try {
             await requestJson(state.editingSavedId ? `${api}/saved-queries/${state.editingSavedId}` : `${api}/saved-queries`, { method: state.editingSavedId ? "PUT" : "POST", body: JSON.stringify(payload) });
             setStatus("Query saved.", "success"); state.editingSavedId = null; await loadSavedQueries();
@@ -886,21 +897,61 @@ function initializeDatabaseWorkbench() {
         try {
             const data = await requestJson(`${api}/saved-queries`);
             state.savedQueries = data.queries;
-            const tbody = byId("db-saved-queries"); tbody.replaceChildren();
-            if (!data.queries.length) { const row = tbody.insertRow(); const cell = row.insertCell(); cell.colSpan = 5; cell.textContent = "No saved queries yet."; return; }
-            data.queries.forEach(item => {
+            renderSavedQueries();
+        } catch (error) { setStatus(error.message, "error"); }
+    }
+
+    function renderSavedQueries() {
+        const tags = new Map();
+        state.savedQueries.flatMap(item => item.tags || []).forEach(tag => {
+            const key = tag.toLocaleLowerCase();
+            if (!tags.has(key)) tags.set(key, tag);
+        });
+        const tagBar = byId("db-saved-tags"); tagBar.replaceChildren();
+        Array.from(tags.entries()).sort((a, b) => a[1].localeCompare(b[1])).forEach(([key, tag]) => {
+            const button = document.createElement("button");
+            const enabled = !state.disabledSavedTags.has(key);
+            button.type = "button"; button.className = `db-tag-filter${enabled ? " active" : ""}`;
+            button.textContent = tag; button.setAttribute("aria-pressed", String(enabled));
+            button.title = enabled ? `Hide queries tagged “${tag}”` : `Show queries tagged “${tag}”`;
+            button.addEventListener("click", () => {
+                if (enabled) state.disabledSavedTags.add(key); else state.disabledSavedTags.delete(key);
+                renderSavedQueries();
+            });
+            tagBar.append(button);
+        });
+        const visibleQueries = state.savedQueries.filter(item =>
+            !(item.tags || []).some(tag => state.disabledSavedTags.has(tag.toLocaleLowerCase()))
+        );
+        const tbody = byId("db-saved-queries"); tbody.replaceChildren();
+        if (!visibleQueries.length) {
+            const row = tbody.insertRow(); const cell = row.insertCell(); cell.colSpan = 7;
+            cell.textContent = state.savedQueries.length ? "No saved queries match the enabled tags." : "No saved queries yet.";
+            return;
+        }
+        visibleQueries.forEach((item, index) => {
                 const row = tbody.insertRow();
-                const name = row.insertCell(); name.innerHTML = `<strong></strong><br><small></small>`; name.querySelector("strong").textContent = item.name; name.querySelector("small").textContent = item.description;
+                row.dataset.value = index;
+                const name = row.insertCell(); name.dataset.value = item.name; name.innerHTML = `<strong></strong><br><small></small>`; name.querySelector("strong").textContent = item.name; name.querySelector("small").textContent = item.description;
+                const tagsCell = row.insertCell(); tagsCell.dataset.value = (item.tags || []).join(", ");
+                const queryTags = document.createElement("div"); queryTags.className = "db-query-tags"; tagsCell.append(queryTags);
+                (item.tags || []).forEach(tag => { const chip = document.createElement("span"); chip.textContent = tag; queryTags.append(chip); });
+                if (!(item.tags || []).length) queryTags.textContent = "—";
                 row.insertCell().textContent = `${item.operation.toUpperCase()} · ${item.query_kind}`;
                 row.insertCell().textContent = item.parameters.map(parameter => parameter.label || parameter.name).join(", ") || "—";
-                row.insertCell().textContent = new Date(item.updated_at).toLocaleString();
+                row.insertCell().textContent = item.created_by_username || "Unknown";
+                const updated = row.insertCell(); updated.textContent = new Date(item.updated_at).toLocaleString(); updated.dataset.value = String(new Date(item.updated_at).getTime());
                 const actions = row.insertCell();
                 const run = document.createElement("button"); run.type = "button"; run.textContent = item.operation === "select" ? "Run" : "Review & run"; run.addEventListener("click", () => beginExecution({ saved_query_id: item.id }, item.parameters, "screen", item.operation));
                 const edit = document.createElement("button"); edit.type = "button"; edit.textContent = "Edit"; edit.addEventListener("click", () => editSaved(item));
                 const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "Delete"; remove.addEventListener("click", async () => { if (!window.confirm(`Delete saved query “${item.name}”?`)) return; try { await requestJson(`${api}/saved-queries/${item.id}`, { method: "DELETE" }); await loadSavedQueries(); } catch (error) { setStatus(error.message, "error"); } });
                 actions.append(run, edit, remove);
             });
-        } catch (error) { setStatus(error.message, "error"); }
+        const table = tbody.closest("table");
+        const sortedHeader = table.querySelector("th[aria-sort]:not([aria-sort='none'])");
+        if (sortedHeader && typeof sortTable === "function") {
+            sortTable(sortedHeader, table, Array.from(sortedHeader.parentElement.cells).indexOf(sortedHeader), sortedHeader.ariaSort);
+        }
     }
 
     function editSaved(item) {
@@ -910,7 +961,7 @@ function initializeDatabaseWorkbench() {
             containers.sqlParameters.replaceChildren(); item.parameters.forEach(addSqlParameter); switchTab("sql");
         } else { loadDefinition(item.definition); switchTab("builder"); }
         state.pendingSave = item.query_kind === "sql" ? { query_kind: "sql", sql_text: item.sql_text, parameters: item.parameters } : { query_kind: "builder", definition: item.definition, parameters: item.parameters };
-        byId("db-save-name").value = item.name; byId("db-save-description").value = item.description;
+        byId("db-save-name").value = item.name; byId("db-save-description").value = item.description; byId("db-save-tags").value = (item.tags || []).join(", ");
     }
 
     function loadDefinition(definition) {
@@ -1240,6 +1291,7 @@ function initializeDatabaseWorkbench() {
     }
 
     root.querySelectorAll("[data-db-tab]").forEach(button => button.addEventListener("click", () => switchTab(button.dataset.dbTab)));
+    window.addEventListener("hashchange", () => switchTab(tabFromUrl(), false));
     root.querySelectorAll("[data-operation]").forEach(button => button.addEventListener("click", () => setOperation(button.dataset.operation)));
     byId("db-base-table").addEventListener("change", () => resetBuilder(baseTable()));
     byId("db-base-alias").addEventListener("input", () => { refreshColumnSelects(); updatePreview(); });
@@ -1263,6 +1315,10 @@ function initializeDatabaseWorkbench() {
     byId("db-confirm-run").addEventListener("click", event => { event.preventDefault(); const fields = Array.from(byId("db-parameter-fields").querySelectorAll("[data-parameter-name]")); if (!fields.every(input => input.reportValidity())) return; const values = Object.fromEntries(fields.map(input => [input.dataset.parameterName, input.type === "checkbox" ? input.checked : input.value])); byId("db-parameter-dialog").close(); executePending(values); });
     byId("db-confirm-save").addEventListener("click", event => { event.preventDefault(); if (!byId("db-save-name").reportValidity()) return; byId("db-save-dialog").close(); savePending(); });
 
+    const initialTab = tabFromUrl();
+    window.history.replaceState(null, "", `#${initialTab}`);
+    switchTab(initialTab, false);
+
     (async () => {
         try {
             setStatus("Loading schema…");
@@ -1270,6 +1326,7 @@ function initializeDatabaseWorkbench() {
             state.objectMap = new Map(state.schema.objects.map(item => [item.name, item]));
             fillSelect(byId("db-base-table"), state.schema.objects.map(item => ({ value: item.name, label: `${item.name} (${item.kind})` })), "", "Select table or view…");
             resetBuilder();
+            switchTab(tabFromUrl(), false);
             await loadSavedQueries();
             setStatus("Schema loaded.", "success");
         } catch (error) { setStatus(error.message, "error"); }

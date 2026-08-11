@@ -5,6 +5,7 @@
 <link rel="stylesheet" href="{{ static('css/database.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <script src="{{ static('js/database.js') }}"></script>
+<script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
 {% block onload %}initializeDatabaseWorkbench(){% endblock %}
 {% block content %}
@@ -133,9 +134,10 @@
     </section>
 
     <section class="db-panel" data-db-panel="saved">
-        <table class="db-saved-table">
-            <thead><tr><th>Name</th><th>Type</th><th>Parameters</th><th>Updated</th><th>Actions</th></tr></thead>
-            <tbody id="db-saved-queries"><tr><td colspan="5">Loading…</td></tr></tbody>
+        <div id="db-saved-tags" class="db-saved-tags" aria-label="Filter saved queries by tag"></div>
+        <table class="db-saved-table sortable">
+            <thead><tr><th>Name</th><th>Tags</th><th>Type</th><th>Parameters</th><th>Created by</th><th>Updated</th><th>Actions</th></tr></thead>
+            <tbody id="db-saved-queries"><tr><td colspan="7">Loading…</td></tr></tbody>
         </table>
     </section>
 
@@ -164,7 +166,7 @@
             <h2>Query parameters</h2>
             <p id="db-parameter-description"></p>
             <div id="db-parameter-fields"></div>
-            <div class="db-dialog-actions"><button value="cancel">Cancel</button><button id="db-confirm-run" value="default" class="primary">Run query</button></div>
+            <div class="db-dialog-actions"><button value="cancel">Cancel</button><button id="db-confirm-run" value="default">Run query</button></div>
         </form>
     </dialog>
 
@@ -173,7 +175,8 @@
             <h2>Save query</h2>
             <label>Name <input id="db-save-name" required maxlength="200"></label>
             <label>Description <textarea id="db-save-description" maxlength="2000"></textarea></label>
-            <div class="db-dialog-actions"><button value="cancel">Cancel</button><button id="db-confirm-save" value="default" class="primary">Save</button></div>
+            <label>Tags <input id="db-save-tags" maxlength="1000" placeholder="reporting, maintenance"></label>
+            <div class="db-dialog-actions"><button value="cancel">Cancel</button><button id="db-confirm-save" value="default">Save</button></div>
         </form>
     </dialog>
 </div>

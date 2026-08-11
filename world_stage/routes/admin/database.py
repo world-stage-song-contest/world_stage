@@ -41,6 +41,9 @@ PARAMETER_TYPES = {
     "integer[]",
 }
 
+MAX_SAVED_QUERY_TAGS = 20
+MAX_SAVED_QUERY_TAG_LENGTH = 50
+
 FRIENDLY_LABELS = {
     "account": "username",
     "country": "name",
@@ -108,6 +111,32 @@ def _parameter_schema(value: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _saved_query_tags(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise QueryDefinitionError("Tags must be an array")
+    tags: list[str] = []
+    seen: set[str] = set()
+    for raw_tag in value:
+        if not isinstance(raw_tag, str):
+            raise QueryDefinitionError("Every tag must be text")
+        tag = raw_tag.strip()
+        if not tag:
+            continue
+        if len(tag) > MAX_SAVED_QUERY_TAG_LENGTH:
+            raise QueryDefinitionError(
+                f"Tags cannot be longer than {MAX_SAVED_QUERY_TAG_LENGTH} characters"
+            )
+        normalized = tag.casefold()
+        if normalized not in seen:
+            seen.add(normalized)
+            tags.append(tag)
+    if len(tags) > MAX_SAVED_QUERY_TAGS:
+        raise QueryDefinitionError(f"A query can have at most {MAX_SAVED_QUERY_TAGS} tags")
+    return tags
+
+
 def _saved_query_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -118,6 +147,7 @@ def _saved_query_row(row: dict[str, Any]) -> dict[str, Any]:
         "definition": row["definition"],
         "sql_text": row["sql_text"],
         "parameters": row["parameters"],
+        "tags": row["tags"],
         "created_by": row.get("created_by"),
         "created_by_username": row.get("created_by_username"),
         "created_at": row["created_at"].isoformat(),
@@ -341,6 +371,7 @@ def _save_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "definition": definition,
         "sql_text": sql_text,
         "parameters": _parameter_schema(payload.get("parameters")),
+        "tags": _saved_query_tags(payload.get("tags")),
     }
 
 
@@ -357,10 +388,10 @@ def create_saved_query():
             """
             INSERT INTO admin_saved_query
                 (name, description, query_kind, operation, definition, sql_text,
-                 parameters, created_by)
+                 parameters, tags, created_by)
             VALUES (%(name)s, %(description)s, %(query_kind)s, %(operation)s,
                     %(definition)s::jsonb, %(sql_text)s, %(parameters)s::jsonb,
-                    %(created_by)s)
+                    %(tags)s, %(created_by)s)
             RETURNING *
             """,
             {
@@ -371,9 +402,11 @@ def create_saved_query():
             },
         )
         row = cursor.fetchone()
-        db.commit()
         assert row is not None
-        row["created_by_username"] = None
+        cursor.execute("SELECT username FROM account WHERE id = %s", (row["created_by"],))
+        creator = cursor.fetchone()
+        row["created_by_username"] = creator["username"] if creator else None
+        db.commit()
         return jsonify({"query": _saved_query_row(row)}), 201
     except QueryDefinitionError as exc:
         return _json_error(str(exc))
@@ -397,7 +430,8 @@ def update_saved_query(query_id: int):
             SET name = %(name)s, description = %(description)s,
                 query_kind = %(query_kind)s, operation = %(operation)s,
                 definition = %(definition)s::jsonb, sql_text = %(sql_text)s,
-                parameters = %(parameters)s::jsonb, updated_at = CURRENT_TIMESTAMP
+                parameters = %(parameters)s::jsonb, tags = %(tags)s,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = %(id)s
             RETURNING *
             """,
@@ -412,8 +446,10 @@ def update_saved_query(query_id: int):
         if row is None:
             db.rollback()
             return _json_error("Saved query not found", 404)
+        cursor.execute("SELECT username FROM account WHERE id = %s", (row["created_by"],))
+        creator = cursor.fetchone()
+        row["created_by_username"] = creator["username"] if creator else None
         db.commit()
-        row["created_by_username"] = None
         return jsonify({"query": _saved_query_row(row)})
     except QueryDefinitionError as exc:
         return _json_error(str(exc))

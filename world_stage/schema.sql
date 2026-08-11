@@ -832,11 +832,13 @@ CREATE TABLE IF NOT EXISTS admin_saved_query (
     definition jsonb,
     sql_text text,
     parameters jsonb NOT NULL DEFAULT '[]'::jsonb,
+    tags text[] NOT NULL DEFAULT '{}',
     created_by bigint REFERENCES account (id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (char_length(name) BETWEEN 1 AND 200),
     CHECK (jsonb_typeof(parameters) = 'array'),
+    CHECK (cardinality(tags) <= 20),
     CHECK (query_kind = 'sql' OR operation <> 'delete'),
     CHECK (
         (query_kind = 'builder' AND definition IS NOT NULL
