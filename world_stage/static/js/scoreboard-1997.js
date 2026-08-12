@@ -188,6 +188,7 @@
         },
         setFinalPlace(view, place) {
             clearPointColours(view);
+            view.element.classList.remove("no-win");
             const parent = view.element.parentElement;
             parent.insertBefore(view.element, parent.childNodes[place]);
         },
