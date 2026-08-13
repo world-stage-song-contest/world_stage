@@ -19,6 +19,11 @@
         <img src="{{ static('images/history.png') }}" alt="Submissions Icon">
         <p>Check out your past submissions.</p>
     </a>
+    <a href="{{ url_for('member.playlist_index') }}" class="card">
+        <h3>Playlists</h3>
+        <img src="{{ static('images/playlist.png') }}" alt="Playlist Icon">
+        <p>Create and play your own song collections.</p>
+    </a>
     <a href="{{ url_for('member.move') }}" class="card">
         <h3>Move entries</h3>
         <img src="{{ static('images/move.png') }}" alt="Move Entries Icon">

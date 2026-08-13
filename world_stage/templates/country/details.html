@@ -98,6 +98,20 @@
     <a class="button" href="{{ url_for('member.submit', country=song.country.cc.lower(), year=song.year.id) }}">Edit</a>
     {% endif %}
     {% endif %}
+    {% if current_user %}
+    {% if custom_playlists %}
+    <form method="post" action="{{ url_for('member.playlist_add_song', playlist_id=custom_playlists[0].id) }}" id="add-to-playlist-form" style="display:inline">
+        <input type="hidden" name="song_id" value="{{ song.id }}">
+        <label for="detail-playlist">Add to playlist</label>
+        <select id="detail-playlist" onchange="this.form.action={{ url_for('member.playlist_add_song', playlist_id=0)|tojson }}.replace('/0/', '/' + this.value + '/')">
+            {% for playlist in custom_playlists %}<option value="{{ playlist.id }}">{{ playlist.name }}</option>{% endfor %}
+        </select>
+        <button type="submit">Add</button>
+    </form>
+    {% else %}
+    <a class="button" href="{{ url_for('member.playlist_index') }}">Create a playlist</a>
+    {% endif %}
+    {% endif %}
     <div style="float: right;">
         {% if current_user and spot_watch_available %}
         <form class="spot-watch" method="POST"

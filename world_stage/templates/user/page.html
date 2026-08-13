@@ -37,5 +37,10 @@
         <img src="{{ static('images/similarity.png') }}" alt="Similar Tastes Icon">
         <p>Find voters who rank songs most like this user.</p>
     </a>
+    <a href="{{ url_for('user.playlists', username=username) }}" class="card">
+        <h3>Playlists</h3>
+        <img src="{{ static('images/playlist.png') }}" alt="Playlist Icon">
+        <p>View the user's playlists.</p>
+    </a>
 </div>
 {% endblock %}

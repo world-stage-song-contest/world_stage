@@ -186,16 +186,22 @@ def get_show_play_entries(
 
     entries: list[dict] = []
     bad_countries: list[str] = []
+    next_shuffle_group = 0
 
     def append_song(row: dict):
+        nonlocal next_shuffle_group
         cc = (row.get("cc") or "").lower()
         url = row.get("url") or ""
+        shuffle_group = f"entry-{next_shuffle_group}"
+        next_shuffle_group += 1
         if "media.world-stage.org" not in url:
             bad_countries.append(cc)
         if postcards:
             entries.append(
                 {
                     "kind": "postcard",
+                    "shuffle_group": shuffle_group,
+                    "shuffleable": True,
                     "cc": cc,
                     "country": row.get("country") or "",
                     "title": "",
@@ -208,6 +214,8 @@ def get_show_play_entries(
         entries.append(
             {
                 "kind": "song",
+                "shuffle_group": shuffle_group,
+                "shuffleable": True,
                 "id": row["id"],
                 "cc": cc,
                 "country": row.get("country") or "",
@@ -228,6 +236,8 @@ def get_show_play_entries(
     entries.append(
         {
             "kind": "recap",
+            "shuffle_group": "recap",
+            "shuffleable": False,
             "cc": "",
             "country": "",
             "title": "Recap",

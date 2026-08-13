@@ -26,6 +26,7 @@ from ..utils import (
     with_auth,
 )
 from ..utils.song_revisions import create_song_revision
+from .member import playlists_for_user
 
 bp = Blueprint("country", __name__, url_prefix="/country")
 
@@ -551,6 +552,7 @@ def details(
         current_user=user,
         spot_watch_available=spot_watch_available,
         spot_watched=spot_watched,
+        custom_playlists=playlists_for_user(user_id) if user_id else [],
     )
 
 
@@ -655,6 +657,7 @@ def _render_song_details(
         current_user=user,
         spot_watch_available=spot_watch_available,
         spot_watched=spot_watched,
+        custom_playlists=playlists_for_user(user_id) if user_id else [],
     )
 
 

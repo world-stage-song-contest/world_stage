@@ -29,15 +29,18 @@ def _play_entries(rows: list[dict], postcards: bool) -> tuple[list[dict], list[s
     """Turn the same catalog rows used by an M3U into browser-player entries."""
     entries: list[dict] = []
     bad_countries: list[str] = []
-    for row in rows:
+    for index, row in enumerate(rows):
         cc = (row.get("cc") or "").lower()
         url = row.get("video_link") or ""
+        shuffle_group = f"entry-{index}"
         if "media.world-stage.org" not in url:
             bad_countries.append(cc)
         if postcards:
             entries.append(
                 {
                     "kind": "postcard",
+                    "shuffle_group": shuffle_group,
+                    "shuffleable": True,
                     "cc": cc,
                     "country": row.get("country") or "",
                     "title": "",
@@ -50,6 +53,8 @@ def _play_entries(rows: list[dict], postcards: bool) -> tuple[list[dict], list[s
         entries.append(
             {
                 "kind": "song",
+                "shuffle_group": shuffle_group,
+                "shuffleable": True,
                 "id": row["id"],
                 "cc": cc,
                 "country": row.get("country") or "",

@@ -133,6 +133,7 @@
 {% endblock %}
 {% block content %}
 <div id="play-controls">
+    <button type="button" id="shuffle-playlist"><i class="ph ph-shuffle"></i> Shuffle</button>
     <label style="margin-left: auto;">
         <input type="checkbox" id="postcards-toggle" {% if postcards %}checked{% endif %}>
         Include postcards
@@ -149,7 +150,7 @@
 </div>
 
 <script>
-    const ENTRIES = {{ entries|tojson }};
+    let ENTRIES = {{ entries|tojson }};
 
     document.getElementById('postcards-toggle').addEventListener('change', (e) => {
         const url = new URL(window.location.href);
@@ -199,6 +200,38 @@
 
     let currentIndex = -1;
     const listEl = document.getElementById('custom-playlist');
+
+    function entryGroups(entries) {
+        const groups = [];
+        const byKey = new Map();
+        entries.forEach((entry, index) => {
+            // Entries without an explicit link remain independent. Entries
+            // sharing a key are collected into one adjacent shuffle unit.
+            const key = entry.shuffle_group ?? `unlinked-${index}`;
+            let group = byKey.get(key);
+            if (!group) {
+                group = { entries: [], shuffleable: true };
+                byKey.set(key, group);
+                groups.push(group);
+            }
+            group.entries.push(entry);
+            if (entry.shuffleable === false) group.shuffleable = false;
+        });
+        return groups;
+    }
+
+    function shuffleEntries(entries) {
+        const groups = entryGroups(entries);
+        const movable = groups.filter(group => group.shuffleable);
+        for (let i = movable.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [movable[i], movable[j]] = [movable[j], movable[i]];
+        }
+        let movableIndex = 0;
+        return groups.flatMap(group => (
+            group.shuffleable ? movable[movableIndex++].entries : group.entries
+        ));
+    }
 
     function videoElement() {
         // The underlying HTMLVideoElement that video.js wraps.
@@ -282,39 +315,52 @@
         }
     }
 
-    // Build the playlist sidebar.
-    ENTRIES.forEach((entry, i) => {
-        const li = document.createElement('li');
+    function renderPlaylist() {
+        listEl.replaceChildren();
+        ENTRIES.forEach((entry, i) => {
+            const li = document.createElement('li');
 
-        const img = document.createElement('img');
-        img.className = 'pl-thumb';
-        const fl = flagUrl(entry.cc);
-        if (fl) {
-            img.classList.add('flag-image');
-            img.draggable = false;
-            img.src = fl;
-            img.alt = entry.cc ? entry.cc.toUpperCase() : '';
-        } else {
-            img.alt = '';
-        }
-        li.appendChild(img);
+            const img = document.createElement('img');
+            img.className = 'pl-thumb';
+            const fl = flagUrl(entry.cc);
+            if (fl) {
+                img.classList.add('flag-image');
+                img.draggable = false;
+                img.src = fl;
+                img.alt = entry.cc ? entry.cc.toUpperCase() : '';
+            } else {
+                img.alt = '';
+            }
+            li.appendChild(img);
 
-        const text = document.createElement('div');
-        text.className = 'pl-text';
-        const name = document.createElement('div');
-        name.className = 'pl-name';
-        name.textContent = entryName(entry);
-        text.appendChild(name);
-        if (entry.kind === 'song' && entry.country) {
-            const desc = document.createElement('div');
-            desc.className = 'pl-desc';
-            desc.textContent = entry.country;
-            text.appendChild(desc);
-        }
-        li.appendChild(text);
+            const text = document.createElement('div');
+            text.className = 'pl-text';
+            const name = document.createElement('div');
+            name.className = 'pl-name';
+            name.textContent = entryName(entry);
+            text.appendChild(name);
+            if (entry.kind === 'song' && entry.country) {
+                const desc = document.createElement('div');
+                desc.className = 'pl-desc';
+                desc.textContent = entry.country;
+                text.appendChild(desc);
+            }
+            li.appendChild(text);
 
-        li.addEventListener('click', () => loadEntry(i));
-        listEl.appendChild(li);
+            li.addEventListener('click', () => loadEntry(i));
+            listEl.appendChild(li);
+        });
+    }
+
+    renderPlaylist();
+
+    const shuffleButton = document.getElementById('shuffle-playlist');
+    shuffleButton.disabled = entryGroups(ENTRIES).filter(group => group.shuffleable).length < 2;
+    shuffleButton.addEventListener('click', () => {
+        ENTRIES = shuffleEntries(ENTRIES);
+        currentIndex = -1;
+        renderPlaylist();
+        if (ENTRIES.length > 0) loadEntry(0);
     });
 
     // Auto-advance on end of item.

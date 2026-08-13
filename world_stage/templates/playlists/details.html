@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Playlist: {{ playlist.name }}{% endblock %}
+{% block navigation %}
+<a class="nav-item" href="{{ url_for('member.playlist_index') }}">My playlists</a>
+<span class="nav-separator"></span>
+<a class="nav-item" href="{{ url_for('member.playlist_play', playlist_id=playlist.id) }}">Play</a>
+{% endblock %}
+{% block content %}
+<div style="float:right;">
+    <form method="post" action="{{ url_for('member.playlist_delete', playlist_id=playlist.id) }}" onsubmit="return confirm('Delete this playlist?')">
+        <button type="submit">Delete playlist</button>
+    </form>
+</div>
+
+<h3>Songs</h3>
+{% if songs %}
+<p><a class="button" href="{{ url_for('member.playlist_play', playlist_id=playlist.id) }}">Play playlist</a></p>
+<ol>
+{% for song in songs %}
+    <li>
+        {% if song.special_short_name %}
+        <a href="{{ url_for('country.special_details', code=song.cc, special_short_name=song.special_short_name, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>
+        {% else %}
+        <a href="{{ url_for('country.details', code=song.cc, year=song.year_id, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>
+        {% endif %}
+        ({{ song.country }}, {{ song.special_name or song.year_id }})
+        <form method="post" action="{{ url_for('member.playlist_remove_song', playlist_id=playlist.id, song_id=song.id) }}" style="display:inline">
+            <button type="submit">Remove</button>
+        </form>
+    </li>
+{% endfor %}
+</ol>
+{% else %}
+<p>This playlist is empty. Search below to add its first song.</p>
+{% endif %}
+
+<h3>Find songs</h3>
+<p>Select a country, a year/special, or both.</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="get">
+    <input type="hidden" name="playlist_id" value="{{ playlist.id }}">
+    <label for="country-filter">Country</label>
+    <select id="country-filter" name="country">
+        <option value="">Any country</option>
+        {% for country in countries %}<option value="{{ country.id }}" {% if selected_country == country.id %}selected{% endif %}>{{ country.name }}</option>{% endfor %}
+    </select>
+    <label for="year-filter">Year or special</label>
+    <select id="year-filter" name="year">
+        <option value="">Any year</option>
+        {% for year in years %}<option value="{{ year.id }}" {% if selected_year == year.id|string %}selected{% endif %}>{{ year.special_name or year.id }}</option>{% endfor %}
+    </select>
+    <button type="submit">Search</button>
+</form>
+
+{% if search_performed %}
+<h3>Search results</h3>
+{% if search_results %}
+<table>
+    <thead><tr><th>Song</th><th>Country</th><th>Year</th><th></th></tr></thead>
+    <tbody>
+    {% for song in search_results %}
+    <tr>
+        <td>{{ song.artist }} — {{ song.title }}</td>
+        <td>{{ song.country }}</td>
+        <td>{{ song.special_name or song.year_id }}</td>
+        <td><form method="post" action="{{ url_for('member.playlist_add_song', playlist_id=playlist.id) }}"><input type="hidden" name="song_id" value="{{ song.id }}"><button type="submit">Add</button></form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No songs matched those filters.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

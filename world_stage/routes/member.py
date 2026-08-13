@@ -13,14 +13,334 @@ from ..utils import (
     render_template,
     require_user,
     resolve_country_code,
+    with_auth,
     with_permissions,
 )
 from ..utils.entry_moves import EntryMoveError, move_entry
 from ..utils.song_revisions import MAX_YEAR_SUBMISSIONS
+from .playlist import _bad_links_error, _m3u, _play_entries, _render_player
 
 bp = Blueprint("member", __name__, url_prefix="/member")
 
 MAX_USER_SUBMISSIONS = 2
+MAX_PLAYLIST_NAME_LENGTH = 100
+
+
+def playlists_for_user(user_id: int) -> list[dict]:
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT custom_playlist.id, custom_playlist.name
+        FROM custom_playlist
+        WHERE custom_playlist.owner_id = %s
+        ORDER BY LOWER(custom_playlist.name), custom_playlist.id
+        """,
+        (user_id,),
+    )
+    return cursor.fetchall()
+
+
+def _owned_playlist(playlist_id: int, user_id: int) -> dict | None:
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT id, name, created_at, updated_at
+        FROM custom_playlist WHERE id = %s AND owner_id = %s
+        """,
+        (playlist_id, user_id),
+    )
+    return cursor.fetchone()
+
+
+def get_public_playlist(playlist_id: int, username: str | None = None) -> dict | None:
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT custom_playlist.id, custom_playlist.name, custom_playlist.owner_id,
+               account.username AS owner_username
+        FROM custom_playlist
+        JOIN account ON account.id = custom_playlist.owner_id
+        WHERE custom_playlist.id = %s
+          AND (%s::text IS NULL OR LOWER(account.username) = LOWER(%s))
+        """,
+        (playlist_id, username, username),
+    )
+    return cursor.fetchone()
+
+
+def render_playlist_player(
+    playlist: dict,
+    permissions: UserPermissions,
+    *,
+    back_url: str,
+):
+    rows = _playlist_rows(playlist["id"])
+    if not rows:
+        return render_template("error.html", error="This playlist is empty"), 400
+    return _render_player(
+        rows=rows,
+        permissions=permissions,
+        title=playlist["name"],
+        back_url=back_url,
+        download_url=url_for("member.playlist_download", playlist_id=playlist["id"]),
+    )
+
+
+def _playlist_rows(playlist_id: int) -> list[dict]:
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT song.id, LOWER(country.id) AS cc, country.name AS country,
+               song.title, song.artist, song.duration, song.video_link,
+               song.poster_link, song.vtt_link, song.year_id, song.entry_number,
+               year.special_name, year.special_short_name,
+               custom_playlist_song.position
+        FROM custom_playlist_song
+        JOIN current_song AS song ON song.id = custom_playlist_song.song_id
+        JOIN country ON country.id = song.country_id
+        JOIN year ON year.id = song.year_id
+        WHERE custom_playlist_song.playlist_id = %s
+        ORDER BY custom_playlist_song.position
+        """,
+        (playlist_id,),
+    )
+    return cursor.fetchall()
+
+
+def _playlist_filter_options() -> tuple[list[dict], list[dict]]:
+    cursor = get_db().cursor()
+    cursor.execute("SELECT id, name FROM country WHERE id <> 'XX' ORDER BY name")
+    countries = cursor.fetchall()
+    cursor.execute(
+        """
+        SELECT id, special_name, special_short_name
+        FROM year
+        WHERE status IN ('closed', 'ongoing')
+        ORDER BY CASE WHEN id < 0 THEN 1 ELSE 0 END, id, special_name
+        """
+    )
+    return countries, cursor.fetchall()
+
+
+def _search_playlist_songs(country: str, year: str) -> tuple[list[dict], str | None]:
+    if not country and not year:
+        return [], None
+
+    year_id: int | None = None
+    if year:
+        try:
+            year_id = int(year)
+        except ValueError:
+            return [], "Invalid year."
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT song.id, song.title, song.artist, song.entry_number,
+               song.year_id, country.id AS country_id, country.name AS country,
+               year.special_name, year.special_short_name
+        FROM current_song AS song
+        JOIN country ON country.id = song.country_id
+        JOIN year ON year.id = song.year_id
+        WHERE NOT song.is_placeholder
+          AND year.status IN ('closed', 'ongoing')
+          AND (%(country)s = '' OR country.id = %(country)s)
+          AND (%(year_id)s::integer IS NULL OR song.year_id = %(year_id)s)
+        ORDER BY song.year_id, country.name, song.entry_number, song.id
+        """,
+        {"country": country, "year_id": year_id},
+    )
+    return cursor.fetchall(), None
+
+
+@bp.get("/playlist")
+@require_user(redirect_to_login=True)
+def playlist_index(user: tuple[int, str]):
+    return render_template("playlists/index.html", playlists=playlists_for_user(user[0]))
+
+
+@bp.post("/playlist")
+@require_user(redirect_to_login=True)
+def playlist_create(user: tuple[int, str]):
+    name = request.form.get("name", "").strip()
+    if not name or len(name) > MAX_PLAYLIST_NAME_LENGTH:
+        return render_template(
+            "playlists/index.html",
+            playlists=playlists_for_user(user[0]),
+            error=(
+                "Enter a playlist name between 1 and "
+                f"{MAX_PLAYLIST_NAME_LENGTH} characters."
+            ),
+        ), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "INSERT INTO custom_playlist (owner_id, name) VALUES (%s, %s) RETURNING id",
+        (user[0], name),
+    )
+    playlist_id = cursor.fetchone()["id"]
+    db.commit()
+    return redirect(url_for("member.playlist_edit", playlist_id=playlist_id))
+
+
+@bp.get("/playlist/edit")
+@require_user(redirect_to_login=True)
+def playlist_edit(user: tuple[int, str]):
+    try:
+        playlist_id = int(request.args.get("playlist_id", ""))
+    except ValueError:
+        return render_template("error.html", error="Playlist not found"), 404
+    playlist = _owned_playlist(playlist_id, user[0])
+    if not playlist:
+        return render_template("error.html", error="Playlist not found"), 404
+
+    country = request.args.get("country", "").upper()
+    year = request.args.get("year", "")
+    search_results, error = _search_playlist_songs(country, year)
+    countries, years = _playlist_filter_options()
+    return render_template(
+        "playlists/details.html",
+        playlist=playlist,
+        songs=_playlist_rows(playlist_id),
+        countries=countries,
+        years=years,
+        selected_country=country,
+        selected_year=year,
+        search_results=search_results,
+        search_performed=bool(country or year),
+        error=error,
+    ), (400 if error else 200)
+
+
+@bp.post("/playlist/<int:playlist_id>/songs")
+@require_user(redirect_to_login=True)
+def playlist_add_song(playlist_id: int, user: tuple[int, str]):
+    playlist = _owned_playlist(playlist_id, user[0])
+    if not playlist:
+        return render_template("error.html", error="Playlist not found"), 404
+    try:
+        song_id = int(request.form.get("song_id", ""))
+    except ValueError:
+        return render_template("error.html", error="Invalid song"), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT 1 FROM current_song WHERE id = %s AND NOT is_placeholder",
+        (song_id,),
+    )
+    if not cursor.fetchone():
+        return render_template("error.html", error="Song not found"), 404
+    cursor.execute(
+        """
+        INSERT INTO custom_playlist_song (playlist_id, song_id, position)
+        SELECT %(playlist_id)s, %(song_id)s, COALESCE(MAX(position), 0) + 1
+        FROM custom_playlist_song
+        WHERE playlist_id = %(playlist_id)s
+        ON CONFLICT (playlist_id, song_id) DO NOTHING
+        """,
+        {"playlist_id": playlist_id, "song_id": song_id},
+    )
+    cursor.execute(
+        "UPDATE custom_playlist SET updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+        (playlist_id,),
+    )
+    db.commit()
+    return redirect(url_for("member.playlist_edit", playlist_id=playlist_id))
+
+
+@bp.post("/playlist/<int:playlist_id>/songs/<int:song_id>/remove")
+@require_user(redirect_to_login=True)
+def playlist_remove_song(playlist_id: int, song_id: int, user: tuple[int, str]):
+    if not _owned_playlist(playlist_id, user[0]):
+        return render_template("error.html", error="Playlist not found"), 404
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "DELETE FROM custom_playlist_song WHERE playlist_id = %s AND song_id = %s",
+        (playlist_id, song_id),
+    )
+    cursor.execute(
+        """
+        WITH reordered AS (
+            SELECT song_id, ROW_NUMBER() OVER (ORDER BY position)::integer AS new_position
+            FROM custom_playlist_song WHERE playlist_id = %s
+        )
+        UPDATE custom_playlist_song AS item
+        SET position = reordered.new_position
+        FROM reordered
+        WHERE item.playlist_id = %s AND item.song_id = reordered.song_id
+        """,
+        (playlist_id, playlist_id),
+    )
+    cursor.execute(
+        "UPDATE custom_playlist SET updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+        (playlist_id,),
+    )
+    db.commit()
+    return redirect(url_for("member.playlist_edit", playlist_id=playlist_id))
+
+
+@bp.post("/playlist/<int:playlist_id>/delete")
+@require_user(redirect_to_login=True)
+def playlist_delete(playlist_id: int, user: tuple[int, str]):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "DELETE FROM custom_playlist WHERE id = %s AND owner_id = %s",
+        (playlist_id, user[0]),
+    )
+    if cursor.rowcount == 0:
+        return render_template("error.html", error="Playlist not found"), 404
+    db.commit()
+    return redirect(url_for("member.playlist_index"))
+
+
+@bp.get("/playlist/<int:playlist_id>/play")
+@with_auth
+def playlist_play(
+    playlist_id: int,
+    user: tuple[int, str] | None,
+    permissions: UserPermissions,
+):
+    playlist = get_public_playlist(playlist_id)
+    if not playlist:
+        return render_template("error.html", error="Playlist not found"), 404
+    is_owner = bool(user and user[0] == playlist["owner_id"])
+    return render_playlist_player(
+        playlist,
+        permissions,
+        back_url=(
+            url_for("member.playlist_edit", playlist_id=playlist_id)
+            if is_owner
+            else url_for("user.profile", username=playlist["owner_username"])
+        ),
+    )
+
+
+@bp.get("/playlist/<int:playlist_id>.m3u")
+@with_auth
+def playlist_download(
+    playlist_id: int,
+    user: tuple[int, str] | None,
+    permissions: UserPermissions,
+):
+    playlist = get_public_playlist(playlist_id)
+    if not playlist:
+        return render_template("error.html", error="Playlist not found"), 404
+    rows = _playlist_rows(playlist_id)
+    if not rows:
+        return render_template("error.html", error="This playlist is empty"), 400
+    postcards = request.args.get("postcards", "false") == "true"
+    entries, bad_countries = _play_entries(rows, postcards)
+    error = _bad_links_error(bad_countries, permissions)
+    if error:
+        return error
+    lines = ["#EXTM3U"]
+    for entry in entries:
+        lines.extend(("#EXTINF:0", "#EXTVLCOPT:network-caching=3000", entry["url"]))
+    return _m3u("\r\n".join(lines) + "\r\n", f"playlist-{playlist_id}")
 
 
 def get_languages() -> list[dict]:
@@ -263,6 +583,7 @@ def index(user: tuple[int, str], permissions: UserPermissions):
     return render_template(
         "member/index.html",
         username=user[1],
+        playlists=playlists_for_user(user[0]),
         has_unread_messages=has_unread_messages(user[0], permissions),
         owns_national_finals=cursor.fetchone()["count"] > 0,
     )

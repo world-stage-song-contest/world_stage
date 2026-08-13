@@ -3,7 +3,7 @@ import urllib.parse
 from collections import Counter, defaultdict
 from typing import Literal, overload
 
-from flask import Blueprint, request
+from flask import Blueprint, request, url_for
 
 from ..db import get_db
 from ..utils import (
@@ -17,6 +17,7 @@ from ..utils import (
     with_auth,
 )
 from .country import _country_stats, _format_decimal
+from .member import get_public_playlist, playlists_for_user, render_playlist_player
 
 bp = Blueprint("user", __name__, url_prefix="/user")
 
@@ -28,7 +29,7 @@ def index():
 
     cursor.execute("""
         SELECT id, username, role FROM account
-        ORDER BY username
+        ORDER BY account.username
     """)
     users: defaultdict[str, list[dict]] = defaultdict(list)
     users["Admin"] = []
@@ -47,7 +48,59 @@ def profile(username: str):
     username = urllib.parse.unquote(username)
     username = unicodedata.normalize("NFKC", username)
 
-    return render_template("user/page.html", username=username)
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT id, username FROM account WHERE LOWER(username) = LOWER(%s)",
+        (username,),
+    )
+    account = cursor.fetchone()
+    if not account:
+        return render_template("error.html", error="User not found"), 404
+
+    return render_template(
+        "user/page.html",
+        username=account["username"],
+    )
+
+
+@bp.get("/<username>/playlist")
+def playlists(username: str):
+    username = urllib.parse.unquote(username)
+    username = unicodedata.normalize("NFKC", username)
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT id, username FROM account WHERE LOWER(username) = LOWER(%s)",
+        (username,),
+    )
+    account = cursor.fetchone()
+    if not account:
+        return render_template("error.html", error="User not found"), 404
+
+    return render_template(
+        "user/playlists.html",
+        username=account["username"],
+        playlists=playlists_for_user(account["id"]),
+    )
+
+
+@bp.get("/<username>/playlist/<int:playlist_id>")
+@with_auth
+def playlist_play(
+    username: str,
+    playlist_id: int,
+    user: tuple[int, str] | None,
+    permissions: UserPermissions,
+):
+    username = unicodedata.normalize("NFKC", urllib.parse.unquote(username))
+    playlist = get_public_playlist(playlist_id, username)
+    if not playlist:
+        return render_template("error.html", error="Playlist not found"), 404
+    return render_playlist_player(
+        playlist,
+        permissions,
+        back_url=url_for("user.playlists", username=playlist["owner_username"]),
+    )
 
 
 def _most_frequent_submission_countries(songs: list[Song]) -> list[dict]:

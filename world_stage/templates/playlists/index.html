@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}My playlists{% endblock %}
+{% block navigation %}<a class="nav-item" href="{{ url_for('member.playlist_index') }}">My playlists</a>{% endblock %}
+{% block content %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="{{ url_for('member.playlist_create') }}">
+    <label for="playlist-name">Name</label>
+    <input id="playlist-name" name="name" maxlength="100" required type="text">
+    <button type="submit">Create</button>
+</form>
+
+<h2>Your playlists</h2>
+{% if playlists %}
+<ul>
+{% for playlist in playlists %}
+    <li>
+        <a href="{{ url_for('member.playlist_play', playlist_id=playlist.id) }}">{{ playlist.name }}</a>
+        (<a href="{{ url_for('member.playlist_edit', playlist_id=playlist.id) }}">Edit</a>)
+    </li>
+{% endfor %}
+</ul>
+{% else %}
+<p>You have not created a playlist yet.</p>
+{% endif %}
+{% endblock %}
