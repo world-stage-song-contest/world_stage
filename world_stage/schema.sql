@@ -2325,16 +2325,22 @@ BEGIN
         WHERE show.year_id = p_year_id AND show.national_final_id IS NULL
         GROUP BY show.id, show.show_number
     ),
+    tiered_shows AS (
+        SELECT show_tiers.*,
+               COUNT(*) OVER (PARTITION BY tier) AS tier_show_count
+        FROM show_tiers
+    ),
     score_values AS (
         SELECT GENERATE_SERIES(COALESCE(MAX(max_pts), 0), 1, -1) AS score
         FROM country_show_results
         WHERE year_id = p_year_id AND result_mode = 'official'
     ),
     candidates AS (
-        SELECT csr.*, show_tiers.tier, show_tiers.show_number,
+        SELECT csr.*, tiered_shows.tier, tiered_shows.show_number,
+               tiered_shows.tier_show_count,
                ROW_NUMBER() OVER (
                    PARTITION BY csr.song_id
-                   ORDER BY show_tiers.tier, csr.place, csr.show_id
+                   ORDER BY tiered_shows.tier, csr.place, csr.show_id
                ) AS reached_order,
                csr.total_points::numeric
                    / NULLIF(csr.max_possible_points, 0) AS points_share,
@@ -2351,7 +2357,7 @@ BEGIN
                    FROM score_values
                ) AS countback
         FROM country_show_results AS csr
-        JOIN show_tiers ON show_tiers.show_id = csr.show_id
+        JOIN tiered_shows ON tiered_shows.show_id = csr.show_id
         WHERE csr.year_id = p_year_id AND csr.result_mode = 'official'
     ),
     reached AS (
@@ -2360,9 +2366,14 @@ BEGIN
     all_ranked AS (
         SELECT country_id, country_name, year_id, song_id,
                ROW_NUMBER() OVER (
-                   ORDER BY tier, points_share DESC NULLS LAST,
-                            voter_share DESC NULLS LAST,
-                            countback DESC NULLS LAST,
+                   ORDER BY tier,
+                            CASE WHEN tier_show_count = 1 THEN place END,
+                            CASE WHEN tier_show_count > 1 THEN points_share END
+                                DESC NULLS LAST,
+                            CASE WHEN tier_show_count > 1 THEN voter_share END
+                                DESC NULLS LAST,
+                            CASE WHEN tier_show_count > 1 THEN countback END
+                                DESC NULLS LAST,
                             running_order NULLS LAST, show_number, song_id
                )::integer AS place
         FROM reached
