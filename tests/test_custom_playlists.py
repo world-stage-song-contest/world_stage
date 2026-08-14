@@ -60,6 +60,17 @@ def test_playlist_pages_require_login(client):
 def test_user_creates_searches_and_plays_playlist(client, db):
     spanish_song = _song(db, "ES", "Spanish song")
     _song(db, "FR", "French song")
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO country_year_results (
+                country_id, country_name, year_id, song_id, place,
+                total_countries, placement_percentage
+            ) VALUES ('ES', 'Spain', 2024, %s, 2, 3, 66.667)
+            """,
+            (spanish_song,),
+        )
+    db.commit()
     _login(client, db)
     playlist_id = _create_playlist(client)
 
@@ -72,6 +83,18 @@ def test_user_creates_searches_and_plays_playlist(client, db):
     assert data["selected_country"] == "ES"
     assert [song["id"] for song in data["search_results"]] == [spanish_song]
     assert [song["title"] for song in data["search_results"]] == ["Spanish song"]
+    assert data["search_results"][0]["year_place"] == 2
+    assert data["search_results"][0]["year_total_countries"] == 3
+
+    html = client.get(
+        f"/member/playlist/edit?playlist_id={playlist_id}&country=ES",
+        headers={"Accept": "text/html"},
+    ).get_data(as_text=True)
+    assert "js/sort-table.js" in html
+    assert '<table class="sortable">' in html
+    assert "<th>Overall result</th>" in html
+    assert '<td data-value="2">' in html
+    assert "2 / 3" in html
 
     response = client.post(
         f"/member/playlist/{playlist_id}/songs",

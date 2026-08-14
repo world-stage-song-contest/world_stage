@@ -141,6 +141,8 @@ def _search_playlist_songs(
         SELECT song.id, song.title, song.artist, song.entry_number,
                song.year_id, country.id AS country_id, country.name AS country,
                year.special_name, year.special_short_name,
+               cyr.place AS year_place,
+               cyr.total_countries AS year_total_countries,
                EXISTS (
                    SELECT 1 FROM custom_playlist_song
                    WHERE custom_playlist_song.playlist_id = %(playlist_id)s
@@ -149,6 +151,7 @@ def _search_playlist_songs(
         FROM current_song AS song
         JOIN country ON country.id = song.country_id
         JOIN year ON year.id = song.year_id
+        LEFT JOIN country_year_results AS cyr ON cyr.song_id = song.id
         WHERE NOT song.is_placeholder
           AND year.status IN ('closed', 'ongoing')
           AND (%(country)s = '' OR country.id = %(country)s)

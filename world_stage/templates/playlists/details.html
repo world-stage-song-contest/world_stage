@@ -3,6 +3,7 @@
 {% block headercontents %}
 <link rel="stylesheet" href="{{ static('css/predict.css') }}">
 <script src="{{ static('js/playlist-add.js') }}"></script>
+<script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
 {% block navigation %}
 <a class="nav-item" href="{{ url_for('member.playlist_index') }}">My playlists</a>
@@ -71,14 +72,19 @@
 {% if search_performed %}
 <h3>Search results</h3>
 {% if search_results %}
-<table>
-    <thead><tr><th>Song</th><th>Country</th><th>Year</th><th></th></tr></thead>
+<table class="sortable">
+    <thead>
+        <tr><th>Song</th><th>Country</th><th>Year</th><th>Place</th><th></th></tr>
+    </thead>
     <tbody>
     {% for song in search_results %}
-    <tr>
+    <tr data-value="{{ loop.index }}">
         <td>{{ song.artist }} — {{ song.title }}</td>
         <td>{{ song.country }}</td>
         <td>{{ song.special_name or song.year_id }}</td>
+        <td data-value="{{ song.year_place or '' }}">
+            {% if song.year_place %}{{ song.year_place }} / {{ song.year_total_countries }}{% endif %}
+        </td>
         <td>
             <button type="button"
                 data-playlist-add
