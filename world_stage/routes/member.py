@@ -299,6 +299,9 @@ def playlist_add_song(playlist_id: int, user: tuple[int, str]):
         (playlist_id,),
     )
     db.commit()
+    return_to = request.form.get("return_to", "")
+    if return_to.startswith("/") and not return_to.startswith("//"):
+        return redirect(return_to)
     if request.accept_mimetypes.accept_json:
         song = next(row for row in _playlist_rows(playlist_id) if row["id"] == song_id)
         details_url = (

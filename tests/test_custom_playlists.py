@@ -335,7 +335,7 @@ def test_show_recap_is_fixed_and_postcards_are_linked(client, db):
 
 
 def test_song_details_offer_users_their_playlists(client, db):
-    _song(db, "ES", "Details song")
+    song_id = _song(db, "ES", "Details song")
     _login(client, db)
     playlist_id = _create_playlist(client, "Road trip")
 
@@ -344,6 +344,28 @@ def test_song_details_offer_users_their_playlists(client, db):
     assert response.get_json()["custom_playlists"] == [
         {"id": playlist_id, "name": "Road trip"}
     ]
+
+    html = client.get(
+        "/country/es/2024", headers={"Accept": "text/html"}
+    ).get_data(as_text=True)
+    assert 'name="return_to" value="/country/es/2024"' in html
+
+    response = client.post(
+        f"/member/playlist/{playlist_id}/songs",
+        data={"song_id": song_id, "return_to": "/country/es/2024"},
+    )
+    assert response.status_code == 302
+    assert response.location == "/country/es/2024"
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM custom_playlist_song
+            WHERE playlist_id = %s AND song_id = %s
+            """,
+            (playlist_id, song_id),
+        )
+        assert cursor.fetchone()["count"] == 1
 
 
 def test_user_pages_link_to_a_dedicated_playlist_page(client, db):
