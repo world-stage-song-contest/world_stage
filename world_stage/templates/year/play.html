@@ -142,7 +142,7 @@
 
 <div id="play-layout">
     <div id="player-wrap">
-        <video id="player-video" class="video-js vjs-default-skin" controls preload="auto" playsinline muted crossorigin="anonymous"></video>
+        <video id="player-video" class="video-js vjs-default-skin" controls preload="auto" playsinline crossorigin="anonymous"></video>
     </div>
     <div id="playlist-wrap">
         <ul id="custom-playlist"></ul>
@@ -301,16 +301,10 @@
 
         if (autoplay) {
             const p = player.play();
-            // Chrome rejects unmuted autoplay without a user gesture.
-            // The element starts `muted`, so this should normally
-            // resolve; if it doesn't (e.g. user unmuted then we
-            // advanced), fall back to muted+retry.
             if (p && typeof p.catch === 'function') {
-                p.catch(() => {
-                    player.muted(true);
-                    const r = player.play();
-                    if (r && typeof r.catch === 'function') r.catch(() => {});
-                });
+                // If the browser no longer considers playback user-initiated,
+                // leave the player paused instead of silently retrying muted.
+                p.catch(() => {});
             }
         }
     }
@@ -368,11 +362,11 @@
         if (currentIndex + 1 < ENTRIES.length) loadEntry(currentIndex + 1);
     });
 
-    // Kick off with the first entry.
+    // Select the first entry, but wait for the listener to start playback.
     if (ENTRIES.length > 0) {
         // Defer until the player is ready so the underlying <video>
         // element exists when we go to attach a <source> child.
-        player.ready(() => loadEntry(0));
+        player.ready(() => loadEntry(0, { autoplay: false }));
     }
 </script>
 {% endblock %}
