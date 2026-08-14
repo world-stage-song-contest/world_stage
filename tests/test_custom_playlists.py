@@ -92,7 +92,7 @@ def test_user_creates_searches_and_plays_playlist(client, db):
     ).get_data(as_text=True)
     assert "js/sort-table.js" in html
     assert '<table class="sortable">' in html
-    assert "<th>Overall result</th>" in html
+    assert "<th>Place</th>" in html
     assert '<td data-value="2">' in html
     assert "2 / 3" in html
 
@@ -168,6 +168,49 @@ def test_playlist_ownership_is_enforced(client, db):
     response = client.get(f"/playlist/{playlist_id}", headers=JSON)
     assert response.status_code == 400
     assert response.get_json()["error"] == "This playlist is empty"
+
+
+def test_user_can_rename_playlist(client, db):
+    _login(client, db)
+    playlist_id = _create_playlist(client)
+
+    html = client.get(
+        f"/member/playlist/edit?playlist_id={playlist_id}",
+        headers={"Accept": "text/html"},
+    ).get_data(as_text=True)
+    assert f'/member/playlist/{playlist_id}/rename' in html
+    assert 'value="Favourites"' in html
+
+    response = client.post(
+        f"/member/playlist/{playlist_id}/rename",
+        data={"name": "  Road trip  "},
+        headers=JSON,
+    )
+    assert response.status_code == 302
+    assert response.location == f"/member/playlist/edit?playlist_id={playlist_id}"
+
+    with db.cursor() as cursor:
+        cursor.execute("SELECT name FROM custom_playlist WHERE id = %s", (playlist_id,))
+        assert cursor.fetchone()["name"] == "Road trip"
+
+    invalid = client.post(
+        f"/member/playlist/{playlist_id}/rename",
+        data={"name": "   "},
+        headers=JSON,
+    )
+    assert invalid.status_code == 400
+    assert invalid.get_json()["rename_error"] == (
+        "Enter a playlist name between 1 and 100 characters."
+    )
+
+    client.delete_cookie("session")
+    _login(client, db, 3)
+    forbidden = client.post(
+        f"/member/playlist/{playlist_id}/rename",
+        data={"name": "Not mine"},
+        headers=JSON,
+    )
+    assert forbidden.status_code == 404
 
 
 def test_multiple_filtered_songs_can_be_added_without_leaving_results(client, db):

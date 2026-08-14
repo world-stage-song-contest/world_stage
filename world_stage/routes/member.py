@@ -26,6 +26,15 @@ MAX_USER_SUBMISSIONS = 2
 MAX_PLAYLIST_NAME_LENGTH = 100
 
 
+def _playlist_name_error(name: str) -> str | None:
+    if name and len(name) <= MAX_PLAYLIST_NAME_LENGTH:
+        return None
+    return (
+        "Enter a playlist name between 1 and "
+        f"{MAX_PLAYLIST_NAME_LENGTH} characters."
+    )
+
+
 def playlists_for_user(user_id: int) -> list[dict]:
     cursor = get_db().cursor()
     cursor.execute(
@@ -163,6 +172,29 @@ def _search_playlist_songs(
     return cursor.fetchall(), None
 
 
+def _render_playlist_edit(playlist: dict, rename_error: str | None = None):
+    country = request.args.get("country", "").upper()
+    year = request.args.get("year", "")
+    search_results, search_error = _search_playlist_songs(
+        playlist["id"], country, year
+    )
+    countries, years = _playlist_filter_options()
+    error = rename_error or search_error
+    return render_template(
+        "playlists/details.html",
+        playlist=playlist,
+        songs=_playlist_rows(playlist["id"]),
+        countries=countries,
+        years=years,
+        selected_country=country,
+        selected_year=year,
+        search_results=search_results,
+        search_performed=bool(country or year),
+        error=search_error,
+        rename_error=rename_error,
+    ), (400 if error else 200)
+
+
 @bp.get("/playlist")
 @require_user(redirect_to_login=True)
 def playlist_index(user: tuple[int, str]):
@@ -173,14 +205,11 @@ def playlist_index(user: tuple[int, str]):
 @require_user(redirect_to_login=True)
 def playlist_create(user: tuple[int, str]):
     name = request.form.get("name", "").strip()
-    if not name or len(name) > MAX_PLAYLIST_NAME_LENGTH:
+    if error := _playlist_name_error(name):
         return render_template(
             "playlists/index.html",
             playlists=playlists_for_user(user[0]),
-            error=(
-                "Enter a playlist name between 1 and "
-                f"{MAX_PLAYLIST_NAME_LENGTH} characters."
-            ),
+            error=error,
         ), 400
 
     db = get_db()
@@ -205,22 +234,32 @@ def playlist_edit(user: tuple[int, str]):
     if not playlist:
         return render_template("error.html", error="Playlist not found"), 404
 
-    country = request.args.get("country", "").upper()
-    year = request.args.get("year", "")
-    search_results, error = _search_playlist_songs(playlist_id, country, year)
-    countries, years = _playlist_filter_options()
-    return render_template(
-        "playlists/details.html",
-        playlist=playlist,
-        songs=_playlist_rows(playlist_id),
-        countries=countries,
-        years=years,
-        selected_country=country,
-        selected_year=year,
-        search_results=search_results,
-        search_performed=bool(country or year),
-        error=error,
-    ), (400 if error else 200)
+    return _render_playlist_edit(playlist)
+
+
+@bp.post("/playlist/<int:playlist_id>/rename")
+@require_user(redirect_to_login=True)
+def playlist_rename(playlist_id: int, user: tuple[int, str]):
+    playlist = _owned_playlist(playlist_id, user[0])
+    if not playlist:
+        return render_template("error.html", error="Playlist not found"), 404
+
+    name = request.form.get("name", "").strip()
+    if error := _playlist_name_error(name):
+        return _render_playlist_edit(playlist, rename_error=error)
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        UPDATE custom_playlist
+        SET name = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s AND owner_id = %s
+        """,
+        (name, playlist_id, user[0]),
+    )
+    db.commit()
+    return redirect(url_for("member.playlist_edit", playlist_id=playlist_id))
 
 
 @bp.post("/playlist/<int:playlist_id>/songs")

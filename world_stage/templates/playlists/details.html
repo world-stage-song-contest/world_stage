@@ -17,6 +17,13 @@
     </form>
 </div>
 
+{% if rename_error %}<p class="error">{{ rename_error }}</p>{% endif %}
+<form method="post" action="{{ url_for('member.playlist_rename', playlist_id=playlist.id) }}">
+    <label for="playlist-name">Playlist name</label>
+    <input id="playlist-name" name="name" maxlength="100" required type="text" value="{{ playlist.name }}">
+    <button type="submit">Rename</button>
+</form>
+
 <h3>Songs</h3>
 <p id="play-playlist-link" {% if not songs %}hidden{% endif %}><a class="button" href="{{ url_for('playlist.custom_play', playlist_id=playlist.id) }}">Play playlist</a></p>
 <p id="playlist-empty-message" {% if songs %}hidden{% endif %}>This playlist is empty. Search below to add its first song.</p>
