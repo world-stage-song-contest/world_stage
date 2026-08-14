@@ -3,7 +3,7 @@ import urllib.parse
 from collections import Counter, defaultdict
 from typing import Literal, overload
 
-from flask import Blueprint, request, url_for
+from flask import Blueprint, request
 
 from ..db import get_db
 from ..utils import (
@@ -17,7 +17,7 @@ from ..utils import (
     with_auth,
 )
 from .country import _country_stats, _format_decimal
-from .member import get_public_playlist, playlists_for_user, render_playlist_player
+from .member import playlists_for_user
 
 bp = Blueprint("user", __name__, url_prefix="/user")
 
@@ -81,25 +81,6 @@ def playlists(username: str):
         "user/playlists.html",
         username=account["username"],
         playlists=playlists_for_user(account["id"]),
-    )
-
-
-@bp.get("/<username>/playlist/<int:playlist_id>")
-@with_auth
-def playlist_play(
-    username: str,
-    playlist_id: int,
-    user: tuple[int, str] | None,
-    permissions: UserPermissions,
-):
-    username = unicodedata.normalize("NFKC", urllib.parse.unquote(username))
-    playlist = get_public_playlist(playlist_id, username)
-    if not playlist:
-        return render_template("error.html", error="Playlist not found"), 404
-    return render_playlist_player(
-        playlist,
-        permissions,
-        back_url=url_for("user.playlists", username=playlist["owner_username"]),
     )
 
 

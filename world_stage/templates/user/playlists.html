@@ -10,7 +10,7 @@
 <ul>
     {% for playlist in playlists %}
     <li>
-        <a href="{{ url_for('user.playlist_play', username=username, playlist_id=playlist.id) }}">{{ playlist.name }}</a>
+        <a href="{{ url_for('playlist.custom_play', playlist_id=playlist.id) }}">{{ playlist.name }}</a>
     </li>
     {% endfor %}
 </ul>

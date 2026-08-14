@@ -20,6 +20,52 @@ from .year import generate_playlist
 bp = Blueprint("playlist", __name__, url_prefix="/playlist")
 
 
+@bp.get("")
+def custom_index():
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT account.id AS user_id, account.username,
+               custom_playlist.id, custom_playlist.name
+        FROM custom_playlist
+        JOIN account ON account.id = custom_playlist.owner_id
+        ORDER BY LOWER(account.username), account.id,
+                 LOWER(custom_playlist.name), custom_playlist.id
+        """
+    )
+    groups: list[dict] = []
+    by_user: dict[int, dict] = {}
+    for row in cursor.fetchall():
+        group = by_user.get(row["user_id"])
+        if group is None:
+            group = {
+                "user_id": row["user_id"],
+                "username": row["username"],
+                "playlists": [],
+            }
+            by_user[row["user_id"]] = group
+            groups.append(group)
+        group["playlists"].append({"id": row["id"], "name": row["name"]})
+    return render_template("playlists/public_index.html", groups=groups)
+
+
+@bp.get("/<int:playlist_id>")
+@with_permissions
+def custom_play(playlist_id: int, permissions: UserPermissions):
+    # Imported lazily because member management itself reuses this module's
+    # generic player helpers.
+    from .member import get_public_playlist, render_playlist_player
+
+    playlist = get_public_playlist(playlist_id)
+    if not playlist:
+        return render_template("error.html", error="Playlist not found"), 404
+    return render_playlist_player(
+        playlist,
+        permissions,
+        back_url=url_for("playlist.custom_index"),
+    )
+
+
 def _scrobble_enabled() -> bool:
     user = get_user_id_from_session(request.cookies.get("session"))
     return bool(user) and scrobble.has_enabled_account(user[0])

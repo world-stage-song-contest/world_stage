@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Playlist: {{ playlist.name }}{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="{{ static('css/predict.css') }}">
+<script src="{{ static('js/playlist-add.js') }}"></script>
+{% endblock %}
 {% block navigation %}
 <a class="nav-item" href="{{ url_for('member.playlist_index') }}">My playlists</a>
 <span class="nav-separator"></span>
-<a class="nav-item" href="{{ url_for('member.playlist_play', playlist_id=playlist.id) }}">Play</a>
+<a class="nav-item" href="{{ url_for('playlist.custom_play', playlist_id=playlist.id) }}">Play</a>
 {% endblock %}
 {% block content %}
 <div style="float:right;">
@@ -13,31 +17,43 @@
 </div>
 
 <h3>Songs</h3>
-{% if songs %}
-<p><a class="button" href="{{ url_for('member.playlist_play', playlist_id=playlist.id) }}">Play playlist</a></p>
-<ol>
+<p id="play-playlist-link" {% if not songs %}hidden{% endif %}><a class="button" href="{{ url_for('playlist.custom_play', playlist_id=playlist.id) }}">Play playlist</a></p>
+<p id="playlist-empty-message" {% if songs %}hidden{% endif %}>This playlist is empty. Search below to add its first song.</p>
+<form method="post" action="{{ url_for('member.playlist_reorder', playlist_id=playlist.id) }}" id="playlist-order-form">
+<fieldset class="predictions" id="sortable-list" {% if not songs %}hidden{% endif %}>
+    <legend>Playlist order</legend>
 {% for song in songs %}
-    <li>
-        {% if song.special_short_name %}
-        <a href="{{ url_for('country.special_details', code=song.cc, special_short_name=song.special_short_name, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>
-        {% else %}
-        <a href="{{ url_for('country.details', code=song.cc, year=song.year_id, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>
-        {% endif %}
-        ({{ song.country }}, {{ song.special_name or song.year_id }})
-        <form method="post" action="{{ url_for('member.playlist_remove_song', playlist_id=playlist.id, song_id=song.id) }}" style="display:inline">
-            <button type="submit">Remove</button>
-        </form>
-    </li>
+    <div class="predictions-item" draggable="true" data-song-id="{{ song.id }}">
+        <span class="drag-handle" aria-hidden="true">⠿</span>
+        <span class="position-label">{{ loop.index }}</span>
+        <input type="hidden" name="song_id" value="{{ song.id }}">
+        <div class="song-details">
+            {{ flag(song.cc, 42, song.country) }}
+            <div class="song-text">
+                {% if song.special_short_name %}
+                <a class="song-title" href="{{ url_for('country.special_details', code=song.cc, special_short_name=song.special_short_name, entry_number=song.entry_number) }}">{{ song.title }}</a>
+                {% else %}
+                <a class="song-title" href="{{ url_for('country.details', code=song.cc, year=song.year_id, entry_number=song.entry_number) }}">{{ song.title }}</a>
+                {% endif %}
+                <span class="song-meta">{{ song.artist }} · {{ song.country }} · {{ song.special_name or song.year_id }}</span>
+            </div>
+        </div>
+        <button type="submit" form="remove-song-{{ song.id }}">Remove</button>
+    </div>
 {% endfor %}
-</ol>
-{% else %}
-<p>This playlist is empty. Search below to add its first song.</p>
-{% endif %}
+</fieldset>
+<div class="submit-row" id="playlist-submit-row" {% if not songs %}hidden{% endif %}><button type="submit" class="big">Save order</button></div>
+</form>
+<div id="remove-song-forms">
+{% for song in songs %}
+<form id="remove-song-{{ song.id }}" method="post" action="{{ url_for('member.playlist_remove_song', playlist_id=playlist.id, song_id=song.id) }}"></form>
+{% endfor %}
+</div>
 
-<h3>Find songs</h3>
+<h3 id="find-songs">Find songs</h3>
 <p>Select a country, a year/special, or both.</p>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
-<form method="get">
+<form method="get" action="{{ url_for('member.playlist_edit') }}#find-songs">
     <input type="hidden" name="playlist_id" value="{{ playlist.id }}">
     <label for="country-filter">Country</label>
     <select id="country-filter" name="country">
@@ -63,7 +79,17 @@
         <td>{{ song.artist }} — {{ song.title }}</td>
         <td>{{ song.country }}</td>
         <td>{{ song.special_name or song.year_id }}</td>
-        <td><form method="post" action="{{ url_for('member.playlist_add_song', playlist_id=playlist.id) }}"><input type="hidden" name="song_id" value="{{ song.id }}"><button type="submit">Add</button></form></td>
+        <td>
+            <button type="button"
+                data-playlist-add
+                data-playlist-id="{{ playlist.id }}"
+                data-song-id="{{ song.id }}"
+                data-target-list="sortable-list"
+                data-url-template="{{ url_for('member.playlist_add_song', playlist_id=0) }}"
+                {% if song.in_playlist %}data-added="true" disabled{% endif %}>
+                {{ 'Added' if song.in_playlist else 'Add' }}
+            </button>
+        </td>
     </tr>
     {% endfor %}
     </tbody>
@@ -72,4 +98,90 @@
 <p>No songs matched those filters.</p>
 {% endif %}
 {% endif %}
+
+<script>
+(function () {
+    const list = document.getElementById('sortable-list');
+    let dragSrc = null;
+
+    function updatePositions() {
+        list.querySelectorAll('.predictions-item').forEach(function (item, index) {
+            item.querySelector('.position-label').textContent = index + 1;
+        });
+    }
+
+    list.addEventListener('dragstart', function (event) {
+        dragSrc = event.target.closest('.predictions-item');
+        if (!dragSrc) return;
+        dragSrc.classList.add('dragging');
+        event.dataTransfer.effectAllowed = 'move';
+    });
+    list.addEventListener('dragend', function () {
+        if (dragSrc) dragSrc.classList.remove('dragging');
+        list.querySelectorAll('.predictions-item').forEach(function (item) {
+            item.classList.remove('drag-over');
+        });
+        dragSrc = null;
+        updatePositions();
+    });
+    list.addEventListener('dragover', function (event) {
+        event.preventDefault();
+        const target = event.target.closest('.predictions-item');
+        if (!target || !dragSrc || target === dragSrc) return;
+        const rect = target.getBoundingClientRect();
+        list.insertBefore(
+            dragSrc,
+            event.clientY < rect.top + rect.height / 2 ? target : target.nextElementSibling
+        );
+    });
+    list.addEventListener('dragenter', function (event) {
+        const target = event.target.closest('.predictions-item');
+        if (target && target !== dragSrc) target.classList.add('drag-over');
+    });
+    list.addEventListener('dragleave', function (event) {
+        const target = event.target.closest('.predictions-item');
+        if (target) target.classList.remove('drag-over');
+    });
+
+    let touchItem = null;
+    let touchClone = null;
+    let touchOffsetY = 0;
+    list.addEventListener('touchstart', function (event) {
+        if (!event.target.closest('.drag-handle')) return;
+        touchItem = event.target.closest('.predictions-item');
+        if (!touchItem) return;
+        const touch = event.touches[0];
+        const rect = touchItem.getBoundingClientRect();
+        touchOffsetY = touch.clientY - rect.top;
+        touchClone = touchItem.cloneNode(true);
+        touchClone.classList.add('touch-clone');
+        touchClone.style.width = rect.width + 'px';
+        touchClone.style.top = touch.clientY - touchOffsetY + 'px';
+        document.body.appendChild(touchClone);
+        touchItem.classList.add('dragging');
+    }, { passive: true });
+    list.addEventListener('touchmove', function (event) {
+        if (!touchItem || !touchClone) return;
+        event.preventDefault();
+        const touch = event.touches[0];
+        touchClone.style.top = touch.clientY - touchOffsetY + 'px';
+        const items = Array.from(list.querySelectorAll('.predictions-item:not(.dragging)'));
+        for (const item of items) {
+            const rect = item.getBoundingClientRect();
+            if (touch.clientY < rect.top + rect.height / 2) {
+                list.insertBefore(touchItem, item);
+                return;
+            }
+        }
+        if (items.length) list.appendChild(touchItem);
+    }, { passive: false });
+    list.addEventListener('touchend', function () {
+        if (touchItem) touchItem.classList.remove('dragging');
+        if (touchClone) touchClone.remove();
+        touchItem = null;
+        touchClone = null;
+        updatePositions();
+    }, { passive: true });
+}());
+</script>
 {% endblock %}

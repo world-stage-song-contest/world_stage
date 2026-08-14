@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Playlists{% endblock %}
+{% block navigation %}<a class="nav-item" href="{{ url_for('playlist.custom_index') }}">Playlists</a>{% endblock %}
+{% block content %}
+{% if groups %}
+{% for group in groups %}
+<h2><a href="{{ url_for('user.profile', username=group.username) }}">{{ group.username }}</a></h2>
+<ul>
+    {% for playlist in group.playlists %}
+    <li><a href="{{ url_for('playlist.custom_play', playlist_id=playlist.id) }}">{{ playlist.name }}</a></li>
+    {% endfor %}
+</ul>
+{% endfor %}
+{% else %}
+<p>No playlists have been created yet.</p>
+{% endif %}
+{% endblock %}

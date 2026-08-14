@@ -122,7 +122,9 @@ def _playlist_filter_options() -> tuple[list[dict], list[dict]]:
     return countries, cursor.fetchall()
 
 
-def _search_playlist_songs(country: str, year: str) -> tuple[list[dict], str | None]:
+def _search_playlist_songs(
+    playlist_id: int, country: str, year: str
+) -> tuple[list[dict], str | None]:
     if not country and not year:
         return [], None
 
@@ -138,7 +140,12 @@ def _search_playlist_songs(country: str, year: str) -> tuple[list[dict], str | N
         """
         SELECT song.id, song.title, song.artist, song.entry_number,
                song.year_id, country.id AS country_id, country.name AS country,
-               year.special_name, year.special_short_name
+               year.special_name, year.special_short_name,
+               EXISTS (
+                   SELECT 1 FROM custom_playlist_song
+                   WHERE custom_playlist_song.playlist_id = %(playlist_id)s
+                     AND custom_playlist_song.song_id = song.id
+               ) AS in_playlist
         FROM current_song AS song
         JOIN country ON country.id = song.country_id
         JOIN year ON year.id = song.year_id
@@ -148,7 +155,7 @@ def _search_playlist_songs(country: str, year: str) -> tuple[list[dict], str | N
           AND (%(year_id)s::integer IS NULL OR song.year_id = %(year_id)s)
         ORDER BY song.year_id, country.name, song.entry_number, song.id
         """,
-        {"country": country, "year_id": year_id},
+        {"playlist_id": playlist_id, "country": country, "year_id": year_id},
     )
     return cursor.fetchall(), None
 
@@ -197,7 +204,7 @@ def playlist_edit(user: tuple[int, str]):
 
     country = request.args.get("country", "").upper()
     year = request.args.get("year", "")
-    search_results, error = _search_playlist_songs(country, year)
+    search_results, error = _search_playlist_songs(playlist_id, country, year)
     countries, years = _playlist_filter_options()
     return render_template(
         "playlists/details.html",
@@ -232,6 +239,8 @@ def playlist_add_song(playlist_id: int, user: tuple[int, str]):
     )
     if not cursor.fetchone():
         return render_template("error.html", error="Song not found"), 404
+    # Concurrent async additions must allocate positions one at a time.
+    cursor.execute("SELECT id FROM custom_playlist WHERE id = %s FOR UPDATE", (playlist_id,))
     cursor.execute(
         """
         INSERT INTO custom_playlist_song (playlist_id, song_id, position)
@@ -242,11 +251,50 @@ def playlist_add_song(playlist_id: int, user: tuple[int, str]):
         """,
         {"playlist_id": playlist_id, "song_id": song_id},
     )
+    added = cursor.rowcount > 0
     cursor.execute(
         "UPDATE custom_playlist SET updated_at = CURRENT_TIMESTAMP WHERE id = %s",
         (playlist_id,),
     )
     db.commit()
+    if request.accept_mimetypes.accept_json:
+        song = next(row for row in _playlist_rows(playlist_id) if row["id"] == song_id)
+        details_url = (
+            url_for(
+                "country.special_details",
+                code=song["cc"],
+                special_short_name=song["special_short_name"],
+                entry_number=song["entry_number"],
+            )
+            if song["special_short_name"]
+            else url_for(
+                "country.details",
+                code=song["cc"],
+                year=song["year_id"],
+                entry_number=song["entry_number"],
+            )
+        )
+        return {
+            "result": {
+                "playlist_id": playlist_id,
+                "song_id": song_id,
+                "added": added,
+                "song": {
+                    "id": song["id"],
+                    "cc": song["cc"],
+                    "country": song["country"],
+                    "title": song["title"],
+                    "artist": song["artist"],
+                    "year": song["special_name"] or song["year_id"],
+                    "details_url": details_url,
+                    "remove_url": url_for(
+                        "member.playlist_remove_song",
+                        playlist_id=playlist_id,
+                        song_id=song_id,
+                    ),
+                },
+            }
+        }
     return redirect(url_for("member.playlist_edit", playlist_id=playlist_id))
 
 
@@ -282,6 +330,50 @@ def playlist_remove_song(playlist_id: int, song_id: int, user: tuple[int, str]):
     return redirect(url_for("member.playlist_edit", playlist_id=playlist_id))
 
 
+@bp.post("/playlist/<int:playlist_id>/order")
+@require_user(redirect_to_login=True)
+def playlist_reorder(playlist_id: int, user: tuple[int, str]):
+    if not _owned_playlist(playlist_id, user[0]):
+        return render_template("error.html", error="Playlist not found"), 404
+
+    payload = request.get_json(silent=True)
+    raw_song_ids = (
+        payload.get("song_ids", [])
+        if isinstance(payload, dict)
+        else request.form.getlist("song_id")
+    )
+    try:
+        song_ids = [int(song_id) for song_id in raw_song_ids]
+    except (TypeError, ValueError):
+        return render_template("error.html", error="Invalid playlist order"), 400
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT song_id FROM custom_playlist_song WHERE playlist_id = %s",
+        (playlist_id,),
+    )
+    existing_song_ids = {row["song_id"] for row in cursor.fetchall()}
+    if len(song_ids) != len(set(song_ids)) or set(song_ids) != existing_song_ids:
+        return render_template("error.html", error="Invalid playlist order"), 400
+
+    cursor.executemany(
+        """
+        UPDATE custom_playlist_song
+        SET position = %s
+        WHERE playlist_id = %s AND song_id = %s
+        """,
+        [(position, playlist_id, song_id) for position, song_id in enumerate(song_ids, 1)],
+    )
+    cursor.execute(
+        "UPDATE custom_playlist SET updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+        (playlist_id,),
+    )
+    get_db().commit()
+    if request.is_json:
+        return {"result": {"playlist_id": playlist_id, "song_ids": song_ids}}
+    return redirect(url_for("member.playlist_edit", playlist_id=playlist_id))
+
+
 @bp.post("/playlist/<int:playlist_id>/delete")
 @require_user(redirect_to_login=True)
 def playlist_delete(playlist_id: int, user: tuple[int, str]):
@@ -295,28 +387,6 @@ def playlist_delete(playlist_id: int, user: tuple[int, str]):
         return render_template("error.html", error="Playlist not found"), 404
     db.commit()
     return redirect(url_for("member.playlist_index"))
-
-
-@bp.get("/playlist/<int:playlist_id>/play")
-@with_auth
-def playlist_play(
-    playlist_id: int,
-    user: tuple[int, str] | None,
-    permissions: UserPermissions,
-):
-    playlist = get_public_playlist(playlist_id)
-    if not playlist:
-        return render_template("error.html", error="Playlist not found"), 404
-    is_owner = bool(user and user[0] == playlist["owner_id"])
-    return render_playlist_player(
-        playlist,
-        permissions,
-        back_url=(
-            url_for("member.playlist_edit", playlist_id=playlist_id)
-            if is_owner
-            else url_for("user.profile", username=playlist["owner_username"])
-        ),
-    )
 
 
 @bp.get("/playlist/<int:playlist_id>.m3u")
