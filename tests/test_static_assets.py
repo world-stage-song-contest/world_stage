@@ -42,6 +42,10 @@ def test_flag_url_selects_small_assets_and_falls_back_to_regular(tmp_path: Path)
     app.config["FLAG_CATALOG"] = sqlite3.connect(f"{catalogue_path.as_uri()}?mode=ro", uri=True)
 
     assert _flag_url(app, "aa", 30) == "/static/release-20260719/flags/AA/rect-small.svg"
+    assert _flag_url(app, "aa", 35) == "/static/release-20260719/flags/AA/rect-small.svg"
+    assert _flag_url(app, "aa", 36) == "/static/release-20260719/flags/AA/rect-small.svg"
+    assert _flag_url(app, "aa", 37) == "/static/release-20260719/flags/AA/rect.svg"
+    assert _flag_url(app, "aa", 40) == "/static/release-20260719/flags/AA/rect.svg"
     assert _flag_url(app, "aa", 80) == "/static/release-20260719/flags/AA/rect.svg"
     assert _flag_url(app, "aa", 80, variant=None) == "/static/release-20260719/flags/AA/rect.svg"
     assert _flag_url(app, "missing", 80) == "/static/release-20260719/flags/XX/rect.svg"

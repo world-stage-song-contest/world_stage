@@ -39,11 +39,14 @@
         </script>
         <script src="{{ static('flag-manifest.js') }}"></script>
         <script>
+            window.FLAG_SMALL_WIDTH_CUTOFF = 36;
             window.flagStaticUrl = (country, width, shape = "rect", variant = "") => {
                 const code = String(country || "XX").toUpperCase();
                 const requestedShape = ["rect", "square"].includes(shape) ? shape : "rect";
                 const requestedVariant = /^[A-Za-z0-9_-]+$/.test(variant) ? variant : "";
-                const requestedSize = Number(width) <= 40 ? "small" : "regular";
+                const requestedSize = Number(width) <= window.FLAG_SMALL_WIDTH_CUTOFF
+                    ? "small"
+                    : "regular";
                 const codes = code === "XX" ? ["XX"] : [code, "XX"];
                 const variants = requestedVariant ? [requestedVariant, ""] : [""];
                 const sizes = requestedSize === "small" ? ["small", "regular"] : ["regular"];

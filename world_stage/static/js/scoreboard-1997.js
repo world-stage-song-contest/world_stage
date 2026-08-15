@@ -18,12 +18,27 @@
         flagFrame.classList.add("sb97-flag-frame");
         element.appendChild(flagFrame);
 
+        const picture = document.createElement("picture");
+        picture.classList.add("sb97-flag-picture");
+        flagFrame.appendChild(picture);
+
+        const smallFlagSource = document.createElement("source");
+        const smallFlagCutoff = window.FLAG_SMALL_WIDTH_CUTOFF || 36;
+        smallFlagSource.srcset = window.flagStaticUrl(
+            country.code,
+            smallFlagCutoff - 1
+        );
+        // The row's precise width is only known after it enters the layout.
+        // ``positionRow`` enables this source when the rendered flag is small.
+        smallFlagSource.media = "not all";
+        picture.appendChild(smallFlagSource);
+
         const flag = document.createElement("img");
         flag.classList.add("sb97-flag", "flag-image");
-        flag.src = window.flagStaticUrl(country.code, 40);
+        flag.src = window.flagStaticUrl(country.code, smallFlagCutoff + 1);
         flag.alt = country.name;
         flag.draggable = false;
-        flagFrame.appendChild(flag);
+        picture.appendChild(flag);
 
         const name = document.createElement("div");
         name.classList.add("sb97-name");
@@ -36,7 +51,7 @@
         const total = makeScore("total");
         element.appendChild(total);
 
-        return {element, flagFrame, name, current, total};
+        return {element, flagFrame, smallFlagSource, name, current, total};
     }
 
     function createPointsLegend() {
@@ -119,6 +134,9 @@
         const row = position - perColumn * column;
         const size = view.element.getBoundingClientRect();
         const flagWidth = (size.height - 4) * 1.5 + 3;
+        const renderedFlagWidth = flagWidth - 3;
+        const useSmallFlag = renderedFlagWidth <= (window.FLAG_SMALL_WIDTH_CUTOFF || 36);
+        view.smallFlagSource.media = useSmallFlag ? "all" : "not all";
         view.element.style.setProperty("--sb97-flag-frame-width", `${flagWidth}px`);
         container.style.height = `${(size.height + 2) * perColumn}px`;
         view.element.style.top = `${(size.height + 2) * row}px`;

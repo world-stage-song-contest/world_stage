@@ -181,7 +181,7 @@ def _flag_url(
     country = (country or "XX").upper()
     shape = shape if shape in {"rect", "square"} else "rect"
     variant = variant if variant and FLAG_VARIANT_RE.fullmatch(variant) else ""
-    size = "small" if width <= 40 else "regular"
+    size = "small" if width <= 36 else "regular"
     catalog = _flag_catalog(app)
 
     if catalog is None:
