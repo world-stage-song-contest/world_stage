@@ -157,8 +157,19 @@
     </section>
 
     <section id="db-results-section" hidden>
-        <div class="db-results-heading"><h2>Results</h2><span id="db-results-meta"></span></div>
-        <div class="db-table-scroll"><table id="db-results"><thead></thead><tbody></tbody></table></div>
+        <div class="db-results-heading">
+            <h2>Results</h2>
+            <div class="db-results-controls">
+                <span id="db-results-meta"></span>
+                <div class="db-segmented" role="group" aria-label="Result display">
+                    <button type="button" class="active" id="db-results-table-view" aria-pressed="true">Table</button>
+                    <button type="button" id="db-results-unicode-view" aria-pressed="false">Copyable</button>
+                </div>
+                <button type="button" id="db-copy-results" hidden>Copy table</button>
+            </div>
+        </div>
+        <div class="db-table-scroll" id="db-html-results"><table id="db-results"><thead></thead><tbody></tbody></table></div>
+        <pre id="db-unicode-results" tabindex="0" aria-label="Copyable Unicode query results" hidden></pre>
     </section>
 
     <dialog id="db-parameter-dialog">

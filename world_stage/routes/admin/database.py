@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import time
+from numbers import Number
 from typing import Any
 
 import psycopg
@@ -631,6 +632,14 @@ def execute_database_query():
         return _json_error(f"Query failed: {exc}")
 
     safe_rows = json_safe_rows(rows)
+    numeric_headers = [
+        header
+        for header in headers
+        if any(
+            isinstance(row.get(header), Number) and not isinstance(row.get(header), bool)
+            for row in rows
+        )
+    ]
     if result_format == "csv":
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=headers)
@@ -645,6 +654,7 @@ def execute_database_query():
     return jsonify(
         {
             "headers": headers,
+            "numeric_headers": numeric_headers,
             "rows": safe_rows,
             "row_count": row_count,
             "duration_ms": duration_ms,

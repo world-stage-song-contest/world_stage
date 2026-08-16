@@ -1,3 +1,44 @@
+function databaseResultText(value) {
+    if (value === null) return "NULL";
+    return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
+function formatUnicodeResultTable(headers, rows, numericHeaders = []) {
+    if (!headers.length) return "";
+    const numericColumns = new Set(numericHeaders);
+    const linesFor = value => databaseResultText(value).replace(/\r\n?/g, "\n").replaceAll("\t", "    ").split("\n");
+    const widthOf = value => Array.from(value).length;
+    const cellLines = rows.map(row => headers.map(header => linesFor(row[header])));
+    const widths = headers.map((header, column) => Math.max(
+        widthOf(String(header)),
+        ...cellLines.map(row => Math.max(...row[column].map(widthOf)))
+    ));
+    const fill = (character, count) => character.repeat(count + 2);
+    const border = (left, middle, right, character) => left + widths.map(width => fill(character, width)).join(middle) + right;
+    const pad = (value, width, rightAligned = false) => {
+        const padding = " ".repeat(width - widthOf(value));
+        return rightAligned ? padding + value : value + padding;
+    };
+    const output = [
+        border("┌", "┬", "┐", "─"),
+        "│ " + headers.map((header, column) => pad(String(header), widths[column])).join(" │ ") + " │",
+        border("╞", "╪", "╡", "═")
+    ];
+    rows.forEach((row, rowIndex) => {
+        const height = Math.max(...cellLines[rowIndex].map(lines => lines.length));
+        for (let line = 0; line < height; line += 1) {
+            const cells = headers.map((header, column) => {
+                const value = cellLines[rowIndex][column][line] || "";
+                const numeric = row[header] !== null && (typeof row[header] === "number" || numericColumns.has(header));
+                return pad(value, widths[column], line === 0 && numeric);
+            });
+            output.push("│ " + cells.join(" │ ") + " │");
+        }
+    });
+    output.push(border("└", "┴", "┘", "─"));
+    return output.join("\n");
+}
+
 function initializeDatabaseWorkbench() {
     const root = document.getElementById("database-workbench");
     if (!root || root.dataset.initialized) return;
@@ -842,13 +883,45 @@ function initializeDatabaseWorkbench() {
         const body = document.createDocumentFragment();
         data.rows.forEach(row => {
             const tr = document.createElement("tr");
-            data.headers.forEach(header => { const td = document.createElement("td"); const value = row[header]; td.textContent = value === null ? "NULL" : typeof value === "object" ? JSON.stringify(value) : String(value); tr.append(td); });
+            data.headers.forEach(header => { const td = document.createElement("td"); const value = row[header]; td.textContent = databaseResultText(value); tr.append(td); });
             body.append(tr);
         });
         table.querySelector("tbody").replaceChildren(body);
+        byId("db-unicode-results").textContent = formatUnicodeResultTable(data.headers, data.rows, data.numeric_headers);
         byId("db-results-meta").textContent = `${data.row_count} rows · ${data.duration_ms} ms`;
         section.hidden = false;
         section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function setResultView(view) {
+        const unicode = view === "unicode";
+        byId("db-html-results").hidden = unicode;
+        byId("db-unicode-results").hidden = !unicode;
+        byId("db-copy-results").hidden = !unicode;
+        byId("db-results-table-view").classList.toggle("active", !unicode);
+        byId("db-results-table-view").setAttribute("aria-pressed", String(!unicode));
+        byId("db-results-unicode-view").classList.toggle("active", unicode);
+        byId("db-results-unicode-view").setAttribute("aria-pressed", String(unicode));
+    }
+
+    async function copyUnicodeResults() {
+        const text = byId("db-unicode-results").textContent;
+        const button = byId("db-copy-results");
+        try {
+            if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+            await navigator.clipboard.writeText(text);
+        } catch (_) {
+            const field = document.createElement("textarea");
+            field.value = text;
+            field.style.position = "fixed";
+            field.style.opacity = "0";
+            document.body.append(field);
+            field.select();
+            document.execCommand("copy");
+            field.remove();
+        }
+        button.textContent = "Copied!";
+        window.setTimeout(() => { button.textContent = "Copy table"; }, 2000);
     }
 
     function builderInputsValid() {
@@ -1310,6 +1383,9 @@ function initializeDatabaseWorkbench() {
     byId("db-csv-builder").addEventListener("click", () => executionForBuilder("csv"));
     byId("db-run-sql").addEventListener("click", () => executionForSql("screen"));
     byId("db-csv-sql").addEventListener("click", () => executionForSql("csv"));
+    byId("db-results-table-view").addEventListener("click", () => setResultView("table"));
+    byId("db-results-unicode-view").addEventListener("click", () => setResultView("unicode"));
+    byId("db-copy-results").addEventListener("click", copyUnicodeResults);
     byId("db-save-builder").addEventListener("click", () => openSave("builder"));
     byId("db-save-sql").addEventListener("click", () => openSave("sql"));
     byId("db-confirm-run").addEventListener("click", event => { event.preventDefault(); const fields = Array.from(byId("db-parameter-fields").querySelectorAll("[data-parameter-name]")); if (!fields.every(input => input.reportValidity())) return; const values = Object.fromEntries(fields.map(input => [input.dataset.parameterName, input.type === "checkbox" ? input.checked : input.value])); byId("db-parameter-dialog").close(); executePending(values); });

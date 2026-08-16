@@ -79,9 +79,11 @@ button.primary { background:var(--accent); color:var(--on-blue); border:1px soli
 .schema-node .kind { fill:var(--muted); font-size:9px; }
 .schema-node .column { font-size:10px; }
 .db-results-heading { margin-top:1.2em; }
+.db-results-controls { display:flex; align-items:center; justify-content:flex-end; gap:.6em; flex-wrap:wrap; }
 .db-table-scroll { max-width:100%; overflow:auto; }
-#db-results { width:max-content; min-width:100%; }
+#db-results { width:max-content; }
 #db-results td { max-width:35em; overflow-wrap:anywhere; white-space:pre-wrap; }
+#db-unicode-results { max-width:100%; box-sizing:border-box; overflow:auto; margin:.7em 0 0; padding:.8em; border:1px solid var(--border-ui); background:var(--background1); user-select:text; }
 dialog { width:min(34em,calc(100% - 2em)); color:var(--foreground1); background:var(--surface); border:1px solid var(--border-subtle); }
 dialog::backdrop { background:rgba(0,0,0,.5); }
 dialog h2 { margin-top:0; }
@@ -96,5 +98,6 @@ dialog label { display:grid; grid-template-columns:9em minmax(0,1fr); align-item
 @media(max-width:42em){
     .db-row,.db-row.join-row,.db-row.aggregate-row,.db-row.order-row,.db-row.parameter-row { grid-template-columns:1fr 1fr; }
     .db-row button { justify-self:start; }
-    .db-heading { align-items:start; flex-direction:column; }
+    .db-heading,.db-results-heading { align-items:start; flex-direction:column; }
+    .db-results-controls { justify-content:flex-start; }
 }

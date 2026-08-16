@@ -100,6 +100,7 @@ def test_saved_parameterized_query_executes_and_is_logged(client, db):
         payload = response.get_json()
         log_id = payload["log_id"]
         assert payload["rows"] == [{"id": 1, "username": "alice"}]
+        assert payload["numeric_headers"] == ["id"]
 
         logged = db.execute(
             """
