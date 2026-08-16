@@ -11,6 +11,7 @@ SONG_DATA_FIELDS = (
     "submitter_id",
     "title",
     "artist",
+    "artist_credit_set_id",
     "native_title",
     "translated_lyrics",
     "romanized_lyrics",

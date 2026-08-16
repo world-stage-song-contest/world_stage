@@ -137,6 +137,96 @@ class TestGetSongByCountryYear:
 
 
 class TestCreateSong:
+    def test_creates_ordered_structured_artist_credits(self, client, db, bob_headers):
+        response = _create_song(
+            client,
+            bob_headers,
+            artist=None,
+            artists=[
+                {
+                    "full_name": "Aleksandra Nowak",
+                    "native_name": "Александра Новак",
+                    "stage_name": "Alexa",
+                    "join": None,
+                },
+                {
+                    "full_name": "Jan Kowalski",
+                    "native_name": None,
+                    "stage_name": "J.K.",
+                    "join": " feat. ",
+                },
+            ],
+        )
+
+        assert response.status_code == 201
+        song = _result(response)
+        assert song["artist"] == "Alexa feat. J.K."
+        assert [credit["stage_name"] for credit in song["artists"]] == [
+            "Alexa",
+            "J.K.",
+        ]
+        assert song["artists"][1]["join"] == " feat. "
+        with db.cursor() as cursor:
+            cursor.execute(
+                "SELECT full_name, native_name FROM artist ORDER BY id DESC LIMIT 2"
+            )
+            assert {row["full_name"] for row in cursor} == {
+                "Aleksandra Nowak",
+                "Jan Kowalski",
+            }
+
+    def test_reuses_canonical_artist_by_name(self, client, db, alice_headers):
+        credit = [{
+            "full_name": "Reusable Person",
+            "native_name": None,
+            "stage_name": "First Name",
+            "join": None,
+        }]
+        _create_song(client, alice_headers, country="US", artist=None, artists=credit)
+        credit[0]["stage_name"] = "New Stage Name"
+        _create_song(client, alice_headers, country="ES", artist=None, artists=credit)
+
+        with db.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) AS count FROM artist WHERE full_name = %s",
+                ("Reusable Person",),
+            )
+            assert cursor.fetchone()["count"] == 1
+
+    def test_rejects_missing_join_between_artists(self, client, bob_headers):
+        response = _create_song(
+            client,
+            bob_headers,
+            artist=None,
+            artists=[
+                {"full_name": "One", "stage_name": "One"},
+                {"full_name": "Two", "stage_name": "Two"},
+            ],
+        )
+
+        assert response.status_code == 400
+        assert "artists[1]" in _error(response)["description"]
+
+    def test_preserves_custom_artist_join_exactly(self, client, bob_headers):
+        response = _create_song(
+            client,
+            bob_headers,
+            artist=None,
+            artists=[
+                {"full_name": "One", "stage_name": "One"},
+                {
+                    "full_name": "Two",
+                    "stage_name": "Two",
+                    "join": " ~ duet with ~ ",
+                },
+            ],
+        )
+
+        assert response.status_code == 201
+        song = _result(response)
+        assert song["artist"] == "One ~ duet with ~ Two"
+        assert song["artists"][1]["join"] == " ~ duet with ~ "
+
     def test_creates_song(self, client, db, bob_headers):
         resp = _create_song(client, bob_headers)
         assert resp.status_code == 201

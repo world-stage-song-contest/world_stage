@@ -34,8 +34,10 @@
     <details>
         <summary>Detailed explanations of every field</summary>
         <dl>
-            <dt><strong>Artist</strong> (Mandatory)</dt>
-            <dd>The name of the artist. Write this in Latin script.</dd>
+            <dt><strong>Artists</strong> (Mandatory)</dt>
+            <dd>Add each performer separately. Use their full name for the artist record,
+                optionally add the name in its native script, and provide the stage name
+                credited on this entry.</dd>
             <dt><strong>Latin title</strong>  (Mandatory)</dt>
             <dd>The title of the song in Latin alphabet. It can either be a translation of the native title or a romanization.</dd>
             <dt><strong>Is the Latin title a translation?</strong></dt>
@@ -121,8 +123,46 @@
 
     <fieldset class="grid hidable" disabled>
         <legend>Song information</legend>
-        <label class="req" for="artist">Artist</label>
-        <input type="text" id="artist" name="artist" placeholder="Artist name" required maxlength="150" minlength="1" value="{{ data.artist }}">
+        <label class="req">Artists</label>
+        <div id="artist-credit-editor">
+            <div id="artist-credit-rows"></div>
+            <button type="button" onclick="addArtistRow()">Add artist</button>
+        </div>
+        <template id="artist-credit-template">
+            <div class="artist-credit-row">
+                <div class="artist-join-controls">
+                    <select class="artist-join" aria-label="Join with previous artist">
+                        <option value=" &amp; ">&amp;</option>
+                        <option value=" and ">and</option>
+                        <option value=" feat. ">feat.</option>
+                        <option value=" featuring ">featuring</option>
+                        <option value=" ft. ">ft.</option>
+                        <option value=" with ">with</option>
+                        <option value=" x ">x</option>
+                        <option value=" × ">×</option>
+                        <option value=" vs. ">vs.</option>
+                        <option value=" presents ">presents</option>
+                        <option value=" meets ">meets</option>
+                        <option value=" + ">+</option>
+                        <option value=", ">comma</option>
+                        <option value=" / ">/</option>
+                        <option value="__other__">Other…</option>
+                    </select>
+                    <input class="artist-custom-join artist-join-other hidden" type="text"
+                           placeholder="Exact join text" aria-label="Custom artist join"
+                           maxlength="20">
+                </div>
+                <input class="artist-full-name" type="text" placeholder="Full name"
+                       aria-label="Full name" required maxlength="150">
+                <input class="artist-native-name" type="text" placeholder="Native-script name (optional)"
+                       aria-label="Native-script name" maxlength="150">
+                <input class="artist-stage-name" type="text" placeholder="Stage name on this entry"
+                       aria-label="Stage name" maxlength="150">
+                <button type="button" class="artist-remove" aria-label="Remove artist">Remove</button>
+            </div>
+        </template>
+        <div class="span-fieldset-flush"><small>Join text is stored exactly as shown;
+            custom joiners may include spaces and punctuation.</small></div>
         <label class="req" for="song">Latin title</label>
         <input type="text" id="title" name="title" placeholder="Song title" required maxlength="100" minlength="1" value="{{ data.title }}">
         <div class="span-fieldset">

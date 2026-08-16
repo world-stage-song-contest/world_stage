@@ -17,6 +17,13 @@ from world_stage.utils import (
     resolve_country_code,
     resp,
 )
+from world_stage.utils.artists import (
+    ArtistValidationError,
+    create_artist_credit_set,
+    fetch_artist_credits,
+    parse_artist_credits,
+    render_artist_credits,
+)
 from world_stage.utils.song_revisions import (
     MAX_YEAR_SUBMISSIONS,
     NonPlaceholderLimitError,
@@ -116,6 +123,31 @@ def _normalize_text(value) -> str | None:
     value = unicodedata.normalize("NFC", value)
     value = value.replace("\r", "")
     return None if value == "" else value
+
+
+def _parse_request_artists(data: dict) -> tuple[list[dict] | None, str | None]:
+    try:
+        return parse_artist_credits(data), None
+    except ArtistValidationError as exc:
+        return None, str(exc)
+
+
+def _same_artist_credits(incoming: list[dict], current: list[dict]) -> bool:
+    if len(incoming) != len(current):
+        return False
+    for new, old in zip(incoming, current, strict=True):
+        if new["stage_name"] != old["stage_name"] or new["join"] != old["join"]:
+            return False
+        if new["id"] is not None:
+            if new["id"] != old["id"]:
+                return False
+        elif (
+            (new["full_name"] or "").casefold() != old["full_name"].casefold()
+            or (new["native_name"] or "").casefold()
+            != (old["native_name"] or "").casefold()
+        ):
+            return False
+    return True
 
 
 def _form_bool(value: str | None) -> bool:
@@ -349,8 +381,18 @@ def _song_row_to_json(
     key_signatures: list[dict] | None = None,
     time_signatures: list[dict] | None = None,
     subgenres: list[dict] | None = None,
+    artists: list[dict] | None = None,
 ) -> dict:
     """Turn a DB row + language list into the API response body."""
+    artist_items = artists if artists is not None else row.get("artists", [])
+    if not artist_items and row.get("artist"):
+        artist_items = [{
+            "id": None,
+            "full_name": row["artist"],
+            "native_name": None,
+            "stage_name": row["artist"],
+            "join": None,
+        }]
     return {
         "id": row["id"],
         "year": row["year_id"],
@@ -361,6 +403,7 @@ def _song_row_to_json(
         "title": row["title"],
         "native_title": row["native_title"],
         "artist": row["artist"],
+        "artists": artist_items,
         "is_placeholder": row["is_placeholder"],
         "title_language_id": row["title_language_id"],
         "native_language_id": row["native_language_id"],
@@ -409,6 +452,7 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
                song.notes, song.sources,
                song.submitter_id, account.username, song.entry_number,
                song.duration, song.song_data_id, song.approval_status,
+               song.artist_credit_set_id,
                year.special_short_name
         FROM current_song AS song
         JOIN country ON song.country_id = country.id
@@ -436,6 +480,7 @@ _SONG_LIST_QUERY = sql.SQL(
         data.title,
         data.native_title,
         data.artist,
+        data.artist_credit_set_id,
         COALESCE(status.is_placeholder, false) AS is_placeholder,
         data.title_language_id,
         data.native_language_id,
@@ -459,7 +504,8 @@ _SONG_LIST_QUERY = sql.SQL(
         COALESCE(languages.items, '[]'::jsonb) AS languages,
         COALESCE(key_signatures.items, '[]'::jsonb) AS key_signatures,
         COALESCE(time_signatures.items, '[]'::jsonb) AS time_signatures,
-        COALESCE(subgenres.items, '[]'::jsonb) AS subgenres
+        COALESCE(subgenres.items, '[]'::jsonb) AS subgenres,
+        COALESCE(artists.items, '[]'::jsonb) AS artists
     FROM selected_song song
     JOIN LATERAL (
         SELECT revision.*
@@ -532,6 +578,20 @@ _SONG_LIST_QUERY = sql.SQL(
         JOIN genre ON genre.id = subgenre.genre_id
         WHERE member.genre_set_id = data.genre_set_id
     ) subgenres ON true
+    LEFT JOIN LATERAL (
+        SELECT jsonb_agg(
+            jsonb_build_object(
+                'id', artist.id,
+                'full_name', artist.full_name,
+                'native_name', artist.native_name,
+                'stage_name', member.stage_name,
+                'join', member.join_phrase
+            ) ORDER BY member.position
+        ) AS items
+        FROM artist_credit member
+        JOIN artist ON artist.id = member.artist_id
+        WHERE member.artist_credit_set_id = data.artist_credit_set_id
+    ) artists ON true
     ORDER BY song.year_id, country.name, song.entry_number
     """
 )
@@ -595,6 +655,15 @@ def _fetch_song_languages(cursor, song_id: int) -> list[dict]:
         (song_id,),
     )
     return [{"id": r["id"], "name": r["name"]} for r in cursor.fetchall()]
+
+
+def _fetch_song_artists(cursor, song_id: int) -> list[dict]:
+    cursor.execute(
+        "SELECT artist_credit_set_id FROM current_song WHERE id = %s",
+        (song_id,),
+    )
+    row = cursor.fetchone()
+    return fetch_artist_credits(cursor, row["artist_credit_set_id"] if row else None)
 
 
 def _fetch_song_key_signatures(cursor, song_id: int) -> list[dict]:
@@ -1178,6 +1247,11 @@ def create_song(auth: tuple):
         return err(ErrorID.BAD_REQUEST, "; ".join(sg_errors))
 
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
+    artist_credits, artist_error = _parse_request_artists(data)
+    if artist_error:
+        return err(ErrorID.BAD_REQUEST, artist_error)
+    assert artist_credits is not None
+    text["artist"] = render_artist_credits(artist_credits)
 
     is_translation = bool(data.get("is_translation", False))
     does_match = bool(data.get("does_match", False))
@@ -1236,6 +1310,7 @@ def create_song(auth: tuple):
     time_signature_set_id = _get_or_create_time_signature_set(
         cursor, time_signatures or []
     )
+    artist_credit_set_id = create_artist_credit_set(cursor, artist_credits)
 
     cursor.execute(
         """
@@ -1254,7 +1329,7 @@ def create_song(auth: tuple):
     cursor.execute(
         """
         INSERT INTO song_data (
-            song_id, title, native_title, artist,
+            song_id, title, native_title, artist, artist_credit_set_id,
             title_language_id, native_language_id, language_set_id,
             genre_set_id, key_signature_set_id, time_signature_set_id,
             video_link, duration,
@@ -1264,11 +1339,12 @@ def create_song(auth: tuple):
             changed_by
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         """,
         (
             song_id, text["title"], text["native_title"], text["artist"],
+            artist_credit_set_id,
             title_language_id, native_language_id, language_set_id,
             genre_set_id, key_signature_set_id, time_signature_set_id,
             text["video_link"], duration_for_link(text["video_link"]),
@@ -1301,7 +1377,8 @@ def create_song(auth: tuple):
     ks = _fetch_song_key_signatures(cursor, song_id)
     ts = _fetch_song_time_signatures(cursor, song_id)
     sg = _fetch_song_subgenres(cursor, song_id)
-    body, code = resp(_song_row_to_json(row, languages, ks, ts, sg), 201)
+    artists = _fetch_song_artists(cursor, song_id)
+    body, code = resp(_song_row_to_json(row, languages, ks, ts, sg, artists), 201)
     response = make_response(body, code)
     response.headers["Location"] = url_for("api.song.get_song", id=song_id)
     return response
@@ -1365,6 +1442,11 @@ def replace_song(id: int, auth: tuple):
 
     # ── Build full replacement values ────────────────────────────
     text = {k: _normalize_text(data.get(k)) for k in MUTABLE_TEXT_FIELDS}
+    artist_credits, artist_error = _parse_request_artists(data)
+    if artist_error:
+        return err(ErrorID.BAD_REQUEST, artist_error)
+    assert artist_credits is not None
+    text["artist"] = render_artist_credits(artist_credits)
 
     is_placeholder = bool(data.get("is_placeholder", False))
     is_translation = bool(data.get("is_translation", False))
@@ -1447,11 +1529,17 @@ def replace_song(id: int, auth: tuple):
     time_signature_set_id = _get_or_create_time_signature_set(
         cursor, time_signatures or []
     )
+    current_credits = fetch_artist_credits(cursor, row["artist_credit_set_id"])
+    if _same_artist_credits(artist_credits, current_credits):
+        artist_credit_set_id = row["artist_credit_set_id"]
+    else:
+        artist_credit_set_id = create_artist_credit_set(cursor, artist_credits)
 
     revision_changes = {
         "title": text["title"],
         "native_title": text["native_title"],
         "artist": text["artist"],
+        "artist_credit_set_id": artist_credit_set_id,
         "title_language_id": title_language_id,
         "native_language_id": native_language_id,
         "language_set_id": language_set_id,
@@ -1512,7 +1600,8 @@ def replace_song(id: int, auth: tuple):
     ks = _fetch_song_key_signatures(cursor, id)
     ts = _fetch_song_time_signatures(cursor, id)
     sg = _fetch_song_subgenres(cursor, id)
-    return resp(_song_row_to_json(updated, langs, ks, ts, sg))
+    artists = _fetch_song_artists(cursor, id)
+    return resp(_song_row_to_json(updated, langs, ks, ts, sg, artists))
 
 
 # ── PATCH /api/song/<id> ─────────────────────────────────────────────
@@ -1537,6 +1626,13 @@ def update_song(id: int, auth: tuple):
     # ── Permission check ─────────────────────────────────────────
     if not permissions.can_edit and row["submitter_id"] != user_id:
         return err(ErrorID.FORBIDDEN, "You can only edit your own submissions")
+
+    artist_credits = None
+    if "artists" in data or "artist" in data:
+        artist_credits, artist_error = _parse_request_artists(data)
+        if artist_error:
+            return err(ErrorID.BAD_REQUEST, artist_error)
+        assert artist_credits is not None
 
     # ── Build SET clause from provided fields ────────────────────
     # Column names are only ever drawn from fixed allowlists, but routing
@@ -1632,6 +1728,7 @@ def update_song(id: int, auth: tuple):
         and key_signatures is None
         and time_signatures is None
         and subgenre_ids is None
+        and artist_credits is None
         and "is_placeholder" not in data
     ):
         return err(ErrorID.BAD_REQUEST, "No fields to update")
@@ -1640,6 +1737,8 @@ def update_song(id: int, auth: tuple):
     for field in MUTABLE_TEXT_FIELDS:
         if field in data:
             merged[field] = _normalize_text(data[field])
+    if artist_credits is not None:
+        merged["artist"] = render_artist_credits(artist_credits)
 
     # Artist and title distinguish live songs from deletion sentinels.
     for field, label in REQUIRED_IDENTITY_FIELDS.items():
@@ -1722,6 +1821,14 @@ def update_song(id: int, auth: tuple):
         )
     if subgenre_ids is not None:
         changes["genre_set_id"] = _get_or_create_genre_set(cursor, subgenre_ids)
+    if artist_credits is not None:
+        rendered_artist = render_artist_credits(artist_credits)
+        current_credits = fetch_artist_credits(cursor, row["artist_credit_set_id"])
+        if not _same_artist_credits(artist_credits, current_credits):
+            changes["artist_credit_set_id"] = create_artist_credit_set(
+                cursor, artist_credits
+            )
+        changes["artist"] = rendered_artist
     changes = {field: value for field, value in changes.items() if row[field] != value}
     if changes:
         create_song_revision(cursor, id, changes, changed_by=user_id)
@@ -1758,7 +1865,8 @@ def update_song(id: int, auth: tuple):
     ks = _fetch_song_key_signatures(cursor, id)
     ts = _fetch_song_time_signatures(cursor, id)
     sg = _fetch_song_subgenres(cursor, id)
-    return resp(_song_row_to_json(updated, langs, ks, ts, sg))
+    artists = _fetch_song_artists(cursor, id)
+    return resp(_song_row_to_json(updated, langs, ks, ts, sg, artists))
 
 
 # ── DELETE /api/song/<id> ─────────────────────────────────────────────

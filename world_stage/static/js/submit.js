@@ -6,6 +6,7 @@ let placeholderRequirementReason = '';
 // ── Lifecycle ────────────────────────────────────────────────────────
 
 async function onLoad() {
+    resetArtistRows();
     const languageCount = document.querySelectorAll('.language-select').length;
     document.getElementById('remove-language-button').disabled = languageCount == 1;
     const yearSelect = document.getElementById('year');
@@ -126,7 +127,7 @@ function collectFormData() {
         subgenres: collectSubgenres(),
         title: form.title.value || null,
         native_title: form.native_title.value || null,
-        artist: form.artist.value || null,
+        artists: collectArtistCredits(),
         is_placeholder: form.is_placeholder.checked,
         is_translation: form.is_translation.checked,
         does_match: form.does_match.checked,
@@ -290,6 +291,8 @@ function clearFormFields() {
         }
     }
 
+    resetArtistRows();
+
     // Reset to a single language row
     resetLanguageRows();
 
@@ -320,6 +323,69 @@ function clearFormFields() {
     }
 
     setPlaceholderRequirement(yearRequiresPlaceholder);
+}
+
+// ── Artist credits ──────────────────────────────────────────────────
+
+function addArtistRow(values = null) {
+    const container = document.getElementById('artist-credit-rows');
+    const fragment = document.getElementById('artist-credit-template').content.cloneNode(true);
+    const row = fragment.querySelector('.artist-credit-row');
+    row.dataset.artistId = values?.id || '';
+    const joinSelect = row.querySelector('.artist-join');
+    const customJoin = row.querySelector('.artist-custom-join');
+    const savedJoin = values?.join || ' & ';
+    if (Array.from(joinSelect.options).some(option => option.value === savedJoin)) {
+        joinSelect.value = savedJoin;
+    } else {
+        joinSelect.value = '__other__';
+        customJoin.value = savedJoin;
+        customJoin.required = true;
+        customJoin.classList.remove('hidden');
+    }
+    joinSelect.addEventListener('change', () => {
+        toggleOther(joinSelect, customJoin);
+        const isOther = joinSelect.value === '__other__';
+        customJoin.required = isOther;
+        if (isOther) customJoin.focus();
+    });
+    row.querySelector('.artist-full-name').value = values?.full_name || '';
+    row.querySelector('.artist-native-name').value = values?.native_name || '';
+    row.querySelector('.artist-stage-name').value = values?.stage_name || '';
+    for (const input of row.querySelectorAll('.artist-full-name, .artist-native-name')) {
+        input.addEventListener('input', () => { row.dataset.artistId = ''; });
+    }
+    row.querySelector('.artist-remove').addEventListener('click', () => {
+        row.remove();
+        if (!container.firstElementChild) addArtistRow();
+    });
+    container.appendChild(fragment);
+}
+
+function resetArtistRows(artists = null) {
+    const container = document.getElementById('artist-credit-rows');
+    if (!container) return;
+    container.innerHTML = '';
+    for (const artist of artists || [null]) addArtistRow(artist);
+}
+
+function collectArtistCredits() {
+    return Array.from(document.querySelectorAll('.artist-credit-row')).map((row, index) => {
+        const fullName = row.querySelector('.artist-full-name').value.trim();
+        const stageInput = row.querySelector('.artist-stage-name');
+        const stageName = stageInput.value.trim() || fullName;
+        const joinSelect = row.querySelector('.artist-join');
+        const join = joinSelect.value === '__other__'
+            ? row.querySelector('.artist-custom-join').value
+            : joinSelect.value;
+        return {
+            id: row.dataset.artistId ? parseInt(row.dataset.artistId, 10) : null,
+            full_name: fullName,
+            native_name: row.querySelector('.artist-native-name').value.trim() || null,
+            stage_name: stageName,
+            join: index === 0 ? null : join,
+        };
+    });
 }
 
 function setPlaceholderRequirement(required) {
@@ -860,10 +926,17 @@ async function populateSongData(entryNumberOverride) {
     const keySignatures = songData.key_signatures || [];
     const timeSignatures = songData.time_signatures || [];
     const subgenres = songData.subgenres || [];
+    const artists = songData.artists || [{
+        full_name: songData.artist,
+        native_name: null,
+        stage_name: songData.artist,
+        join: null,
+    }];
     delete songData.languages;
     delete songData.key_signatures;
     delete songData.time_signatures;
     delete songData.subgenres;
+    delete songData.artists;
     delete songData.id;
 
     const form = document.forms.submit_song;
@@ -893,6 +966,8 @@ async function populateSongData(entryNumberOverride) {
             console.error(`Error setting value for ${key}:`, error);
         }
     }
+
+    resetArtistRows(artists);
 
     // Reset language rows, then add the right number
     resetLanguageRows();
