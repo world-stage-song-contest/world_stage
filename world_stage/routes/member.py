@@ -16,6 +16,7 @@ from ..utils import (
     with_auth,
     with_permissions,
 )
+from ..utils.artists import fetch_artist_credits
 from ..utils.entry_moves import EntryMoveError, move_entry
 from ..utils.song_revisions import MAX_YEAR_SUBMISSIONS
 from .playlist import _bad_links_error, _m3u, _play_entries, _render_player
@@ -964,7 +965,8 @@ def get_country_data(year: int, country: str):
             return {"error": "entry_number must be an integer"}, 400
         cursor.execute(
             """
-            SELECT id, title, native_title, artist, is_placeholder,
+            SELECT id, title, native_title, artist, artist_credit_set_id,
+                   is_placeholder,
                    title_language_id, native_language_id, video_link, poster_link,
                    vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                    translated_lyrics,
@@ -980,7 +982,8 @@ def get_country_data(year: int, country: str):
         current_user_id = session_data[0] if session_data else None
         cursor.execute(
             """
-                SELECT id, title, native_title, artist, is_placeholder,
+                SELECT id, title, native_title, artist, artist_credit_set_id,
+                       is_placeholder,
                        title_language_id, native_language_id, video_link, poster_link,
                        vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                        translated_lyrics,
@@ -996,7 +999,8 @@ def get_country_data(year: int, country: str):
     else:
         cursor.execute(
             """
-            SELECT id, title, native_title, artist, is_placeholder,
+            SELECT id, title, native_title, artist, artist_credit_set_id,
+                   is_placeholder,
                    title_language_id, native_language_id, video_link, poster_link,
                    vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                    translated_lyrics,
@@ -1012,6 +1016,7 @@ def get_country_data(year: int, country: str):
         return {"error": "Song not found"}, 404
 
     song_id = row["id"]
+    artists = fetch_artist_credits(cursor, row["artist_credit_set_id"])
 
     cursor.execute(
         """
@@ -1104,6 +1109,7 @@ def get_country_data(year: int, country: str):
         "title": row["title"],
         "native_title": row["native_title"],
         "artist": row["artist"],
+        "artists": artists,
         "is_placeholder": bool(row["is_placeholder"]),
         "title_language_id": row["title_language_id"],
         "native_language_id": row["native_language_id"],

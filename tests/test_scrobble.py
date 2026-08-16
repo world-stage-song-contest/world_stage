@@ -23,9 +23,9 @@ def _add_song(db, cc, year, title, artist, link, duration):
         song_id = cur.fetchone()["id"]
         cur.execute(
             """INSERT INTO song_data (
-                   song_id, submitter_id, title, artist, video_link,
+                   song_id, submitter_id, title, artist_credit_set_id, video_link,
                    duration
-               ) VALUES (%s, 1, %s, %s, %s, %s)""",
+               ) VALUES (%s, 1, %s, test_artist_credit(%s), %s, %s)""",
             (song_id, title, artist, link, duration),
         )
     db.commit()

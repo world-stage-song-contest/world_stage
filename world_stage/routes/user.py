@@ -469,7 +469,9 @@ def _load_vote_history_points(cursor, votes: list[dict], *, unredacted: bool) ->
         JOIN show AS source_show ON source_show.id = vote_set.show_id
         JOIN song ON song.id = vote.song_id
         JOIN LATERAL (
-            SELECT song_data.title, song_data.artist
+            SELECT song_data.title,
+                   artist_credit_name(song_data.artist_credit_set_id) AS artist,
+                   song_data.artist_credit_set_id
             FROM song_data
             WHERE song_data.song_id = song.id
                OR (
@@ -502,7 +504,7 @@ def _load_vote_history_points(cursor, votes: list[dict], *, unredacted: bool) ->
          AND result.result_mode = 'official'
         WHERE vote.vote_set_id = ANY(%s)
           AND data.title IS NOT NULL
-          AND data.artist IS NOT NULL
+          AND data.artist_credit_set_id IS NOT NULL
         ORDER BY vote.vote_set_id, vote.score DESC
         """,
         (vote_set_ids,),
@@ -582,7 +584,9 @@ def _load_revote_history_points(cursor, votes: list[dict]) -> None:
         ) AS ballot_vote ON true
         JOIN song ON song.id = ballot_vote.song_id
         JOIN LATERAL (
-            SELECT song_data.title, song_data.artist
+            SELECT song_data.title,
+                   artist_credit_name(song_data.artist_credit_set_id) AS artist,
+                   song_data.artist_credit_set_id
             FROM song_data
             WHERE song_data.song_id = song.id
                OR (
@@ -608,7 +612,7 @@ def _load_revote_history_points(cursor, votes: list[dict]) -> None:
         ) AS progression ON true
         WHERE revote_set.id = ANY(%s)
           AND data.title IS NOT NULL
-          AND data.artist IS NOT NULL
+          AND data.artist_credit_set_id IS NOT NULL
         ORDER BY revote_set.id, ballot_vote.pts DESC,
                  CASE WHEN ballot_vote.pts = 0
                       THEN ballot_vote.original_score END DESC,
@@ -870,7 +874,9 @@ def predictions(username: str):
             JOIN prediction_set ON prediction_set.id = prediction.set_id
             JOIN song ON song.id = prediction.song_id
             JOIN LATERAL (
-                SELECT song_data.title, song_data.artist
+                SELECT song_data.title,
+                       artist_credit_name(song_data.artist_credit_set_id) AS artist,
+                       song_data.artist_credit_set_id
                 FROM song_data
                 WHERE song_data.song_id = song.id
                    OR (
@@ -889,7 +895,7 @@ def predictions(username: str):
              AND result.result_mode = 'official'
             WHERE prediction.set_id = ANY(%s)
               AND data.title IS NOT NULL
-              AND data.artist IS NOT NULL
+              AND data.artist_credit_set_id IS NOT NULL
             ORDER BY prediction.set_id, prediction.position
             """,
             (prediction_set_ids,),

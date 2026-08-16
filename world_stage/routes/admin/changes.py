@@ -478,7 +478,7 @@ def changes():
                 status.created_at AS changed_at,
                 data.song_id,
                 data.title AS song_title,
-                data.artist AS song_artist,
+                artist_credit_name(data.artist_credit_set_id) AS song_artist,
                 data.country_id AS song_country_id,
                 data.year_id AS song_year_id,
                 JSONB_STRIP_NULLS(JSONB_BUILD_OBJECT(

@@ -46,8 +46,8 @@ def test_revote_keeps_official_results_unchanged(client, db, rendered_templates)
             song_id = cursor.fetchone()["id"]
             song_ids.append(song_id)
             cursor.execute(
-                """INSERT INTO song_data (song_id, title, artist)
-                   VALUES (%s, %s, 'Artist')""",
+                """INSERT INTO song_data (song_id, title, artist_credit_set_id)
+                   VALUES (%s, %s, test_artist_credit('Artist'))""",
                 (song_id, title),
             )
         cursor.executemany(

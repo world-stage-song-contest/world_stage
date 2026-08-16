@@ -28,9 +28,11 @@ def _add_song(
         song_id = cur.fetchone()["id"]
         cur.execute(
             """INSERT INTO song_data (
-                   song_id, submitter_id, title, artist, video_link, duration,
+                   song_id, submitter_id, title, artist_credit_set_id, video_link, duration,
                    poster_link, vtt_link
-               ) VALUES (%s, 1, %s, 'Artist', %s, %s, %s, %s)""",
+               ) VALUES (
+                   %s, 1, %s, test_artist_credit('Artist'), %s, %s, %s, %s
+               )""",
             (song_id, title, link, duration, poster, vtt),
         )
         set_song_status(cur, song_id, changed_by=1, is_placeholder=placeholder)

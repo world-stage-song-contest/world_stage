@@ -106,7 +106,7 @@ input:read-only {
 
 .artist-credit-row {
     display: grid;
-    grid-template-columns: 6rem repeat(3, minmax(9rem, 1fr)) max-content;
+    grid-template-columns: 6rem repeat(2, minmax(9rem, 1fr)) max-content;
     gap: 0.5rem;
     margin-bottom: 0.5rem;
 }

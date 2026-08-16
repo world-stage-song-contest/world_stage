@@ -10,7 +10,6 @@ class NonPlaceholderLimitError(ValueError):
 SONG_DATA_FIELDS = (
     "submitter_id",
     "title",
-    "artist",
     "artist_credit_set_id",
     "native_title",
     "translated_lyrics",
@@ -38,7 +37,9 @@ SONG_DATA_FIELDS = (
 def latest_song_data(cursor, song_id: int) -> dict | None:
     cursor.execute(
         """
-        SELECT data.* FROM song
+        SELECT data.*,
+               artist_credit_name(data.artist_credit_set_id) AS rendered_artist
+        FROM song
         JOIN song_data AS data
           ON data.song_id = song.id
           OR (
@@ -78,7 +79,7 @@ def create_song_revision(
         map(sql.Identifier, ("song_id", *SONG_DATA_FIELDS, "changed_by"))
     )
     placeholders = sql.SQL(", ").join(
-        sql.Placeholder() for _ in range(len(values) + 2)
+        sql.Placeholder() for _ in range(len(SONG_DATA_FIELDS) + 2)
     )
     cursor.execute(
         sql.SQL(
@@ -91,9 +92,14 @@ def create_song_revision(
     def comparable(value):
         return value.casefold() if isinstance(value, str) else value
 
-    replaced = any(
-        comparable(previous[field]) != comparable(values[field])
-        for field in ("artist", "title")
+    cursor.execute(
+        "SELECT artist_credit_name(%s) AS artist",
+        (values["artist_credit_set_id"],),
+    )
+    rendered_artist = cursor.fetchone()["artist"]
+    replaced = (
+        comparable(previous["rendered_artist"]) != comparable(rendered_artist)
+        or comparable(previous["title"]) != comparable(values["title"])
     )
     if not replaced:
         cursor.execute(

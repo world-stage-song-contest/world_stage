@@ -23,9 +23,9 @@ def _add_song(db, *, title="Original title", artist="Original artist") -> int:
                 RETURNING id
             )
             INSERT INTO song_data (
-                song_id, submitter_id, title, artist
+                song_id, submitter_id, title, artist_credit_set_id
             )
-            SELECT id, 2, %s, %s FROM inserted
+            SELECT id, 2, %s, test_artist_credit(%s) FROM inserted
             RETURNING song_id
             """,
             (title, artist),
@@ -72,7 +72,13 @@ def test_song_changes_are_derived_from_adjacent_revisions(db):
     song_id = _add_song(db)
     with db.cursor() as cursor:
         create_song_revision(cursor, song_id, {"notes": "Metadata correction"}, changed_by=2)
-        create_song_revision(cursor, song_id, {"artist": "ORIGINAL ARTIST"}, changed_by=2)
+        cursor.execute("SELECT test_artist_credit('ORIGINAL ARTIST') AS id")
+        create_song_revision(
+            cursor,
+            song_id,
+            {"artist_credit_set_id": cursor.fetchone()["id"]},
+            changed_by=2,
+        )
         create_song_revision(cursor, song_id, {"title": "Replacement title"}, changed_by=2)
         set_song_status(cursor, song_id, changed_by=2, is_placeholder=True)
         create_song_revision(cursor, song_id, {"submitter_id": 3}, changed_by=2)
@@ -103,10 +109,7 @@ def test_song_changes_are_derived_from_adjacent_revisions(db):
         "old": None,
         "new": "Metadata correction",
     }
-    assert changes[2]["changed_fields"]["artist"] == {
-        "old": "Original artist",
-        "new": "ORIGINAL ARTIST",
-    }
+    assert changes[2]["changed_fields"] is None
     assert changes[3]["changed_fields"]["title"] == {
         "old": "Original title",
         "new": "Replacement title",
@@ -171,8 +174,10 @@ def test_refilling_a_withdrawn_song_is_a_creation(db):
         cursor.execute(
             """
             INSERT INTO song_data (
-                song_id, submitter_id, title, artist, changed_by
-            ) VALUES (%s, 2, 'Returned title', 'Returned artist', 2)
+                song_id, submitter_id, title, artist_credit_set_id, changed_by
+            ) VALUES (
+                %s, 2, 'Returned title', test_artist_credit('Returned artist'), 2
+            )
             """,
             (song_id,),
         )
@@ -193,7 +198,9 @@ def test_deletion_and_creation_are_derived_from_required_identity_fields(db):
     with db.cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO song_data (song_id, title, artist, changed_by)
+            INSERT INTO song_data (
+                song_id, title, artist_credit_set_id, changed_by
+            )
             VALUES (%s, NULL, NULL, 2)
             """,
             (song_id,),
@@ -201,8 +208,10 @@ def test_deletion_and_creation_are_derived_from_required_identity_fields(db):
         cursor.execute(
             """
             INSERT INTO song_data (
-                song_id, title, artist, modified_at, changed_by
-            ) VALUES (%s, 'Restored', 'Restored Artist', NULL, 2)
+                song_id, title, artist_credit_set_id, modified_at, changed_by
+            ) VALUES (
+                %s, 'Restored', test_artist_credit('Restored Artist'), NULL, 2
+            )
             """,
             (song_id,),
         )
@@ -284,6 +293,13 @@ def test_consolidated_migration_reconstructs_legacy_audit_rows(db):
         reconstruction = migration.split("-- BEGIN LEGACY SONG AUDIT RECONSTRUCTION", 1)[1].split(
             "-- END LEGACY SONG AUDIT RECONSTRUCTION", 1
         )[0]
+        reconstruction = reconstruction.replace(
+            "submitter_id, title, artist, created_at",
+            "submitter_id, title, artist_credit_set_id, created_at",
+        ).replace(
+            "state ->> 'title', state ->> 'artist', revision_at",
+            "state ->> 'title', test_artist_credit(state ->> 'artist'), revision_at",
+        )
         cursor.execute(reconstruction)
     db.commit()
 

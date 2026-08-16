@@ -2,6 +2,8 @@
 let currentSongId = null;   // non-null when editing an existing song
 let yearRequiresPlaceholder = false;
 let placeholderRequirementReason = '';
+let artistSearchTimer = null;
+let artistSearchController = null;
 
 // ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -327,6 +329,16 @@ function clearFormFields() {
 
 // ── Artist credits ──────────────────────────────────────────────────
 
+function formatArtistDisplayName(fullName, number) {
+    return number > 1 ? `${fullName} (${number})` : fullName;
+}
+
+function parseArtistDisplayName(displayName) {
+    const match = displayName.match(/^(.*?) \(([1-9]\d*)\)$/);
+    if (!match) return {fullName: displayName, number: 1};
+    return {fullName: match[1], number: parseInt(match[2], 10)};
+}
+
 function addArtistRow(values = null) {
     const container = document.getElementById('artist-credit-rows');
     const fragment = document.getElementById('artist-credit-template').content.cloneNode(true);
@@ -349,17 +361,78 @@ function addArtistRow(values = null) {
         customJoin.required = isOther;
         if (isOther) customJoin.focus();
     });
-    row.querySelector('.artist-full-name').value = values?.full_name || '';
-    row.querySelector('.artist-native-name').value = values?.native_name || '';
+    const fullNameInput = row.querySelector('.artist-full-name');
+    const artistNumber = values?.number || 1;
+    fullNameInput.value = values?.display_name
+        || formatArtistDisplayName(values?.full_name || '', artistNumber);
+    row.dataset.artistFullName = values?.full_name || '';
+    row.dataset.artistNumber = artistNumber;
     row.querySelector('.artist-stage-name').value = values?.stage_name || '';
-    for (const input of row.querySelectorAll('.artist-full-name, .artist-native-name')) {
-        input.addEventListener('input', () => { row.dataset.artistId = ''; });
-    }
+    fullNameInput.addEventListener('input', () => {
+        row.dataset.artistId = '';
+        row.dataset.artistFullName = '';
+        row.dataset.artistNumber = '';
+        selectArtistSuggestion(row);
+        scheduleArtistSearch(fullNameInput);
+    });
+    fullNameInput.addEventListener('change', () => selectArtistSuggestion(row));
     row.querySelector('.artist-remove').addEventListener('click', () => {
         row.remove();
         if (!container.firstElementChild) addArtistRow();
     });
     container.appendChild(fragment);
+}
+
+function selectArtistSuggestion(row) {
+    const input = row.querySelector('.artist-full-name');
+    const option = Array.from(document.getElementById('artist-suggestions').options)
+        .find(candidate => candidate.value === input.value);
+    if (!option) return;
+    row.dataset.artistId = option.dataset.artistId;
+    row.dataset.artistFullName = option.dataset.fullName;
+    row.dataset.artistNumber = option.dataset.artistNumber;
+}
+
+function scheduleArtistSearch(input) {
+    clearTimeout(artistSearchTimer);
+    const query = input.value.trim();
+    if (!query) {
+        document.getElementById('artist-suggestions').innerHTML = '';
+        return;
+    }
+    artistSearchTimer = setTimeout(() => fetchArtistSuggestions(query), 150);
+}
+
+async function fetchArtistSuggestions(query) {
+    if (artistSearchController) artistSearchController.abort();
+    artistSearchController = new AbortController();
+    try {
+        const response = await fetch(`/api/song/artists?q=${encodeURIComponent(query)}`, {
+            signal: artistSearchController.signal,
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const datalist = document.getElementById('artist-suggestions');
+        datalist.innerHTML = '';
+        for (const artist of payload.result || []) {
+            const option = document.createElement('option');
+            option.value = artist.display_name;
+            option.dataset.artistId = artist.id;
+            option.dataset.fullName = artist.full_name;
+            option.dataset.artistNumber = artist.number;
+            option.dataset.nativeName = artist.native_name || '';
+            const details = [];
+            if (artist.native_name) details.push(artist.native_name);
+            const aliases = (artist.stage_names || [])
+                .filter(name => name !== artist.full_name)
+                .slice(0, 3);
+            if (aliases.length) details.push(`credited as ${aliases.join(', ')}`);
+            option.label = details.join(' — ');
+            datalist.appendChild(option);
+        }
+    } catch (error) {
+        if (error.name !== 'AbortError') console.error('Artist search failed:', error);
+    }
 }
 
 function resetArtistRows(artists = null) {
@@ -371,17 +444,21 @@ function resetArtistRows(artists = null) {
 
 function collectArtistCredits() {
     return Array.from(document.querySelectorAll('.artist-credit-row')).map((row, index) => {
-        const fullName = row.querySelector('.artist-full-name').value.trim();
+        const enteredName = row.querySelector('.artist-full-name').value.trim();
+        const parsedName = parseArtistDisplayName(enteredName);
         const stageInput = row.querySelector('.artist-stage-name');
-        const stageName = stageInput.value.trim() || fullName;
+        const stageName = stageInput.value.trim() || null;
         const joinSelect = row.querySelector('.artist-join');
         const join = joinSelect.value === '__other__'
             ? row.querySelector('.artist-custom-join').value
             : joinSelect.value;
         return {
-            id: row.dataset.artistId ? parseInt(row.dataset.artistId, 10) : null,
-            full_name: fullName,
-            native_name: row.querySelector('.artist-native-name').value.trim() || null,
+            // Name + disambiguation number is the canonical key. Avoid sending
+            // autocomplete IDs so stale browser state can never override edits.
+            id: null,
+            full_name: parsedName.fullName,
+            native_name: null,
+            number: parsedName.number,
             stage_name: stageName,
             join: index === 0 ? null : join,
         };
@@ -926,12 +1003,7 @@ async function populateSongData(entryNumberOverride) {
     const keySignatures = songData.key_signatures || [];
     const timeSignatures = songData.time_signatures || [];
     const subgenres = songData.subgenres || [];
-    const artists = songData.artists || [{
-        full_name: songData.artist,
-        native_name: null,
-        stage_name: songData.artist,
-        join: null,
-    }];
+    const artists = songData.artists || [];
     delete songData.languages;
     delete songData.key_signatures;
     delete songData.time_signatures;

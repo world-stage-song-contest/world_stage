@@ -1,3 +1,4 @@
+import re
 import unicodedata
 
 MAX_ARTISTS_PER_ENTRY = 20
@@ -6,6 +7,20 @@ MAX_JOIN_LENGTH = 20
 
 class ArtistValidationError(ValueError):
     pass
+
+
+_NUMBERED_NAME_RE = re.compile(r"^(?P<name>.+?) \((?P<number>[1-9][0-9]*)\)$")
+
+
+def artist_display_name(full_name: str, number: int) -> str:
+    return full_name if number == 1 else f"{full_name} ({number})"
+
+
+def parse_artist_display_name(display_name: str) -> tuple[str, int]:
+    match = _NUMBERED_NAME_RE.fullmatch(display_name)
+    if not match:
+        return display_name, 1
+    return match.group("name"), int(match.group("number"))
 
 
 def _text(value, *, required: bool = False) -> str | None:
@@ -37,6 +52,7 @@ def parse_artist_credits(data: dict) -> list[dict]:
             "id": None,
             "full_name": legacy,
             "native_name": None,
+            "number": 1,
             "stage_name": legacy,
             "join": None,
         }]
@@ -59,14 +75,28 @@ def parse_artist_credits(data: dict) -> list[dict]:
                 f"artists[{position}].id must be an integer"
             ) from exc
         try:
-            full_name = _text(item.get("full_name"), required=artist_id is None)
+            full_name = _text(item.get("full_name"), required=True)
             native_name = _text(item.get("native_name"))
-            stage_name = _text(item.get("stage_name"), required=True)
+            stage_name = _text(item.get("stage_name"))
             join = _join_text(item.get("join"))
             if position > 0 and join is None:
                 raise ArtistValidationError("must provide a non-blank join")
         except ArtistValidationError as exc:
             raise ArtistValidationError(f"artists[{position}] {exc}") from exc
+        raw_number = item.get("number")
+        if artist_id is None and raw_number in (None, "") and full_name is not None:
+            full_name, parsed_number = parse_artist_display_name(full_name)
+            raw_number = parsed_number
+        try:
+            number = int(raw_number) if raw_number not in (None, "") else 1
+        except (TypeError, ValueError) as exc:
+            raise ArtistValidationError(
+                f"artists[{position}].number must be a positive integer"
+            ) from exc
+        if number < 1:
+            raise ArtistValidationError(
+                f"artists[{position}].number must be a positive integer"
+            )
         if position == 0:
             join = None
         elif join is not None and (len(join) > MAX_JOIN_LENGTH or "\n" in join):
@@ -77,6 +107,7 @@ def parse_artist_credits(data: dict) -> list[dict]:
             "id": artist_id,
             "full_name": full_name,
             "native_name": native_name,
+            "number": number,
             "stage_name": stage_name,
             "join": join,
         })
@@ -85,7 +116,7 @@ def parse_artist_credits(data: dict) -> list[dict]:
 
 def render_artist_credits(credits: list[dict]) -> str:
     return "".join(
-        (credit.get("join") or "") + credit["stage_name"]
+        (credit.get("join") or "") + (credit.get("stage_name") or credit["full_name"])
         for credit in credits
     )
 
@@ -97,33 +128,43 @@ def create_artist_credit_set(cursor, credits: list[dict]) -> int:
         artist_id = credit["id"]
         if artist_id is not None:
             cursor.execute(
-                "SELECT full_name, native_name FROM artist WHERE id = %s",
+                "SELECT full_name, native_name, number FROM artist WHERE id = %s",
                 (artist_id,),
             )
             artist = cursor.fetchone()
             if artist is None:
                 raise ArtistValidationError(f"artist {artist_id} does not exist")
-            credit["full_name"] = artist["full_name"]
-            credit["native_name"] = artist["native_name"]
-        else:
+            if (
+                credit["full_name"].casefold() == artist["full_name"].casefold()
+                and credit["number"] == artist["number"]
+            ):
+                credit["full_name"] = artist["full_name"]
+                credit["native_name"] = artist["native_name"]
+                credit["number"] = artist["number"]
+            else:
+                # A stale autocomplete ID must never override text the user
+                # edited after selecting that suggestion.
+                artist_id = None
+                credit["id"] = None
+        if artist_id is None:
             cursor.execute(
                 """
                 SELECT id FROM artist
                 WHERE LOWER(full_name) = LOWER(%s)
-                  AND LOWER(COALESCE(native_name, '')) = LOWER(COALESCE(%s, ''))
+                  AND number = %s
                 ORDER BY id
                 LIMIT 1
                 """,
-                (credit["full_name"], credit["native_name"]),
+                (credit["full_name"], credit["number"]),
             )
             artist = cursor.fetchone()
             if artist:
                 artist_id = artist["id"]
             else:
                 cursor.execute(
-                    """INSERT INTO artist (full_name, native_name)
-                       VALUES (%s, %s) RETURNING id""",
-                    (credit["full_name"], credit["native_name"]),
+                    """INSERT INTO artist (full_name, native_name, number)
+                       VALUES (%s, %s, %s) RETURNING id""",
+                    (credit["full_name"], credit["native_name"], credit["number"]),
                 )
                 artist_id = cursor.fetchone()["id"]
             credit["id"] = artist_id
@@ -143,7 +184,10 @@ def fetch_artist_credits(cursor, credit_set_id: int | None) -> list[dict]:
         return []
     cursor.execute(
         """
-        SELECT artist.id, artist.full_name, artist.native_name,
+        SELECT artist.id, artist.full_name, artist.native_name, artist.number,
+               CASE WHEN artist.number = 1 THEN artist.full_name
+                    ELSE artist.full_name || ' (' || artist.number || ')'
+               END AS display_name,
                credit.stage_name, credit.join_phrase AS join
         FROM artist_credit AS credit
         JOIN artist ON artist.id = credit.artist_id

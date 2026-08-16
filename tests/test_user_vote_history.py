@@ -85,8 +85,9 @@ def test_history_filters_country_and_user_lists_to_voted_shows(
             songs.append((song_id, shows[show]))
             cursor.execute(
                 """
-                INSERT INTO song_data (song_id, title, artist, submitter_id)
-                VALUES (%s, %s, 'Artist', %s)
+                INSERT INTO song_data (
+                    song_id, title, artist_credit_set_id, submitter_id
+                ) VALUES (%s, %s, test_artist_credit('Artist'), %s)
                 """,
                 (song_id, title, submitter_id),
             )

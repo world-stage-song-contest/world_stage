@@ -58,7 +58,9 @@ def _scoreboard_data(show_data, songs) -> dict:
         FROM song_show
         JOIN song ON song.id = song_show.song_id
         JOIN LATERAL (
-            SELECT song_data.submitter_id, song_data.title, song_data.artist
+            SELECT song_data.submitter_id, song_data.title,
+                   artist_credit_name(song_data.artist_credit_set_id) AS artist,
+                   song_data.artist_credit_set_id
             FROM song_data
             WHERE song_data.song_id = song.id
                OR (
@@ -73,7 +75,7 @@ def _scoreboard_data(show_data, songs) -> dict:
         JOIN account ON account.id = data.submitter_id
         WHERE song_show.show_id = %s
           AND data.title IS NOT NULL
-          AND data.artist IS NOT NULL
+          AND data.artist_credit_set_id IS NOT NULL
         ORDER BY song_show.running_order, song_show.id
         """,
         (show_data.id,),

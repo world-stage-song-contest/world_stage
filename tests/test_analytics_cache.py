@@ -69,8 +69,8 @@ def test_bias_caches_refresh_on_publication_revotes_and_metadata_changes(db):
             song_ids[submitter_id] = cursor.fetchone()["id"]
             cursor.execute(
                 """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist
-                   ) VALUES (%s, %s, %s, 'Artist')""",
+                       song_id, submitter_id, title, artist_credit_set_id
+                   ) VALUES (%s, %s, %s, test_artist_credit('Artist'))""",
                 (song_ids[submitter_id], submitter_id, title),
             )
         cursor.executemany(

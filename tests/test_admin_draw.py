@@ -47,8 +47,8 @@ def draw_setup(db, client):
             song_ids[cc] = cur.fetchone()["id"]
             cur.execute(
                 """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist
-                   ) VALUES (%s, %s, %s, 'Artist')""",
+                       song_id, submitter_id, title, artist_credit_set_id
+                   ) VALUES (%s, %s, %s, test_artist_credit('Artist'))""",
                 (song_ids[cc], submitter, f"{cc} Song"),
             )
 

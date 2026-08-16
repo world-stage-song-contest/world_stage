@@ -100,6 +100,34 @@ class TestGetSongById:
         assert _error(resp)["id"] == 1  # ErrorID.NOT_FOUND
 
 
+class TestArtistSearch:
+    def test_finds_artist_by_full_native_and_stage_names(self, client, bob_headers):
+        created = _result(_create_song(
+            client,
+            bob_headers,
+            artist=None,
+            artists=[{
+                "full_name": "Aleksandra Nowak",
+                "native_name": "Александра Новак",
+                "stage_name": "Alexa",
+            }],
+        ))
+        artist_id = created["artists"][0]["id"]
+
+        for query in ("Aleksandra", "Александра", "Alexa"):
+            response = client.get("/api/song/artists", query_string={"q": query})
+            assert response.status_code == 200
+            matches = _result(response)
+            assert matches[0]["id"] == artist_id
+            assert "Alexa" in matches[0]["stage_names"]
+
+    def test_empty_artist_search_returns_no_suggestions(self, client):
+        response = client.get("/api/song/artists", query_string={"q": ""})
+
+        assert response.status_code == 200
+        assert _result(response) == []
+
+
 # ── GET /api/song/<cc>/<year> ───────────────────────────────────────
 
 
@@ -193,6 +221,38 @@ class TestCreateSong:
             )
             assert cursor.fetchone()["count"] == 1
 
+    def test_artist_number_disambiguates_identical_names(
+        self, client, db, alice_headers
+    ):
+        first = _result(_create_song(
+            client,
+            alice_headers,
+            country="US",
+            artist=None,
+            artists=[{"full_name": "Shared Name", "stage_name": "First"}],
+        ))
+        second = _result(_create_song(
+            client,
+            alice_headers,
+            country="ES",
+            artist=None,
+            artists=[{"full_name": "Shared Name (2)", "stage_name": "Second"}],
+        ))
+
+        assert first["artists"][0]["display_name"] == "Shared Name"
+        assert second["artists"][0]["display_name"] == "Shared Name (2)"
+        assert first["artists"][0]["id"] != second["artists"][0]["id"]
+        with db.cursor() as cursor:
+            cursor.execute(
+                """SELECT full_name, number FROM artist
+                   WHERE LOWER(full_name) = LOWER(%s) ORDER BY number""",
+                ("Shared Name",),
+            )
+            assert cursor.fetchall() == [
+                {"full_name": "Shared Name", "number": 1},
+                {"full_name": "Shared Name", "number": 2},
+            ]
+
     def test_rejects_missing_join_between_artists(self, client, bob_headers):
         response = _create_song(
             client,
@@ -226,6 +286,39 @@ class TestCreateSong:
         song = _result(response)
         assert song["artist"] == "One ~ duet with ~ Two"
         assert song["artists"][1]["join"] == " ~ duet with ~ "
+
+    def test_null_stage_name_renders_canonical_name(self, client, db, bob_headers):
+        response = _create_song(
+            client,
+            bob_headers,
+            artist=None,
+            artists=[{
+                "full_name": "Canonical Name (2)",
+                "stage_name": None,
+            }],
+        )
+
+        assert response.status_code == 201
+        song = _result(response)
+        assert song["artist"] == "Canonical Name"
+        assert song["artists"][0]["display_name"] == "Canonical Name (2)"
+        assert song["artists"][0]["stage_name"] is None
+
+        by_id = _result(client.get(f"/api/song/{song['id']}"))
+        assert by_id["artists"][0]["stage_name"] is None
+
+        submission_data = client.get("/member/submit/2025/US").get_json()
+        assert submission_data["artists"][0]["display_name"] == "Canonical Name (2)"
+        assert submission_data["artists"][0]["stage_name"] is None
+        with db.cursor() as cursor:
+            cursor.execute(
+                """SELECT stage_name FROM artist_credit
+                   WHERE artist_credit_set_id = (
+                       SELECT artist_credit_set_id FROM current_song WHERE id = %s
+                   )""",
+                (song["id"],),
+            )
+            assert cursor.fetchone()["stage_name"] is None
 
     def test_creates_song(self, client, db, bob_headers):
         resp = _create_song(client, bob_headers)
@@ -842,8 +935,8 @@ class TestSongDuration:
             song_id = cur.fetchone()["id"]
             cur.execute(
                 """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist, video_link
-                   ) VALUES (%s, 1, 'Backfill me', 'Artist', %s)""",
+                       song_id, submitter_id, title, artist_credit_set_id, video_link
+                   ) VALUES (%s, 1, 'Backfill me', test_artist_credit('Artist'), %s)""",
                 (song_id, self.MEDIA_LINK),
             )
         db.commit()
@@ -884,6 +977,37 @@ def _put_song(client, headers, song_id, **overrides):
 
 
 class TestReplaceSong:
+    def test_edited_artist_text_overrides_stale_autocomplete_id(
+        self, client, bob_headers
+    ):
+        created = _result(_create_song(
+            client,
+            bob_headers,
+            artist=None,
+            artists=[{"full_name": "Original Canonical", "stage_name": None}],
+        ))
+        original_artist_id = created["artists"][0]["id"]
+
+        response = _put_song(
+            client,
+            bob_headers,
+            created["id"],
+            artist=None,
+            artists=[{
+                "id": original_artist_id,
+                "full_name": "Replacement Canonical",
+                "number": 1,
+                "stage_name": None,
+                "join": None,
+            }],
+        )
+
+        assert response.status_code == 200
+        updated = _result(response)
+        assert updated["artist"] == "Replacement Canonical"
+        assert updated["artists"][0]["full_name"] == "Replacement Canonical"
+        assert updated["artists"][0]["id"] != original_artist_id
+
     def test_replaces_all_fields(self, client, db, bob_headers):
         song_id = _result(
             _create_song(client, bob_headers, notes="old notes", video_link="http://old.com")
@@ -1091,8 +1215,8 @@ class TestDeleteSong:
             song_id = cur.fetchone()["id"]
             cur.execute(
                 """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist
-                   ) VALUES (%s, %s, 'Closed Song', 'Artist')""",
+                       song_id, submitter_id, title, artist_credit_set_id
+                   ) VALUES (%s, %s, 'Closed Song', test_artist_credit('Artist'))""",
                 (song_id, submitter_id),
             )
         db.commit()

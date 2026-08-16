@@ -107,11 +107,12 @@ def create_spot_watch_notifications(
         FROM song AS stable
         JOIN country ON country.id = stable.country_id
         LEFT JOIN LATERAL (
-            SELECT data.title, data.artist
+            SELECT data.title,
+                   artist_credit_name(data.artist_credit_set_id) AS artist
             FROM song_data AS data
             WHERE data.song_id = stable.id
               AND data.title IS NOT NULL
-              AND data.artist IS NOT NULL
+              AND data.artist_credit_set_id IS NOT NULL
             ORDER BY data.created_at DESC, data.id DESC
             LIMIT 1
         ) AS latest ON true

@@ -34,8 +34,9 @@ def _song(
         song_id = cursor.fetchone()["id"]
         cursor.execute(
             """
-            INSERT INTO song_data (song_id, submitter_id, title, artist, video_link)
-            VALUES (%s, 1, %s, 'Test Artist', %s)
+            INSERT INTO song_data (
+                song_id, submitter_id, title, artist_credit_set_id, video_link
+            ) VALUES (%s, 1, %s, test_artist_credit('Test Artist'), %s)
             """,
             (song_id, title, f"https://media.world-stage.org/{song_id}.mp4"),
         )

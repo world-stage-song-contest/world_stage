@@ -34,9 +34,9 @@ def _add_radio_songs(db):
             )
             cursor.execute(
                 """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist, video_link,
+                       song_id, submitter_id, title, artist_credit_set_id, video_link,
                        duration
-                   ) VALUES (%s, 1, %s, 'Artist', %s, %s)""",
+                   ) VALUES (%s, 1, %s, test_artist_credit('Artist'), %s, %s)""",
                 (cursor.fetchone()["id"], title, link, duration),
             )
     db.commit()
@@ -52,9 +52,9 @@ def _add_many_radio_songs(db, count=60):
             )
             cursor.execute(
                 """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist, video_link,
+                       song_id, submitter_id, title, artist_credit_set_id, video_link,
                        duration
-                   ) VALUES (%s, 1, %s, 'Artist', %s, %s)""",
+                   ) VALUES (%s, 1, %s, test_artist_credit('Artist'), %s, %s)""",
                 (
                     cursor.fetchone()["id"], f"Song {entry_number}",
                     f"https://media.world-stage.org/song-{entry_number}.mp4",

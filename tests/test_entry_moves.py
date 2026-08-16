@@ -44,8 +44,10 @@ def _add_song(db, country, year, submitter, *, placeholder=False, title="Song"):
                 INSERT INTO song (country_id, year_id, entry_number)
                 VALUES (%s, %s, 1) RETURNING id
             )
-            INSERT INTO song_data (song_id, submitter_id, title, artist)
-            SELECT id, %s, %s, 'Artist' FROM inserted
+            INSERT INTO song_data (
+                song_id, submitter_id, title, artist_credit_set_id
+            )
+            SELECT id, %s, %s, test_artist_credit('Artist') FROM inserted
             RETURNING song_id, id
             """,
             (country, year, submitter, title),

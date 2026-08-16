@@ -630,7 +630,8 @@ def get_languages_for_songs(song_ids: list[int]) -> dict[int, list[Language]]:
 # LiteralString so pyright rejects any runtime string reaching
 # cursor.execute; bind values always go through query parameters.
 _SONG_COLUMNS: LiteralString = """
-    song.id, data.title, data.artist, data.native_title,
+    song.id, data.title,
+    artist_credit_name(data.artist_credit_set_id) AS artist, data.native_title,
     song.country_id, COALESCE(an.name, country.name) AS name,
     country.is_participating, country.cc3, an.flag_variant,
     COALESCE(status.is_placeholder, false) AS is_placeholder,
@@ -867,7 +868,9 @@ SELECT
 FROM selected
 JOIN song ON song.id = selected.song_id
 JOIN LATERAL (
-    SELECT song_data.title, song_data.artist, song_data.native_title,
+    SELECT song_data.title,
+           artist_credit_name(song_data.artist_credit_set_id) AS artist,
+           song_data.artist_credit_set_id, song_data.native_title,
            song_data.submitter_id
     FROM song_data
     WHERE song_data.song_id = song.id
@@ -889,7 +892,7 @@ LEFT JOIN alternative_name AS an ON an.country_id = song.country_id
 
 _SHOW_LINEUP_SQL: LiteralString = (
     _SHOW_ENTRY_QUERY
-    + """WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+    + """WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
 ORDER BY selected.running_order, selected.song_show_id"""
 )
 
@@ -898,7 +901,7 @@ _SHOW_REVEAL_SQL: LiteralString = (
     + """LEFT JOIN show_qualifier
   ON show_qualifier.target_show_id = selected.show_id
  AND show_qualifier.song_id = song.id
-WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
 ORDER BY show_qualifier.source_show_id NULLS FIRST,
          show_qualifier.qualifier_order NULLS FIRST,
          selected.running_order, selected.song_show_id"""
@@ -981,7 +984,8 @@ WITH RECURSIVE winners AS (
     WHERE csr.result_mode = 'official'
 )
 SELECT
-    song.id, data.title, data.artist, data.native_title,
+    song.id, data.title,
+    artist_credit_name(data.artist_credit_set_id) AS artist, data.native_title,
     song.country_id, COALESCE(an.name, country.name) AS name,
     country.is_participating, country.cc3, an.flag_variant,
     COALESCE(status.is_placeholder, false) AS is_placeholder,
@@ -1052,7 +1056,7 @@ LEFT JOIN language AS native_language ON native_language.id = data.native_langua
 LEFT JOIN alternative_name AS an ON an.country_id = song.country_id
     AND (an.from_year_id IS NULL OR song.year_id >= an.from_year_id)
     AND (an.to_year_id IS NULL OR song.year_id <= an.to_year_id)
-WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
 ORDER BY song.year_id
 """
     cursor = get_db().cursor()
@@ -1068,7 +1072,7 @@ _YEAR_OVERVIEW_SQL: LiteralString = (
     + _SONG_JOINS
     + _CYR_JOIN
     + """
-WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
   AND song.year_id = %s
   AND song.main_participant
 ORDER BY """
@@ -1081,7 +1085,7 @@ _USER_SUBMISSION_HISTORY_SQL: LiteralString = (
     + _SONG_JOINS
     + _CYR_JOIN
     + """
-WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
   AND data.submitter_id = %s
   AND song.year_id IS NOT NULL
 ORDER BY song.year_id,"""
@@ -1118,7 +1122,8 @@ SELECT country.id, COALESCE(an.name, country.name) AS name,
        country.is_participating, country.cc3, an.flag_variant
 FROM song
 JOIN LATERAL (
-    SELECT song_data.submitter_id, song_data.title, song_data.artist
+    SELECT song_data.submitter_id, song_data.title,
+           song_data.artist_credit_set_id
     FROM song_data
     WHERE song_data.song_id = song.id
        OR (
@@ -1139,7 +1144,7 @@ LEFT JOIN alternative_name AS an ON an.country_id = song.country_id
 WHERE data.submitter_id = %s
   AND song.year_id = %s
   AND data.title IS NOT NULL
-  AND data.artist IS NOT NULL"""
+  AND data.artist_credit_set_id IS NOT NULL"""
         + main_filter
         + """
 ORDER BY CASE WHEN year.status = 'closed' THEN cyr.place END NULLS LAST,
@@ -1262,7 +1267,7 @@ _COUNTRY_HISTORY_SQL: LiteralString = (
     + _SONG_JOINS
     + _CYR_JOIN
     + """
-WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
   AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
   AND song.year_id IS NOT NULL
   AND song.main_participant
@@ -1275,7 +1280,7 @@ _MAIN_ENTRY_DETAILS_SQL: LiteralString = (
     + _SONG_COLUMNS
     + _SONG_JOINS
     + """
-WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
   AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
   AND song.year_id = %(year)s
   AND song.main_participant
@@ -1288,7 +1293,7 @@ _NUMBERED_ENTRY_DETAILS_SQL: LiteralString = (
     + _SONG_COLUMNS
     + _SONG_JOINS
     + """
-WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
   AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
   AND song.year_id = %(year)s
   AND song.entry_number = %(entry)s
@@ -1301,7 +1306,7 @@ _SPECIAL_COUNTRY_ENTRIES_SQL: LiteralString = (
     + _SONG_COLUMNS
     + _SONG_JOINS
     + """
-WHERE data.title IS NOT NULL AND data.artist IS NOT NULL
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
   AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
   AND song.year_id = %(year)s
   AND song.main_participant

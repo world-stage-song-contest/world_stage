@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Artists{% endblock %}
+{% block headercontents %}<link rel="stylesheet" href="{{ static('css/results.css') }}">{% endblock %}
+{% block content %}
+<table>
+    <thead><tr><th>Artist</th><th>Native name</th><th>Entries</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for artist in artists %}
+        <tr>
+            <td><a href="{{ url_for('artist.details', name=artist.display_name) }}">{{ artist.display_name }}</a></td>
+            <td>{{ artist.native_name or '' }}</td>
+            <td>{{ artist.entry_count }}</td>
+            {% if can_edit %}<td><a href="{{ url_for('artist.edit', name=artist.display_name) }}">Edit</a></td>{% endif %}
+        </tr>
+    {% else %}
+        <tr><td colspan="4">No artists found.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

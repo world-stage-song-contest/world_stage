@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ artist.display_name }}{% endblock %}
+{% block headercontents %}<link rel="stylesheet" href="{{ static('css/results.css') }}">{% endblock %}
+{% block content %}
+{% if artist.native_name %}<p class="subheading">{{ artist.native_name }}</p>{% endif %}
+{% if can_edit %}<p><a class="button" href="{{ url_for('artist.edit', name=artist.display_name) }}">Edit artist</a></p>{% endif %}
+<h3>Entries</h3>
+<table>
+    <thead><tr><th>Year</th><th>Country</th><th>Artist credit</th><th>Title</th></tr></thead>
+    <tbody>
+    {% for entry in entries %}
+        <tr>
+            <td>{{ entry.special_name or entry.year_id }}</td>
+            <td>{{ entry.country_name }}</td>
+            <td>{{ entry.artist }}</td>
+            <td>
+                {% if entry.special_short_name %}
+                    <a href="{{ url_for('country.special_details', code=entry.country_id|lower, special_short_name=entry.special_short_name, entry_number=entry.entry_number) }}">{{ entry.title }}</a>
+                {% else %}
+                    <a href="{{ url_for('country.details', code=entry.country_id|lower, year=entry.year_id, entry_number=entry.entry_number) }}">{{ entry.title }}</a>
+                {% endif %}
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="4">No entries are associated with this artist.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

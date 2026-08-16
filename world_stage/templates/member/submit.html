@@ -35,9 +35,9 @@
         <summary>Detailed explanations of every field</summary>
         <dl>
             <dt><strong>Artists</strong> (Mandatory)</dt>
-            <dd>Add each performer separately. Use their full name for the artist record,
-                optionally add the name in its native script, and provide the stage name
-                credited on this entry.</dd>
+            <dd>Select each performer and optionally provide the stage name credited on
+                this entry. When two different artists have the same name, use Name (2),
+                Name (3), and so on.</dd>
             <dt><strong>Latin title</strong>  (Mandatory)</dt>
             <dd>The title of the song in Latin alphabet. It can either be a translation of the native title or a romanization.</dd>
             <dt><strong>Is the Latin title a translation?</strong></dt>
@@ -153,16 +153,20 @@
                            maxlength="20">
                 </div>
                 <input class="artist-full-name" type="text" placeholder="Full name"
-                       aria-label="Full name" required maxlength="150">
-                <input class="artist-native-name" type="text" placeholder="Native-script name (optional)"
-                       aria-label="Native-script name" maxlength="150">
-                <input class="artist-stage-name" type="text" placeholder="Stage name on this entry"
+                       aria-label="Full name" role="combobox" aria-autocomplete="list"
+                       aria-controls="artist-suggestions" list="artist-suggestions"
+                       autocomplete="off" required maxlength="150">
+                <input class="artist-stage-name" type="text" placeholder="Stage name (optional)"
                        aria-label="Stage name" maxlength="150">
                 <button type="button" class="artist-remove" aria-label="Remove artist">Remove</button>
             </div>
         </template>
+        <datalist id="artist-suggestions"></datalist>
         <div class="span-fieldset-flush"><small>Join text is stored exactly as shown;
             custom joiners may include spaces and punctuation.</small></div>
+        <div class="span-fieldset-flush"><small>Artists with duplicate names are
+            distinguished as Name (2), Name (3), etc. The number identifies the artist
+            and is not part of their stage name.</small></div>
         <label class="req" for="song">Latin title</label>
         <input type="text" id="title" name="title" placeholder="Song title" required maxlength="100" minlength="1" value="{{ data.title }}">
         <div class="span-fieldset">

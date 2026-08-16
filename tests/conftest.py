@@ -142,6 +142,37 @@ def _seeded_db(_test_db):
             ON CONFLICT DO NOTHING
         """)
 
+        # Test seeds that bypass the song API still create normalized artist
+        # credits rather than relying on the removed song_data.artist cache.
+        cur.execute("""
+            CREATE OR REPLACE FUNCTION test_artist_credit(p_name text)
+            RETURNS bigint
+            LANGUAGE plpgsql
+            AS $$
+            DECLARE
+                artist_id bigint;
+                credit_set_id bigint;
+            BEGIN
+                SELECT id INTO artist_id
+                FROM artist
+                WHERE LOWER(full_name) = LOWER(p_name) AND number = 1;
+
+                IF artist_id IS NULL THEN
+                    INSERT INTO artist (full_name)
+                    VALUES (p_name)
+                    RETURNING id INTO artist_id;
+                END IF;
+
+                INSERT INTO artist_credit_set DEFAULT VALUES
+                RETURNING id INTO credit_set_id;
+                INSERT INTO artist_credit (
+                    artist_credit_set_id, position, artist_id
+                ) VALUES (credit_set_id, 1, artist_id);
+                RETURN credit_set_id;
+            END;
+            $$;
+        """)
+
         # Versioned voting rules are reference data. A schema-only copy of a
         # migrated source database contains their table and triggers but not
         # these rows, while its copied migration ledger marks the seed
@@ -305,6 +336,8 @@ def _clean_songs(_seeded_db):
         cur.execute("DELETE FROM song_revision_merge")
         cur.execute("DELETE FROM song_verification_hidden_revision")
         cur.execute("DELETE FROM song_data")
+        cur.execute("DELETE FROM artist_credit_set")
+        cur.execute("DELETE FROM artist")
         cur.execute("DELETE FROM genre_set_subgenre")
         cur.execute("DELETE FROM genre_set")
         cur.execute("DELETE FROM key_signature_set_key_signature")

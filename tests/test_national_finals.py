@@ -301,8 +301,9 @@ def test_finished_national_final_exposes_progression_ranking_and_entry_links(
                 song_ids.append(song_id)
                 cursor.execute(
                     """
-                    INSERT INTO song_data (song_id, title, artist, submitter_id)
-                    VALUES (%s, %s, 'Archive Artist', 3)
+                    INSERT INTO song_data (
+                        song_id, title, artist_credit_set_id, submitter_id
+                    ) VALUES (%s, %s, test_artist_credit('Archive Artist'), 3)
                     """,
                     (song_id, title),
                 )
@@ -977,8 +978,11 @@ def test_nf_ballot_ignores_country_and_uses_capacity_exception(db, national_fina
                 """
                 INSERT INTO song_data (
                     song_id, country_id, year_id, entry_number, submitter_id,
-                    title, artist
-                ) VALUES (%s, 'ES', 2025, %s, %s, %s, 'Artist')
+                    title, artist_credit_set_id
+                ) VALUES (
+                    %s, 'ES', 2025, %s, %s, %s,
+                    test_artist_credit('Artist')
+                )
                 """,
                 (song_id, entry_number, submitter_id, f"Candidate {entry_number}"),
             )
@@ -1052,8 +1056,9 @@ def test_nf_lifecycle_controls_voting_and_closes_child_shows(client, db, nationa
                 lineup_song_ids.append(song_id)
                 cursor.execute(
                     """
-                    INSERT INTO song_data (song_id, title, artist, submitter_id)
-                    VALUES (%s, %s, 'Artist', 3)
+                    INSERT INTO song_data (
+                        song_id, title, artist_credit_set_id, submitter_id
+                    ) VALUES (%s, %s, test_artist_credit('Artist'), 3)
                     """,
                     (song_id, f"Lifecycle candidate {position}"),
                 )

@@ -71,8 +71,8 @@ def _add_entry(
     song_id = cursor.fetchone()["id"]
     cursor.execute(
         """INSERT INTO song_data (
-               song_id, title, artist, submitter_id
-           ) VALUES (%s, %s, 'Artist', %s)""",
+               song_id, title, artist_credit_set_id, submitter_id
+           ) VALUES (%s, %s, test_artist_credit('Artist'), %s)""",
         (song_id, f"Entry {show_id}-{position}", submitter_id),
     )
     cursor.execute(

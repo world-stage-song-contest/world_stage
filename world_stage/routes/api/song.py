@@ -61,6 +61,54 @@ MAX_SNIPPET2_DURATION = 10
 MAX_USER_SUBMISSIONS = 2
 MAX_USER_SUBMISSIONS_SPECIAL = 1
 
+
+@bp.get("/artists")
+def search_artists():
+    """Return canonical artists matching a name or previous stage name."""
+    query = _normalize_text(request.args.get("q"))
+    if not query:
+        return resp([])
+    if len(query) > 100:
+        return err(ErrorID.BAD_REQUEST, "Artist search must be at most 100 characters")
+
+    cursor = get_db().cursor()
+    pattern = f"%{query}%"
+    cursor.execute(
+        """
+        SELECT artist.id, artist.full_name, artist.native_name, artist.number,
+               CASE WHEN artist.number = 1 THEN artist.full_name
+                    ELSE artist.full_name || ' (' || artist.number || ')'
+               END AS display_name,
+               COALESCE(aliases.stage_names, ARRAY[]::text[]) AS stage_names
+        FROM artist
+        LEFT JOIN LATERAL (
+            SELECT ARRAY_AGG(DISTINCT credit.stage_name ORDER BY credit.stage_name)
+                   AS stage_names
+            FROM artist_credit AS credit
+            WHERE credit.artist_id = artist.id
+        ) AS aliases ON true
+        WHERE artist.full_name ILIKE %s
+           OR artist.native_name ILIKE %s
+           OR EXISTS (
+                SELECT 1 FROM artist_credit AS credit
+                WHERE credit.artist_id = artist.id
+                  AND credit.stage_name ILIKE %s
+           )
+        ORDER BY
+            CASE
+                WHEN LOWER(artist.full_name) = LOWER(%s) THEN 0
+                WHEN artist.full_name ILIKE %s THEN 1
+                ELSE 2
+            END,
+            artist.full_name,
+            artist.number,
+            artist.id
+        LIMIT 12
+        """,
+        (pattern, pattern, pattern, query, f"{query}%"),
+    )
+    return resp(cursor.fetchall())
+
 MUTABLE_TEXT_FIELDS = (
     "title",
     "native_title",
@@ -139,10 +187,16 @@ def _same_artist_credits(incoming: list[dict], current: list[dict]) -> bool:
         if new["stage_name"] != old["stage_name"] or new["join"] != old["join"]:
             return False
         if new["id"] is not None:
-            if new["id"] != old["id"]:
+            if (
+                new["id"] != old["id"]
+                or (new["full_name"] or "").casefold()
+                != old["full_name"].casefold()
+                or new["number"] != old["number"]
+            ):
                 return False
         elif (
             (new["full_name"] or "").casefold() != old["full_name"].casefold()
+            or new["number"] != old["number"]
             or (new["native_name"] or "").casefold()
             != (old["native_name"] or "").casefold()
         ):
@@ -385,14 +439,6 @@ def _song_row_to_json(
 ) -> dict:
     """Turn a DB row + language list into the API response body."""
     artist_items = artists if artists is not None else row.get("artists", [])
-    if not artist_items and row.get("artist"):
-        artist_items = [{
-            "id": None,
-            "full_name": row["artist"],
-            "native_name": None,
-            "stage_name": row["artist"],
-            "join": None,
-        }]
     return {
         "id": row["id"],
         "year": row["year_id"],
@@ -479,7 +525,7 @@ _SONG_LIST_QUERY = sql.SQL(
         country.name AS country_name,
         data.title,
         data.native_title,
-        data.artist,
+        artist_credit_name(data.artist_credit_set_id) AS artist,
         data.artist_credit_set_id,
         COALESCE(status.is_placeholder, false) AS is_placeholder,
         data.title_language_id,
@@ -519,7 +565,7 @@ _SONG_LIST_QUERY = sql.SQL(
            )
         ORDER BY revision.created_at DESC, revision.id DESC
         LIMIT 1
-    ) data ON data.title IS NOT NULL AND data.artist IS NOT NULL
+    ) data ON data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
     LEFT JOIN LATERAL (
         SELECT revision_status.is_placeholder
         FROM song_status revision_status
@@ -584,6 +630,9 @@ _SONG_LIST_QUERY = sql.SQL(
                 'id', artist.id,
                 'full_name', artist.full_name,
                 'native_name', artist.native_name,
+                'number', artist.number,
+                'display_name', CASE WHEN artist.number = 1 THEN artist.full_name
+                    ELSE artist.full_name || ' (' || artist.number || ')' END,
                 'stage_name', member.stage_name,
                 'join', member.join_phrase
             ) ORDER BY member.position
@@ -1038,7 +1087,12 @@ def get_song(id: int):
     key_signatures = _fetch_song_key_signatures(cursor, id)
     time_signatures = _fetch_song_time_signatures(cursor, id)
     subgenres = _fetch_song_subgenres(cursor, id)
-    return resp(_song_row_to_json(row, languages, key_signatures, time_signatures, subgenres))
+    artists = _fetch_song_artists(cursor, id)
+    return resp(
+        _song_row_to_json(
+            row, languages, key_signatures, time_signatures, subgenres, artists
+        )
+    )
 
 
 # ── GET /api/song/<cc>/<year> ─────────────────────────────────────────
@@ -1329,7 +1383,7 @@ def create_song(auth: tuple):
     cursor.execute(
         """
         INSERT INTO song_data (
-            song_id, title, native_title, artist, artist_credit_set_id,
+            song_id, title, native_title, artist_credit_set_id,
             title_language_id, native_language_id, language_set_id,
             genre_set_id, key_signature_set_id, time_signature_set_id,
             video_link, duration,
@@ -1338,13 +1392,12 @@ def create_song(auth: tuple):
             romanized_lyrics, native_lyrics, submitter_id, notes, sources,
             changed_by
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         """,
         (
-            song_id, text["title"], text["native_title"], text["artist"],
-            artist_credit_set_id,
+            song_id, text["title"], text["native_title"], artist_credit_set_id,
             title_language_id, native_language_id, language_set_id,
             genre_set_id, key_signature_set_id, time_signature_set_id,
             text["video_link"], duration_for_link(text["video_link"]),
@@ -1538,7 +1591,6 @@ def replace_song(id: int, auth: tuple):
     revision_changes = {
         "title": text["title"],
         "native_title": text["native_title"],
-        "artist": text["artist"],
         "artist_credit_set_id": artist_credit_set_id,
         "title_language_id": title_language_id,
         "native_language_id": native_language_id,
@@ -1645,7 +1697,7 @@ def update_song(id: int, auth: tuple):
         return sql.SQL("{} = %s").format(sql.Identifier(col))
 
     for field in MUTABLE_TEXT_FIELDS:
-        if field in data:
+        if field in data and field != "artist":
             if field in ("snippet_start", "snippet_end", "snippet2_start", "snippet2_end"):
                 val = _normalize_text(data[field])
                 sets.append(_assign(field))
@@ -1788,7 +1840,7 @@ def update_song(id: int, auth: tuple):
     changes = {}
     if sets:
         for field in MUTABLE_TEXT_FIELDS:
-            if field in data:
+            if field in data and field != "artist":
                 value = _normalize_text(data[field])
                 if field in (
                     "snippet_start", "snippet_end", "snippet2_start", "snippet2_end"
@@ -1822,13 +1874,11 @@ def update_song(id: int, auth: tuple):
     if subgenre_ids is not None:
         changes["genre_set_id"] = _get_or_create_genre_set(cursor, subgenre_ids)
     if artist_credits is not None:
-        rendered_artist = render_artist_credits(artist_credits)
         current_credits = fetch_artist_credits(cursor, row["artist_credit_set_id"])
         if not _same_artist_credits(artist_credits, current_credits):
             changes["artist_credit_set_id"] = create_artist_credit_set(
                 cursor, artist_credits
             )
-        changes["artist"] = rendered_artist
     changes = {field: value for field, value in changes.items() if row[field] != value}
     if changes:
         create_song_revision(cursor, id, changes, changed_by=user_id)

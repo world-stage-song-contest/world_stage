@@ -66,8 +66,8 @@ def _seed_show_and_songs(db):
             song_ids.append(song_id)
             cursor.execute(
                 """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist
-                   ) VALUES (%s, %s, %s, 'Artist')""",
+                       song_id, submitter_id, title, artist_credit_set_id
+                   ) VALUES (%s, %s, %s, test_artist_credit('Artist'))""",
                 (song_id, submitter_id, title),
             )
         cursor.executemany(

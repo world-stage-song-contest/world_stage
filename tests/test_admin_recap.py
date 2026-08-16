@@ -37,8 +37,9 @@ def test_cytube_playlist_inserts_and_labels_the_host(client, db):
             )
             song_ids[country] = cur.fetchone()["id"]
             cur.execute(
-                """INSERT INTO song_data (song_id, submitter_id, artist, title)
-                   VALUES (%s, 1, %s, %s)""",
+                """INSERT INTO song_data (
+                       song_id, submitter_id, artist_credit_set_id, title
+                   ) VALUES (%s, 1, test_artist_credit(%s), %s)""",
                 (song_ids[country], artist, title),
             )
 
@@ -129,8 +130,8 @@ def test_cytube_playlist_adds_opening_act_by_prior_year_placement(client, db):
             )
             song_id = cur.fetchone()["id"]
             cur.execute(
-                """INSERT INTO song_data (song_id, artist, title)
-                   VALUES (%s, 'Previous Artist', 'Previous Song')""",
+                """INSERT INTO song_data (song_id, artist_credit_set_id, title)
+                   VALUES (%s, test_artist_credit('Previous Artist'), 'Previous Song')""",
                 (song_id,),
             )
             cur.execute(
@@ -205,8 +206,11 @@ def test_all_recap_data_variants_include_submitter(client, db):
         )
         song_id = cur.fetchone()["id"]
         cur.execute(
-            """INSERT INTO song_data (song_id, submitter_id, artist, title)
-               VALUES (%s, 1, 'Metadata Artist', 'Metadata Song')""",
+            """INSERT INTO song_data (
+                   song_id, submitter_id, artist_credit_set_id, title
+               ) VALUES (
+                   %s, 1, test_artist_credit('Metadata Artist'), 'Metadata Song'
+               )""",
             (song_id,),
         )
         cur.execute(

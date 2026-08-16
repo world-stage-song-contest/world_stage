@@ -1,7 +1,6 @@
 """Tests for the member submission form data endpoints."""
 
 import uuid
-from pathlib import Path
 
 
 def test_placeholder_is_forced_after_two_regular_submissions(
@@ -106,8 +105,8 @@ def test_admin_can_edit_closed_song_without_submitter(client, db):
                 INSERT INTO song (country_id, year_id)
                 VALUES ('HU', 1970) RETURNING id
             )
-            INSERT INTO song_data (song_id, title, artist)
-            SELECT id, 'Lost Record', 'Unknown' FROM inserted
+            INSERT INTO song_data (song_id, title, artist_credit_set_id)
+            SELECT id, 'Lost Record', test_artist_credit('Unknown') FROM inserted
             """
         )
         cur.execute(

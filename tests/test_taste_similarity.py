@@ -112,8 +112,8 @@ def test_taste_similarity_revotes_replace_each_voters_official_ballot(
             song_id = cursor.fetchone()["id"]
             song_ids.append(song_id)
             cursor.execute(
-                """INSERT INTO song_data (song_id, title, artist)
-                   VALUES (%s, %s, 'Artist')""",
+                """INSERT INTO song_data (song_id, title, artist_credit_set_id)
+                   VALUES (%s, %s, test_artist_credit('Artist'))""",
                 (song_id, title),
             )
         cursor.executemany(

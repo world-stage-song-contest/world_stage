@@ -83,7 +83,8 @@ def _render_verifications(year: dict):
     cursor.execute(
         """
         SELECT data.id, song.id AS song_id, data.country_id, data.entry_number,
-               data.artist, data.title, data.sources,
+               artist_credit_name(data.artist_credit_set_id) AS artist,
+               data.title, data.sources,
                COALESCE(status.is_placeholder, false) AS is_placeholder,
                COALESCE(status.approval_status, 'pending') AS approval_status,
                status.id AS status_id,
@@ -92,7 +93,8 @@ def _render_verifications(year: dict):
                country.name AS country_name,
                submitter.username AS submitter_username,
                latest.id AS latest_data_id,
-               song.id IS NULL OR latest.title IS NULL OR latest.artist IS NULL
+               song.id IS NULL OR latest.title IS NULL
+                   OR latest.artist_credit_set_id IS NULL
                    AS song_deleted
         FROM song_data AS data
         LEFT JOIN song
@@ -100,7 +102,7 @@ def _render_verifications(year: dict):
          AND song.year_id = data.year_id
          AND song.entry_number IS NOT DISTINCT FROM data.entry_number
         JOIN LATERAL (
-            SELECT newest.id, newest.title, newest.artist
+            SELECT newest.id, newest.title, newest.artist_credit_set_id
             FROM song_data AS newest
             WHERE newest.country_id = data.country_id
               AND newest.year_id = data.year_id
@@ -115,12 +117,12 @@ def _render_verifications(year: dict):
               AND newest.year_id = data.year_id
               AND newest.entry_number IS NOT DISTINCT FROM data.entry_number
               AND newest.title IS NOT NULL
-              AND newest.artist IS NOT NULL
+              AND newest.artist_credit_set_id IS NOT NULL
             ORDER BY newest.created_at DESC, newest.id DESC
             LIMIT 1
         ) AS latest_content ON true
         LEFT JOIN LATERAL (
-            SELECT newer.id, newer.title, newer.artist
+            SELECT newer.id, newer.title, newer.artist_credit_set_id
             FROM song_data AS newer
             WHERE newer.previous_revision_id = data.id
             LIMIT 1
@@ -141,7 +143,7 @@ def _render_verifications(year: dict):
           ON hidden_revision.song_data_id = data.id
         WHERE data.year_id = %s
           AND data.title IS NOT NULL
-          AND data.artist IS NOT NULL
+          AND data.artist_credit_set_id IS NOT NULL
           AND manual_merge.song_data_id IS NULL
           AND hidden_revision.song_data_id IS NULL
           AND (
@@ -150,9 +152,11 @@ def _render_verifications(year: dict):
                   next_data.id IS NOT NULL
                   AND (
                       next_data.title IS NULL
-                      OR next_data.artist IS NULL
+                      OR next_data.artist_credit_set_id IS NULL
                       OR LOWER(next_data.title) IS DISTINCT FROM LOWER(data.title)
-                      OR LOWER(next_data.artist) IS DISTINCT FROM LOWER(data.artist)
+                      OR LOWER(artist_credit_name(next_data.artist_credit_set_id))
+                         IS DISTINCT FROM
+                         LOWER(artist_credit_name(data.artist_credit_set_id))
                   )
               )
               OR EXISTS (
@@ -426,7 +430,7 @@ def _hide_verification_revision(
         WHERE old.id = %s
           AND old.year_id = %s
           AND old.title IS NOT NULL
-          AND old.artist IS NOT NULL
+          AND old.artist_credit_set_id IS NOT NULL
           AND NOT EXISTS (
               SELECT 1
               FROM current_song AS current

@@ -49,8 +49,8 @@ def _add_song(
         cursor.execute(
             """
             INSERT INTO song_data (
-                song_id, submitter_id, title, artist, sources
-            ) VALUES (%s, 2, %s, 'Test Artist', %s)
+                song_id, submitter_id, title, artist_credit_set_id, sources
+            ) VALUES (%s, 2, %s, test_artist_credit('Test Artist'), %s)
             """,
             (song_id, title, sources),
         )
@@ -63,6 +63,11 @@ def _revise_song(db, song_id: int, **changes) -> int:
     from world_stage.utils.song_revisions import create_song_revision
 
     with db.cursor() as cursor:
+        if "artist" in changes:
+            cursor.execute(
+                "SELECT test_artist_credit(%s) AS id", (changes.pop("artist"),)
+            )
+            changes["artist_credit_set_id"] = cursor.fetchone()["id"]
         revision_id = create_song_revision(cursor, song_id, changes, changed_by=2)["id"]
     db.commit()
     return revision_id
@@ -485,7 +490,8 @@ def test_comments_follow_minor_edits_while_status_remains_song_level(client, db)
         assert cursor.fetchall() == [{"song_data_id": original_version_id}]
         cursor.execute(
             """
-            SELECT title IS NULL OR artist IS NULL AS song_deleted FROM song_data
+            SELECT title IS NULL OR artist_credit_set_id IS NULL AS song_deleted
+            FROM song_data
             WHERE country_id = 'ES' AND year_id = 2025 ORDER BY id
             """,
         )

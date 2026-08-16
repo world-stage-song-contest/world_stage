@@ -355,6 +355,7 @@ def create_app(config: dict | None = None) -> Flask:
     from .routes import (
         admin,
         api,
+        artist,
         country,
         index,
         member,
@@ -381,6 +382,7 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(admin.bp)
     app.register_blueprint(country.bp)
     app.register_blueprint(api.bp)
+    app.register_blueprint(artist.bp)
     app.register_blueprint(playlist.bp)
     app.register_blueprint(radio.bp)
     app.register_blueprint(scrobble_routes.bp)

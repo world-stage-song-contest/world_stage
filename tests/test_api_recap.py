@@ -35,8 +35,11 @@ def _seed_recap_data(db):
         )
         song_id = cur.fetchone()["id"]
         cur.execute(
-            """INSERT INTO song_data (song_id, submitter_id, artist, title)
-               VALUES (%s, 1, 'API Artist', 'API Song')""",
+            """INSERT INTO song_data (
+                   song_id, submitter_id, artist_credit_set_id, title
+               ) VALUES (
+                   %s, 1, test_artist_credit('API Artist'), 'API Song'
+               )""",
             (song_id,),
         )
         cur.execute(
@@ -191,8 +194,11 @@ def test_recap_api_etag_tracks_exported_values(client, db):
 
     with db.cursor() as cur:
         cur.execute(
-            """INSERT INTO song_data (song_id, submitter_id, artist, title, notes)
-               SELECT song_id, submitter_id, artist, title, 'Not part of recap data'
+            """INSERT INTO song_data (
+                   song_id, submitter_id, artist_credit_set_id, title, notes
+               )
+               SELECT song_id, submitter_id, artist_credit_set_id, title,
+                      'Not part of recap data'
                FROM song_data WHERE song_id = %s ORDER BY created_at DESC, id DESC LIMIT 1""",
             (song_id,),
         )
@@ -201,8 +207,11 @@ def test_recap_api_etag_tracks_exported_values(client, db):
 
     with db.cursor() as cur:
         cur.execute(
-            """INSERT INTO song_data (song_id, submitter_id, artist, title, notes)
-               SELECT song_id, submitter_id, artist, 'Changed API Song', notes
+            """INSERT INTO song_data (
+                   song_id, submitter_id, artist_credit_set_id, title, notes
+               )
+               SELECT song_id, submitter_id, artist_credit_set_id,
+                      'Changed API Song', notes
                FROM song_data WHERE song_id = %s ORDER BY created_at DESC, id DESC LIMIT 1""",
             (song_id,),
         )
@@ -234,8 +243,11 @@ def test_recap_api_country_accepts_codes_and_names(client, db):
             """
             WITH inserted AS (
                 INSERT INTO song (country_id, year_id) VALUES ('US', 2024) RETURNING id
-            ) INSERT INTO song_data (song_id, submitter_id, artist, title)
-              SELECT id, 1, 'Country Artist', 'Country Song' FROM inserted
+            ) INSERT INTO song_data (
+                song_id, submitter_id, artist_credit_set_id, title
+            )
+              SELECT id, 1, test_artist_credit('Country Artist'), 'Country Song'
+              FROM inserted
             """
         )
     db.commit()
@@ -262,16 +274,22 @@ def test_recap_api_excludes_specials_unless_requested(client, db):
             """
             WITH inserted AS (
                 INSERT INTO song (country_id, year_id) VALUES ('US', -1) RETURNING id
-            ) INSERT INTO song_data (song_id, submitter_id, artist, title)
-              SELECT id, 1, 'Special Artist', 'Special Song' FROM inserted
+            ) INSERT INTO song_data (
+                song_id, submitter_id, artist_credit_set_id, title
+            )
+              SELECT id, 1, test_artist_credit('Special Artist'), 'Special Song'
+              FROM inserted
             """
         )
         cur.execute(
             """
             WITH inserted AS (
                 INSERT INTO song (country_id, year_id) VALUES ('US', 2024) RETURNING id
-            ) INSERT INTO song_data (song_id, submitter_id, artist, title)
-              SELECT id, 1, 'Regular Artist', 'Regular Song' FROM inserted
+            ) INSERT INTO song_data (
+                song_id, submitter_id, artist_credit_set_id, title
+            )
+              SELECT id, 1, test_artist_credit('Regular Artist'), 'Regular Song'
+              FROM inserted
             """
         )
     db.commit()
