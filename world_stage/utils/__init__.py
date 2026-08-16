@@ -58,6 +58,7 @@ from .sequencers import (
 )
 from .songs import (
     Song,
+    get_artist_history,
     get_country_history,
     get_entry_details,
     get_language,
@@ -126,6 +127,7 @@ __all__ = (
     "generate_api_token",
     "get_api_auth",
     "get_ballot_entry_rules",
+    "get_artist_history",
     "get_closed_years",
     "get_countries",
     "get_country_name",

@@ -6,13 +6,14 @@ from flask import Blueprint, redirect, request, url_for
 from ..db import get_db
 from ..utils import (
     UserPermissions,
+    get_artist_history,
+    get_show_results_for_songs,
     render_template,
     require_permissions,
     with_permissions,
 )
 from ..utils.artists import (
     artist_display_name,
-    fetch_song_artist_credits,
     parse_artist_display_name,
 )
 
@@ -46,7 +47,12 @@ def index(permissions: UserPermissions):
     cursor.execute(
         """
         SELECT artist.id, artist.full_name, artist.native_name, artist.number,
-               COUNT(DISTINCT song.id) AS entry_count
+               COUNT(DISTINCT song.id) AS entry_count,
+               COALESCE(
+                   ARRAY_AGG(DISTINCT credit.stage_name ORDER BY credit.stage_name)
+                       FILTER (WHERE credit.stage_name IS NOT NULL),
+                   ARRAY[]::text[]
+               ) AS stage_names
         FROM artist
         JOIN artist_credit AS credit ON credit.artist_id = artist.id
         JOIN current_song AS song
@@ -143,32 +149,15 @@ def details(name: str, permissions: UserPermissions):
     artist = _find_artist(cursor, name)
     if not artist:
         return render_template("error.html", error="Artist not found"), 404
-    cursor.execute(
-        """
-        SELECT DISTINCT song.id, song.year_id, song.country_id,
-               country.name AS country_name, song.entry_number,
-               song.title, song.artist, year.special_short_name,
-               year.special_name
-        FROM current_song AS song
-        JOIN artist_credit AS credit
-          ON credit.artist_credit_set_id = song.artist_credit_set_id
-        JOIN country ON country.id = song.country_id
-        JOIN year ON year.id = song.year_id
-        WHERE credit.artist_id = %s
-          AND year.status IN ('closed', 'ongoing')
-        ORDER BY song.year_id DESC, country.name, song.entry_number
-        """,
-        (artist["id"],),
-    )
-    entries = cursor.fetchall()
+    entries = get_artist_history(artist["id"])
     if not entries:
         return render_template("error.html", error="Artist not found"), 404
-    credits = fetch_song_artist_credits(cursor, [entry["id"] for entry in entries])
-    for entry in entries:
-        entry["artists"] = credits.get(entry["id"], [])
+    results = get_show_results_for_songs([entry.id for entry in entries])
     return render_template(
         "artist/details.html",
         artist=artist,
-        entries=entries,
+        entries=[entry for entry in entries if entry.year.id >= 0],
+        special_entries=[entry for entry in entries if entry.year.id < 0],
+        results=results,
         can_edit=permissions.can_edit,
     )

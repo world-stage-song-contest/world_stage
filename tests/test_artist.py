@@ -1,7 +1,9 @@
 import uuid
 
 
-def _create_artist_entry(client, headers, *, name="Canonical Artist"):
+def _create_artist_entry(
+    client, headers, *, name="Canonical Artist", stage_name=None
+):
     response = client.post(
         "/api/song",
         json={
@@ -9,7 +11,7 @@ def _create_artist_entry(client, headers, *, name="Canonical Artist"):
             "country": "US",
             "title": "Artist Route Song",
             "artist": None,
-            "artists": [{"full_name": name, "stage_name": None}],
+            "artists": [{"full_name": name, "stage_name": stage_name}],
             "sources": "http://example.com",
             "languages": [20],
         },
@@ -52,13 +54,20 @@ def test_artist_index_and_details_list_associated_entries(
         assert b'<table class="songs-table sortable">' in details.data
         assert b"js/sort-table.js" in details.data
         assert b'class="country"' in details.data
+        assert b'<th class="year-result">Year</th>' in details.data
+        assert b'<th class="pct-cell">%</th>' in details.data
+        assert b'<th class="final">Final</th>' in details.data
+        assert b'<th class="repechage">Repe</th>' in details.data
+        assert b'<th class="semifinal">Semi</th>' in details.data
     finally:
         with db.cursor() as cursor:
             cursor.execute("UPDATE year SET status = 'open' WHERE id = 2025")
         db.commit()
 
 
-def test_artist_from_open_year_is_hidden(client, bob_headers):
+def test_artist_from_open_year_is_hidden_from_index_but_has_details(
+    client, bob_headers
+):
     _create_artist_entry(client, bob_headers)
     headers = {"Accept": "text/html"}
 
@@ -67,7 +76,26 @@ def test_artist_from_open_year_is_hidden(client, bob_headers):
 
     assert index.status_code == 200
     assert b"Canonical Artist" not in index.data
-    assert details.status_code == 404
+    assert details.status_code == 200
+    assert b"Artist Route Song" in details.data
+
+
+def test_artist_index_lists_distinct_stage_names(client, db, bob_headers):
+    try:
+        _create_artist_entry(client, bob_headers, stage_name="The Alias")
+        with db.cursor() as cursor:
+            cursor.execute("UPDATE year SET status = 'ongoing' WHERE id = 2025")
+        db.commit()
+
+        response = client.get("/artist", headers={"Accept": "text/html"})
+
+        assert response.status_code == 200
+        assert b"Stage names" in response.data
+        assert b"The Alias" in response.data
+    finally:
+        with db.cursor() as cursor:
+            cursor.execute("UPDATE year SET status = 'open' WHERE id = 2025")
+        db.commit()
 
 
 def test_admin_can_edit_artist_and_native_name(client, db, bob_headers):

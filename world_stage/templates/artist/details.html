@@ -10,41 +10,103 @@
 {% block content %}
 {% if artist.native_name %}<p class="subheading">{{ artist.native_name }}</p>{% endif %}
 {% if can_edit %}<p><a class="button" href="{{ url_for('artist.edit', name=artist.display_name) }}">Edit artist</a></p>{% endif %}
-<h3>Entries</h3>
+
+{% macro year_result_cell(entry) %}
+  {% if entry %}
+    {% set place = entry.place %}
+    {% set place_class = (
+         'first' if place == 1 else 'second' if place == 2 else
+         'third' if place == 3 else ''
+       ) ~ (' last' if place == entry.total_countries else '') %}
+    <td class="number year-result place-cell {{ place_class }}">{{ place }}</td>
+    <td class="number pct-cell {{ place_class }}">{{ "%.2f%%" | format(entry.placement_percentage|float) }}</td>
+  {% else %}
+    <td class="number year-result place-cell no-entry"></td>
+    <td class="number pct-cell no-entry"></td>
+  {% endif %}
+{% endmacro %}
+
+{% macro result_cells(entry, category) %}
+  {% if entry %}
+    {% set place = entry.place %}
+    {% set place_class = (
+         'first' if place == 1 else 'second' if place == 2 else
+         'third' if place == 3 else ''
+       ) ~ (' last' if place == entry.total_countries else '') %}
+    <td class="number {{ category }} place-cell {{ place_class }}">{{ place }}</td>
+    <td class="number {{ category }} pts-cell {{ place_class }}">{{ entry.pts }}</td>
+  {% else %}
+    <td class="number {{ category }} place-cell no-entry"></td>
+    <td class="number {{ category }} pts-cell no-entry"></td>
+  {% endif %}
+{% endmacro %}
+
+{% macro entry_table(songs, special=False) %}
 <table class="songs-table sortable">
-    <thead><tr><th>Year</th><th>Country</th><th>Artist credit</th><th>Title</th></tr></thead>
+    <thead>
+        <tr>
+            <th>{{ 'Special' if special else 'Year' }}</th>
+            <th>Country</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Language</th>
+            <th>Submitter</th>
+            <th class="year-result">{{ 'Place' if special else 'Year' }}</th>
+            <th class="pct-cell">%</th>
+            <th class="final">Final</th>
+            <th class="final">Points</th>
+            <th class="repechage">Repe</th>
+            <th class="repechage">Points</th>
+            <th class="semifinal">Semi</th>
+            <th class="semifinal">Points</th>
+        </tr>
+    </thead>
     <tbody>
-    {% for entry in entries %}
-        <tr data-value="{{ loop.index }}" class="finalised">
+    {% for song in songs %}
+        {% set result = results.get(song.id, {}) %}
+        <tr data-value="{{ loop.index }}" class="{{ 'placeholder' if song.placeholder else 'finalised' }}">
             <td>
-                {% if entry.special_short_name %}
-                    <a href="{{ url_for('year.special', short_name=entry.special_short_name) }}">{{ entry.special_name }}</a>
+                {% if special %}
+                    <a href="{{ url_for('year.special', short_name=song.year.special_short_name) }}">{{ song.year.special_name }}</a>
                 {% else %}
-                    <a href="{{ url_for('year.year', year=entry.year_id) }}">{{ entry.year_id }}</a>
+                    <a href="{{ url_for('year.year', year=song.year.id) }}">{{ song.year.id }}</a>
                 {% endif %}
             </td>
             <td>
-                <a href="{{ url_for('country.country', code=entry.country_id|lower) }}">
+                <a href="{{ url_for('country.country', code=song.country.cc|lower) }}">
                     <div class="country">
-                        {{ flag(entry.country_id, 42, entry.country_name) }}
-                        <span>{{ entry.country_name }}</span>
+                        {{ flag(song.country.cc, 42, song.country.name, variant=song.country.flag_variant) }}
+                        <span>{{ song.country.name }}</span>
                     </div>
                 </a>
             </td>
-            <td><div class="song-artist">{{ artist_links(entry) }}</div></td>
-            <td>
-                <div class="song-title">
-                {% if entry.special_short_name %}
-                    <a href="{{ url_for('country.special_details', code=entry.country_id|lower, special_short_name=entry.special_short_name, entry_number=entry.entry_number) }}">{{ entry.title }}</a>
+            <td><div class="song-artist">{{ artist_links(song) }}</div></td>
+            <td><div class="song-title">
+                {% if special %}
+                    <a href="{{ url_for('country.special_details', code=song.country.cc|lower, special_short_name=song.year.special_short_name, entry_number=song.entry_number) }}">{{ song.title }}</a>
                 {% else %}
-                    <a href="{{ url_for('country.details', code=entry.country_id|lower, year=entry.year_id, entry_number=entry.entry_number) }}">{{ entry.title }}</a>
+                    <a href="{{ url_for('country.details', code=song.country.cc|lower, year=song.year.id, entry_number=song.entry_number) }}">{{ song.title }}</a>
                 {% endif %}
-                </div>
-            </td>
+                {% if song.native_title %}<bdi>{{ song.native_title }}</bdi>{% endif %}
+            </div></td>
+            <td>{{ song.languages|map(attribute='name')|join(', ') }}</td>
+            <td>{{ song.submitter or '' }}</td>
+            {{ year_result_cell(result.get('year')) }}
+            {{ result_cells(result.get('f'), 'final') }}
+            {{ result_cells(result.get('sc'), 'repechage') }}
+            {{ result_cells(result.get('sf'), 'semifinal') }}
         </tr>
-    {% else %}
-        <tr><td colspan="4">No entries are associated with this artist.</td></tr>
     {% endfor %}
     </tbody>
 </table>
+{% endmacro %}
+
+{% if entries %}
+<h3>Entries</h3>
+{{ entry_table(entries) }}
+{% endif %}
+{% if special_entries %}
+<h3>Specials</h3>
+{{ entry_table(special_entries, True) }}
+{% endif %}
 {% endblock %}

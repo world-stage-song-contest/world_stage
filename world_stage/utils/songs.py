@@ -1316,6 +1316,24 @@ ORDER BY song.year_id,"""
     + _YEAR_PLACE_ORDER
 )
 
+_ARTIST_HISTORY_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + _CYR_JOIN
+    + """
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
+  AND song.year_id IS NOT NULL
+  AND EXISTS (
+      SELECT 1
+      FROM artist_credit AS linked_credit
+      WHERE linked_credit.artist_credit_set_id = data.artist_credit_set_id
+        AND linked_credit.artist_id = %(artist_id)s
+  )
+ORDER BY song.year_id,"""
+    + _YEAR_PLACE_ORDER
+)
+
 _MAIN_ENTRY_DETAILS_SQL: LiteralString = (
     "SELECT"
     + _SONG_COLUMNS
@@ -1359,6 +1377,15 @@ def get_country_history(code: str) -> list[Song]:
     """Load the rich rows displayed on one country's history page."""
     cursor = get_db().cursor()
     cursor.execute(_COUNTRY_HISTORY_SQL, {"cc": code})
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_languages(songs)
+    return songs
+
+
+def get_artist_history(artist_id: int) -> list[Song]:
+    """Load the rich rows displayed on one artist's entry history page."""
+    cursor = get_db().cursor()
+    cursor.execute(_ARTIST_HISTORY_SQL, {"artist_id": artist_id})
     songs = _songs_from_rows(cursor.fetchall())
     _attach_languages(songs)
     return songs
