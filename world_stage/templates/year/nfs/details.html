@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}{{ nf.name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -95,7 +96,7 @@
     <tr>
         {% if nf.status == 'finished' %}<td class="number">{{ ranking.overall_place if ranking else '' }}</td>{% endif %}
         <td><div class="country">{{ flag(song.country_id, 24, song.country) }}{{ song.country }}</div></td>
-        <td><div class="song-artist">{{ song.artist }}</div></td>
+        <td><div class="song-artist">{{ artist_links(song) }}</div></td>
         <td><div class="song-title">
             {% if special %}
             <a href="{{ url_for('country.special_details', code=song.country_id.lower(), special_short_name=special, entry_number=song.entry_number) }}">{{ song.title }}</a>

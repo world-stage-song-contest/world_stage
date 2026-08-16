@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}{{ 'Revote votes: ' if is_revote else '' }}{{ song.artist }} — {{ song.title }} | {{ year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -111,7 +112,7 @@
 <div class="song-header">
     {{ flag(song.country_id, 32, song.country_name) }}
     <div>
-        <h2>{% if special %}<a href="{{ url_for('country.special_details', code=song.country_id|lower, special_short_name=special, entry_number=song.entry_number) }}">{{ song.artist }} — {{ song.title }}</a>{% else %}<a href="{{ url_for('country.details', code=song.country_id|lower, year=year) }}">{{ song.artist }} — {{ song.title }}</a>{% endif %}</h2>
+        <h2>{{ artist_links(song) }} — {% if special %}<a href="{{ url_for('country.special_details', code=song.country_id|lower, special_short_name=special, entry_number=song.entry_number) }}">{{ song.title }}</a>{% else %}<a href="{{ url_for('country.details', code=song.country_id|lower, year=year) }}">{{ song.title }}</a>{% endif %}</h2>
         <div class="song-meta">{{ song.country_name }} | {{ show_name }} | {{ total_points }} points from {{ voters_who_gave }} voter{{ 's' if voters_who_gave != 1 else '' }}</div>
     </div>
 </div>

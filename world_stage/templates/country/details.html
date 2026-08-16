@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}Overview: {{ name }} {{ year }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -138,7 +139,7 @@
     <table>
         <tr>
             <th>Artist</th>
-            <td>{{ song.artist }}</td>
+            <td>{{ artist_links(song) }}</td>
         </tr>
         <tr>
             <th>Title</th>

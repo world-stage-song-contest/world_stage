@@ -49,6 +49,9 @@ def test_artist_index_and_details_list_associated_entries(
         assert details.status_code == 200
         assert b"Artist Route Song" in details.data
         assert b"United States" in details.data
+        assert b'<table class="songs-table sortable">' in details.data
+        assert b"js/sort-table.js" in details.data
+        assert b'class="country"' in details.data
     finally:
         with db.cursor() as cursor:
             cursor.execute("UPDATE year SET status = 'open' WHERE id = 2025")

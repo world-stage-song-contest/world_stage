@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}{{ 'Detailed revote results' if is_revote else 'Detailed Results' }}: {{ special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -108,7 +109,7 @@
                 {% if is_revote and original and original.special_qualifier %}title="Special qualifier"{% endif %}>
                 <td class="number header-like">{{ song.vote_data.ro }}</td>
                 <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
-                <td><span class="col-truncate" title="{{ song.artist }}">{{ song.artist }}</span></td>
+                <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
                 {% if is_revote %}
                 <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('revote.song_votes', year=revote_year, show=show, song_id=song.id) }}">{{ song.title }}</a></td>
                 {% elif special %}

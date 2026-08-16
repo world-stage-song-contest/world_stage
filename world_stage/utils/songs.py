@@ -14,6 +14,7 @@ class Song:
     id: int
     title: str
     artist: str
+    artists: list[dict]
     country: Country
     year: Year
     entry_number: int
@@ -104,6 +105,7 @@ class Song:
             title=song["title"],
             native_title=song.get("native_title"),
             artist=song["artist"],
+            artists=song.get("artists") or [],
             video_link=song.get("video_link"),
             poster_link=song.get("poster_link"),
             vtt_link=song.get("vtt_link"),
@@ -631,7 +633,20 @@ def get_languages_for_songs(song_ids: list[int]) -> dict[int, list[Language]]:
 # cursor.execute; bind values always go through query parameters.
 _SONG_COLUMNS: LiteralString = """
     song.id, data.title,
-    artist_credit_name(data.artist_credit_set_id) AS artist, data.native_title,
+    artist_credit_name(data.artist_credit_set_id) AS artist,
+    COALESCE((
+        SELECT JSONB_AGG(JSONB_BUILD_OBJECT(
+            'full_name', artist.full_name,
+            'display_name', CASE WHEN artist.number = 1 THEN artist.full_name
+                ELSE artist.full_name || ' (' || artist.number || ')' END,
+            'stage_name', credit.stage_name,
+            'join', credit.join_phrase
+        ) ORDER BY credit.position)
+        FROM artist_credit AS credit
+        JOIN artist ON artist.id = credit.artist_id
+        WHERE credit.artist_credit_set_id = data.artist_credit_set_id
+    ), '[]'::jsonb) AS artists,
+    data.native_title,
     song.country_id, COALESCE(an.name, country.name) AS name,
     country.is_participating, country.cc3, an.flag_variant,
     COALESCE(status.is_placeholder, false) AS is_placeholder,
@@ -859,7 +874,20 @@ WITH selected AS MATERIALIZED (
     WHERE song_show.show_id = %s
 )
 SELECT
-    song.id, data.title, data.artist, data.native_title,
+    song.id, data.title, data.artist,
+    COALESCE((
+        SELECT JSONB_AGG(JSONB_BUILD_OBJECT(
+            'full_name', artist.full_name,
+            'display_name', CASE WHEN artist.number = 1 THEN artist.full_name
+                ELSE artist.full_name || ' (' || artist.number || ')' END,
+            'stage_name', credit.stage_name,
+            'join', credit.join_phrase
+        ) ORDER BY credit.position)
+        FROM artist_credit AS credit
+        JOIN artist ON artist.id = credit.artist_id
+        WHERE credit.artist_credit_set_id = data.artist_credit_set_id
+    ), '[]'::jsonb) AS artists,
+    data.native_title,
     song.country_id, COALESCE(an.name, country.name) AS name,
     country.is_participating, country.cc3, an.flag_variant,
     data.submitter_id, song.year_id, song.entry_number,
@@ -985,7 +1013,20 @@ WITH RECURSIVE winners AS (
 )
 SELECT
     song.id, data.title,
-    artist_credit_name(data.artist_credit_set_id) AS artist, data.native_title,
+    artist_credit_name(data.artist_credit_set_id) AS artist,
+    COALESCE((
+        SELECT JSONB_AGG(JSONB_BUILD_OBJECT(
+            'full_name', artist.full_name,
+            'display_name', CASE WHEN artist.number = 1 THEN artist.full_name
+                ELSE artist.full_name || ' (' || artist.number || ')' END,
+            'stage_name', credit.stage_name,
+            'join', credit.join_phrase
+        ) ORDER BY credit.position)
+        FROM artist_credit AS credit
+        JOIN artist ON artist.id = credit.artist_id
+        WHERE credit.artist_credit_set_id = data.artist_credit_set_id
+    ), '[]'::jsonb) AS artists,
+    data.native_title,
     song.country_id, COALESCE(an.name, country.name) AS name,
     country.is_participating, country.cc3, an.flag_variant,
     COALESCE(status.is_placeholder, false) AS is_placeholder,

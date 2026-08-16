@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}Overview: {{ country_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -247,7 +248,7 @@
             <td class="year"><div class="number">
                 <a href="{{ url_for('year.year', year=song.year.id) }}">{{ song.year.id }}</a>
             </div></td>
-            <td>{{ song.artist or '' }}</td>
+            <td>{{ artist_links(song) }}</td>
             <td><div class="song-title">
                 <a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">
                     <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>
@@ -298,7 +299,7 @@
             <td style="text-align: left">
                 <a href="{{ url_for('year.special', short_name=song.year.special_short_name) }}">{{ song.year.special_name }}</a>
             </td>
-            <td>{{ song.artist or '' }}</td>
+            <td>{{ artist_links(song) }}</td>
             <td><div class="song-title">
                 <a href="{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=song.year.special_short_name, entry_number=song.entry_number) }}">
                     <span lang="{{song.title_lang.str('Latn', song.country.cc)}}">{{ song.title or '' }}</span>

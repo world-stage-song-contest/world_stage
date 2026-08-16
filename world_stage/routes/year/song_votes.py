@@ -11,6 +11,7 @@ from ...utils import (
     resolve_country_code,
     with_permissions,
 )
+from ...utils.artists import fetch_song_artist_credits
 from .common import bp, get_other_shows, resolve_special
 
 
@@ -52,6 +53,9 @@ def special_song_votes_disambig(short_name: str, show: str, country_code: str):
         (show_data.id, country_code),
     )
     songs = cursor.fetchall()
+    credits = fetch_song_artist_credits(cursor, [song["id"] for song in songs])
+    for song in songs:
+        song["artists"] = credits.get(song["id"], [])
 
     if not songs:
         return render_template("error.html", error="Song not found in this show"), 404
@@ -140,6 +144,9 @@ def special_song_votes(
 
     if not song:
         return render_template("error.html", error="Song not found in this show"), 404
+    song["artists"] = fetch_song_artist_credits(cursor, [song["id"]]).get(
+        song["id"], []
+    )
 
     if show_data.status == "partial" and not permissions.can_view_restricted:
         qualifier_cutoff = show_data.total_qualifiers
@@ -285,6 +292,9 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
 
     if not song:
         return render_template("error.html", error="Song not found in this show"), 404
+    song["artists"] = fetch_song_artist_credits(cursor, [song["id"]]).get(
+        song["id"], []
+    )
 
     # In partial mode, block access to qualifier results
     if show_data.status == "partial" and not permissions.can_view_restricted:

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}Years{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/year.css') }}">
@@ -64,7 +65,7 @@
                     {{ flag(winner.country.cc, 42, winner.country.name, variant=winner.country.flag_variant) }}
                     {{ winner.country.name }}
                 </div></a></td>
-                <td class="artist"><div class="song-artist">{{ winner.artist }}</div></td>
+                <td class="artist"><div class="song-artist">{{ artist_links(winner) }}</div></td>
                 <td class="title">
                     <div class="song-title">
                         <a href="{{ url_for('country.details', code=winner.country.cc.lower(), year=winner.year.id) }}">
@@ -117,7 +118,7 @@
                     {{ flag(winner.country.cc, 42, winner.country.name, variant=winner.country.flag_variant) }}
                     {{ winner.country.name }}
                 </div></a></td>
-                <td class="artist"><div class="song-artist">{{ winner.artist }}</div></td>
+                <td class="artist"><div class="song-artist">{{ artist_links(winner) }}</div></td>
                 <td class="title">
                     <div class="song-title">
                         <span lang="{{winner.title_lang.str('Latn', winner.country.cc)}}">{{ winner.title }}</span>

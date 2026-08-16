@@ -10,7 +10,11 @@ from ..utils import (
     require_permissions,
     with_permissions,
 )
-from ..utils.artists import artist_display_name, parse_artist_display_name
+from ..utils.artists import (
+    artist_display_name,
+    fetch_song_artist_credits,
+    parse_artist_display_name,
+)
 
 bp = Blueprint("artist", __name__, url_prefix="/artist")
 
@@ -159,6 +163,9 @@ def details(name: str, permissions: UserPermissions):
     entries = cursor.fetchall()
     if not entries:
         return render_template("error.html", error="Artist not found"), 404
+    credits = fetch_song_artist_credits(cursor, [entry["id"] for entry in entries])
+    for entry in entries:
+        entry["artists"] = credits.get(entry["id"], [])
     return render_template(
         "artist/details.html",
         artist=artist,

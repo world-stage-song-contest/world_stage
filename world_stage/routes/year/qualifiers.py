@@ -12,6 +12,7 @@ from ...utils import (
     render_template,
     with_auth,
 )
+from ...utils.artists import fetch_song_artist_credits
 from .common import bp, resolve_special
 from .themes import qualifier_theme
 
@@ -164,6 +165,15 @@ def _manual_special_qualifiers(
         """,
         (show_data.id,),
     )
+    special_qualifiers = cursor.fetchall()
+    song_ids = [song["id"] for song in candidates] + [
+        song["song_id"] for song in special_qualifiers
+    ]
+    artist_credits = fetch_song_artist_credits(cursor, song_ids)
+    for song in candidates:
+        song["artists"] = artist_credits.get(song["id"], [])
+    for song in special_qualifiers:
+        song["artists"] = artist_credits.get(song["song_id"], [])
     return render_template(
         "year/special_qualifiers.html",
         show=show,
@@ -172,7 +182,7 @@ def _manual_special_qualifiers(
         special=special,
         candidates=candidates,
         progressions=show_data.progressions,
-        special_qualifiers=cursor.fetchall(),
+        special_qualifiers=special_qualifiers,
     )
 
 

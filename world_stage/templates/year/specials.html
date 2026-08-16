@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}Years{% endblock %}
 {% block headercontents %}
 <link rel="stylesheet" href="{{ static('css/year.css') }}">
@@ -38,7 +39,7 @@
                     {{ flag(winner.country.cc, 42, winner.country.name, variant=winner.country.flag_variant) }}
                     <span href="/country/{{ winner.country.cc }}">{{ winner.country.name }}</span>
                 </div></td>
-                <td class="artist">{{ winner.artist }}</td>
+                <td class="artist">{{ artist_links(winner) }}</td>
                 <td class="title">{{ winner.title }}</td>
                 <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
                 <td class="points">{{ winner.vote_data.sum }}</td>

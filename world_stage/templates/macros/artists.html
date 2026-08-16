@@ -1,0 +1,10 @@
+{% macro artist_links(song) -%}
+    {%- if song.artists -%}
+        {%- for credit in song.artists -%}
+            {{- credit.join or '' -}}
+            <a href="{{ url_for('artist.details', name=credit.display_name) }}">{{ credit.stage_name or credit.full_name }}</a>
+        {%- endfor -%}
+    {%- else -%}
+        {{- song.artist or '' -}}
+    {%- endif -%}
+{%- endmacro %}

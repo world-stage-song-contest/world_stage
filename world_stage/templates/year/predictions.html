@@ -1,4 +1,5 @@
 {%extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}Predictions: {{ special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -181,7 +182,7 @@
                         {{ song.country.name }}
                     </div>
                 </td>
-                <td><span class="col-truncate" title="{{ song.artist }}">{{ song.artist }}</span></td>
+                <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
                 <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">{{ song.title }}</a></td>
                 {% set real = real_positions.get(song.id) %}
                 <td class="number" data-value="{{ real if real is not none else '' }}">{{ real if real is not none else '' }}</td>
@@ -239,7 +240,7 @@
                         {{ song.country.name }}
                     </div>
                 </td>
-                <td><span class="col-truncate" title="{{ song.artist }}">{{ song.artist }}</span></td>
+                <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
                 <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">{{ song.title }}</a></td>
                 {% set real = real_positions.get(song.id) %}
                 <td class="number">{{ real if real is not none else '' }}</td>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}{{ country_name }} — {{ special_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -22,7 +23,7 @@
     {% for song in songs %}
         <tr>
             <td class="number">{{ song.entry_number }}</td>
-            <td><div class="song-artist">{{ song.artist }}</div></td>
+            <td><div class="song-artist">{{ artist_links(song) }}</div></td>
             <td><div class="song-title">
                 <a href="{{ url_for('country.special_details', code=country.lower(), special_short_name=special, entry_number=song.entry_number) }}">
                     {{ song.title }}

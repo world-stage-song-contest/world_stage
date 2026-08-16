@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/artists.html" import artist_links %}
 {% block title %}Manage {{ nf.name }}{% endblock %}
 {% block headercontents %}
 <script>
@@ -112,7 +113,7 @@
     <tbody>
     {% for song in candidates %}
     <tr>
-        <td>{{ song.country }}</td><td>{{ song.artist }}</td>
+        <td>{{ song.country }}</td><td>{{ artist_links(song) }}</td>
         <td><a href="{{ url_for('member.submit', national_final_id=nf.id, year=year, country=song.country_id, entry_number=song.entry_number) }}">{{ song.title }}</a></td>
         <td>{{ song.submitter or '' }}</td>
         <td>{% for assignment in assignments.get(song.id, []) %}{{ assignment.short_name|upper }} (#{{ assignment.running_order }}){% if not loop.last %}, {% endif %}{% endfor %}</td>

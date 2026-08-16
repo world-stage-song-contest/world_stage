@@ -11,6 +11,7 @@ from ...utils import (
     render_template,
     with_auth,
 )
+from ...utils.artists import fetch_song_artist_credits
 from .common import bp, resolve_special
 
 NF_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -212,6 +213,11 @@ def _show_nf(
         (nf["id"],),
     )
     candidates = cursor.fetchall()
+    candidate_credits = fetch_song_artist_credits(
+        cursor, [candidate["id"] for candidate in candidates]
+    )
+    for candidate in candidates:
+        candidate["artists"] = candidate_credits.get(candidate["id"], [])
     rankings, stage_results = _archive_results(cursor, nf)
     if rankings:
         candidates.sort(

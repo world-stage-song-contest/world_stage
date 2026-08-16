@@ -197,3 +197,29 @@ def fetch_artist_credits(cursor, credit_set_id: int | None) -> list[dict]:
         (credit_set_id,),
     )
     return cursor.fetchall()
+
+
+def fetch_song_artist_credits(cursor, song_ids: list[int]) -> dict[int, list[dict]]:
+    """Load ordered, linkable credits for several current songs at once."""
+    if not song_ids:
+        return {}
+    cursor.execute(
+        """
+        SELECT song.id AS song_id, artist.full_name,
+               CASE WHEN artist.number = 1 THEN artist.full_name
+                    ELSE artist.full_name || ' (' || artist.number || ')'
+               END AS display_name,
+               credit.stage_name, credit.join_phrase AS join
+        FROM current_song AS song
+        JOIN artist_credit AS credit
+          ON credit.artist_credit_set_id = song.artist_credit_set_id
+        JOIN artist ON artist.id = credit.artist_id
+        WHERE song.id = ANY(%s)
+        ORDER BY song.id, credit.position
+        """,
+        (song_ids,),
+    )
+    credits = {song_id: [] for song_id in song_ids}
+    for row in cursor.fetchall():
+        credits[row.pop("song_id")].append(row)
+    return credits
