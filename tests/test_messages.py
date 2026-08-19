@@ -720,9 +720,11 @@ def test_shared_admin_unread_state_is_independent_for_each_admin(
         db.commit()
 
         _login(client, db, 1)
-        first_admin_inbox = client.get("/messages", headers={"Accept": "text/html"})
+        first_admin_inbox = client.get(
+            "/admin/messages", headers={"Accept": "text/html"}
+        )
         assert first_admin_inbox.status_code == 200
-        assert _context(rendered_templates, "messages/inbox.html")["conversations"][0][
+        assert _context(rendered_templates, "admin/messages.html")["conversations"][0][
             "unread_count"
         ] == 1
         client.get(
@@ -733,14 +735,71 @@ def test_shared_admin_unread_state_is_independent_for_each_admin(
         second_admin = app.test_client()
         _login(second_admin, db, 3)
         second_admin_inbox = second_admin.get(
-            "/messages",
+            "/admin/messages",
             headers={"Accept": "text/html"},
         )
         assert second_admin_inbox.status_code == 200
-        assert _context(rendered_templates, "messages/inbox.html")["conversations"][0][
+        assert _context(rendered_templates, "admin/messages.html")["conversations"][0][
             "unread_count"
         ] == 1
 
+    finally:
+        with db.cursor() as cursor:
+            cursor.execute("UPDATE account SET role = 'user' WHERE id = 3")
+        db.commit()
+
+
+def test_moderator_personal_inbox_only_shows_conversations_they_participate_in(
+    app, db, rendered_templates
+):
+    with db.cursor() as cursor:
+        cursor.execute("UPDATE account SET role = 'admin' WHERE id = 3")
+    db.commit()
+
+    try:
+        unrelated_conversation_id = _insert_conversation(
+            db,
+            owner_account_id=1,
+            subject="Another moderator's message",
+            participants=[2],
+            admin_accessible=True,
+            created_by_admin=True,
+        )
+        participating_conversation_id = _insert_conversation(
+            db,
+            owner_account_id=1,
+            subject="Message including this moderator",
+            participants=[2, 3],
+            admin_accessible=True,
+            created_by_admin=True,
+        )
+        with db.cursor() as cursor:
+            cursor.executemany(
+                """
+                INSERT INTO message (conversation_id, sender_id, sender_kind, body)
+                VALUES (%s, 1, 'admin', %s)
+                """,
+                [
+                    (unrelated_conversation_id, "Not for this moderator"),
+                    (participating_conversation_id, "This moderator is included"),
+                ],
+            )
+        db.commit()
+
+        moderator_client = app.test_client()
+        _login(moderator_client, db, 3)
+        response = moderator_client.get(
+            "/messages",
+            headers={"Accept": "text/html"},
+        )
+
+        assert response.status_code == 200
+        conversations = _context(
+            rendered_templates, "messages/inbox.html"
+        )["conversations"]
+        assert [conversation["id"] for conversation in conversations] == [
+            participating_conversation_id
+        ]
     finally:
         with db.cursor() as cursor:
             cursor.execute("UPDATE account SET role = 'user' WHERE id = 3")

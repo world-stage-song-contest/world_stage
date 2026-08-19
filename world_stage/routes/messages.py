@@ -358,7 +358,6 @@ def inbox(user: tuple[int, str] | None, permissions: UserPermissions):
             LIMIT 1
         ) AS latest ON true
         WHERE current_participant.account_id IS NOT NULL
-           OR (conversation.admin_accessible AND %s)
         ORDER BY COALESCE(current_participant.pinned, false) DESC,
                  COALESCE(latest.created_at, conversation.created_at) DESC,
                  conversation.id DESC
@@ -368,7 +367,6 @@ def inbox(user: tuple[int, str] | None, permissions: UserPermissions):
             user_id,
             user_id,
             user_id,
-            permissions.can_moderate,
             INBOX_PAGE_SIZE + 1,
             (page - 1) * INBOX_PAGE_SIZE,
         ),

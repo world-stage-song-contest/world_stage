@@ -198,8 +198,8 @@ def create_spot_watch_notifications(
     return notifications
 
 
-def has_unread_messages(user_id: int, permissions: UserPermissions) -> bool:
-    """Return whether the user can access at least one unread message."""
+def has_unread_messages(user_id: int, _permissions: UserPermissions) -> bool:
+    """Return whether the user's personal inbox has an unread message."""
     cursor = get_db().cursor()
     cursor.execute(
         """
@@ -210,14 +210,11 @@ def has_unread_messages(user_id: int, permissions: UserPermissions) -> bool:
             LEFT JOIN conversation_read_state
               ON conversation_read_state.conversation_id = conversation.id
              AND conversation_read_state.account_id = %s
-            WHERE (
-                EXISTS (
-                    SELECT 1
-                    FROM conversation_participant
-                    WHERE conversation_participant.conversation_id = conversation.id
-                      AND conversation_participant.account_id = %s
-                )
-                OR (conversation.admin_accessible AND %s)
+            WHERE EXISTS (
+                SELECT 1
+                FROM conversation_participant
+                WHERE conversation_participant.conversation_id = conversation.id
+                  AND conversation_participant.account_id = %s
             )
               AND message.id > COALESCE(
                   conversation_read_state.last_read_message_id,
@@ -229,7 +226,6 @@ def has_unread_messages(user_id: int, permissions: UserPermissions) -> bool:
         (
             user_id,
             user_id,
-            permissions.can_moderate,
             user_id,
         ),
     )
