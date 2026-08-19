@@ -32,8 +32,14 @@ function sortTable(clickedEl, tableEl, columnIndex, direction) {
         const aCell = a.cells[columnIndex];
         const bCell = b.cells[columnIndex];
 
-        const aRaw = aCell?.getAttribute('data-value') ?? aCell?.textContent ?? '';
-        const bRaw = bCell?.getAttribute('data-value') ?? bCell?.textContent ?? '';
+        const aRaw = aCell?.getAttribute('data-sort-value')
+            ?? aCell?.getAttribute('data-value')
+            ?? aCell?.textContent
+            ?? '';
+        const bRaw = bCell?.getAttribute('data-sort-value')
+            ?? bCell?.getAttribute('data-value')
+            ?? bCell?.textContent
+            ?? '';
 
         const aVal = aRaw.trim();
         const bVal = bRaw.trim();

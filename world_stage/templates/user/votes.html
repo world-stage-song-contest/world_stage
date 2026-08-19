@@ -18,7 +18,8 @@
 {% endblock %}
 {% block content %}
 {% macro vote_points_cell(cell, submitted_by_voter, mark_unvoted_submissions) %}
-<td class="num {{ '' if cell.part else 'unavailable' }}">{% if cell.pts is not none %}{{ 'N/A' if mark_unvoted_submissions and submitted_by_voter and not cell.voted_for else cell.pts }}{% endif %}</td>
+{% set own_unvoted_entry = mark_unvoted_submissions and submitted_by_voter and not cell.voted_for and cell.pts is not none %}
+<td class="num {{ '' if cell.part else 'unavailable' }}"{% if own_unvoted_entry %} data-sort-value="-1"{% endif %}>{% if cell.pts is not none %}{{ 'N/A' if own_unvoted_entry else cell.pts }}{% endif %}</td>
 {% endmacro %}
 {% macro entry_table(entries, special, show_country, show_year=true, mark_unvoted_submissions=false) %}
 <div id="scroll-container">
