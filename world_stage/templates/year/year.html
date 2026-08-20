@@ -183,7 +183,7 @@
         </tr>
     {% endfor %}
     {% for nf in ongoing_national_finals %}
-        <tr data-value="{{ songs|length + loop.index }}" class="placeholder">
+        <tr data-value="{{ songs|length + loop.index }}" class="finalised">
             {% if is_closed %}<td class="number year-result"></td>{% endif %}
             <td>
                 <a href="{{ url_for('country.country', code=nf.country_id.lower()) }}">

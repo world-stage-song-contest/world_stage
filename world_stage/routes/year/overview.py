@@ -175,6 +175,7 @@ def special(short_name: str, permissions: UserPermissions):
     )
     total_entries = fetchone(cursor)["c"]
     total_placeholders = len(songs) - total_entries
+    total_entries += len(ongoing_national_finals)
     cursor.execute(
         "SELECT show.short_name, show.show_name, show.date FROM show "
         "JOIN show_types ON show_types.id = show.show_type "
@@ -288,6 +289,7 @@ def year(year: int, permissions: UserPermissions):
     )
     total_entries = fetchone(cursor)["c"]
     total_placeholders = len(songs) - total_entries
+    total_entries += len(ongoing_national_finals)
     cursor.execute(
         "SELECT show.short_name, show.show_name, show.date FROM show "
         "JOIN show_types ON show_types.id = show.show_type "
