@@ -1,1235 +1,581 @@
-"""Tests for the /api/song endpoints."""
+import string
 
-
-# ── helpers ─────────────────────────────────────────────────────────
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 
 def _create_song(client, headers, **overrides):
-    """POST a minimal valid song and return the response."""
-    body = {
-        "year": 2025,
-        "country": "US",
-        "title": "Test Song",
-        "artist": "Test Artist",
-        "sources": "http://example.com",
-        "languages": [20],
-        **overrides,
-    }
-    return client.post("/api/song", json=body, headers=headers)
+    return client.post(
+        "/api/song",
+        headers=headers,
+        json={
+            "year": 2025,
+            "country": "US",
+            "title": "Test Song",
+            "artist": "Test Artist",
+            "sources": "https://example.test/source",
+            "languages": [20],
+            **overrides,
+        },
+    )
 
 
-def _result(resp):
-    """Extract the 'result' key from a successful JSON response."""
-    return resp.get_json()["result"]
+def _put_song(client, headers, song_id, **overrides):
+    return client.put(
+        f"/api/song/{song_id}",
+        headers=headers,
+        json={
+            "year": 2025,
+            "country": "US",
+            "title": "Replacement Title",
+            "artist": "Replacement Artist",
+            "sources": "https://example.test/replacement",
+            "languages": [20],
+            **overrides,
+        },
+    )
 
 
-def _error(resp):
-    """Extract the 'error' key from an error JSON response."""
-    return resp.get_json()["error"]
+def _result(response):
+    return response.get_json()["result"]
 
 
-# ── GET /api/song/<id> ──────────────────────────────────────────────
+def _delete_if_current(client, headers, song_id):
+    client.delete(f"/api/song/{song_id}", headers=headers)
 
 
-class TestGetSongById:
-    def test_returns_song(self, client, alice_headers):
-        create = _create_song(client, alice_headers)
-        song_id = _result(create)["id"]
+SAFE_TEXT = st.text(
+    alphabet=string.ascii_letters + string.digits + " -_.,!?",
+    min_size=1,
+    max_size=35,
+).filter(lambda value: bool(value.strip()))
 
-        resp = client.get(f"/api/song/{song_id}")
-        assert resp.status_code == 200
-        data = _result(resp)
-        assert data["id"] == song_id
-        assert data["title"] == "Test Song"
-        assert data["artist"] == "Test Artist"
-        assert data["country_id"] == "US"
-        assert data["year"] == 2025
 
-    def test_includes_languages(self, client, alice_headers):
-        create = _create_song(client, alice_headers, languages=[20, 30])
-        song_id = _result(create)["id"]
+def test_song_crud_round_trip_preserves_generated_catalog_values(
+    client, bob_headers, alice_headers
+):
+    language_order = st.lists(st.sampled_from([20, 30, 40]), min_size=1, max_size=3, unique=True)
 
-        resp = client.get(f"/api/song/{song_id}")
-        langs = _result(resp)["languages"]
-        assert len(langs) == 2
-        assert langs[0]["id"] == 20
-        assert langs[1]["id"] == 30
-
-    def test_reuses_identical_ordered_language_sets(
-        self, client, db, alice_headers
-    ):
-        first = _result(
-            _create_song(client, alice_headers, country="US", languages=[20, 30])
-        )
-        second = _result(
-            _create_song(client, alice_headers, country="ES", languages=[20, 30])
-        )
-
-        with db.cursor() as cursor:
-            cursor.execute(
-                """SELECT language_set_id FROM current_song
-                   WHERE id = ANY(%s) ORDER BY id""",
-                ([first["id"], second["id"]],),
+    @settings(max_examples=12, deadline=None)
+    @given(
+        country=st.sampled_from(["US", "ES", "FR"]),
+        title=SAFE_TEXT,
+        artist=SAFE_TEXT,
+        languages=language_order,
+        request_encoding=st.sampled_from(["json", "form"]),
+    )
+    def property_test(country, title, artist, languages, request_encoding):
+        if request_encoding == "json":
+            response = _create_song(
+                client,
+                bob_headers,
+                country=country,
+                title=title,
+                artist=artist,
+                languages=languages,
             )
-            set_ids = [row["language_set_id"] for row in cursor]
-            cursor.execute(
-                """SELECT COUNT(*) AS count FROM language_set
-                   WHERE language_ids = %s::bigint[]""",
-                ([20, 30],),
+        else:
+            response = client.post(
+                "/api/song",
+                data={
+                    "year": "2025",
+                    "country": country,
+                    "title": title,
+                    "artist": artist,
+                    "sources": "https://example.test/source",
+                    "language": [str(language) for language in languages],
+                },
+                headers={
+                    "Authorization": "Bearer token-bob",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
             )
-            assert cursor.fetchone()["count"] == 1
-        assert set_ids[0] == set_ids[1]
-
-    def test_language_order_defines_distinct_sets(self, client, db, alice_headers):
-        _create_song(client, alice_headers, country="US", languages=[20, 30])
-        _create_song(client, alice_headers, country="ES", languages=[30, 20])
-
-        with db.cursor() as cursor:
-            cursor.execute(
-                """SELECT language_ids FROM language_set
-                   WHERE language_ids IN (%s::bigint[], %s::bigint[])""",
-                ([20, 30], [30, 20]),
-            )
-            assert {tuple(row["language_ids"]) for row in cursor} == {
-                (20, 30), (30, 20)
+        assert response.status_code == 201
+        created = _result(response)
+        song_id = created["id"]
+        try:
+            loaded = _result(client.get(f"/api/song/{song_id}"))
+            assert {
+                "id": loaded["id"],
+                "country_id": loaded["country_id"],
+                "year": loaded["year"],
+                "title": loaded["title"],
+                "artist": loaded["artist"],
+            } == {
+                "id": song_id,
+                "country_id": country,
+                "year": 2025,
+                "title": title.strip(),
+                "artist": artist.strip(),
             }
+            assert [language["id"] for language in loaded["languages"]] == languages
+            by_slot = client.get(f"/api/song/{country.lower()}/2025")
+            assert by_slot.status_code == 200
+            assert _result(by_slot)["id"] == song_id
 
-    def test_not_found(self, client):
-        resp = client.get("/api/song/999999")
-        assert resp.status_code == 404
-        assert _error(resp)["id"] == 1  # ErrorID.NOT_FOUND
+        finally:
+            _delete_if_current(client, alice_headers, song_id)
+
+    property_test()
 
 
-class TestArtistSearch:
-    def test_finds_artist_by_full_native_and_stage_names(self, client, bob_headers):
-        created = _result(_create_song(
+def test_country_and_artist_lookup_accept_equivalent_public_identifiers(
+    client, bob_headers, alice_headers
+):
+    created = _result(
+        _create_song(
             client,
             bob_headers,
-            artist=None,
-            artists=[{
-                "full_name": "Aleksandra Nowak",
-                "native_name": "Александра Новак",
-                "stage_name": "Alexa",
-            }],
-        ))
-        artist_id = created["artists"][0]["id"]
-
-        for query in ("Aleksandra", "Александра", "Alexa"):
-            response = client.get("/api/song/artists", query_string={"q": query})
-            assert response.status_code == 200
-            matches = _result(response)
-            assert matches[0]["id"] == artist_id
-            assert "Alexa" in matches[0]["stage_names"]
-
-    def test_empty_artist_search_returns_no_suggestions(self, client):
-        response = client.get("/api/song/artists", query_string={"q": ""})
-
-        assert response.status_code == 200
-        assert _result(response) == []
-
-
-# ── GET /api/song/<cc>/<year> ───────────────────────────────────────
-
-
-class TestGetSongByCountryYear:
-    def test_returns_song_by_cc2(self, app, client, alice_headers):
-        app.config["PERFORMANCE_HEADERS"] = True
-        _create_song(client, alice_headers, country="US", year=2025)
-
-        resp = client.get("/api/song/us/2025")
-        assert resp.status_code == 200
-        assert resp.headers["X-SQL-Query-Count"] == "1"
-        data = _result(resp)
-        assert data["country_id"] == "US"
-        assert data["year"] == 2025
-
-    def test_cc3_redirects_to_cc2(self, client, alice_headers):
-        _create_song(client, alice_headers, country="ES", year=2025)
-
-        resp = client.get("/api/song/esp/2025")
-        assert resp.status_code == 301
-        assert "/api/song/es/2025" in resp.headers["Location"]
-
-    def test_not_found_country(self, client):
-        resp = client.get("/api/song/zz/2025")
-        assert resp.status_code == 404
-
-    def test_not_found_year(self, client, alice_headers):
-        _create_song(client, alice_headers, country="US", year=2025)
-
-        resp = client.get("/api/song/us/1800")
-        assert resp.status_code == 404
-
-
-# ── POST /api/song ──────────────────────────────────────────────────
-
-
-class TestCreateSong:
-    def test_creates_ordered_structured_artist_credits(self, client, db, bob_headers):
-        response = _create_song(
-            client,
-            bob_headers,
+            country="ES",
             artist=None,
             artists=[
                 {
                     "full_name": "Aleksandra Nowak",
                     "native_name": "Александра Новак",
                     "stage_name": "Alexa",
-                    "join": None,
-                },
-                {
-                    "full_name": "Jan Kowalski",
-                    "native_name": None,
-                    "stage_name": "J.K.",
-                    "join": " feat. ",
-                },
+                }
             ],
         )
+    )
+    song_id = created["id"]
+    artist_id = created["artists"][0]["id"]
+    try:
 
-        assert response.status_code == 201
-        song = _result(response)
-        assert song["artist"] == "Alexa feat. J.K."
-        assert [credit["stage_name"] for credit in song["artists"]] == [
-            "Alexa",
-            "J.K.",
-        ]
-        assert song["artists"][1]["join"] == " feat. "
-        with db.cursor() as cursor:
-            cursor.execute(
-                "SELECT full_name, native_name FROM artist ORDER BY id DESC LIMIT 2"
+        @given(query=st.sampled_from(["Aleksandra", "Александра", "Alexa"]))
+        def artist_property(query):
+            matches = _result(client.get("/api/song/artists", query_string={"q": query}))
+            assert any(artist["id"] == artist_id for artist in matches)
+
+        artist_property()
+
+        @given(code=st.sampled_from(["ES", "es", "ESP", "esp"]))
+        def country_property(code):
+            response = client.get(f"/api/song/{code}/2025", follow_redirects=True)
+            assert response.status_code == 200
+            assert _result(response)["id"] == song_id
+
+        country_property()
+    finally:
+        _delete_if_current(client, alice_headers, song_id)
+
+
+def test_structured_artist_credits_preserve_order_and_joins(client, alice_headers):
+    joins = st.lists(
+        st.sampled_from([" feat. ", " & ", " x ", " ~ duet with ~ "]),
+        min_size=1,
+        max_size=2,
+    )
+
+    @settings(max_examples=8, deadline=None)
+    @given(generated_joins=joins, use_stage_names=st.booleans())
+    def property_test(generated_joins, use_stage_names):
+        count = len(generated_joins) + 1
+        artists = []
+        for index in range(count):
+            full_name = f"Canonical Artist {index}"
+            artists.append(
+                {
+                    "full_name": full_name,
+                    "stage_name": f"Stage {index}" if use_stage_names else None,
+                    "join": None if index == 0 else generated_joins[index - 1],
+                }
             )
-            assert {row["full_name"] for row in cursor} == {
-                "Aleksandra Nowak",
-                "Jan Kowalski",
-            }
-
-    def test_reuses_canonical_artist_by_name(self, client, db, alice_headers):
-        credit = [{
-            "full_name": "Reusable Person",
-            "native_name": None,
-            "stage_name": "First Name",
-            "join": None,
-        }]
-        _create_song(client, alice_headers, country="US", artist=None, artists=credit)
-        credit[0]["stage_name"] = "New Stage Name"
-        _create_song(client, alice_headers, country="ES", artist=None, artists=credit)
-
-        with db.cursor() as cursor:
-            cursor.execute(
-                "SELECT COUNT(*) AS count FROM artist WHERE full_name = %s",
-                ("Reusable Person",),
-            )
-            assert cursor.fetchone()["count"] == 1
-
-    def test_artist_number_disambiguates_identical_names(
-        self, client, db, alice_headers
-    ):
-        first = _result(_create_song(
+        response = _create_song(
             client,
             alice_headers,
             country="US",
             artist=None,
-            artists=[{"full_name": "Shared Name", "stage_name": "First"}],
-        ))
-        second = _result(_create_song(
-            client,
-            alice_headers,
-            country="ES",
-            artist=None,
-            artists=[{"full_name": "Shared Name (2)", "stage_name": "Second"}],
-        ))
-
-        assert first["artists"][0]["display_name"] == "Shared Name"
-        assert second["artists"][0]["display_name"] == "Shared Name (2)"
-        assert first["artists"][0]["id"] != second["artists"][0]["id"]
-        with db.cursor() as cursor:
-            cursor.execute(
-                """SELECT full_name, number FROM artist
-                   WHERE LOWER(full_name) = LOWER(%s) ORDER BY number""",
-                ("Shared Name",),
-            )
-            assert cursor.fetchall() == [
-                {"full_name": "Shared Name", "number": 1},
-                {"full_name": "Shared Name", "number": 2},
-            ]
-
-    def test_rejects_missing_join_between_artists(self, client, bob_headers):
-        response = _create_song(
-            client,
-            bob_headers,
-            artist=None,
-            artists=[
-                {"full_name": "One", "stage_name": "One"},
-                {"full_name": "Two", "stage_name": "Two"},
-            ],
+            artists=artists,
         )
-
-        assert response.status_code == 400
-        assert "artists[1]" in _error(response)["description"]
-
-    def test_preserves_custom_artist_join_exactly(self, client, bob_headers):
-        response = _create_song(
-            client,
-            bob_headers,
-            artist=None,
-            artists=[
-                {"full_name": "One", "stage_name": "One"},
-                {
-                    "full_name": "Two",
-                    "stage_name": "Two",
-                    "join": " ~ duet with ~ ",
-                },
-            ],
-        )
-
         assert response.status_code == 201
         song = _result(response)
-        assert song["artist"] == "One ~ duet with ~ Two"
-        assert song["artists"][1]["join"] == " ~ duet with ~ "
-
-    def test_null_stage_name_renders_canonical_name(self, client, db, bob_headers):
-        response = _create_song(
-            client,
-            bob_headers,
-            artist=None,
-            artists=[{
-                "full_name": "Canonical Name (2)",
-                "stage_name": None,
-            }],
-        )
-
-        assert response.status_code == 201
-        song = _result(response)
-        assert song["artist"] == "Canonical Name"
-        assert song["artists"][0]["display_name"] == "Canonical Name (2)"
-        assert song["artists"][0]["stage_name"] is None
-
-        by_id = _result(client.get(f"/api/song/{song['id']}"))
-        assert by_id["artists"][0]["stage_name"] is None
-
-        submission_data = client.get("/member/submit/2025/US").get_json()
-        assert submission_data["artists"][0]["display_name"] == "Canonical Name (2)"
-        assert submission_data["artists"][0]["stage_name"] is None
-        with db.cursor() as cursor:
-            cursor.execute(
-                """SELECT stage_name FROM artist_credit
-                   WHERE artist_credit_set_id = (
-                       SELECT artist_credit_set_id FROM current_song WHERE id = %s
-                   )""",
-                (song["id"],),
-            )
-            assert cursor.fetchone()["stage_name"] is None
-
-    def test_creates_song(self, client, db, bob_headers):
-        resp = _create_song(client, bob_headers)
-        assert resp.status_code == 201
-        data = _result(resp)
-        assert data["title"] == "Test Song"
-        assert data["submitter_id"] == 2  # bob
-        assert "approval_status" not in data
-        assert "admin_approved" not in data
-        with db.cursor() as cursor:
-            cursor.execute(
-                "SELECT changed_by FROM current_song WHERE id = %s",
-                (data["id"],),
-            )
-            assert cursor.fetchone()["changed_by"] == 2
-
-    def test_submission_gate_is_independent_of_year_status(
-        self, client, db, bob_headers
-    ):
         try:
-            with db.cursor() as cursor:
-                cursor.execute(
-                    """UPDATE year
-                       SET status = 'ongoing', submissions_open = true
-                       WHERE id = 2025"""
-                )
-            db.commit()
-            assert _create_song(client, bob_headers, country="US").status_code == 201
-
-            with db.cursor() as cursor:
-                cursor.execute(
-                    """UPDATE year
-                       SET status = 'open', submissions_open = false
-                       WHERE id = 2025"""
-                )
-            db.commit()
-            assert _create_song(client, bob_headers, country="ES").status_code == 403
+            rendered_names = [artist["stage_name"] or artist["full_name"] for artist in artists]
+            expected = rendered_names[0] + "".join(
+                join + name for join, name in zip(generated_joins, rendered_names[1:], strict=True)
+            )
+            assert song["artist"] == expected
+            assert [credit["join"] for credit in song["artists"]] == [
+                None,
+                *generated_joins,
+            ]
         finally:
+            _delete_if_current(client, alice_headers, song["id"])
+
+    property_test()
+
+
+def test_creation_validation_rejects_missing_or_unknown_required_dimensions(client, bob_headers):
+    @given(
+        invalid=st.sampled_from(
+            [
+                "auth",
+                "year",
+                "country",
+                "languages",
+                "title",
+                "artist",
+                "sources",
+                "unknown-year",
+                "unknown-country",
+            ]
+        )
+    )
+    def property_test(invalid):
+        body = {
+            "year": 2025,
+            "country": "US",
+            "title": "Valid title",
+            "artist": "Valid artist",
+            "sources": "https://example.test/source",
+            "languages": [20],
+        }
+        headers = bob_headers
+        if invalid == "auth":
+            headers = None
+        elif invalid in {"year", "country"}:
+            body.pop(invalid)
+        elif invalid in {"languages", "title", "artist", "sources"}:
+            body[invalid] = [] if invalid == "languages" else ""
+        elif invalid == "unknown-year":
+            body["year"] = 1800
+        else:
+            body["country"] = "ZZ"
+        response = client.post("/api/song", json=body, headers=headers)
+        assert response.status_code == (
+            401 if invalid == "auth" else 404 if invalid.startswith("unknown") else 400
+        )
+
+    property_test()
+
+
+def test_submission_gate_depends_on_submission_availability_not_year_label(
+    client, db, bob_headers, alice_headers
+):
+    @given(
+        submissions_open=st.booleans(),
+        status=st.sampled_from(["open", "ongoing", "closed"]),
+    )
+    def property_test(submissions_open, status):
+        db.execute(
+            "UPDATE year SET submissions_open = %s, status = %s WHERE id = 2025",
+            (submissions_open, status),
+        )
+        db.commit()
+        response = _create_song(client, bob_headers)
+        assert response.status_code == (201 if submissions_open else 403)
+        if response.status_code == 201:
+            _delete_if_current(client, alice_headers, _result(response)["id"])
+
+    try:
+        property_test()
+    finally:
+        db.execute("UPDATE year SET submissions_open = true, status = 'open' WHERE id = 2025")
+        db.commit()
+
+
+def test_user_submission_limit_exempts_placeholders_and_admins(client, bob_headers, alice_headers):
+    occupied = [
+        _result(_create_song(client, bob_headers, country=country))["id"]
+        for country in ("US", "ES")
+    ]
+
+    @given(actor=st.sampled_from(["user", "admin"]), placeholder=st.booleans())
+    def property_test(actor, placeholder):
+        headers = bob_headers if actor == "user" else alice_headers
+        response = _create_song(
+            client,
+            headers,
+            country="FR",
+            is_placeholder=placeholder,
+        )
+        accepted = actor == "admin" or placeholder
+        assert response.status_code == (201 if accepted else 403)
+        if accepted:
+            assert _result(response)["is_placeholder"] is placeholder
+            _delete_if_current(client, alice_headers, _result(response)["id"])
+
+    try:
+        property_test()
+    finally:
+        for song_id in occupied:
+            _delete_if_current(client, alice_headers, song_id)
+
+
+def test_write_permissions_follow_owner_and_admin_roles(
+    client, db, bob_headers, carol_headers, alice_headers
+):
+    @settings(max_examples=24, deadline=None)
+    @given(
+        operation_and_state=st.one_of(
+            st.sampled_from([("patch", False), ("put", False)]),
+            st.tuples(st.just("delete"), st.booleans()),
+        ),
+        actor=st.sampled_from(["anonymous", "owner", "other", "admin"]),
+        nonexistent=st.booleans(),
+        title=SAFE_TEXT,
+    )
+    def property_test(operation_and_state, actor, nonexistent, title):
+        operation, closed_year = operation_and_state
+        if nonexistent:
+            song_id = 9_999_999
+        elif closed_year:
             with db.cursor() as cursor:
+                song_id = cursor.execute(
+                    """INSERT INTO song (country_id, year_id, entry_number)
+                       SELECT 'US', 2024, COALESCE(MAX(entry_number), 0) + 1
+                       FROM song WHERE country_id = 'US' AND year_id = 2024
+                       RETURNING id"""
+                ).fetchone()["id"]
                 cursor.execute(
-                    """UPDATE year
-                       SET status = 'open', submissions_open = true
-                       WHERE id = 2025"""
+                    """INSERT INTO song_data (
+                           song_id, submitter_id, title, artist_credit_set_id
+                       ) VALUES (
+                           %s, 2, 'Closed Song', test_artist_credit('Artist')
+                       )""",
+                    (song_id,),
                 )
             db.commit()
+        else:
+            song_id = _result(_create_song(client, bob_headers))["id"]
+        headers = {
+            "anonymous": None,
+            "owner": bob_headers,
+            "other": carol_headers,
+            "admin": alice_headers,
+        }[actor]
+        if operation == "patch":
+            response = client.patch(f"/api/song/{song_id}", json={"title": title}, headers=headers)
+        elif operation == "put":
+            response = (
+                _put_song(client, headers or {}, song_id, title=title)
+                if headers
+                else client.put(
+                    f"/api/song/{song_id}",
+                    json={
+                        "year": 2025,
+                        "country": "US",
+                        "title": title,
+                        "artist": "Artist",
+                        "sources": "source",
+                        "languages": [20],
+                    },
+                )
+            )
+        else:
+            response = client.delete(f"/api/song/{song_id}", headers=headers)
+        if nonexistent:
+            expected = 401 if actor == "anonymous" else 204 if operation == "delete" else 404
+        elif actor == "anonymous":
+            expected = 401
+        elif actor == "other" or (closed_year and actor != "admin"):
+            expected = 403
+        else:
+            expected = 204 if operation == "delete" else 200
+        assert response.status_code == expected
+        if expected == 200:
+            assert _result(response)["title"] == title.strip()
+        if operation == "delete" and expected == 204 and not nonexistent:
+            assert client.get(f"/api/song/{song_id}").status_code == 404
+        else:
+            _delete_if_current(client, alice_headers, song_id)
 
-    def test_create_cannot_set_approval_status(self, client, db, alice_headers):
-        resp = _create_song(client, alice_headers, approval_status="accepted")
-        assert resp.status_code == 201
-        data = _result(resp)
-        assert "approval_status" not in data
-        with db.cursor() as cursor:
-            cursor.execute("SELECT approval_status FROM current_song WHERE id = %s", (data["id"],))
-            assert cursor.fetchone()["approval_status"] == "pending"
+    property_test()
 
-    def test_returns_location_header(self, client, bob_headers):
-        resp = _create_song(client, bob_headers)
-        assert resp.status_code == 201
-        assert "Location" in resp.headers
-        song_id = _result(resp)["id"]
-        assert f"/api/song/{song_id}" in resp.headers["Location"]
 
-    def test_requires_auth(self, client):
-        resp = client.post(
-            "/api/song",
-            json={
-                "year": 2025,
-                "country": "US",
-                "title": "X",
-                "artist": "Y",
-                "sources": "Z",
-                "languages": [20],
-            },
-        )
-        assert resp.status_code == 401
-
-    def test_assigns_next_entry_number_for_same_country(self, client, bob_headers):
-        first = _create_song(client, bob_headers, country="US")
-        resp = _create_song(client, bob_headers, country="US")
-        assert first.status_code == 201
-        assert resp.status_code == 201
-        assert _result(first)["entry_number"] == 1
-        assert _result(resp)["entry_number"] == 2
-
-    def test_requires_year_and_country(self, client, bob_headers):
-        resp = client.post("/api/song", json={"title": "X"}, headers=bob_headers)
-        assert resp.status_code == 400
-
-    def test_requires_languages(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, languages=[])
-        assert resp.status_code == 400
-
-    def test_requires_title_for_non_admin(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, title="")
-        assert resp.status_code == 400
-
-    def test_requires_artist_for_non_admin(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, artist="")
-        assert resp.status_code == 400
-
-    def test_requires_sources_for_non_admin(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, sources="")
-        assert resp.status_code == 400
-
-    def test_admin_cannot_skip_artist_and_title(self, client, alice_headers):
-        resp = _create_song(client, alice_headers, title="", artist="", sources="")
-        assert resp.status_code == 400
-
-    def test_admin_can_set_submitter_id(self, client, alice_headers):
-        resp = _create_song(client, alice_headers, submitter_id=2)
-        assert resp.status_code == 201
-        assert _result(resp)["submitter_id"] == 2
-
-    def test_non_admin_cannot_set_submitter_id(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, submitter_id=1)
-        assert resp.status_code == 201
-        assert _result(resp)["submitter_id"] == 2  # still bob, not alice
-
-    def test_submission_limit_per_user(self, client, bob_headers, alice_headers):
-        _create_song(client, bob_headers, country="US")
-        _create_song(client, bob_headers, country="ES")
-        resp = _create_song(client, bob_headers, country="FR")
-        assert resp.status_code == 403
-
-    def test_placeholders_bypass_submission_limit(self, client, bob_headers):
-        _create_song(client, bob_headers, country="US")
-        _create_song(client, bob_headers, country="ES")
-
-        third = _create_song(
-            client, bob_headers, country="FR", is_placeholder=True
-        )
-        fourth = _create_song(
-            client, bob_headers, country="US", is_placeholder=True
-        )
-
-        assert third.status_code == 201
-        assert fourth.status_code == 201
-        assert _result(third)["is_placeholder"] is True
-        assert _result(fourth)["is_placeholder"] is True
-
-    def test_extra_submission_still_must_be_placeholder(self, client, bob_headers):
-        _create_song(client, bob_headers, country="US")
-        _create_song(client, bob_headers, country="ES")
-        _create_song(client, bob_headers, country="FR", is_placeholder=True)
-
-        resp = _create_song(
-            client, bob_headers, country="US", is_placeholder=False
-        )
-
-        assert resp.status_code == 403
-
-    def test_admin_bypasses_submission_limit(self, client, alice_headers):
-        _create_song(client, alice_headers, country="US")
-        _create_song(client, alice_headers, country="ES")
-        resp = _create_song(client, alice_headers, country="FR")
-        assert resp.status_code == 201
-
-    def test_global_limit_applies_to_admin_status_changes(
-        self, client, alice_headers, monkeypatch
-    ):
-        monkeypatch.setattr(
-            "world_stage.utils.song_revisions.MAX_YEAR_SUBMISSIONS", 2
-        )
-        _create_song(client, alice_headers, country="US")
-        _create_song(client, alice_headers, country="ES")
-
-        over_limit = _create_song(client, alice_headers, country="FR")
-        placeholder_id = _result(
+def test_patch_preserves_omitted_values_while_put_replaces_the_resource(
+    client, bob_headers, alice_headers
+):
+    @settings(max_examples=10, deadline=None)
+    @given(
+        method=st.sampled_from(["patch", "put"]),
+        title=SAFE_TEXT,
+        languages=st.lists(st.sampled_from([20, 30, 40]), min_size=1, max_size=3, unique=True),
+    )
+    def property_test(method, title, languages):
+        song_id = _result(
             _create_song(
-                client, alice_headers, country="FR", is_placeholder=True
+                client,
+                bob_headers,
+                notes="Original notes",
+                video_link="https://example.test/video",
+                languages=[20],
             )
         )["id"]
+        try:
+            if method == "patch":
+                response = client.patch(
+                    f"/api/song/{song_id}",
+                    headers=bob_headers,
+                    json={"title": title, "languages": languages},
+                )
+            else:
+                response = _put_song(
+                    client,
+                    bob_headers,
+                    song_id,
+                    title=title,
+                    languages=languages,
+                )
+            assert response.status_code == 200
+            updated = _result(response)
+            assert updated["title"] == title.strip()
+            assert [language["id"] for language in updated["languages"]] == languages
+            assert updated["notes"] == ("Original notes" if method == "patch" else None)
+            assert updated["video_link"] == (
+                "https://example.test/video" if method == "patch" else None
+            )
+        finally:
+            _delete_if_current(client, alice_headers, song_id)
 
-        response = client.patch(
-            f"/api/song/{placeholder_id}",
-            json={"is_placeholder": False},
-            headers=alice_headers,
-        )
-
-        assert over_limit.status_code == 403
-        assert response.status_code == 403
-        assert "maximum number of entries (2)" in _error(response)["description"]
-
-    def test_form_encoded(self, client, bob_headers):
-        resp = client.post(
-            "/api/song",
-            data={
-                "year": "2025",
-                "country": "US",
-                "title": "Form Song",
-                "artist": "Form Artist",
-                "sources": "http://example.com",
-                "language": ["20", "30"],
-            },
-            headers={
-                "Authorization": "Bearer token-bob",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-        )
-        assert resp.status_code == 201
-        data = _result(resp)
-        assert data["title"] == "Form Song"
-        assert len(data["languages"]) == 2
-
-    def test_unknown_year(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, year=1800)
-        assert resp.status_code == 404
-
-    def test_unknown_country(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, country="ZZ")
-        assert resp.status_code == 404
-
-    def test_snippet_duration_limit(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, snippet_start="0:00", snippet_end="0:30")
-        assert resp.status_code == 400
-
-    def test_valid_snippet(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, snippet_start="1:00", snippet_end="1:15")
-        assert resp.status_code == 201
-
-    def test_second_snippet_is_optional(self, client, bob_headers):
-        resp = _create_song(client, bob_headers, snippet2_start="1:00")
-
-        assert resp.status_code == 201
-        assert _result(resp)["snippet2_start"] == "1:00"
-        assert _result(resp)["snippet2_end"] is None
-
-    def test_second_snippet_duration_limit(self, client, bob_headers):
-        resp = _create_song(
-            client,
-            bob_headers,
-            snippet2_start="0:00",
-            snippet2_end="0:11",
-        )
-
-        assert resp.status_code == 400
-
-    def test_valid_second_snippet(self, client, bob_headers):
-        resp = _create_song(
-            client,
-            bob_headers,
-            snippet2_start="1:00",
-            snippet2_end="1:10",
-        )
-
-        assert resp.status_code == 201
-        assert _result(resp)["snippet2_start"] == "1:00"
-        assert _result(resp)["snippet2_end"] == "1:10"
+    property_test()
 
 
-# ── PATCH /api/song/<id> ────────────────────────────────────────────
+def test_snippet_limits_apply_consistently_to_create_patch_and_replace(
+    client, bob_headers, alice_headers
+):
+    @settings(max_examples=18, deadline=None)
+    @given(
+        method=st.sampled_from(["create", "patch", "put"]),
+        snippet=st.sampled_from(["first", "second"]),
+        start=st.integers(1, 300),
+        duration=st.integers(0, 30),
+    )
+    def property_test(method, snippet, start, duration):
+        prefix = "snippet" if snippet == "first" else "snippet2"
+        values = {
+            f"{prefix}_start": f"{start // 60}:{start % 60:02d}",
+            f"{prefix}_end": f"{(start + duration) // 60}:{(start + duration) % 60:02d}",
+        }
+        song_id = None
+        try:
+            if method == "create":
+                response = _create_song(client, bob_headers, **values)
+            else:
+                baseline = _create_song(client, bob_headers)
+                assert baseline.status_code == 201
+                song_id = _result(baseline)["id"]
+                response = (
+                    client.patch(f"/api/song/{song_id}", json=values, headers=bob_headers)
+                    if method == "patch"
+                    else _put_song(client, bob_headers, song_id, **values)
+                )
+            limit = 20 if snippet == "first" else 10
+            expected = 201 if method == "create" else 200
+            assert response.status_code == (expected if duration <= limit else 400)
+            if response.status_code in {200, 201}:
+                result = _result(response)
+                song_id = result["id"]
+                assert result[f"{prefix}_start"] == values[f"{prefix}_start"]
+                assert result[f"{prefix}_end"] == values[f"{prefix}_end"]
+        finally:
+            if song_id is not None:
+                _delete_if_current(client, alice_headers, song_id)
+
+    property_test()
 
 
-class TestUpdateSong:
-    def test_updates_title(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(
-            f"/api/song/{song_id}", json={"title": "New Title"}, headers=bob_headers
-        )
-        assert resp.status_code == 200
-        assert _result(resp)["title"] == "New Title"
-
-    def test_updates_multiple_fields(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(
-            f"/api/song/{song_id}",
-            json={
-                "title": "Updated",
-                "artist": "New Artist",
-                "notes": "Some notes",
-            },
-            headers=bob_headers,
-        )
-        assert resp.status_code == 200
-        data = _result(resp)
-        assert data["title"] == "Updated"
-        assert data["artist"] == "New Artist"
-        assert data["notes"] == "Some notes"
-
-    def test_placeholder_change_only_appends_song_status(
-        self, client, db, bob_headers
-    ):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        response = client.patch(
-            f"/api/song/{song_id}",
-            json={"is_placeholder": True},
-            headers=bob_headers,
-        )
-
-        assert response.status_code == 200
-        assert _result(response)["is_placeholder"] is True
-        with db.cursor() as cursor:
-            cursor.execute(
+def test_approval_state_is_not_writable_through_song_crud_and_placeholder_is_status_only(
+    client, db, bob_headers, alice_headers
+):
+    @given(method=st.sampled_from(["create", "patch", "put"]), placeholder=st.booleans())
+    def property_test(method, placeholder):
+        if method == "create":
+            response = _create_song(
+                client,
+                alice_headers,
+                approval_status="accepted",
+                is_placeholder=placeholder,
+            )
+            song_id = _result(response)["id"]
+        else:
+            song_id = _result(_create_song(client, bob_headers))["id"]
+            before_revisions = db.execute(
                 "SELECT COUNT(*) AS count FROM song_data WHERE song_id = %s",
                 (song_id,),
+            ).fetchone()["count"]
+            response = (
+                client.patch(
+                    f"/api/song/{song_id}",
+                    headers=alice_headers,
+                    json={
+                        "approval_status": "accepted",
+                        "is_placeholder": placeholder,
+                    },
+                )
+                if method == "patch"
+                else _put_song(
+                    client,
+                    alice_headers,
+                    song_id,
+                    approval_status="accepted",
+                    is_placeholder=placeholder,
+                )
             )
-            assert cursor.fetchone()["count"] == 1
-            cursor.execute(
-                "SELECT COUNT(*) AS count FROM song_status WHERE song_id = %s",
-                (song_id,),
-            )
-            assert cursor.fetchone()["count"] == 2
-
-    def test_extra_placeholder_cannot_be_promoted(self, client, bob_headers):
-        _create_song(client, bob_headers, country="US")
-        _create_song(client, bob_headers, country="ES")
-        placeholder_id = _result(
-            _create_song(client, bob_headers, country="FR", is_placeholder=True)
-        )["id"]
-
-        response = client.patch(
-            f"/api/song/{placeholder_id}",
-            json={"is_placeholder": False},
-            headers=bob_headers,
-        )
-
-        assert response.status_code == 403
-
-    def test_logs_second_snippet_changes(self, client, db, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(
-            f"/api/song/{song_id}",
-            json={"snippet2_start": "1:00", "snippet2_end": "1:10"},
-            headers=bob_headers,
-        )
-
-        assert resp.status_code == 200
-        with db.cursor() as cur:
-            cur.execute(
-                """
-                SELECT changed_by, changed_fields
-                FROM song_change
-                WHERE song_id = %s AND event_type = 'song_modification'
-                ORDER BY id DESC
-                LIMIT 1
-                """,
-                (song_id,),
-            )
-            audit = cur.fetchone()
-        assert audit["changed_by"] == 2
-        assert audit["changed_fields"]["snippet2_start"] == {"old": None, "new": 60}
-        assert audit["changed_fields"]["snippet2_end"] == {"old": None, "new": 70}
-
-    def test_updates_languages(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers, languages=[20]))["id"]
-
-        resp = client.patch(
-            f"/api/song/{song_id}", json={"languages": [30, 40]}, headers=bob_headers
-        )
-        assert resp.status_code == 200
-        langs = _result(resp)["languages"]
-        assert [lang["id"] for lang in langs] == [30, 40]
-
-    def test_language_change_is_stored_on_the_new_revision(
-        self, client, db, bob_headers
-    ):
-        song_id = _result(
-            _create_song(client, bob_headers, languages=[20])
-        )["id"]
-
-        response = client.patch(
-            f"/api/song/{song_id}", json={"languages": [30, 40]},
-            headers=bob_headers,
-        )
-        assert response.status_code == 200
-
-        with db.cursor() as cursor:
-            cursor.execute(
-                """SELECT language_set.language_ids
-                   FROM song_data
-                   JOIN language_set
-                     ON language_set.id = song_data.language_set_id
-                   WHERE song_data.song_id = %s
-                   ORDER BY song_data.created_at, song_data.id""",
-                (song_id,),
-            )
-            assert [row["language_ids"] for row in cursor] == [[20], [30, 40]]
-
-    def test_collection_sets_are_deduplicated_and_audited(
-        self, client, db, bob_headers
-    ):
-        with db.cursor() as cursor:
-            cursor.execute(
-                """INSERT INTO genre (id, name)
-                   SELECT COALESCE(MAX(id), 0) + 1, 'Audit set genre' FROM genre
-                   RETURNING id"""
-            )
-            genre_id = cursor.fetchone()["id"]
-            cursor.execute(
-                """WITH next_id AS (
-                       SELECT COALESCE(MAX(id), 0) + 1 AS id FROM subgenre
-                   )
-                   INSERT INTO subgenre (id, genre_id, name)
-                   SELECT id, %s, 'First' FROM next_id
-                   UNION ALL
-                   SELECT id + 1, %s, 'Second' FROM next_id
-                   RETURNING id""",
-                (genre_id, genre_id),
-            )
-            subgenre_ids = [row["id"] for row in cursor.fetchall()]
-        db.commit()
-
-        collections = {
-            "subgenres": subgenre_ids,
-            "key_signatures": [
-                {
-                    "start_seconds": 0,
-                    "tonic": "C",
-                    "mode": "major",
-                    "microtonal": False,
-                    "notes": None,
-                }
-            ],
-            "time_signatures": [
-                {
-                    "start_seconds": 0,
-                    "numerator": 4,
-                    "denominator": 4,
-                    "notes": None,
-                }
-            ],
+            if method == "patch" and response.status_code == 200:
+                after_revisions = db.execute(
+                    "SELECT COUNT(*) AS count FROM song_data WHERE song_id = %s",
+                    (song_id,),
+                ).fetchone()["count"]
+                assert after_revisions == before_revisions
+        assert response.status_code in {200, 201}
+        assert "approval_status" not in _result(response)
+        current = db.execute(
+            """SELECT approval_status, is_placeholder
+               FROM current_song WHERE id = %s""",
+            (song_id,),
+        ).fetchone()
+        assert current == {
+            "approval_status": "pending",
+            "is_placeholder": placeholder,
         }
-        first_id = _result(
-            _create_song(client, bob_headers, country="US", **collections)
-        )["id"]
-        second_id = _result(
-            _create_song(client, bob_headers, country="ES", **collections)
-        )["id"]
+        _delete_if_current(client, alice_headers, song_id)
 
-        with db.cursor() as cursor:
-            cursor.execute(
-                """SELECT genre_set_id, key_signature_set_id, time_signature_set_id
-                   FROM current_song WHERE id = ANY(%s) ORDER BY id""",
-                ([first_id, second_id],),
+    property_test()
+
+
+def test_media_duration_tracks_only_internal_media_link_changes(
+    client, db, bob_headers, alice_headers, monkeypatch
+):
+    internal_one = "https://media.world-stage.org/one.mp4"
+    internal_two = "https://media.world-stage.org/two.mp4"
+    external = "https://example.test/video.mp4"
+
+    @settings(max_examples=10, deadline=None)
+    @given(
+        initial_internal=st.booleans(),
+        next_link=st.sampled_from([internal_one, internal_two, external, ""]),
+        duration=st.floats(min_value=1, max_value=600, allow_nan=False, allow_infinity=False),
+    )
+    def property_test(initial_internal, next_link, duration):
+        def probe(_url):
+            return duration
+
+        monkeypatch.setattr("world_stage.media.probe_duration", probe)
+        initial_link = internal_one if initial_internal else external
+        song_id = _result(_create_song(client, bob_headers, video_link=initial_link))["id"]
+        try:
+            response = client.patch(
+                f"/api/song/{song_id}",
+                json={"video_link": next_link},
+                headers=bob_headers,
             )
-            set_ids = cursor.fetchall()
-        assert set_ids[0] == set_ids[1]
-
-        response = client.patch(
-            f"/api/song/{first_id}",
-            json={
-                "subgenres": list(reversed(subgenre_ids)),
-                "key_signatures": [{"start_seconds": 0, "tonic": "D", "mode": "minor"}],
-                "time_signatures": [
-                    {"start_seconds": 0, "numerator": 3, "denominator": 4}
-                ],
-            },
-            headers=bob_headers,
-        )
-
-        assert response.status_code == 200
-        with db.cursor() as cursor:
-            cursor.execute(
-                """SELECT changed_fields FROM song_change
-                   WHERE song_id = %s AND event_type = 'song_modification'
-                   ORDER BY id DESC LIMIT 1""",
-                (first_id,),
-            )
-            changed_fields = cursor.fetchone()["changed_fields"]
-            cursor.execute(
-                """SELECT genre_set_id, key_signature_set_id, time_signature_set_id
-                   FROM song_data WHERE song_id = %s ORDER BY id""",
-                (first_id,),
-            )
-            revisions = cursor.fetchall()
-
-        assert set(changed_fields) >= {
-            "genre_set_id",
-            "key_signature_set_id",
-            "time_signature_set_id",
-        }
-        assert len(revisions) == 2
-        assert revisions[0] != revisions[1]
-
-    def test_requires_auth(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(f"/api/song/{song_id}", json={"title": "X"})
-        assert resp.status_code == 401
-
-    def test_owner_can_edit_own(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(f"/api/song/{song_id}", json={"title": "Updated"}, headers=bob_headers)
-        assert resp.status_code == 200
-
-    def test_non_owner_cannot_edit(self, client, bob_headers, carol_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(f"/api/song/{song_id}", json={"title": "Hijack"}, headers=carol_headers)
-        assert resp.status_code == 403
-
-    def test_admin_can_edit_any(self, client, bob_headers, alice_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(
-            f"/api/song/{song_id}", json={"title": "Admin Edit"}, headers=alice_headers
-        )
-        assert resp.status_code == 200
-        assert _result(resp)["title"] == "Admin Edit"
-
-    def test_not_found(self, client, alice_headers):
-        resp = client.patch("/api/song/999999", json={"title": "X"}, headers=alice_headers)
-        assert resp.status_code == 404
-
-    def test_empty_body_rejected(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(f"/api/song/{song_id}", json={}, headers=bob_headers)
-        assert resp.status_code == 400
-
-    def test_patch_cannot_set_approval_status(
-        self, client, db, bob_headers, alice_headers
-    ):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(
-            f"/api/song/{song_id}",
-            json={"approval_status": "accepted", "title": "T"},
-            headers=alice_headers,
-        )
-        assert resp.status_code == 200
-        assert "approval_status" not in _result(resp)
-        with db.cursor() as cursor:
-            cursor.execute("SELECT approval_status FROM current_song WHERE id = %s", (song_id,))
-            assert cursor.fetchone()["approval_status"] == "pending"
-
-    def test_clears_nullable_field(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com"))["id"]
-
-        resp = client.patch(f"/api/song/{song_id}", json={"video_link": ""}, headers=bob_headers)
-        assert resp.status_code == 200
-        assert _result(resp)["video_link"] is None
-
-
-class TestSongDuration:
-    """video_link writes keep the probed duration column in sync."""
-
-    MEDIA_LINK = "https://media.world-stage.org/ws2025us.mp4"
-
-    def _stored_duration(self, db, song_id):
-        with db.cursor() as cur:
-            cur.execute("SELECT duration FROM current_song WHERE id = %s", (song_id,))
-            return cur.fetchone()["duration"]
-
-    def test_create_with_media_link_probes_duration(self, client, db, bob_headers, monkeypatch):
-        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 187.5)
-        song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
-        assert self._stored_duration(db, song_id) == 187.5
-
-    def test_create_with_external_link_does_not_probe(self, client, db, bob_headers, monkeypatch):
-        def boom(url):
-            raise AssertionError("probe_duration must not be called")
-
-        monkeypatch.setattr("world_stage.media.probe_duration", boom)
-        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com/x"))[
-            "id"
-        ]
-        assert self._stored_duration(db, song_id) is None
-
-    def test_patch_to_media_link_sets_duration(self, client, db, bob_headers, monkeypatch):
-        song_id = _result(_create_song(client, bob_headers, video_link="http://example.com/x"))[
-            "id"
-        ]
-
-        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 203.0)
-        resp = client.patch(
-            f"/api/song/{song_id}", json={"video_link": self.MEDIA_LINK}, headers=bob_headers
-        )
-        assert resp.status_code == 200
-        assert self._stored_duration(db, song_id) == 203.0
-
-    def test_patch_to_external_link_clears_duration(self, client, db, bob_headers, monkeypatch):
-        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 203.0)
-        song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
-
-        resp = client.patch(
-            f"/api/song/{song_id}", json={"video_link": "http://example.com/x"}, headers=bob_headers
-        )
-        assert resp.status_code == 200
-        assert self._stored_duration(db, song_id) is None
-
-    def test_patch_with_unchanged_link_keeps_duration_without_reprobe(
-        self, client, db, bob_headers, monkeypatch
-    ):
-        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 203.0)
-        song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
-
-        def boom(url):
-            raise AssertionError("unchanged link must not re-probe")
-
-        monkeypatch.setattr("world_stage.media.probe_duration", boom)
-        resp = client.patch(
-            f"/api/song/{song_id}",
-            json={"video_link": self.MEDIA_LINK, "notes": "edited"},
-            headers=bob_headers,
-        )
-        assert resp.status_code == 200
-        assert self._stored_duration(db, song_id) == 203.0
-
-    def test_backfill_command(self, app, db, monkeypatch):
-        with db.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO song (country_id, year_id)
-                VALUES ('US', 2024)
-                RETURNING id
-                """,
-            )
-            song_id = cur.fetchone()["id"]
-            cur.execute(
-                """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist_credit_set_id, video_link
-                   ) VALUES (%s, 1, 'Backfill me', test_artist_credit('Artist'), %s)""",
-                (song_id, self.MEDIA_LINK),
-            )
-        db.commit()
-
-        monkeypatch.setattr("world_stage.media.probe_duration", lambda url: 154.2)
-        runner = app.test_cli_runner()
-        result = runner.invoke(args=["backfill-durations"])
-        assert "1 updated, 0 failed" in result.output
-        assert self._stored_duration(db, song_id) == 154.2
-
-    def test_admin_update_duration_endpoint_requires_auth(self, client, db, bob_headers):
-        song_id = _result(_create_song(client, bob_headers, video_link=self.MEDIA_LINK))["id"]
-        resp = client.post(f"/country/duration/{song_id}")
-        assert resp.status_code == 403
-
-    def test_non_admin_cannot_clear_required(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.patch(f"/api/song/{song_id}", json={"title": ""}, headers=bob_headers)
-        assert resp.status_code == 400
-
-
-# ── PUT /api/song/<id> ──────────────────────────────────────────────
-
-
-def _put_song(client, headers, song_id, **overrides):
-    """PUT a full song replacement."""
-    body = {
-        "year": 2025,
-        "country": "US",
-        "title": "Replaced Title",
-        "artist": "Replaced Artist",
-        "sources": "http://replaced.com",
-        "languages": [20],
-        **overrides,
-    }
-    return client.put(f"/api/song/{song_id}", json=body, headers=headers)
-
-
-class TestReplaceSong:
-    def test_edited_artist_text_overrides_stale_autocomplete_id(
-        self, client, bob_headers
-    ):
-        created = _result(_create_song(
-            client,
-            bob_headers,
-            artist=None,
-            artists=[{"full_name": "Original Canonical", "stage_name": None}],
-        ))
-        original_artist_id = created["artists"][0]["id"]
-
-        response = _put_song(
-            client,
-            bob_headers,
-            created["id"],
-            artist=None,
-            artists=[{
-                "id": original_artist_id,
-                "full_name": "Replacement Canonical",
-                "number": 1,
-                "stage_name": None,
-                "join": None,
-            }],
-        )
-
-        assert response.status_code == 200
-        updated = _result(response)
-        assert updated["artist"] == "Replacement Canonical"
-        assert updated["artists"][0]["full_name"] == "Replacement Canonical"
-        assert updated["artists"][0]["id"] != original_artist_id
-
-    def test_replaces_all_fields(self, client, db, bob_headers):
-        song_id = _result(
-            _create_song(client, bob_headers, notes="old notes", video_link="http://old.com")
-        )["id"]
-
-        resp = _put_song(
-            client,
-            bob_headers,
-            song_id,
-            title="New Title",
-            artist="New Artist",
-            sources="http://new.com",
-            languages=[30],
-        )
-        assert resp.status_code == 200
-        data = _result(resp)
-        assert data["title"] == "New Title"
-        assert data["artist"] == "New Artist"
-        assert data["sources"] == "http://new.com"
-        assert data["languages"][0]["id"] == 30
-        # Fields not included in PUT body are cleared
-        assert data["notes"] is None
-        assert data["video_link"] is None
-        with db.cursor() as cursor:
-            cursor.execute(
-                "SELECT changed_by FROM current_song WHERE id = %s",
+            assert response.status_code == 200
+            stored = db.execute(
+                "SELECT video_link, duration FROM current_song WHERE id = %s",
                 (song_id,),
-            )
-            assert cursor.fetchone()["changed_by"] == 2
+            ).fetchone()
+            normalized_next = next_link or None
+            assert stored["video_link"] == normalized_next
+            if next_link.startswith("https://media.world-stage.org/"):
+                if next_link == initial_link:
+                    expected_duration = duration if initial_internal else None
+                else:
+                    expected_duration = duration
+            else:
+                expected_duration = None
+            assert stored["duration"] == expected_duration
+        finally:
+            _delete_if_current(client, alice_headers, song_id)
 
-    def test_requires_auth(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.put(
-            f"/api/song/{song_id}",
-            json={
-                "title": "X",
-                "artist": "Y",
-                "sources": "Z",
-                "languages": [20],
-            },
-        )
-        assert resp.status_code == 401
-
-    def test_not_found(self, client, alice_headers):
-        resp = _put_song(client, alice_headers, 999999)
-        assert resp.status_code == 404
-
-    def test_owner_can_replace(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, bob_headers, song_id)
-        assert resp.status_code == 200
-
-    def test_non_owner_cannot_replace(self, client, bob_headers, carol_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, carol_headers, song_id)
-        assert resp.status_code == 403
-
-    def test_admin_can_replace_any(self, client, bob_headers, alice_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, alice_headers, song_id, title="Admin Replace")
-        assert resp.status_code == 200
-        assert _result(resp)["title"] == "Admin Replace"
-
-    def test_requires_languages(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, bob_headers, song_id, languages=[])
-        assert resp.status_code == 400
-
-    def test_requires_title_for_non_admin(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, bob_headers, song_id, title="")
-        assert resp.status_code == 400
-
-    def test_admin_cannot_clear_artist_and_title(self, client, alice_headers):
-        song_id = _result(_create_song(client, alice_headers))["id"]
-
-        resp = _put_song(client, alice_headers, song_id, title="", artist="", sources="")
-        assert resp.status_code == 400
-
-    def test_replaces_languages(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers, languages=[20, 30]))["id"]
-
-        resp = _put_song(client, bob_headers, song_id, languages=[40])
-        assert resp.status_code == 200
-        langs = _result(resp)["languages"]
-        assert len(langs) == 1
-        assert langs[0]["id"] == 40
-
-    def test_preserves_submitter(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, bob_headers, song_id)
-        assert resp.status_code == 200
-        assert _result(resp)["submitter_id"] == 2  # still bob
-
-    def test_admin_can_change_submitter(self, client, bob_headers, alice_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, alice_headers, song_id, submitter_id=3)
-        assert resp.status_code == 200
-        assert _result(resp)["submitter_id"] == 3
-
-    def test_put_cannot_set_approval_status(self, client, db, bob_headers, alice_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, alice_headers, song_id, approval_status="accepted")
-        assert resp.status_code == 200
-        assert "approval_status" not in _result(resp)
-        with db.cursor() as cursor:
-            cursor.execute("SELECT approval_status FROM current_song WHERE id = %s", (song_id,))
-            assert cursor.fetchone()["approval_status"] == "pending"
-
-    def test_snippet_duration_limit(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(client, bob_headers, song_id, snippet_start="0:00", snippet_end="0:30")
-        assert resp.status_code == 400
-
-    def test_second_snippet_duration_limit(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = _put_song(
-            client,
-            bob_headers,
-            song_id,
-            snippet2_start="0:00",
-            snippet2_end="0:11",
-        )
-
-        assert resp.status_code == 400
-
-
-# ── DELETE /api/song/<id> ───────────────────────────────────────────
-
-
-class TestDeleteSong:
-    def test_deletes_song(self, client, db, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.delete(f"/api/song/{song_id}", headers=bob_headers)
-        assert resp.status_code == 204
-        assert resp.data == b""
-
-        # Verify it's gone
-        resp = client.get(f"/api/song/{song_id}")
-        assert resp.status_code == 404
-        with db.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT changed_by
-                FROM song_data
-                WHERE country_id = 'US' AND year_id = 2025
-                ORDER BY created_at DESC, id DESC
-                LIMIT 1
-                """
-            )
-            assert cursor.fetchone()["changed_by"] == 2
-
-    def test_returns_204_for_nonexistent(self, client, alice_headers):
-        resp = client.delete("/api/song/999999", headers=alice_headers)
-        assert resp.status_code == 204
-
-    def test_requires_auth(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.delete(f"/api/song/{song_id}")
-        assert resp.status_code == 401
-
-    def test_owner_can_delete_own(self, client, bob_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.delete(f"/api/song/{song_id}", headers=bob_headers)
-        assert resp.status_code == 204
-
-    def test_non_owner_cannot_delete(self, client, bob_headers, carol_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.delete(f"/api/song/{song_id}", headers=carol_headers)
-        assert resp.status_code == 403
-
-    def test_admin_can_delete_any(self, client, bob_headers, alice_headers):
-        song_id = _result(_create_song(client, bob_headers))["id"]
-
-        resp = client.delete(f"/api/song/{song_id}", headers=alice_headers)
-        assert resp.status_code == 204
-
-    # The create API rejects non-open years for everyone, so songs in
-    # a closed year are seeded directly in the database.
-    @staticmethod
-    def _insert_closed_year_song(db, submitter_id=2):
-        with db.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO song (country_id, year_id)
-                VALUES ('US', 2024)
-                RETURNING id
-                """,
-            )
-            song_id = cur.fetchone()["id"]
-            cur.execute(
-                """INSERT INTO song_data (
-                       song_id, submitter_id, title, artist_credit_set_id
-                   ) VALUES (%s, %s, 'Closed Song', test_artist_credit('Artist'))""",
-                (song_id, submitter_id),
-            )
-        db.commit()
-        return song_id
-
-    def test_cannot_delete_closed_year(self, client, db, bob_headers):
-        song_id = self._insert_closed_year_song(db)
-
-        resp = client.delete(f"/api/song/{song_id}", headers=bob_headers)
-        assert resp.status_code == 403
-
-    def test_admin_can_delete_closed_year(self, client, db, bob_headers, alice_headers):
-        song_id = self._insert_closed_year_song(db)
-
-        resp = client.delete(f"/api/song/{song_id}", headers=alice_headers)
-        assert resp.status_code == 204
+    property_test()

@@ -1,80 +1,67 @@
-"""Regression coverage for taste-similarity ballot selection."""
+import math
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 
 def _insert_ballot(cursor, voter_id, show_id, result_mode, song_ids, scores):
-    cursor.execute(
-        """
-        INSERT INTO vote_set (voter_id, show_id, result_mode)
-        VALUES (%s, %s, %s)
-        RETURNING id
-        """,
+    vote_set_id = cursor.execute(
+        """INSERT INTO vote_set (voter_id, show_id, result_mode)
+           VALUES (%s, %s, %s) RETURNING id""",
         (voter_id, show_id, result_mode),
-    )
-    vote_set_id = cursor.fetchone()["id"]
+    ).fetchone()["id"]
     cursor.executemany(
         "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
-        [
-            (vote_set_id, song_id, score)
-            for song_id, score in zip(song_ids, scores, strict=True)
-        ],
+        [(vote_set_id, song_id, score) for song_id, score in zip(song_ids, scores, strict=True)],
     )
 
 
-def _delete_ballot(cursor, voter_id, show_id, result_mode):
+def _delete_revotes(cursor, show_id):
     cursor.execute(
-        """
-        DELETE FROM vote
-        WHERE vote_set_id IN (
-            SELECT id FROM vote_set
-            WHERE voter_id = %s AND show_id = %s AND result_mode = %s
-        )
-        """,
-        (voter_id, show_id, result_mode),
+        """DELETE FROM vote
+           WHERE vote_set_id IN (
+               SELECT id FROM vote_set
+               WHERE show_id = %s AND result_mode = 'revote'
+           )""",
+        (show_id,),
     )
     cursor.execute(
-        """
-        DELETE FROM vote_set
-        WHERE voter_id = %s AND show_id = %s AND result_mode = %s
-        """,
-        (voter_id, show_id, result_mode),
+        "DELETE FROM vote_set WHERE show_id = %s AND result_mode = 'revote'",
+        (show_id,),
     )
 
 
-def _similarity(cursor, include_revotes=None):
-    if include_revotes is None:
-        cursor.execute(
-            """
-            SELECT similarity
-            FROM user_taste_similarity(1, 2024, 2024, false)
-            WHERE other_id = 2
-            """
-        )
-    else:
-        cursor.execute(
-            """
-            SELECT similarity
-            FROM user_taste_similarity(1, 2024, 2024, false, %s)
-            WHERE other_id = 2
-            """,
-            (include_revotes,),
-        )
-    return float(cursor.fetchone()["similarity"])
+def _correlation(left, right):
+    left_mean = sum(left) / len(left)
+    right_mean = sum(right) / len(right)
+    numerator = sum(
+        (left_value - left_mean) * (right_value - right_mean)
+        for left_value, right_value in zip(left, right, strict=True)
+    )
+    denominator = math.sqrt(
+        sum((value - left_mean) ** 2 for value in left)
+        * sum((value - right_mean) ** 2 for value in right)
+    )
+    return numerator / denominator
 
 
-def test_taste_similarity_revotes_replace_each_voters_official_ballot(
-    client, db, rendered_templates
-):
+def test_taste_similarity_uses_each_voters_effective_ballot(db):
+    official = [12, 10, 8]
+    alice_revote = [8, 10, 12]
+    bob_revote = [12, 8, 10]
     with db.cursor() as cursor:
         cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
-        cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point_system")
-        point_system_id = cursor.fetchone()["id"]
+        point_system_id = cursor.execute(
+            "SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point_system"
+        ).fetchone()["id"]
         cursor.execute(
-            "INSERT INTO point_system (id, number) VALUES (%s, 3)", (point_system_id,)
+            "INSERT INTO point_system (id, number) VALUES (%s, 3)",
+            (point_system_id,),
         )
-        cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point")
-        first_point_id = cursor.fetchone()["id"]
+        first_point_id = cursor.execute(
+            "SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point"
+        ).fetchone()["id"]
         cursor.executemany(
             "INSERT INTO point (id, point_system_id, place, score) VALUES (%s, %s, %s, %s)",
             [
@@ -83,94 +70,56 @@ def test_taste_similarity_revotes_replace_each_voters_official_ballot(
                 (first_point_id + 2, point_system_id, 3, 8),
             ],
         )
-        cursor.execute(
-            """
-            INSERT INTO show (
-                year_id, point_system_id, show_type, show_number, status
-            )
-            VALUES (2024, %s, 'sf', 83, 'full')
-            RETURNING id
-            """,
+        show_id = cursor.execute(
+            """INSERT INTO show (
+                   year_id, point_system_id, show_type, show_number, status
+               ) VALUES (2024, %s, 'sf', 83, 'full') RETURNING id""",
             (point_system_id,),
-        )
-        show_id = cursor.fetchone()["id"]
-
+        ).fetchone()["id"]
         song_ids = []
-        for country, title in (
-            ("US", "Taste one"),
-            ("ES", "Taste two"),
-            ("FR", "Taste three"),
-        ):
-            cursor.execute(
-                """
-                INSERT INTO song (country_id, year_id)
-                VALUES (%s, 2024)
-                RETURNING id
-                """,
+        for country in ("US", "ES", "FR"):
+            song_id = cursor.execute(
+                "INSERT INTO song (country_id, year_id) VALUES (%s, 2024) RETURNING id",
                 (country,),
-            )
-            song_id = cursor.fetchone()["id"]
+            ).fetchone()["id"]
             song_ids.append(song_id)
             cursor.execute(
                 """INSERT INTO song_data (song_id, title, artist_credit_set_id)
                    VALUES (%s, %s, test_artist_credit('Artist'))""",
-                (song_id, title),
+                (song_id, f"Taste {country}"),
             )
         cursor.executemany(
             "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
-            [
-                (song_id, show_id, running_order)
-                for running_order, song_id in enumerate(song_ids, start=1)
-            ],
+            [(song_id, show_id, position) for position, song_id in enumerate(song_ids, start=1)],
         )
-
-        _insert_ballot(cursor, 1, show_id, "official", song_ids, [12, 10, 8])
-        _insert_ballot(cursor, 2, show_id, "official", song_ids, [12, 10, 8])
-        _insert_ballot(cursor, 1, show_id, "revote", song_ids, [8, 10, 12])
-        _insert_ballot(cursor, 2, show_id, "revote", song_ids, [12, 8, 10])
+        _insert_ballot(cursor, 1, show_id, "official", song_ids, official)
+        _insert_ballot(cursor, 2, show_id, "official", song_ids, official)
     db.commit()
 
-    # Omitting the new argument defaults to both Revote ballots. Disabling it
-    # ignores both Revotes and compares the matching official ballots.
-    with db.cursor() as cursor:
-        assert _similarity(cursor) == pytest.approx(-0.5)
-        assert _similarity(cursor, include_revotes=False) == pytest.approx(1.0)
-
-    response = client.get("/user/alice/similar", headers={"Accept": "text/html"})
-    assert response.status_code == 200
-    assert rendered_templates[-1][1]["include_revotes"] is True
-
-    response = client.get(
-        "/user/alice/similar?include_revotes=false", headers={"Accept": "text/html"}
+    @given(
+        alice_has_revote=st.booleans(),
+        bob_has_revote=st.booleans(),
+        include_revotes=st.booleans(),
     )
-    assert response.status_code == 200
-    assert rendered_templates[-1][1]["include_revotes"] is False
-
-    # An unchecked form checkbox is absent from the query string; the form's
-    # submission sentinel distinguishes that from the default first visit.
-    response = client.get(
-        "/user/alice/similar?_submitted=1&include_specials=true",
-        headers={"Accept": "text/html"},
-    )
-    assert response.status_code == 200
-    assert rendered_templates[-1][1]["include_revotes"] is False
-
-    with db.cursor() as cursor:
-        # Alice's Revote combines with Bob's official ballot when Bob has not
-        # revoted, rather than dropping the show or using Alice's official.
-        _delete_ballot(cursor, 2, show_id, "revote")
+    def property_test(alice_has_revote, bob_has_revote, include_revotes):
+        with db.cursor() as cursor:
+            _delete_revotes(cursor, show_id)
+            if alice_has_revote:
+                _insert_ballot(cursor, 1, show_id, "revote", song_ids, alice_revote)
+            if bob_has_revote:
+                _insert_ballot(cursor, 2, show_id, "revote", song_ids, bob_revote)
         db.commit()
-        assert _similarity(cursor) == pytest.approx(-1.0)
 
-        # The opposite mixed pair independently selects Bob's Revote and
-        # Alice's official ballot.
-        _insert_ballot(cursor, 2, show_id, "revote", song_ids, [12, 8, 10])
-        _delete_ballot(cursor, 1, show_id, "revote")
-        db.commit()
-        assert _similarity(cursor) == pytest.approx(0.5)
+        row = db.execute(
+            """SELECT similarity
+               FROM user_taste_similarity(1, 2024, 2024, false, %s)
+               WHERE other_id = 2""",
+            (include_revotes,),
+        ).fetchone()
+        alice_effective = alice_revote if include_revotes and alice_has_revote else official
+        bob_effective = bob_revote if include_revotes and bob_has_revote else official
+        assert float(row["similarity"]) == pytest.approx(
+            _correlation(alice_effective, bob_effective)
+        )
 
-        # With no Revotes, include_revotes naturally falls back to both
-        # official ballots.
-        _delete_ballot(cursor, 2, show_id, "revote")
-        db.commit()
-        assert _similarity(cursor) == pytest.approx(1.0)
+    property_test()

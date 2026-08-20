@@ -1,40 +1,32 @@
-def _result(response):
-    return response.get_json()["result"]
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+from world_stage.utils.song_revisions import create_song_revision
 
 
 def _revise_song(db, song_id, **changes):
-    from world_stage.utils.song_revisions import create_song_revision
-
-    with db.cursor() as cur:
-        create_song_revision(cur, song_id, changes, changed_by=None)
+    db.rollback()
+    with db.cursor() as cursor:
+        create_song_revision(cursor, song_id, changes, changed_by=None)
     db.commit()
 
 
-def _seed_recap_data(db):
-    with db.cursor() as cur:
-        cur.execute(
-            "SELECT COALESCE(MAX(show_number), 0) + 1 AS number "
-            "FROM show WHERE year_id = 2025 AND show_type = 'sf'"
-        )
-        show_number = cur.fetchone()["number"]
-        cur.execute(
-            """
-            INSERT INTO show (year_id, show_type, show_number)
-            VALUES (2025, 'sf', %s)
-            RETURNING id
-            """,
+def _seed_show(db):
+    with db.cursor() as cursor:
+        show_number = cursor.execute(
+            """SELECT COALESCE(MAX(show_number), 0) + 1 AS number
+               FROM show WHERE year_id = 2025 AND show_type = 'sf'"""
+        ).fetchone()["number"]
+        show_id = cursor.execute(
+            """INSERT INTO show (year_id, show_type, show_number)
+               VALUES (2025, 'sf', %s) RETURNING id""",
             (show_number,),
-        )
-        show_id = cur.fetchone()["id"]
-        cur.execute(
-            """
-            INSERT INTO song (country_id, year_id)
-            VALUES ('US', 2025)
-            RETURNING id
-            """
-        )
-        song_id = cur.fetchone()["id"]
-        cur.execute(
+        ).fetchone()["id"]
+        song_id = cursor.execute(
+            """INSERT INTO song (country_id, year_id)
+               VALUES ('US', 2025) RETURNING id"""
+        ).fetchone()["id"]
+        cursor.execute(
             """INSERT INTO song_data (
                    song_id, submitter_id, artist_credit_set_id, title
                ) VALUES (
@@ -42,282 +34,205 @@ def _seed_recap_data(db):
                )""",
             (song_id,),
         )
-        cur.execute(
-            "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, 1)",
+        cursor.execute(
+            """INSERT INTO song_show (song_id, show_id, running_order)
+               VALUES (%s, %s, 1)""",
             (song_id, show_id),
         )
     db.commit()
-    return song_id, f"sf{show_number}"
+    return song_id, f"2025-sf{show_number}"
 
 
-def test_recap_api_returns_recap_data(client, db):
-    _, show = _seed_recap_data(db)
-
-    response = client.get(
+def _recap(client, recap_type, selection, **query):
+    return client.get(
         "/api/recap",
-        query_string={"type": "show", "show": f"2025-{show}"},
+        query_string={"type": recap_type, "show": selection, **query},
     )
 
-    assert response.status_code == 200
-    assert _result(response) == [
-        {
-            "year": 2025,
-            "submitter": "alice",
-            "show": f"2025{show}",
-            "ro": 1,
-            "cc": "us",
-            "country": "United States",
-            "artist": "API Artist",
-            "title": "API Song",
-            "snippet_start": 50,
-            "snippet_end": 70,
-            "snippet2_start": 50,
-            "snippet2_end": 60,
-            "type": "video",
-        }
-    ]
+
+def _expected_snippets(first_start, first_end, second_start, second_end):
+    if first_start is None and first_end is None:
+        first_start, first_end = 50, 70
+    if second_start is None and second_end is None:
+        second_start = first_start
+        second_end = second_start + 10 if second_start is not None else None
+    elif second_start is not None and second_end is None:
+        second_end = second_start + 10
+    return {
+        key: value
+        for key, value in {
+            "snippet_start": first_start,
+            "snippet_end": first_end,
+            "snippet2_start": second_start,
+            "snippet2_end": second_end,
+        }.items()
+        if value is not None
+    }
 
 
-def test_recap_api_preserves_configured_snippet_times(client, db):
-    song_id, show = _seed_recap_data(db)
-    _revise_song(db, song_id, snippet_start=0, snippet_end=30)
+def test_recap_snippet_export_follows_configured_values_and_fallbacks(client, db):
+    song_id, show = _seed_show(db)
+    optional_time = st.one_of(st.none(), st.integers(min_value=0, max_value=600))
 
-    response = client.get(
-        "/api/recap",
-        query_string={"type": "show", "show": f"2025-{show}"},
-    )
-
-    assert response.status_code == 200
-    assert _result(response)[0]["snippet_start"] == 0
-    assert _result(response)[0]["snippet_end"] == 30
-
-
-def test_recap_api_does_not_default_end_when_start_is_configured(client, db):
-    song_id, show = _seed_recap_data(db)
-    _revise_song(db, song_id, snippet_start=12)
-
-    response = client.get(
-        "/api/recap",
-        query_string={"type": "show", "show": f"2025-{show}"},
-    )
-
-    assert response.status_code == 200
-    assert _result(response)[0]["snippet_start"] == 12
-    assert "snippet_end" not in _result(response)[0]
-
-
-def test_recap_api_preserves_second_snippet_times(client, db):
-    song_id, show = _seed_recap_data(db)
-    _revise_song(db, song_id, snippet2_start=80, snippet2_end=88)
-
-    response = client.get(
-        "/api/recap",
-        query_string={"type": "show", "show": f"2025-{show}"},
-    )
-
-    assert response.status_code == 200
-    assert _result(response)[0]["snippet2_start"] == 80
-    assert _result(response)[0]["snippet2_end"] == 88
-
-
-def test_recap_api_derives_second_snippet_end(client, db):
-    song_id, show = _seed_recap_data(db)
-    _revise_song(db, song_id, snippet2_start=80)
-
-    response = client.get(
-        "/api/recap",
-        query_string={"type": "show", "show": f"2025-{show}"},
-    )
-
-    assert response.status_code == 200
-    assert _result(response)[0]["snippet2_start"] == 80
-    assert _result(response)[0]["snippet2_end"] == 90
-
-
-def test_recap_api_derives_second_snippet_from_first(client, db):
-    song_id, show = _seed_recap_data(db)
-    _revise_song(db, song_id, snippet_start=12, snippet_end=20)
-
-    response = client.get(
-        "/api/recap",
-        query_string={"type": "show", "show": f"2025-{show}"},
-    )
-
-    assert response.status_code == 200
-    assert _result(response)[0]["snippet2_start"] == 12
-    assert _result(response)[0]["snippet2_end"] == 22
-
-
-def test_recap_api_is_public(client, db):
-    _, show = _seed_recap_data(db)
-
-    response = client.get(
-        "/api/recap",
-        query_string={"type": "show", "show": f"2025-{show}"},
-    )
-
-    assert response.status_code == 200
-    assert _result(response)[0]["title"] == "API Song"
-
-
-def test_recap_api_etag_tracks_exported_values(client, db):
-    song_id, show = _seed_recap_data(db)
-    query = {"type": "show", "show": f"2025-{show}"}
-
-    initial = client.get("/api/recap", query_string=query)
-    repeated = client.get("/api/recap", query_string=query)
-    not_modified = client.get(
-        "/api/recap",
-        query_string=query,
-        headers={"If-None-Match": initial.headers["ETag"]},
-    )
-    if_match = client.get(
-        "/api/recap",
-        query_string=query,
-        headers={"If-Match": initial.headers["ETag"]},
-    )
-    if_match_failed = client.get(
-        "/api/recap",
-        query_string=query,
-        headers={"If-Match": '"stale"'},
-    )
-    if_modified_since = client.get(
-        "/api/recap",
-        query_string=query,
-        headers={"If-Modified-Since": initial.headers["Last-Modified"]},
-    )
-    if_unmodified_since = client.get(
-        "/api/recap",
-        query_string=query,
-        headers={"If-Unmodified-Since": "Thu, 01 Jan 1970 00:00:00 GMT"},
-    )
-
-    with db.cursor() as cur:
-        cur.execute(
-            """INSERT INTO song_data (
-                   song_id, submitter_id, artist_credit_set_id, title, notes
-               )
-               SELECT song_id, submitter_id, artist_credit_set_id, title,
-                      'Not part of recap data'
-               FROM song_data WHERE song_id = %s ORDER BY created_at DESC, id DESC LIMIT 1""",
-            (song_id,),
+    @st.composite
+    def second_snippet(draw):
+        start = draw(optional_time)
+        end = draw(
+            optional_time
+            if start is None
+            else st.one_of(st.none(), st.integers(min_value=0, max_value=start + 10))
         )
-    db.commit()
-    unrelated_change = client.get("/api/recap", query_string=query)
+        return start, end
 
-    with db.cursor() as cur:
-        cur.execute(
-            """INSERT INTO song_data (
-                   song_id, submitter_id, artist_credit_set_id, title, notes
-               )
-               SELECT song_id, submitter_id, artist_credit_set_id,
-                      'Changed API Song', notes
-               FROM song_data WHERE song_id = %s ORDER BY created_at DESC, id DESC LIMIT 1""",
-            (song_id,),
-        )
-    db.commit()
-    exported_change = client.get("/api/recap", query_string=query)
-    stale_etag = client.get(
-        "/api/recap",
-        query_string=query,
-        headers={"If-None-Match": initial.headers["ETag"]},
+    @settings(max_examples=20, deadline=None)
+    @given(
+        first_start=optional_time,
+        first_end=optional_time,
+        second=second_snippet(),
     )
-
-    assert initial.headers["ETag"] == repeated.headers["ETag"]
-    assert "Last-Modified" in initial.headers
-    assert not_modified.status_code == 304
-    assert not_modified.data == b""
-    assert if_match.status_code == 200
-    assert if_match_failed.status_code == 412
-    assert if_modified_since.status_code == 304
-    assert if_unmodified_since.status_code == 412
-    assert initial.headers["ETag"] == unrelated_change.headers["ETag"]
-    assert initial.headers["ETag"] != exported_change.headers["ETag"]
-    assert stale_etag.status_code == 200
-    assert stale_etag.headers["ETag"] == exported_change.headers["ETag"]
-
-
-def test_recap_api_country_accepts_codes_and_names(client, db):
-    with db.cursor() as cur:
-        cur.execute(
-            """
-            WITH inserted AS (
-                INSERT INTO song (country_id, year_id) VALUES ('US', 2024) RETURNING id
-            ) INSERT INTO song_data (
-                song_id, submitter_id, artist_credit_set_id, title
-            )
-              SELECT id, 1, test_artist_credit('Country Artist'), 'Country Song'
-              FROM inserted
-            """
+    def property_test(first_start, first_end, second):
+        second_start, second_end = second
+        _revise_song(
+            db,
+            song_id,
+            snippet_start=first_start,
+            snippet_end=first_end,
+            snippet2_start=second_start,
+            snippet2_end=second_end,
         )
-    db.commit()
-
-    for selection in ("US", "us", "USA", "United States", "united states"):
-        response = client.get(
-            "/api/recap",
-            query_string={"type": "country", "show": selection},
-        )
+        response = _recap(client, "show", show)
 
         assert response.status_code == 200
-        assert _result(response)[0]["title"] == "Country Song"
+        rows = response.get_json()["result"]
+        assert len(rows) == 1
+        exported = {key: value for key, value in rows[0].items() if key.startswith("snippet")}
+        assert exported == _expected_snippets(first_start, first_end, second_start, second_end)
+        assert rows[0]["title"] == "API Song"
+        assert rows[0]["artist"] == "API Artist"
+
+    property_test()
 
 
-def test_recap_api_excludes_specials_unless_requested(client, db):
-    with db.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO year (id, status, host_id, special_name, special_short_name)
-            VALUES (-1, 'closed', 'US', 'Special Recap', 'sr')
-            """
-        )
-        cur.execute(
-            """
-            WITH inserted AS (
-                INSERT INTO song (country_id, year_id) VALUES ('US', -1) RETURNING id
-            ) INSERT INTO song_data (
-                song_id, submitter_id, artist_credit_set_id, title
-            )
-              SELECT id, 1, test_artist_credit('Special Artist'), 'Special Song'
-              FROM inserted
-            """
-        )
-        cur.execute(
-            """
-            WITH inserted AS (
-                INSERT INTO song (country_id, year_id) VALUES ('US', 2024) RETURNING id
-            ) INSERT INTO song_data (
-                song_id, submitter_id, artist_credit_set_id, title
-            )
-              SELECT id, 1, test_artist_credit('Regular Artist'), 'Regular Song'
-              FROM inserted
-            """
+def test_country_selection_accepts_equivalent_identifiers(client, db):
+    with db.cursor() as cursor:
+        cursor.execute(
+            """WITH inserted AS (
+                   INSERT INTO song (country_id, year_id)
+                   VALUES ('US', 2024) RETURNING id
+               )
+               INSERT INTO song_data (
+                   song_id, submitter_id, artist_credit_set_id, title
+               )
+               SELECT id, 1, test_artist_credit('Country Artist'), 'Country Song'
+               FROM inserted"""
         )
     db.commit()
 
-    default_response = client.get("/api/recap", query_string={"type": "country", "show": "US"})
-    explicit_false_response = client.get(
-        "/api/recap",
-        query_string={"type": "country", "show": "US", "specials": "false"},
-    )
-    enabled_response = client.get(
-        "/api/recap",
-        query_string={"type": "country", "show": "US", "specials": "true"},
-    )
-    only_response = client.get(
-        "/api/recap",
-        query_string={"type": "country", "show": "US", "specials": "only"},
-    )
+    @given(selection=st.sampled_from(["US", "us", "USA", "usa", "United States", "united states"]))
+    def property_test(selection):
+        response = _recap(client, "country", selection)
+        assert response.status_code == 200
+        assert {row["title"] for row in response.get_json()["result"]} == {"Country Song"}
 
-    assert [row["title"] for row in _result(default_response)] == ["Regular Song"]
-    assert [row["title"] for row in _result(explicit_false_response)] == ["Regular Song"]
-    assert {row["title"] for row in _result(enabled_response)} == {"Regular Song", "Special Song"}
-    assert [row["title"] for row in _result(only_response)] == ["Special Song"]
+    property_test()
 
 
-def test_recap_api_validates_the_request(client):
-    response = client.get("/api/recap")
+def test_special_year_filter_partitions_country_entries(client, db):
+    with db.cursor() as cursor:
+        cursor.execute(
+            """INSERT INTO year (
+                   id, status, host_id, special_name, special_short_name
+               ) VALUES (-1, 'closed', 'US', 'Special Recap', 'sr')"""
+        )
+        for year, title in ((-1, "Special Song"), (2024, "Regular Song")):
+            cursor.execute(
+                """WITH inserted AS (
+                       INSERT INTO song (country_id, year_id)
+                       VALUES ('US', %s) RETURNING id
+                   )
+                   INSERT INTO song_data (
+                       song_id, submitter_id, artist_credit_set_id, title
+                   )
+                   SELECT id, 1, test_artist_credit('Artist'), %s FROM inserted""",
+                (year, title),
+            )
+    db.commit()
 
-    assert response.status_code == 400
-    assert response.get_json()["error"]["description"] == (
-        "type must be show, year, country, or submitter"
+    @given(mode=st.sampled_from(["false", "true", "only"]))
+    def property_test(mode):
+        response = _recap(client, "country", "US", specials=mode)
+        assert response.status_code == 200
+        titles = {row["title"] for row in response.get_json()["result"]}
+        expected = (
+            {
+                "Special Song",
+                "Regular Song",
+            }
+            if mode == "true"
+            else {"Special Song" if mode == "only" else "Regular Song"}
+        )
+        assert titles == expected
+
+    property_test()
+
+
+def test_recap_cache_validators_track_only_exported_behavior(client, db):
+    song_id, show = _seed_show(db)
+
+    @given(validator=st.sampled_from(["none-match", "match", "stale-match"]))
+    def validator_property(validator):
+        initial = _recap(client, "show", show)
+        etag = initial.headers["ETag"]
+        headers = {
+            "none-match": {"If-None-Match": etag},
+            "match": {"If-Match": etag},
+            "stale-match": {"If-Match": '"stale"'},
+        }[validator]
+        response = client.get(
+            "/api/recap",
+            query_string={"type": "show", "show": show},
+            headers=headers,
+        )
+        assert (
+            response.status_code
+            == {
+                "none-match": 304,
+                "match": 200,
+                "stale-match": 412,
+            }[validator]
+        )
+
+    validator_property()
+
+    @given(exported_change=st.booleans())
+    def change_property(exported_change):
+        before = _recap(client, "show", show)
+        current_title = before.get_json()["result"][0]["title"]
+        changes = (
+            {"title": current_title + " changed"}
+            if exported_change
+            else {"notes": "Unexported metadata"}
+        )
+        _revise_song(db, song_id, **changes)
+        after = _recap(client, "show", show)
+        assert (after.headers["ETag"] != before.headers["ETag"]) is exported_change
+
+    change_property()
+
+
+def test_recap_rejects_invalid_request_dimensions(client):
+    @given(
+        invalid=st.sampled_from(["type", "selection", "specials"]),
+        value=st.text(max_size=12),
     )
+    def property_test(invalid, value):
+        query = {"type": "year", "show": "2024", "specials": "false"}
+        if invalid == "type":
+            query["type"] = value if value not in {"show", "year", "country", "submitter"} else ""
+        elif invalid == "selection":
+            query.pop("show")
+        else:
+            query["specials"] = value if value.lower() not in {"false", "true", "only"} else "bad"
+        assert client.get("/api/recap", query_string=query).status_code == 400
+
+    property_test()

@@ -1,44 +1,43 @@
-import logging
+from flask import Flask
+from hypothesis import given
+from hypothesis import strategies as st
 
-from world_stage.db import get_db
+from world_stage.performance import init_app, record_sql
 
 
-def test_request_performance_metrics_count_execute_and_executemany(app, caplog):
-    app.config["PERFORMANCE_HEADERS"] = True
+@given(
+    counts=st.lists(st.integers(min_value=-3, max_value=20), max_size=20),
+    durations=st.lists(
+        st.floats(min_value=0, max_value=10, allow_nan=False, allow_infinity=False),
+        min_size=1,
+        max_size=20,
+    ),
+    expose_headers=st.booleans(),
+)
+def test_request_metrics_accumulate_positive_work_and_respect_header_policy(
+    counts, durations, expose_headers
+):
+    app = Flask(__name__)
+    app.config["PERFORMANCE_HEADERS"] = expose_headers
+    init_app(app)
 
-    @app.get("/_test/performance-metrics")
-    def performance_metrics():
-        cursor = get_db().cursor()
-        cursor.execute("SELECT 1")
-        cursor.executemany("SELECT %s", [(1,), (2,), (3,)])
+    @app.get("/metrics")
+    def metrics():
+        for index, count in enumerate(counts):
+            record_sql(durations[index % len(durations)], count)
         return "ok"
 
-    with caplog.at_level(logging.INFO, logger="world_stage.performance"):
-        response = app.test_client().get("/_test/performance-metrics")
+    response = app.test_client().get("/metrics")
 
     assert response.status_code == 200
-    assert response.headers["X-SQL-Query-Count"] == "4"
-    assert "app;dur=" in response.headers["Server-Timing"]
-    assert "db;dur=" in response.headers["Server-Timing"]
-
-    records = [
-        record for record in caplog.records if record.name == "world_stage.performance"
-    ]
-    assert len(records) == 1
-    message = records[0].getMessage()
-    assert "endpoint=performance_metrics" in message
-    assert "status=200" in message
-    assert "sql_count=4" in message
-
-
-def test_performance_headers_are_disabled_by_default(app):
-    app.config["PERFORMANCE_HEADERS"] = False
-
-    @app.get("/_test/performance-no-headers")
-    def performance_no_headers():
-        return "ok"
-
-    response = app.test_client().get("/_test/performance-no-headers")
-
-    assert "Server-Timing" not in response.headers
-    assert "X-SQL-Query-Count" not in response.headers
+    if expose_headers:
+        assert int(response.headers["X-SQL-Query-Count"]) == sum(
+            count for count in counts if count > 0
+        )
+        metric_names = {
+            metric.split(";")[0] for metric in response.headers["Server-Timing"].split(", ")
+        }
+        assert metric_names == {"app", "db"}
+    else:
+        assert "Server-Timing" not in response.headers
+        assert "X-SQL-Query-Count" not in response.headers

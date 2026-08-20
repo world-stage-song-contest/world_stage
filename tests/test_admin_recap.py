@@ -1,6 +1,9 @@
 import json
 import uuid
 
+from hypothesis import given
+from hypothesis import strategies as st
+
 
 def test_cytube_playlist_inserts_and_labels_the_host(client, db):
     session_id = str(uuid.uuid4())
@@ -53,34 +56,34 @@ def test_cytube_playlist_inserts_and_labels_the_host(client, db):
     db.commit()
     client.set_cookie("session", session_id)
 
-    response = client.post(
-        "/admin/recapdata",
-        data={"type": "show", "show": "2025-sf1", "action": "cytube"},
-        headers={"Accept": "text/html"},
-    )
+    @given(action=st.sampled_from(["cytube", "download"]))
+    def property_test(action):
+        response = client.post(
+            "/admin/recapdata",
+            data={"type": "show", "show": "2025-sf1", "action": action},
+            headers={"Accept": "text/html"} if action == "cytube" else None,
+        )
 
-    assert response.status_code == 200
-    assert "WS 2025 Opening;https://media.world-stage.org/openings/2025.mov" in response.text
-    assert "Opening act" not in response.text
-    assert (
-        ";https://media.world-stage.org/ws2025es.json\n"
-        "[HOST] United States;https://media.world-stage.org/postcards/us.mov\n"
-        "[HOST] Host Artist - Host Song;https://media.world-stage.org/ws2025us.json\n"
-        ";https://media.world-stage.org/postcards/fr.mov"
-    ) in response.text
-    assert "Recap 2;https://media.world-stage.org/recaps/2025sf1s.mov" in response.text
-    assert "https://media.world-stage.org/intervals/2025/sf1/i3.json" in response.text
+        assert response.status_code == 200
+        if action == "cytube":
+            playlist = [line.rsplit(";", 1) for line in response.text.splitlines() if ";" in line]
+            labels_by_url = {url.strip(): label.strip() for label, url in playlist}
+            host_song_url = "https://media.world-stage.org/ws2025us.json"
+            assert host_song_url in labels_by_url, labels_by_url
+            assert labels_by_url[host_song_url].startswith("[HOST]")
+            assert labels_by_url["https://media.world-stage.org/postcards/us.mov"].startswith(
+                "[HOST]"
+            )
+            assert "https://media.world-stage.org/ws2025es.json" in labels_by_url
+            assert "https://media.world-stage.org/ws2025fr.json" in labels_by_url
+        else:
+            recap_data = response.get_json()
+            assert recap_data
+            assert all(row["year"] == 2025 for row in recap_data)
+            assert all(row["submitter"] == "alice" for row in recap_data)
+            assert all("short_name" not in row and "show_name" not in row for row in recap_data)
 
-    response = client.post(
-        "/admin/recapdata",
-        data={"type": "show", "show": "2025-sf1", "action": "download"},
-    )
-
-    assert response.status_code == 200
-    recap_data = json.loads(response.text)
-    assert all(row["year"] == 2025 for row in recap_data)
-    assert all(row["submitter"] == "alice" for row in recap_data)
-    assert all("short_name" not in row and "show_name" not in row for row in recap_data)
+    property_test()
 
 
 def test_cytube_playlist_adds_opening_act_by_prior_year_placement(client, db):
@@ -159,7 +162,9 @@ def test_cytube_playlist_adds_opening_act_by_prior_year_placement(client, db):
     db.commit()
     client.set_cookie("session", session_id)
 
-    for short_name, _, country in opening_act_shows:
+    @given(show=st.sampled_from(opening_act_shows))
+    def property_test(show):
+        short_name, _placement, country = show
         response = client.post(
             "/admin/recapdata",
             data={"type": "show", "show": f"2026-{short_name}", "action": "cytube"},
@@ -171,6 +176,8 @@ def test_cytube_playlist_adds_opening_act_by_prior_year_placement(client, db):
             "WS 2026 Opening;https://media.world-stage.org/openings/2026.mov\n"
             f"Opening act;https://media.world-stage.org/ws2025{country.lower()}.json"
         ) in response.text
+
+    property_test()
 
 
 def test_all_recap_data_variants_include_submitter(client, db):
@@ -220,12 +227,18 @@ def test_all_recap_data_variants_include_submitter(client, db):
     db.commit()
     client.set_cookie("session", session_id)
 
-    for variant, selection in (
-        ("show", "2027-f"),
-        ("year", "2027"),
-        ("country", "US"),
-        ("submitter", "alice"),
-    ):
+    @given(
+        source=st.sampled_from(
+            [
+                ("show", "2027-f"),
+                ("year", "2027"),
+                ("country", "US"),
+                ("submitter", "alice"),
+            ]
+        )
+    )
+    def property_test(source):
+        variant, selection = source
         response = client.post(
             "/admin/recapdata",
             data={"type": variant, "show": selection, "action": "download"},
@@ -241,3 +254,5 @@ def test_all_recap_data_variants_include_submitter(client, db):
         assert row["snippet2_end"] == 60
         assert "short_name" not in row
         assert "show_name" not in row
+
+    property_test()

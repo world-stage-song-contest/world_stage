@@ -1,8 +1,10 @@
+from hypothesis import given
+from hypothesis import strategies as st
+
+
 def test_year_results_use_normalized_round_tiebreaks(db):
     with db.cursor() as cursor:
-        cursor.execute(
-            "INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING"
-        )
+        cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
         cursor.execute(
             """
             INSERT INTO country (id, name, cc3)
@@ -128,12 +130,12 @@ def test_year_results_use_normalized_round_tiebreaks(db):
             )
 
         cursor.execute("SELECT refresh_year_results(2024)")
-        cursor.execute(
-            "SELECT country_id, place FROM country_year_results WHERE year_id = 2024"
-        )
+        cursor.execute("SELECT country_id, place FROM country_year_results WHERE year_id = 2024")
         places = {row["country_id"]: row["place"] for row in cursor.fetchall()}
 
-    assert places["US"] < places["ES"]
-    assert places["NZ"] < places["TH"]
-    assert places["FR"] < places["DE"]
-    assert places["AT"] < places["BE"]
+    @given(ordered_pair=st.sampled_from([("US", "ES"), ("NZ", "TH"), ("FR", "DE"), ("AT", "BE")]))
+    def property_test(ordered_pair):
+        higher, lower = ordered_pair
+        assert places[higher] < places[lower]
+
+    property_test()

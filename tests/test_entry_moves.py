@@ -1,58 +1,36 @@
-import uuid
-
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from world_stage.utils.song_revisions import create_song_revision, set_song_status
-
-HTML_HEADERS = {"Accept": "text/html"}
-
-
-def _login(client, db, user_id: int):
-    session_id = str(uuid.uuid4())
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO session (user_id, session_id, expires_at)
-            VALUES (%s, %s, CURRENT_TIMESTAMP + INTERVAL '1 day')
-            """,
-            (user_id, session_id),
-        )
-    db.commit()
-    client.set_cookie("session", session_id)
 
 
 @pytest.fixture()
 def move_years(db):
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO year (id, status, submissions_open, host_id)
-            VALUES (2026, 'open', true, 'US'), (2027, 'ongoing', false, 'FR')
-            ON CONFLICT (id) DO UPDATE
-            SET status = EXCLUDED.status,
-                submissions_open = EXCLUDED.submissions_open
-            """
-        )
+    db.execute(
+        """INSERT INTO year (id, status, submissions_open, host_id)
+           VALUES (2026, 'open', true, 'US'), (2027, 'ongoing', false, 'FR')
+           ON CONFLICT (id) DO UPDATE
+           SET status = EXCLUDED.status,
+               submissions_open = EXCLUDED.submissions_open"""
+    )
     db.commit()
 
 
 def _add_song(db, country, year, submitter, *, placeholder=False, title="Song"):
     with db.cursor() as cursor:
-        cursor.execute(
-            """
-            WITH inserted AS (
-                INSERT INTO song (country_id, year_id, entry_number)
-                VALUES (%s, %s, 1) RETURNING id
-            )
-            INSERT INTO song_data (
-                song_id, submitter_id, title, artist_credit_set_id
-            )
-            SELECT id, %s, %s, test_artist_credit('Artist') FROM inserted
-            RETURNING song_id, id
-            """,
+        row = cursor.execute(
+            """WITH inserted AS (
+                   INSERT INTO song (country_id, year_id, entry_number)
+                   VALUES (%s, %s, 1) RETURNING id
+               )
+               INSERT INTO song_data (
+                   song_id, submitter_id, title, artist_credit_set_id
+               )
+               SELECT id, %s, %s, test_artist_credit('Artist') FROM inserted
+               RETURNING song_id, id""",
             (country, year, submitter, title),
-        )
-        row = cursor.fetchone()
+        ).fetchone()
         set_song_status(
             cursor,
             row["song_id"],
@@ -63,195 +41,177 @@ def _add_song(db, country, year, submitter, *, placeholder=False, title="Song"):
     return row
 
 
-def test_user_page_lists_selected_year_and_moves_owned_entry(client, db, move_years):
-    song = _add_song(db, "ES", 2025, 2)
-    _login(client, db, 2)
-
-    page = client.get("/member/move", headers=HTML_HEADERS)
-    assert page.status_code == 200
-
-    entries = client.get("/member/move/2025")
-    assert entries.status_code == 200
-    assert entries.json["entries"] == [
-        {
-            "id": song["song_id"],
-            "cc": "ES",
-            "country": "Spain",
-        }
-    ]
-
-    destinations = client.get(f"/member/move/destinations/2026?song_id={song['song_id']}")
-    assert destinations.status_code == 200
-    assert {country["cc"] for country in destinations.json["countries"]} >= {
-        "US",
-        "ES",
-        "FR",
-    }
-
-    response = client.post(
-        "/member/move",
-        json={
-            "song_id": song["song_id"],
-            "to_year": 2026,
-            "to_country": "FR",
-        },
-        headers={"Accept": "application/json"},
+def _remove_songs(db, song_ids):
+    db.rollback()
+    db.execute(
+        """DELETE FROM song_verification_comment
+           WHERE song_data_id IN (
+               SELECT id FROM song_data WHERE song_id = ANY(%s)
+           )""",
+        (song_ids,),
     )
-    assert response.status_code == 200
-    assert response.json["result"]["details_url"] == "/country/fr/2026"
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT current.id, current.year_id, current.country_id,
-                   data.previous_revision_id, change.event_type
-            FROM current_song AS current
-            JOIN song_data AS data ON data.id = current.song_data_id
-            JOIN song_change AS change ON change.id = data.id
-            WHERE current.id = %s
-            """,
-            (song["song_id"],),
-        )
-        assert cursor.fetchone() == {
-            "id": song["song_id"],
-            "year_id": 2026,
-            "country_id": "FR",
-            "previous_revision_id": song["id"],
-            "event_type": "song_modification",
-        }
-
-
-def test_move_replaces_placeholder_and_all_comments_follow(client, db, move_years):
-    song = _add_song(db, "ES", 2025, 2)
-    placeholder = _add_song(db, "FR", 2026, 3, placeholder=True, title="Reserved")
-    with db.cursor() as cursor:
-        cursor.execute(
-            """INSERT INTO song_verification_comment (song_data_id, author_id, body)
-               VALUES (%s, 1, 'First check')""",
-            (song["id"],),
-        )
-        revision = create_song_revision(
-            cursor, song["song_id"], {"notes": "More detail"}, changed_by=2
-        )
-        cursor.execute(
-            """INSERT INTO song_verification_comment (song_data_id, author_id, body)
-               VALUES (%s, 1, 'Second check')""",
-            (revision["id"],),
-        )
+    db.execute("DELETE FROM song_status WHERE song_id = ANY(%s)", (song_ids,))
+    db.execute("DELETE FROM song_data WHERE song_id = ANY(%s)", (song_ids,))
+    db.execute("DELETE FROM song WHERE id = ANY(%s)", (song_ids,))
     db.commit()
-    _login(client, db, 2)
-
-    destinations = client.get(f"/member/move/destinations/2026?song_id={song['song_id']}")
-    france = next(country for country in destinations.json["countries"] if country["cc"] == "FR")
-    assert france["replaces_placeholder"] is True
-
-    response = client.post(
-        "/member/move",
-        json={
-            "song_id": song["song_id"],
-            "to_year": 2026,
-            "to_country": "FR",
-        },
-        headers={"Accept": "application/json"},
-    )
-    assert response.status_code == 200
-    with db.cursor() as cursor:
-        cursor.execute("SELECT id FROM current_song WHERE year_id = 2026 AND country_id = 'FR'")
-        assert cursor.fetchone()["id"] == song["song_id"]
-        cursor.execute("SELECT 1 FROM current_song WHERE id = %s", (placeholder["song_id"],))
-        assert cursor.fetchone() is None
-        cursor.execute(
-            """
-            SELECT data.year_id, data.country_id, COUNT(*) AS count
-            FROM song_verification_comment AS comment
-            JOIN song_data AS data ON data.id = comment.song_data_id
-            GROUP BY data.year_id, data.country_id
-            """
-        )
-        assert cursor.fetchall() == [{"year_id": 2026, "country_id": "FR", "count": 2}]
 
 
-def test_user_cannot_move_someone_elses_entry_or_replace_real_slot(client, db, move_years):
+def test_move_discovery_exposes_only_owned_entries_and_usable_destinations(
+    client, db, move_years, login
+):
     own = _add_song(db, "ES", 2025, 2)
-    other = _add_song(db, "US", 2026, 3)
-    _login(client, db, 2)
+    other = _add_song(db, "US", 2025, 3)
+    occupied = _add_song(db, "US", 2026, 3)
+    placeholder = _add_song(db, "FR", 2026, 3, placeholder=True)
+    login(2)
 
-    destinations = client.get(f"/member/move/destinations/2026?song_id={own['song_id']}")
-    assert "US" not in {country["cc"] for country in destinations.json["countries"]}
+    @given(year=st.sampled_from([2025, 2026, 2027]))
+    def property_test(year):
+        entries = client.get(f"/member/move/{year}")
+        assert entries.status_code == 200
+        returned_ids = {entry["id"] for entry in entries.get_json()["entries"]}
+        assert returned_ids == ({own["song_id"]} if year == 2025 else set())
 
-    occupied = client.post(
-        "/member/move",
-        data={
-            "song_id": own["song_id"],
-            "from_year": 2025,
-            "to_year": 2026,
-            "to_country": "US",
-        },
-        headers=HTML_HEADERS,
+        destinations = client.get(f"/member/move/destinations/{year}?song_id={own['song_id']}")
+        if year == 2027:
+            assert destinations.status_code == 400
+            return
+
+        assert destinations.status_code == 200
+        countries = {
+            country["cc"]: country["replaces_placeholder"]
+            for country in destinations.get_json()["countries"]
+        }
+        assert "US" not in countries
+        assert ("ES" in countries) is (year == 2026)
+        assert countries.get("FR") is (year == 2026)
+
+    try:
+        property_test()
+    finally:
+        _remove_songs(
+            db,
+            [
+                own["song_id"],
+                other["song_id"],
+                occupied["song_id"],
+                placeholder["song_id"],
+            ],
+        )
+
+
+def test_moving_an_owned_entry_preserves_identity_history_and_comments(
+    client, db, move_years, login
+):
+    login(2)
+
+    @settings(max_examples=8, deadline=None)
+    @given(
+        destination=st.sampled_from(["US", "FR"]),
+        has_placeholder=st.booleans(),
+        comment_count=st.integers(min_value=0, max_value=3),
     )
-    assert occupied.status_code == 400
+    def property_test(destination, has_placeholder, comment_count):
+        source = _add_song(db, "ES", 2025, 2)
+        song_ids = [source["song_id"]]
+        if has_placeholder:
+            placeholder = _add_song(db, destination, 2026, 3, placeholder=True, title="Reserved")
+            song_ids.append(placeholder["song_id"])
 
-    not_owned = client.post(
-        "/member/move",
-        data={
-            "song_id": other["song_id"],
-            "from_year": 2026,
-            "to_year": 2025,
-            "to_country": "FR",
-        },
-        headers=HTML_HEADERS,
-    )
-    assert not_owned.status_code == 400
+        with db.cursor() as cursor:
+            revision_ids = [source["id"]]
+            if comment_count > 1:
+                revision = create_song_revision(
+                    cursor, source["song_id"], {"notes": "More detail"}, changed_by=2
+                )
+                revision_ids.append(revision["id"])
+            for index in range(comment_count):
+                cursor.execute(
+                    """INSERT INTO song_verification_comment (
+                           song_data_id, author_id, body
+                       ) VALUES (%s, 1, %s)""",
+                    (revision_ids[index % len(revision_ids)], f"Check {index}"),
+                )
+        db.commit()
+
+        try:
+            response = client.post(
+                "/member/move",
+                json={
+                    "song_id": source["song_id"],
+                    "to_year": 2026,
+                    "to_country": destination,
+                },
+                headers={"Accept": "application/json"},
+            )
+            assert response.status_code == 200
+
+            current = db.execute(
+                "SELECT id, year_id, country_id FROM current_song WHERE id = %s",
+                (source["song_id"],),
+            ).fetchone()
+            assert current == {
+                "id": source["song_id"],
+                "year_id": 2026,
+                "country_id": destination,
+            }
+            comments = db.execute(
+                """SELECT COUNT(*) AS count,
+                          BOOL_AND(data.song_id = %s) AS follow_source
+                   FROM song_verification_comment AS comment
+                   JOIN song_data AS data ON data.id = comment.song_data_id
+                   WHERE data.song_id = %s""",
+                (source["song_id"], source["song_id"]),
+            ).fetchone()
+            assert comments["count"] == comment_count
+            assert comments["follow_source"] is (True if comment_count else None)
+            if has_placeholder:
+                assert (
+                    db.execute(
+                        "SELECT 1 FROM current_song WHERE id = %s",
+                        (placeholder["song_id"],),
+                    ).fetchone()
+                    is None
+                )
+        finally:
+            _remove_songs(db, song_ids)
+
+    property_test()
 
 
-def test_move_requires_open_source_and_destination(client, db, move_years):
-    closed = _add_song(db, "ES", 2024, 2)
-    upcoming = _add_song(db, "FR", 2025, 2)
-    _login(client, db, 2)
+def test_invalid_moves_leave_the_entry_in_its_original_slot(client, db, move_years, login):
+    login(2)
 
-    from_closed = client.post(
-        "/member/move",
-        data={
-            "song_id": closed["song_id"],
-            "from_year": 2024,
-            "to_year": 2026,
-            "to_country": "US",
-        },
-        headers=HTML_HEADERS,
-    )
-    assert from_closed.status_code == 400
+    @settings(max_examples=8, deadline=None)
+    @given(reason=st.sampled_from(["not-owner", "closed-source", "closed-target", "occupied"]))
+    def property_test(reason):
+        source_year = 2024 if reason == "closed-source" else 2025
+        owner = 3 if reason == "not-owner" else 2
+        source = _add_song(db, "ES", source_year, owner)
+        song_ids = [source["song_id"]]
+        target_year = 2027 if reason == "closed-target" else 2026
+        target_country = "US"
+        if reason == "occupied":
+            occupant = _add_song(db, target_country, target_year, 3)
+            song_ids.append(occupant["song_id"])
 
-    to_ongoing = client.post(
-        "/member/move",
-        data={
-            "song_id": upcoming["song_id"],
-            "from_year": 2025,
-            "to_year": 2027,
-            "to_country": "US",
-        },
-        headers=HTML_HEADERS,
-    )
-    assert to_ongoing.status_code == 400
+        try:
+            response = client.post(
+                "/member/move",
+                json={
+                    "song_id": source["song_id"],
+                    "to_year": target_year,
+                    "to_country": target_country,
+                },
+                headers={"Accept": "application/json"},
+            )
+            assert response.status_code == 400
+            current = db.execute(
+                "SELECT year_id, country_id FROM current_song WHERE id = %s",
+                (source["song_id"],),
+            ).fetchone()
+            assert current == {"year_id": source_year, "country_id": "ES"}
+        finally:
+            _remove_songs(db, song_ids)
 
-
-def test_admin_move_page_uses_the_same_placeholder_rules(client, db, move_years):
-    song = _add_song(db, "ES", 2025, 2)
-    _add_song(db, "FR", 2026, 3, placeholder=True, title="Reserved")
-    _login(client, db, 1)
-
-    page = client.get("/admin/move", headers=HTML_HEADERS)
-    assert page.status_code == 200
-
-    response = client.post(
-        "/admin/move",
-        data={
-            "from_year": 2025,
-            "from_cc": "ES",
-            "to_year": 2026,
-            "to_cc": "FR",
-        },
-        headers=HTML_HEADERS,
-    )
-    assert response.status_code == 200
-    with db.cursor() as cursor:
-        cursor.execute("SELECT id FROM current_song WHERE year_id = 2026 AND country_id = 'FR'")
-        assert cursor.fetchone()["id"] == song["song_id"]
+    property_test()

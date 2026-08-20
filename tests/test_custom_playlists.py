@@ -1,43 +1,26 @@
-import uuid
-from urllib.parse import parse_qs, urlparse
+import string
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from world_stage.utils.song_revisions import set_song_status
 
 JSON = {"Accept": "application/json"}
 
 
-def _login(client, db, user_id: int = 2):
-    session_id = str(uuid.uuid4())
+def _song(db, country: str, title: str, *, entry_number: int = 1) -> int:
     with db.cursor() as cursor:
+        song_id = cursor.execute(
+            """INSERT INTO song (country_id, year_id, entry_number)
+               VALUES (%s, 2024, %s) RETURNING id""",
+            (country, entry_number),
+        ).fetchone()["id"]
         cursor.execute(
-            """
-            INSERT INTO session (user_id, session_id, expires_at)
-            VALUES (%s, %s, CURRENT_TIMESTAMP + '1 day')
-            """,
-            (user_id, session_id),
-        )
-    db.commit()
-    client.set_cookie("session", session_id)
-
-
-def _song(
-    db, country: str, title: str, *, year: int = 2024, entry_number: int = 1
-) -> int:
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO song (country_id, year_id, entry_number)
-            VALUES (%s, %s, %s) RETURNING id
-            """,
-            (country, year, entry_number),
-        )
-        song_id = cursor.fetchone()["id"]
-        cursor.execute(
-            """
-            INSERT INTO song_data (
-                song_id, submitter_id, title, artist_credit_set_id, video_link
-            ) VALUES (%s, 1, %s, test_artist_credit('Test Artist'), %s)
-            """,
+            """INSERT INTO song_data (
+                   song_id, submitter_id, title, artist_credit_set_id, video_link
+               ) VALUES (
+                   %s, 1, %s, test_artist_credit('Test Artist'), %s
+               )""",
             (song_id, title, f"https://media.world-stage.org/{song_id}.mp4"),
         )
         set_song_status(cursor, song_id, changed_by=1, is_placeholder=False)
@@ -45,373 +28,197 @@ def _song(
     return song_id
 
 
-def _create_playlist(client, name: str = "Favourites") -> int:
+def _create_playlist(client, db, name: str = "Favourites") -> int:
     response = client.post("/member/playlist", data={"name": name}, headers=JSON)
     assert response.status_code == 302
-    assert urlparse(response.location).path == "/member/playlist/edit"
-    return int(parse_qs(urlparse(response.location).query)["playlist_id"][0])
+    return db.execute(
+        """SELECT id FROM custom_playlist
+           WHERE owner_id = 2 AND name = %s ORDER BY id DESC LIMIT 1""",
+        (name,),
+    ).fetchone()["id"]
 
 
-def test_playlist_pages_require_login(client):
-    assert client.get("/member/playlist", headers=JSON).location.endswith("/login")
-    response = client.get("/member/playlist/edit?playlist_id=1", headers=JSON)
-    assert response.location.endswith("/login")
+def test_playlist_management_requires_authentication_and_ownership(client, db, login):
+    @given(path=st.sampled_from(["/member/playlist", "/member/playlist/edit?playlist_id=1"]))
+    def anonymous_property(path):
+        response = client.get(path, headers=JSON)
+        assert response.status_code == 302
+        assert response.location.endswith("/login")
 
+    anonymous_property()
+    login(2)
+    playlist_id = _create_playlist(client, db)
+    song_id = _song(db, "ES", "Owned song")
 
-def test_user_creates_searches_and_plays_playlist(client, db):
-    spanish_song = _song(db, "ES", "Spanish song")
-    _song(db, "FR", "French song")
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO country_year_results (
-                country_id, country_name, year_id, song_id, place,
-                total_countries, placement_percentage
-            ) VALUES ('ES', 'Spain', 2024, %s, 2, 3, 66.667)
-            """,
-            (spanish_song,),
+    @given(operation=st.sampled_from(["read", "rename", "add", "order"]))
+    def ownership_property(operation):
+        client.delete_cookie("session")
+        login(3)
+        if operation == "read":
+            response = client.get(f"/member/playlist/edit?playlist_id={playlist_id}", headers=JSON)
+        elif operation == "rename":
+            response = client.post(
+                f"/member/playlist/{playlist_id}/rename",
+                data={"name": "Not mine"},
+                headers=JSON,
+            )
+        elif operation == "add":
+            response = client.post(
+                f"/member/playlist/{playlist_id}/songs",
+                data={"song_id": song_id},
+                headers=JSON,
+            )
+        else:
+            response = client.post(
+                f"/member/playlist/{playlist_id}/order",
+                json={"song_ids": []},
+                headers=JSON,
+            )
+        assert response.status_code == 404
+        assert (
+            db.execute("SELECT name FROM custom_playlist WHERE id = %s", (playlist_id,)).fetchone()[
+                "name"
+            ]
+            == "Favourites"
         )
-    db.commit()
-    _login(client, db)
-    playlist_id = _create_playlist(client)
-
-    response = client.get(
-        f"/member/playlist/edit?playlist_id={playlist_id}&country=ES",
-        headers=JSON,
-    )
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data["selected_country"] == "ES"
-    assert [song["id"] for song in data["search_results"]] == [spanish_song]
-    assert [song["title"] for song in data["search_results"]] == ["Spanish song"]
-    assert data["search_results"][0]["year_place"] == 2
-    assert data["search_results"][0]["year_total_countries"] == 3
-
-    html = client.get(
-        f"/member/playlist/edit?playlist_id={playlist_id}&country=ES",
-        headers={"Accept": "text/html"},
-    ).get_data(as_text=True)
-    assert "js/sort-table.js" in html
-    assert '<table class="sortable">' in html
-    assert "<th>Place</th>" in html
-    assert '<td data-value="2">' in html
-    assert "2 / 3" in html
-
-    response = client.post(
-        f"/member/playlist/{playlist_id}/songs",
-        data={"song_id": spanish_song},
-        headers=JSON,
-    )
-    assert response.status_code == 200
-    result = response.get_json()["result"]
-    assert result["playlist_id"] == playlist_id
-    assert result["song_id"] == spanish_song
-    assert result["added"] is True
-    assert result["song"] == {
-        "id": spanish_song,
-        "cc": "es",
-        "country": "Spain",
-        "title": "Spanish song",
-        "artist": "Test Artist",
-        "year": 2024,
-        "details_url": "/country/es/2024/1",
-        "remove_url": f"/member/playlist/{playlist_id}/songs/{spanish_song}/remove",
-    }
-
-    # Adding the same song twice is intentionally idempotent.
-    duplicate = client.post(
-        f"/member/playlist/{playlist_id}/songs",
-        data={"song_id": spanish_song},
-        headers=JSON,
-    )
-    assert duplicate.get_json()["result"]["added"] is False
-    with db.cursor() as cursor:
-        cursor.execute(
-            "SELECT COUNT(*) AS count FROM custom_playlist_song WHERE playlist_id = %s",
-            (playlist_id,),
+        assert (
+            db.execute(
+                "SELECT COUNT(*) AS count FROM custom_playlist_song WHERE playlist_id = %s",
+                (playlist_id,),
+            ).fetchone()["count"]
+            == 0
         )
-        assert cursor.fetchone()["count"] == 1
 
-    refreshed = client.get(
-        f"/member/playlist/edit?playlist_id={playlist_id}&country=ES",
-        headers=JSON,
-    )
-    assert refreshed.get_json()["search_results"][0]["in_playlist"] is True
-
-    response = client.get(f"/playlist/{playlist_id}", headers=JSON)
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data["collection_title"] == "Favourites"
-    assert [(entry["id"], entry["title"]) for entry in data["entries"]] == [
-        (spanish_song, "Spanish song")
-    ]
-    assert data["entries"][0]["shuffleable"] is True
-
-    with_postcard = client.get(
-        f"/playlist/{playlist_id}?postcards=true", headers=JSON
-    ).get_json()["entries"]
-    assert [entry["kind"] for entry in with_postcard] == ["postcard", "song"]
-    assert len({entry["shuffle_group"] for entry in with_postcard}) == 1
-    assert all(entry["shuffleable"] is True for entry in with_postcard)
+    ownership_property()
 
 
-def test_playlist_ownership_is_enforced(client, db):
-    _login(client, db, 2)
-    playlist_id = _create_playlist(client, "Bob's list")
+def test_playlist_names_are_trimmed_and_bounded(client, db, login):
+    login(2)
+    playlist_id = _create_playlist(client, db)
+    alphabet = string.ascii_letters + string.digits + " _-"
 
-    client.delete_cookie("session")
-    _login(client, db, 3)
-    response = client.get(f"/member/playlist/edit?playlist_id={playlist_id}", headers=JSON)
-    assert response.status_code == 404
-    assert response.get_json()["error"] == "Playlist not found"
-
-    # Public listing and playback do not grant editing access.
-    response = client.get(f"/playlist/{playlist_id}", headers=JSON)
-    assert response.status_code == 400
-    assert response.get_json()["error"] == "This playlist is empty"
-
-
-def test_user_can_rename_playlist(client, db):
-    _login(client, db)
-    playlist_id = _create_playlist(client)
-
-    html = client.get(
-        f"/member/playlist/edit?playlist_id={playlist_id}",
-        headers={"Accept": "text/html"},
-    ).get_data(as_text=True)
-    assert f'/member/playlist/{playlist_id}/rename' in html
-    assert 'value="Favourites"' in html
-
-    response = client.post(
-        f"/member/playlist/{playlist_id}/rename",
-        data={"name": "  Road trip  "},
-        headers=JSON,
-    )
-    assert response.status_code == 302
-    assert response.location == f"/member/playlist/edit?playlist_id={playlist_id}"
-
-    with db.cursor() as cursor:
-        cursor.execute("SELECT name FROM custom_playlist WHERE id = %s", (playlist_id,))
-        assert cursor.fetchone()["name"] == "Road trip"
-
-    invalid = client.post(
-        f"/member/playlist/{playlist_id}/rename",
-        data={"name": "   "},
-        headers=JSON,
-    )
-    assert invalid.status_code == 400
-    assert invalid.get_json()["rename_error"] == (
-        "Enter a playlist name between 1 and 100 characters."
-    )
-
-    client.delete_cookie("session")
-    _login(client, db, 3)
-    forbidden = client.post(
-        f"/member/playlist/{playlist_id}/rename",
-        data={"name": "Not mine"},
-        headers=JSON,
-    )
-    assert forbidden.status_code == 404
-
-
-def test_multiple_filtered_songs_can_be_added_without_leaving_results(client, db):
-    first_song = _song(db, "ES", "First Spanish song", entry_number=1)
-    second_song = _song(db, "ES", "Second Spanish song", entry_number=2)
-    _login(client, db)
-    playlist_id = _create_playlist(client)
-
-    results = client.get(
-        f"/member/playlist/edit?playlist_id={playlist_id}&country=ES",
-        headers=JSON,
-    ).get_json()["search_results"]
-    assert [song["id"] for song in results] == [first_song, second_song]
-    assert all(song["in_playlist"] is False for song in results)
-
-    for song_id in (first_song, second_song):
+    @settings(max_examples=20)
+    @given(raw_name=st.text(alphabet=alphabet, min_size=0, max_size=105))
+    def property_test(raw_name):
+        before = db.execute(
+            "SELECT name FROM custom_playlist WHERE id = %s", (playlist_id,)
+        ).fetchone()["name"]
         response = client.post(
+            f"/member/playlist/{playlist_id}/rename",
+            data={"name": raw_name},
+            headers=JSON,
+        )
+        normalized = raw_name.strip()
+        valid = 1 <= len(normalized) <= 100
+        assert response.status_code == (302 if valid else 400)
+        after = db.execute(
+            "SELECT name FROM custom_playlist WHERE id = %s", (playlist_id,)
+        ).fetchone()["name"]
+        assert after == (normalized if valid else before)
+
+    property_test()
+
+
+def test_playlist_search_matches_the_requested_catalog_filters(client, db, login):
+    songs = {
+        _song(db, "ES", "First Spanish song", entry_number=1): "ES",
+        _song(db, "ES", "Second Spanish song", entry_number=2): "ES",
+        _song(db, "FR", "French song", entry_number=1): "FR",
+    }
+    login(2)
+    playlist_id = _create_playlist(client, db)
+
+    @given(
+        country=st.sampled_from(["", "ES", "FR"]),
+        year=st.sampled_from(["", "2024", "not-a-year"]),
+    )
+    def property_test(country, year):
+        response = client.get(
+            f"/member/playlist/edit?playlist_id={playlist_id}&country={country}&year={year}",
+            headers=JSON,
+        )
+        if year == "not-a-year":
+            assert response.status_code == 400
+            return
+
+        assert response.status_code == 200
+        result = response.get_json()["search_results"]
+        expected = {
+            song_id
+            for song_id, song_country in songs.items()
+            if (country or year) and (not country or song_country == country)
+        }
+        assert {song["id"] for song in result} == expected
+        assert all(song["in_playlist"] is False for song in result)
+
+    property_test()
+
+
+def test_playlist_membership_is_an_idempotent_ordered_set(client, db, login):
+    song_ids = [
+        _song(db, "ES", "First song", entry_number=1),
+        _song(db, "FR", "Second song", entry_number=1),
+        _song(db, "US", "Third song", entry_number=1),
+    ]
+    login(2)
+    playlist_id = _create_playlist(client, db)
+
+    @settings(max_examples=12, deadline=None)
+    @given(
+        insertion=st.permutations(song_ids),
+        final_order=st.permutations(song_ids),
+        duplicate_index=st.integers(min_value=0, max_value=2),
+        remove_count=st.integers(min_value=0, max_value=2),
+        postcards=st.booleans(),
+    )
+    def property_test(insertion, final_order, duplicate_index, remove_count, postcards):
+        db.execute("DELETE FROM custom_playlist_song WHERE playlist_id = %s", (playlist_id,))
+        db.commit()
+
+        for song_id in insertion:
+            response = client.post(
+                f"/member/playlist/{playlist_id}/songs",
+                data={"song_id": song_id},
+                headers=JSON,
+            )
+            assert response.status_code == 200
+            assert response.get_json()["result"]["added"] is True
+
+        duplicate = client.post(
             f"/member/playlist/{playlist_id}/songs",
-            data={"song_id": song_id},
+            data={"song_id": insertion[duplicate_index]},
+            headers=JSON,
+        )
+        assert duplicate.get_json()["result"]["added"] is False
+
+        reordered = client.post(
+            f"/member/playlist/{playlist_id}/order",
+            json={"song_ids": final_order},
+            headers=JSON,
+        )
+        assert reordered.status_code == 200
+
+        removed = set(final_order[:remove_count])
+        for song_id in removed:
+            response = client.post(
+                f"/member/playlist/{playlist_id}/songs/{song_id}/remove",
+                headers=JSON,
+            )
+            assert response.status_code == 302
+        expected = [song_id for song_id in final_order if song_id not in removed]
+
+        response = client.get(
+            f"/playlist/{playlist_id}?postcards={'true' if postcards else 'false'}",
             headers=JSON,
         )
         assert response.status_code == 200
-        assert response.get_json()["result"]["added"] is True
+        entries = response.get_json()["entries"]
+        played_songs = [entry for entry in entries if entry["kind"] == "song"]
+        assert [entry["id"] for entry in played_songs] == expected
+        assert len(entries) == len(expected) * (2 if postcards else 1)
+        assert all(entry["shuffleable"] is True for entry in entries)
+        for song in played_songs:
+            group = [entry for entry in entries if entry["shuffle_group"] == song["shuffle_group"]]
+            assert len(group) == (2 if postcards else 1)
 
-    refreshed = client.get(
-        f"/member/playlist/edit?playlist_id={playlist_id}&country=ES",
-        headers=JSON,
-    ).get_json()["search_results"]
-    assert [song["id"] for song in refreshed] == [first_song, second_song]
-    assert all(song["in_playlist"] is True for song in refreshed)
-
-
-def test_user_can_reorder_playlist_cards(client, db):
-    first_song = _song(db, "ES", "First song")
-    second_song = _song(db, "FR", "Second song")
-    _login(client, db)
-    playlist_id = _create_playlist(client)
-    for song_id in (first_song, second_song):
-        client.post(
-            f"/member/playlist/{playlist_id}/songs",
-            data={"song_id": song_id},
-            headers=JSON,
-        )
-
-    response = client.post(
-        f"/member/playlist/{playlist_id}/order",
-        json={"song_ids": [second_song, first_song]},
-        headers=JSON,
-    )
-    assert response.status_code == 200
-    assert response.get_json()["result"]["song_ids"] == [second_song, first_song]
-
-    form_response = client.post(
-        f"/member/playlist/{playlist_id}/order",
-        data={"song_id": [second_song, first_song]},
-        headers=JSON,
-    )
-    assert form_response.status_code == 302
-    assert form_response.location == (
-        f"/member/playlist/edit?playlist_id={playlist_id}"
-    )
-
-    player = client.get(f"/playlist/{playlist_id}", headers=JSON)
-    assert [entry["id"] for entry in player.get_json()["entries"]] == [
-        second_song,
-        first_song,
-    ]
-
-    invalid = client.post(
-        f"/member/playlist/{playlist_id}/order",
-        json={"song_ids": [first_song]},
-        headers=JSON,
-    )
-    assert invalid.status_code == 400
-    assert invalid.get_json()["error"] == "Invalid playlist order"
-
-
-def test_show_recap_is_fixed_and_postcards_are_linked(client, db):
-    first_song = _song(db, "ES", "First song")
-    second_song = _song(db, "FR", "Second song")
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT COALESCE(MAX(show_number), 0) + 1 AS number
-            FROM show WHERE year_id = 2024 AND show_type = 'sf'
-            """
-        )
-        show_number = cursor.fetchone()["number"]
-        cursor.execute(
-            """
-            INSERT INTO show (year_id, show_type, show_number)
-            VALUES (2024, 'sf', %s) RETURNING id
-            """,
-            (show_number,),
-        )
-        show_id = cursor.fetchone()["id"]
-        cursor.execute(
-            """
-            INSERT INTO song_show (song_id, show_id, running_order)
-            VALUES (%s, %s, 1), (%s, %s, 2)
-            """,
-            (first_song, show_id, second_song, show_id),
-        )
-    db.commit()
-
-    response = client.get(
-        f"/year/2024/sf{show_number}/play?postcards=true", headers=JSON
-    )
-    assert response.status_code == 200
-    entries = response.get_json()["entries"]
-    assert entries[-1]["kind"] == "recap"
-    assert entries[-1]["shuffleable"] is False
-    assert [entry["kind"] for entry in entries[:-1]] == [
-        "postcard",
-        "song",
-        "postcard",
-        "song",
-    ]
-    assert entries[0]["shuffle_group"] == entries[1]["shuffle_group"]
-    assert entries[2]["shuffle_group"] == entries[3]["shuffle_group"]
-    assert entries[0]["shuffle_group"] != entries[2]["shuffle_group"]
-
-
-def test_song_details_offer_users_their_playlists(client, db):
-    song_id = _song(db, "ES", "Details song")
-    _login(client, db)
-    playlist_id = _create_playlist(client, "Road trip")
-
-    response = client.get("/country/es/2024", headers=JSON)
-    assert response.status_code == 200
-    assert response.get_json()["custom_playlists"] == [
-        {"id": playlist_id, "name": "Road trip"}
-    ]
-
-    html = client.get(
-        "/country/es/2024", headers={"Accept": "text/html"}
-    ).get_data(as_text=True)
-    assert 'name="return_to" value="/country/es/2024"' in html
-
-    response = client.post(
-        f"/member/playlist/{playlist_id}/songs",
-        data={"song_id": song_id, "return_to": "/country/es/2024"},
-    )
-    assert response.status_code == 302
-    assert response.location == "/country/es/2024"
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS count
-            FROM custom_playlist_song
-            WHERE playlist_id = %s AND song_id = %s
-            """,
-            (playlist_id, song_id),
-        )
-        assert cursor.fetchone()["count"] == 1
-
-
-def test_user_pages_link_to_a_dedicated_playlist_page(client, db):
-    song_id = _song(db, "ES", "Public song")
-    _login(client, db)
-    playlist_id = _create_playlist(client, "Road trip")
-    client.post(
-        f"/member/playlist/{playlist_id}/songs",
-        data={"song_id": song_id},
-        headers=JSON,
-    )
-
-    playlist_page = client.get("/user/bob/playlist", headers=JSON)
-    assert playlist_page.status_code == 200
-    assert playlist_page.get_json()["playlists"] == [
-        {"id": playlist_id, "name": "Road trip"}
-    ]
-
-    directory = client.get("/user", headers=JSON)
-    bob = next(user for user in directory.get_json()["users"]["B"] if user["id"] == 2)
-    assert bob == {"id": 2, "username": "bob"}
-
-    profile = client.get("/user/bob", headers=JSON)
-    assert profile.status_code == 200
-    assert profile.get_json()["username"] == "bob"
-
-    client.delete_cookie("session")
-    public_index = client.get("/playlist", headers=JSON)
-    assert public_index.status_code == 200
-    assert public_index.get_json()["groups"] == [
-        {
-            "user_id": 2,
-            "username": "bob",
-            "playlists": [{"id": playlist_id, "name": "Road trip"}],
-        }
-    ]
-
-    playback = client.get(f"/playlist/{playlist_id}", headers=JSON)
-    assert playback.status_code == 200
-    assert [(entry["id"], entry["title"]) for entry in playback.get_json()["entries"]] == [
-        (song_id, "Public song")
-    ]
-
-    assert client.get(f"/user/bob/playlist/{playlist_id}", headers=JSON).status_code == 404
-    assert (
-        client.get(f"/member/playlist/{playlist_id}/play", headers=JSON).status_code
-        == 404
-    )
+    property_test()

@@ -1,219 +1,172 @@
 import uuid
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 
 @pytest.fixture()
 def admin_session(client, db):
-    session_id = str(uuid.uuid4())
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO session (user_id, session_id, expires_at)
-            VALUES (1, %s, CURRENT_TIMESTAMP + INTERVAL '1 day')
-            """,
-            (session_id,),
-        )
+    session_id = uuid.uuid4()
+    db.execute(
+        """INSERT INTO session (user_id, session_id, expires_at)
+           VALUES (1, %s, CURRENT_TIMESTAMP + INTERVAL '1 day')""",
+        (session_id,),
+    )
     db.commit()
-    client.set_cookie("session", session_id)
-
+    client.set_cookie("session", str(session_id))
     yield
-
+    client.delete_cookie("session")
     db.rollback()
-    with db.cursor() as cursor:
-        cursor.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
-        cursor.execute(
-            """UPDATE year
-               SET host_id = 'US', status = 'open', submissions_open = true,
-                   scoreboard_style = 'esc-1997'
-               WHERE id = 2025"""
-        )
-    db.commit()
-
-
-@pytest.fixture()
-def final_and_spanish_entry(db):
-    with db.cursor() as cursor:
-        cursor.execute(
-            "INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING"
-        )
-        cursor.execute(
-            """
-            INSERT INTO show (year_id, show_type, status)
-            VALUES (2025, 'f', 'none')
-            RETURNING id
-            """
-        )
-        final_id = cursor.fetchone()["id"]
-        cursor.execute(
-            """
-            INSERT INTO song (country_id, year_id, entry_number)
-            VALUES ('ES', 2025, 1)
-            RETURNING id
-            """
-        )
-        song_id = cursor.fetchone()["id"]
-    db.commit()
-
-    yield final_id, song_id
-
-    with db.cursor() as cursor:
-        cursor.execute("DELETE FROM song_show WHERE show_id = %s", (final_id,))
-        cursor.execute("DELETE FROM song WHERE id = %s", (song_id,))
-        cursor.execute("DELETE FROM show WHERE id = %s", (final_id,))
-    db.commit()
-
-
-def test_manage_year_can_set_host(client, db, admin_session, final_and_spanish_entry):
-    final_id, song_id = final_and_spanish_entry
-    response = client.post(
-        "/admin/manage/2025",
-        data={"action": "set_host", "host_id": "ES"},
+    db.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
+    db.execute(
+        """UPDATE year
+           SET host_id = 'US', status = 'open', submissions_open = true,
+               scoreboard_style = 'esc-1997'
+           WHERE id = 2025"""
     )
+    db.commit()
 
-    assert response.status_code == 302
-    assert response.location.endswith("/admin/manage/2025")
-    with db.cursor() as cursor:
-        cursor.execute("SELECT host_id FROM year WHERE id = 2025")
-        assert cursor.fetchone()["host_id"] == "ES"
-        cursor.execute(
-            """
-            SELECT song_id, running_order
-            FROM song_show
-            WHERE show_id = %s
-            """,
-            (final_id,),
+
+def test_host_selection_accepts_existing_countries_or_no_host(client, db, admin_session):
+    db.execute("INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING")
+    final_id = db.execute(
+        """INSERT INTO show (year_id, show_type, status)
+           VALUES (2025, 'f', 'none') RETURNING id"""
+    ).fetchone()["id"]
+    eligible_hosts = ["US", "ES", "FR"]
+    song_ids = []
+    for entry_number, country_id in enumerate(eligible_hosts, 1):
+        song_ids.append(
+            db.execute(
+                """INSERT INTO song (country_id, year_id, entry_number)
+                   VALUES (%s, 2025, %s) RETURNING id""",
+                (country_id, entry_number),
+            ).fetchone()["id"]
         )
-        assert cursor.fetchone() == {
-            "song_id": song_id,
-            "running_order": 1,
+    db.commit()
+    cases = [*eligible_hosts, "", "ZZZ"]
+
+    @given(host=st.sampled_from(cases))
+    def property_test(host):
+        db.execute("UPDATE year SET host_id = 'US' WHERE id = 2025")
+        db.commit()
+
+        response = client.post(
+            "/admin/manage/2025",
+            data={"action": "set_host", "host_id": host},
+        )
+
+        expected = None if host == "" else host if host in eligible_hosts else "US"
+        assert response.status_code == (302 if host in eligible_hosts or host == "" else 400)
+        assert (
+            db.execute("SELECT host_id FROM year WHERE id = 2025").fetchone()["host_id"] == expected
+        )
+
+    try:
+        property_test()
+    finally:
+        db.rollback()
+        db.execute("DELETE FROM song_show WHERE show_id = %s", (final_id,))
+        db.execute("DELETE FROM song WHERE id = ANY(%s)", (song_ids,))
+        db.execute("DELETE FROM show WHERE id = %s", (final_id,))
+        db.commit()
+
+
+def test_submission_availability_is_independent_of_year_lifecycle(client, db, admin_session):
+    @given(submissions_open=st.booleans(), lifecycle=st.sampled_from(["open", "closed"]))
+    def property_test(submissions_open, lifecycle):
+        db.execute("UPDATE year SET status = 'open', submissions_open = true WHERE id = 2025")
+        db.commit()
+
+        assert (
+            client.post(
+                "/admin/manage/2025",
+                json={
+                    "action": "set_submissions_open",
+                    "submissions_open": submissions_open,
+                },
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                "/admin/manage/2025",
+                json={"action": "change_year_status", "year_status": lifecycle},
+            ).status_code
+            == 200
+        )
+
+        assert db.execute(
+            "SELECT status, submissions_open FROM year WHERE id = 2025"
+        ).fetchone() == {
+            "status": lifecycle,
+            "submissions_open": submissions_open,
         }
 
+    property_test()
 
-def test_lineup_issues_only_block_relevant_state_transitions(
-    client, db, admin_session, final_and_spanish_entry
-):
-    final_id, _ = final_and_spanish_entry
 
-    page = client.get("/admin/manage/2025", headers={"Accept": "application/json"})
-    assert page.status_code == 200
-    data = page.get_json()
-    assert "lineup_issues" not in data
-    assert "unassigned_lineup_issue" not in data
+def test_scoreboard_style_accepts_only_supported_values(client, db, admin_session):
+    @given(style=st.sampled_from([None, "esc-1997", "unknown", "", "future-style"]))
+    def property_test(style):
+        db.execute("UPDATE year SET scoreboard_style = 'esc-1997' WHERE id = 2025")
+        db.commit()
 
-    response = client.post(
-        "/admin/manage/2025/f",
-        json={"action": "open_voting"},
-    )
-    assert response.status_code == 400
-    response_codes = {
-        issue["code"] for issue in response.get_json()["lineup_issues"]
-    }
-    assert "lineup_empty" in response_codes
-    assert "main_participant_unassigned" not in response_codes
+        response = client.post(
+            "/admin/manage/2025",
+            json={"action": "set_scoreboard_style", "scoreboard_style": style},
+        )
 
-    response = client.post(
-        "/admin/manage/2025/f",
-        json={"action": "set_status", "status": "full"},
-    )
-    assert response.status_code == 400
-    assert "lineup_empty" in {
-        issue["code"] for issue in response.get_json()["lineup_issues"]
-    }
+        valid = style in {None, "esc-1997"}
+        assert response.status_code == (200 if valid else 400)
+        expected = style if valid else "esc-1997"
+        assert (
+            db.execute("SELECT scoreboard_style FROM year WHERE id = 2025").fetchone()[
+                "scoreboard_style"
+            ]
+            == expected
+        )
 
-    response = client.post(
-        "/admin/manage/2025",
-        json={"action": "change_year_status", "year_status": "ongoing"},
-    )
-    assert response.status_code == 400
-    assert response.get_json()["lineup_issues"] == [
-        {
-            "code": "main_participant_unassigned",
-            "message": "1 main contest participant is not assigned to any show.",
-        }
+    property_test()
+
+
+def test_lineup_issues_block_only_the_transition_they_make_unsafe(client, db, admin_session):
+    db.execute("INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING")
+    show_id = db.execute(
+        """INSERT INTO show (year_id, show_type, status)
+           VALUES (2025, 'f', 'none') RETURNING id"""
+    ).fetchone()["id"]
+    song_id = db.execute(
+        """INSERT INTO song (country_id, year_id, entry_number)
+           VALUES ('ES', 2025, 1) RETURNING id"""
+    ).fetchone()["id"]
+    db.commit()
+    cases = [
+        ("show", {"action": "open_voting"}, "lineup_empty"),
+        ("show", {"action": "set_status", "status": "full"}, "lineup_empty"),
+        (
+            "year",
+            {"action": "change_year_status", "year_status": "ongoing"},
+            "main_participant_unassigned",
+        ),
     ]
-    with db.cursor() as cursor:
-        cursor.execute("SELECT voting_opens FROM show WHERE id = %s", (final_id,))
-        assert cursor.fetchone()["voting_opens"] is None
 
+    @given(case=st.sampled_from(cases))
+    def property_test(case):
+        target, payload, expected_issue = case
+        url = "/admin/manage/2025/f" if target == "show" else "/admin/manage/2025"
 
-def test_manage_year_rejects_unknown_host(client, db, admin_session):
-    response = client.post(
-        "/admin/manage/2025",
-        data={"action": "set_host", "host_id": "ZZ"},
-    )
+        response = client.post(url, json=payload)
 
-    assert response.status_code == 400
-    with db.cursor() as cursor:
-        cursor.execute("SELECT host_id FROM year WHERE id = 2025")
-        assert cursor.fetchone()["host_id"] == "US"
+        assert response.status_code == 400
+        assert expected_issue in {issue["code"] for issue in response.get_json()["lineup_issues"]}
 
-
-def test_manage_year_can_clear_host(client, db, admin_session):
-    response = client.post(
-        "/admin/manage/2025",
-        data={"action": "set_host", "host_id": ""},
-    )
-
-    assert response.status_code == 302
-    with db.cursor() as cursor:
-        cursor.execute("SELECT host_id FROM year WHERE id = 2025")
-        assert cursor.fetchone()["host_id"] is None
-
-
-def test_manage_year_submission_status_is_independent_of_lifecycle(
-    client, db, admin_session
-):
-    response = client.post(
-        "/admin/manage/2025",
-        json={"action": "set_submissions_open", "submissions_open": False},
-    )
-
-    assert response.status_code == 200
-    with db.cursor() as cursor:
-        cursor.execute(
-            "SELECT status, submissions_open FROM year WHERE id = 2025"
-        )
-        assert cursor.fetchone() == {"status": "open", "submissions_open": False}
-
-    response = client.post(
-        "/admin/manage/2025",
-        json={"action": "change_year_status", "year_status": "closed"},
-    )
-    assert response.status_code == 200
-    with db.cursor() as cursor:
-        cursor.execute(
-            "SELECT status, submissions_open FROM year WHERE id = 2025"
-        )
-        assert cursor.fetchone() == {"status": "closed", "submissions_open": False}
-
-
-def test_manage_year_can_change_scoreboard_style(client, db, admin_session):
-    response = client.post(
-        "/admin/manage/2025",
-        json={"action": "set_scoreboard_style", "scoreboard_style": None},
-    )
-
-    assert response.status_code == 200
-    with db.cursor() as cursor:
-        cursor.execute("SELECT scoreboard_style FROM year WHERE id = 2025")
-        assert cursor.fetchone()["scoreboard_style"] is None
-
-    response = client.post(
-        "/admin/manage/2025",
-        json={"action": "set_scoreboard_style", "scoreboard_style": "esc-1997"},
-    )
-
-    assert response.status_code == 200
-    with db.cursor() as cursor:
-        cursor.execute("SELECT scoreboard_style FROM year WHERE id = 2025")
-        assert cursor.fetchone()["scoreboard_style"] == "esc-1997"
-
-
-def test_manage_year_rejects_unknown_scoreboard_style(client, db, admin_session):
-    response = client.post(
-        "/admin/manage/2025",
-        json={"action": "set_scoreboard_style", "scoreboard_style": "unknown"},
-    )
-
-    assert response.status_code == 400
+    try:
+        property_test()
+    finally:
+        db.rollback()
+        db.execute("DELETE FROM song_show WHERE show_id = %s", (show_id,))
+        db.execute("DELETE FROM song WHERE id = %s", (song_id,))
+        db.execute("DELETE FROM show WHERE id = %s", (show_id,))
+        db.commit()

@@ -8,10 +8,11 @@ whose schema will be copied (schema-only, no data) into a disposable
 import hashlib
 import os
 import subprocess
+import uuid
+from contextlib import contextmanager
 
 import psycopg
 import pytest
-from flask import template_rendered
 from psycopg.rows import dict_row
 
 from world_stage import create_app
@@ -22,17 +23,6 @@ SOURCE_DB = os.environ.get("TEST_SOURCE_DB", "worldstage")
 # Connection string pointing at the *maintenance* database so we can
 # CREATE / DROP the test database itself.
 _MAINTENANCE_DSN = os.environ.get("TEST_MAINTENANCE_DSN", "dbname=postgres")
-
-
-@pytest.fixture()
-def rendered_templates(app):
-    rendered = []
-
-    def capture(_sender, template, context, **_extra):
-        rendered.append((template.name, context))
-
-    with template_rendered.connected_to(capture, app):
-        yield rendered
 
 
 # ── session-scoped: create & destroy the test database ──────────────
@@ -75,9 +65,7 @@ def _test_db():
     conn.close()
 
     # Run any pending migrations (e.g. new ones not yet applied to source).
-    app = create_app(
-        {"TESTING": True, "LOCAL_ASSETS": True, "DATABASE_URI": f"dbname={TEST_DB}"}
-    )
+    app = create_app({"TESTING": True, "LOCAL_ASSETS": True, "DATABASE_URI": f"dbname={TEST_DB}"})
     with app.app_context():
         from world_stage.db import migrate_db
 
@@ -248,7 +236,7 @@ def _seeded_db(_test_db):
         for uid, token in [(1, "token-alice"), (2, "token-bob"), (3, "token-carol")]:
             h = hashlib.sha256(token.encode()).digest()
             cur.execute(
-                "INSERT INTO api_token (user_id, token_hash, label) VALUES (%s, %s, 'test')" \
+                "INSERT INTO api_token (user_id, token_hash, label) VALUES (%s, %s, 'test')"
                 "ON CONFLICT DO NOTHING",
                 (uid, h),
             )
@@ -263,9 +251,7 @@ def _seeded_db(_test_db):
 
 @pytest.fixture()
 def app(_seeded_db):
-    app = create_app(
-        {"TESTING": True, "LOCAL_ASSETS": True, "DATABASE_URI": _seeded_db}
-    )
+    app = create_app({"TESTING": True, "LOCAL_ASSETS": True, "DATABASE_URI": _seeded_db})
     yield app
 
 
@@ -306,14 +292,66 @@ def carol_headers():
     return {"Authorization": "Bearer token-carol", "Content-Type": "application/json"}
 
 
+@pytest.fixture()
+def login(client, db):
+    """Return a helper that authenticates the browser client as an account."""
+
+    def authenticate(user_id: int = 2) -> str:
+        session_id = str(uuid.uuid4())
+        db.execute(
+            """INSERT INTO session (user_id, session_id, expires_at)
+               VALUES (%s, %s, CURRENT_TIMESTAMP + INTERVAL '1 day')""",
+            (user_id, session_id),
+        )
+        db.commit()
+        client.set_cookie("session", session_id)
+        return session_id
+
+    return authenticate
+
+
+@pytest.fixture()
+def configured_email(app):
+    """Configure captured email delivery for a test."""
+    app.config.update(
+        MAIL_SERVER="smtp.test",
+        MAIL_DEFAULT_SENDER="noreply@example.test",
+        MAIL_SUPPRESS_SEND=True,
+        SITE_URL="https://worldstage.example",
+    )
+    app.extensions["mail_outbox"].clear()
+
+
+@pytest.fixture()
+def isolated_example(db):
+    """Return a savepoint context for generated database examples."""
+
+    @contextmanager
+    def isolate():
+        db.execute("SAVEPOINT hypothesis_example")
+        try:
+            yield
+        finally:
+            db.execute("ROLLBACK TO SAVEPOINT hypothesis_example")
+            db.execute("RELEASE SAVEPOINT hypothesis_example")
+
+    return isolate
+
+
 # ── cleanup: remove songs between tests ─────────────────────────────
 
 
 @pytest.fixture(autouse=True)
-def _clean_songs(_seeded_db):
-    """Delete all songs (and their languages) after each test."""
+def _clean_songs(request):
+    """Reset shared database state after tests which use database-backed fixtures."""
+    database_fixtures = {"_seeded_db", "app", "client", "db"}
+    if database_fixtures.isdisjoint(request.fixturenames):
+        yield
+        return
+
+    seeded_db = request.getfixturevalue("_seeded_db")
     yield
-    conn = psycopg.connect(_seeded_db)
+    conn = psycopg.connect(seeded_db)
     with conn.cursor() as cur:
         cur.execute("DELETE FROM account_avatar")
         cur.execute("DELETE FROM custom_playlist_song")

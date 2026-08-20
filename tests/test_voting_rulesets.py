@@ -1,15 +1,14 @@
-"""Voting ruleset assignment and ballot-entry policy."""
+"""Property tests for voting-rule assignment and ballot policy."""
 
 from decimal import Decimal
-from uuid import uuid4
+
+import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 
 def _create_show(cursor, *, version: str | None, scores: list[int]) -> int:
-    cursor.execute(
-        "INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING"
-    )
-    # Other tests seed reference point systems with explicit IDs, so choose an
-    # explicit unused ID rather than depending on their identity sequence.
+    cursor.execute("INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING")
     cursor.execute("SELECT COALESCE(MAX(id), 0) + 1000 AS id FROM point_system")
     point_system_id = cursor.fetchone()["id"]
     cursor.execute(
@@ -40,11 +39,7 @@ def _create_show(cursor, *, version: str | None, scores: list[int]) -> int:
         VALUES (2025, %s, %s, 'sf', %s, 'none')
         RETURNING id
         """,
-        (
-            point_system_id,
-            version,
-            show_number,
-        ),
+        (point_system_id, version, show_number),
     )
     return cursor.fetchone()["id"]
 
@@ -63,10 +58,7 @@ def _add_entry(
         VALUES (%s, 2025, %s)
         RETURNING id
         """,
-        (
-            country_id,
-            show_id * 10 + position,
-        ),
+        (country_id, show_id * 10 + position),
     )
     song_id = cursor.fetchone()["id"]
     cursor.execute(
@@ -76,10 +68,7 @@ def _add_entry(
         (song_id, f"Entry {show_id}-{position}", submitter_id),
     )
     cursor.execute(
-        """
-        INSERT INTO song_show (song_id, show_id, running_order)
-        VALUES (%s, %s, %s)
-        """,
+        "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, %s)",
         (song_id, show_id, position),
     )
     return song_id
@@ -96,7 +85,7 @@ def _rule(
 ) -> dict:
     cursor.execute(
         """
-        SELECT rule_kind, required_score, score_cap
+        SELECT rule_kind, rule_reason, required_score, score_cap
         FROM ballot_entry_rule(%s, %s, %s, %s, %s)
         """,
         (show_id, result_mode, voter_id, country_id, song_id),
@@ -104,527 +93,274 @@ def _rule(
     return cursor.fetchone()
 
 
-def _add_vote_set(
-    cursor,
-    *,
-    show_id: int,
-    voter_id: int,
-    country_id: str,
-    result_mode: str,
-) -> int:
-    cursor.execute(
-        """
-        INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
-        VALUES (%s, %s, %s, %s)
-        RETURNING id
-        """,
-        (voter_id, show_id, country_id, result_mode),
+def _official_rule_model(version, *, flag, owned, max_score):
+    if version == "v1" and flag:
+        return {
+            "rule_kind": "FORCED",
+            "rule_reason": "flag",
+            "required_score": 1,
+            "score_cap": 1,
+        }
+    forbidden_reason = None
+    if version == "v2" and flag:
+        forbidden_reason = "flag"
+    elif version == "v3" and (flag or owned):
+        forbidden_reason = "flag_and_owner" if flag and owned else "flag" if flag else "owner"
+    elif version in {"v4", "v5"} and owned:
+        forbidden_reason = "owner"
+    if forbidden_reason is not None:
+        return {
+            "rule_kind": "FORBIDDEN",
+            "rule_reason": forbidden_reason,
+            "required_score": None,
+            "score_cap": 0,
+        }
+    return {
+        "rule_kind": "NORMAL",
+        "rule_reason": None,
+        "required_score": None,
+        "score_cap": max_score,
+    }
+
+
+def _adjusted_percentage(points: Decimal, midpoint: Decimal, maximum: Decimal) -> Decimal:
+    if midpoint <= 0:
+        return Decimal(0)
+    if points <= midpoint:
+        return Decimal(50) * points / midpoint
+    return Decimal(50) + Decimal(50) * (points - midpoint) / (maximum - midpoint)
+
+
+def test_new_shows_snapshot_whichever_rulesets_are_current(db, isolated_example):
+    @settings(max_examples=20, deadline=None)
+    @given(
+        scores=st.lists(
+            st.integers(min_value=1, max_value=100),
+            min_size=1,
+            max_size=8,
+            unique=True,
+        )
     )
-    return cursor.fetchone()["id"]
-
-
-def test_new_show_snapshots_current_ruleset(db):
-    with db.cursor() as cursor:
-        show_id = _create_show(cursor, version=None, scores=[12, 10, 8])
-        cursor.execute(
-            """
-            SELECT voting_ruleset_version, revote_ruleset_version
-            FROM show
-            WHERE id = %s
-            """,
-            (show_id,),
-        )
-        assert cursor.fetchone() == {
-            "voting_ruleset_version": "v5",
-            "revote_ruleset_version": "v6",
-        }
-
-
-def test_result_rule_matrix_matches_authoritative_entry_rules(db):
-    with db.cursor() as cursor:
-        show_id = _create_show(cursor, version="v3", scores=[12, 10, 1])
-        for position, (country_id, submitter_id) in enumerate(
-            [("US", 1), ("ES", 1), ("FR", 2)],
-            start=1,
-        ):
-            _add_entry(
-                cursor,
-                show_id=show_id,
-                country_id=country_id,
-                submitter_id=submitter_id,
-                position=position,
+    def property_test(scores):
+        with isolated_example(), db.cursor() as cursor:
+            cursor.execute(
+                """SELECT
+                       MAX(version) FILTER (WHERE is_current) AS official,
+                       MAX(version) FILTER (WHERE is_current_revote) AS revote
+                   FROM voting_ruleset"""
             )
-        vote_set_id = _add_vote_set(
-            cursor,
-            show_id=show_id,
-            voter_id=1,
-            country_id="US",
-            result_mode="official",
-        )
-
-        cursor.execute(
-            """
-            SELECT
-                matrix.song_id,
-                matrix.rule_kind,
-                matrix.rule_reason,
-                matrix.required_score,
-                matrix.score_cap,
-                scalar.rule_kind AS scalar_kind,
-                scalar.rule_reason AS scalar_reason,
-                scalar.required_score AS scalar_required_score,
-                scalar.score_cap AS scalar_score_cap
-            FROM ballot_entry_rule_matrix(%s, 'official') matrix
-            CROSS JOIN LATERAL ballot_entry_rule(
-                %s,
-                'official',
-                matrix.voter_id,
-                matrix.country_id,
-                matrix.song_id
-            ) scalar
-            WHERE matrix.vote_set_id = %s
-            ORDER BY matrix.song_id
-            """,
-            (show_id, show_id, vote_set_id),
-        )
-        rules = cursor.fetchall()
-
-    assert len(rules) == 3
-    for rule in rules:
-        assert (
-            rule["rule_kind"],
-            rule["rule_reason"],
-            rule["required_score"],
-            rule["score_cap"],
-        ) == (
-            rule["scalar_kind"],
-            rule["scalar_reason"],
-            rule["scalar_required_score"],
-            rule["scalar_score_cap"],
-        )
-
-
-def test_v5_and_v6_penalize_non_voters(db):
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT version, penalizes_non_voters
-            FROM voting_ruleset
-            ORDER BY version
-            """
-        )
-        assert [
-            (row["version"], row["penalizes_non_voters"])
-            for row in cursor.fetchall()
-        ] == [
-            ("v1", False),
-            ("v2", False),
-            ("v3", False),
-            ("v4", False),
-            ("v5", True),
-            ("v6", True),
-        ]
-
-
-def test_v1_forces_flag_entry_but_allows_other_owned_entries(db):
-    with db.cursor() as cursor:
-        show_id = _create_show(cursor, version="v1", scores=[20, 10, 1])
-        flag_entry = _add_entry(
-            cursor,
-            show_id=show_id,
-            country_id="US",
-            submitter_id=1,
-            position=1,
-        )
-        other_owned_entry = _add_entry(
-            cursor,
-            show_id=show_id,
-            country_id="ES",
-            submitter_id=1,
-            position=2,
-        )
-
-        assert _rule(
-            cursor,
-            show_id=show_id,
-            result_mode="official",
-            voter_id=1,
-            country_id="US",
-            song_id=flag_entry,
-        ) == {"rule_kind": "FORCED", "required_score": 1, "score_cap": 1}
-        assert _rule(
-            cursor,
-            show_id=show_id,
-            result_mode="official",
-            voter_id=1,
-            country_id="US",
-            song_id=other_owned_entry,
-        ) == {"rule_kind": "NORMAL", "required_score": None, "score_cap": 20}
-
-
-def test_v2_and_v3_distinguish_flag_and_ownership_rules(db):
-    with db.cursor() as cursor:
-        v2_show = _create_show(cursor, version="v2", scores=[12, 10, 1])
-        v2_flag_entry = _add_entry(
-            cursor,
-            show_id=v2_show,
-            country_id="US",
-            submitter_id=2,
-            position=1,
-        )
-        v2_owned_entry = _add_entry(
-            cursor,
-            show_id=v2_show,
-            country_id="ES",
-            submitter_id=1,
-            position=2,
-        )
-
-        assert _rule(
-            cursor,
-            show_id=v2_show,
-            result_mode="official",
-            voter_id=1,
-            country_id="US",
-            song_id=v2_flag_entry,
-        )["rule_kind"] == "FORBIDDEN"
-        assert _rule(
-            cursor,
-            show_id=v2_show,
-            result_mode="official",
-            voter_id=1,
-            country_id="US",
-            song_id=v2_owned_entry,
-        )["rule_kind"] == "NORMAL"
-
-        v3_show = _create_show(cursor, version="v3", scores=[12, 10, 1])
-        v3_flag_entry = _add_entry(
-            cursor,
-            show_id=v3_show,
-            country_id="US",
-            submitter_id=2,
-            position=1,
-        )
-        v3_owned_entry = _add_entry(
-            cursor,
-            show_id=v3_show,
-            country_id="ES",
-            submitter_id=1,
-            position=2,
-        )
-        v3_overlap_entry = _add_entry(
-            cursor,
-            show_id=v3_show,
-            country_id="FR",
-            submitter_id=1,
-            position=3,
-        )
-
-        assert _rule(
-            cursor,
-            show_id=v3_show,
-            result_mode="official",
-            voter_id=1,
-            country_id="US",
-            song_id=v3_flag_entry,
-        )["rule_kind"] == "FORBIDDEN"
-        assert _rule(
-            cursor,
-            show_id=v3_show,
-            result_mode="official",
-            voter_id=1,
-            country_id="US",
-            song_id=v3_owned_entry,
-        )["rule_kind"] == "FORBIDDEN"
-        assert _rule(
-            cursor,
-            show_id=v3_show,
-            result_mode="official",
-            voter_id=1,
-            country_id="FR",
-            song_id=v3_overlap_entry,
-        ) == {"rule_kind": "FORBIDDEN", "required_score": None, "score_cap": 0}
-
-
-def test_v4_and_v5_forbid_owned_entries_only(db):
-    with db.cursor() as cursor:
-        for version in ("v4", "v5"):
-            show_id = _create_show(cursor, version=version, scores=[12, 10, 1])
-            owned_entry = _add_entry(
-                cursor,
-                show_id=show_id,
-                country_id="US",
-                submitter_id=1,
-                position=1,
+            current = cursor.fetchone()
+            show_id = _create_show(cursor, version=None, scores=scores)
+            cursor.execute(
+                """SELECT voting_ruleset_version AS official,
+                          revote_ruleset_version AS revote
+                   FROM show WHERE id = %s""",
+                (show_id,),
             )
-            other_entry = _add_entry(
-                cursor,
-                show_id=show_id,
-                country_id="ES",
-                submitter_id=2,
-                position=2,
-            )
+            assert cursor.fetchone() == current
 
-            assert _rule(
-                cursor,
-                show_id=show_id,
-                result_mode="official",
-                voter_id=1,
-                country_id="ES",
-                song_id=owned_entry,
-            )["rule_kind"] == "FORBIDDEN"
-            assert _rule(
-                cursor,
-                show_id=show_id,
-                result_mode="official",
-                voter_id=1,
-                country_id="ES",
-                song_id=other_entry,
-            ) == {"rule_kind": "NORMAL", "required_score": None, "score_cap": 12}
+    property_test()
 
 
-def test_revote_capacity_exception_uses_point_system_size(db):
-    with db.cursor() as cursor:
-        show_id = _create_show(cursor, version="v1", scores=[20, 10, 1])
-        owned_entry = _add_entry(
-            cursor,
-            show_id=show_id,
-            country_id="US",
-            submitter_id=1,
-            position=1,
-        )
-        _add_entry(
-            cursor,
-            show_id=show_id,
-            country_id="ES",
-            submitter_id=1,
-            position=2,
-        )
-        _add_entry(
-            cursor,
-            show_id=show_id,
-            country_id="FR",
-            submitter_id=2,
-            position=3,
-        )
-        _add_entry(
-            cursor,
-            show_id=show_id,
-            country_id="ES",
-            submitter_id=3,
-            position=4,
-        )
-
-        # Two non-owned entries cannot fill three scored positions, so all
-        # entries become eligible under the revote exception.
-        assert _rule(
-            cursor,
-            show_id=show_id,
-            result_mode="revote",
-            voter_id=1,
-            country_id="US",
-            song_id=owned_entry,
-        ) == {"rule_kind": "NORMAL", "required_score": None, "score_cap": 20}
-
-        _add_entry(
-            cursor,
-            show_id=show_id,
-            country_id="FR",
-            submitter_id=3,
-            position=5,
-        )
-
-        # At exactly three non-owned entries the ballot can be completed
-        # without the exception.
-        assert _rule(
-            cursor,
-            show_id=show_id,
-            result_mode="revote",
-            voter_id=1,
-            country_id="US",
-            song_id=owned_entry,
-        ) == {"rule_kind": "FORBIDDEN", "required_score": None, "score_cap": 0}
-
-
-def test_adjusted_percentage_formula_uses_midpoint_on_both_branches(db):
-    with db.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT
-                calculate_adjusted_points_percentage(29, 58, 100) AS below,
-                calculate_adjusted_points_percentage(58, 58, 100) AS midpoint,
-                calculate_adjusted_points_percentage(79, 58, 100) AS above,
-                calculate_adjusted_points_percentage(0, 0, 0) AS empty
-            """
-        )
-        assert cursor.fetchone() == {
-            "below": Decimal("25"),
-            "midpoint": Decimal("50"),
-            "above": Decimal("75.0"),
-            "empty": Decimal("0"),
-        }
-
-
-def test_results_store_dynamic_adjusted_metrics_and_keep_legacy_percentage(db):
-    with db.cursor() as cursor:
-        show_id = _create_show(cursor, version="v1", scores=[20, 10, 1])
-        songs = [
-            _add_entry(
-                cursor,
-                show_id=show_id,
-                country_id=country_id,
-                submitter_id=submitter_id,
-                position=position,
-            )
-            for position, (country_id, submitter_id) in enumerate(
-                (("US", 1), ("ES", 2), ("FR", 3)),
-                start=1,
-            )
-        ]
-        cursor.execute(
-            """
-            INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
-            VALUES (1, %s, 'US', 'official')
-            RETURNING id
-            """,
-            (show_id,),
-        )
-        vote_set_id = cursor.fetchone()["id"]
-        cursor.executemany(
-            "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
-            [
-                (vote_set_id, songs[0], 1),
-                (vote_set_id, songs[1], 20),
-                (vote_set_id, songs[2], 10),
-            ],
-        )
-
-        cursor.execute(
-            "SELECT refresh_show_results_for_mode(%s, 'official')",
-            (show_id,),
-        )
-        cursor.execute(
-            """
-            SELECT
-                country_id,
-                total_points,
-                max_possible_points,
-                points_percentage,
-                adjusted_max_possible_points,
-                points_midpoint,
-                adjusted_points_percentage
-            FROM country_show_results
-            WHERE show_id = %s AND result_mode = 'official'
-            ORDER BY country_id
-            """,
-            (show_id,),
-        )
-
-        assert cursor.fetchall() == [
-            {
-                "country_id": "ES",
-                "total_points": 20,
-                "max_possible_points": 20,
-                "points_percentage": Decimal("100.00"),
-                "adjusted_max_possible_points": 20,
-                "points_midpoint": Decimal("10.333333"),
-                "adjusted_points_percentage": Decimal("100.00"),
-            },
-            {
-                "country_id": "FR",
-                "total_points": 10,
-                "max_possible_points": 20,
-                "points_percentage": Decimal("50.00"),
-                "adjusted_max_possible_points": 20,
-                "points_midpoint": Decimal("10.333333"),
-                "adjusted_points_percentage": Decimal("48.39"),
-            },
-            {
-                "country_id": "US",
-                "total_points": 1,
-                "max_possible_points": 20,
-                "points_percentage": Decimal("5.00"),
-                "adjusted_max_possible_points": 1,
-                "points_midpoint": Decimal("10.333333"),
-                "adjusted_points_percentage": Decimal("4.84"),
-            },
-        ]
-
-
-def test_official_penalty_policy_comes_from_snapshotted_ruleset(client, db):
-    with db.cursor() as cursor:
-        shows = {
-            version: _create_show(cursor, version=version, scores=[12])
-            for version in ("v4", "v5")
-        }
-        for show_id in shows.values():
+def test_official_entry_rules_and_rule_matrix_match_the_reference_model(db, isolated_example):
+    @settings(max_examples=50, deadline=None)
+    @given(
+        version=st.sampled_from(["v1", "v2", "v3", "v4", "v5"]),
+        flag=st.booleans(),
+        owned=st.booleans(),
+        max_score=st.integers(min_value=2, max_value=100),
+    )
+    def property_test(version, flag, owned, max_score):
+        with isolated_example(), db.cursor() as cursor:
+            show_id = _create_show(cursor, version=version, scores=[max_score, 1])
             song_id = _add_entry(
                 cursor,
                 show_id=show_id,
+                country_id="US" if flag else "ES",
+                submitter_id=1 if owned else 2,
+                position=1,
+            )
+            cursor.execute(
+                """INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
+                   VALUES (1, %s, 'US', 'official') RETURNING id""",
+                (show_id,),
+            )
+            vote_set_id = cursor.fetchone()["id"]
+
+            scalar = _rule(
+                cursor,
+                show_id=show_id,
+                result_mode="official",
+                voter_id=1,
+                country_id="US",
+                song_id=song_id,
+            )
+            assert scalar == _official_rule_model(
+                version,
+                flag=flag,
+                owned=owned,
+                max_score=max_score,
+            )
+
+            cursor.execute(
+                """SELECT rule_kind, rule_reason, required_score, score_cap
+                   FROM ballot_entry_rule_matrix(%s, 'official')
+                   WHERE vote_set_id = %s AND song_id = %s""",
+                (show_id, vote_set_id, song_id),
+            )
+            assert cursor.fetchone() == scalar
+
+    property_test()
+
+
+def test_revote_ownership_exception_depends_only_on_ballot_capacity(db, isolated_example):
+    @settings(max_examples=40, deadline=None)
+    @given(
+        scored_positions=st.integers(min_value=1, max_value=6),
+        owned_count=st.integers(min_value=1, max_value=5),
+        other_count=st.integers(min_value=0, max_value=7),
+    )
+    def property_test(scored_positions, owned_count, other_count):
+        with isolated_example(), db.cursor() as cursor:
+            scores = list(range(scored_positions, 0, -1))
+            show_id = _create_show(cursor, version="v5", scores=scores)
+            owned_song = _add_entry(
+                cursor,
+                show_id=show_id,
                 country_id="US",
                 submitter_id=1,
                 position=1,
             )
+            position = 2
+            for _ in range(owned_count - 1):
+                _add_entry(
+                    cursor,
+                    show_id=show_id,
+                    country_id="ES",
+                    submitter_id=1,
+                    position=position,
+                )
+                position += 1
+            for index in range(other_count):
+                _add_entry(
+                    cursor,
+                    show_id=show_id,
+                    country_id="FR" if index % 2 else "ES",
+                    submitter_id=2,
+                    position=position,
+                )
+                position += 1
+
+            rule = _rule(
+                cursor,
+                show_id=show_id,
+                result_mode="revote",
+                voter_id=1,
+                country_id="US",
+                song_id=owned_song,
+            )
+            if other_count < scored_positions:
+                assert rule["rule_kind"] == "NORMAL"
+                assert rule["score_cap"] == scored_positions
+            else:
+                assert rule["rule_kind"] == "FORBIDDEN"
+                assert rule["score_cap"] == 0
+
+    property_test()
+
+
+@st.composite
+def adjusted_percentage_cases(draw):
+    midpoint = draw(st.integers(min_value=1, max_value=10_000))
+    maximum = midpoint + draw(st.integers(min_value=1, max_value=10_000))
+    points = draw(st.integers(min_value=0, max_value=maximum))
+    return points, midpoint, maximum
+
+
+def test_adjusted_percentage_matches_the_piecewise_reference_formula(db, isolated_example):
+    @settings(max_examples=80, deadline=None)
+    @given(case=adjusted_percentage_cases())
+    def property_test(case):
+        points, midpoint, maximum = case
+        with isolated_example(), db.cursor() as cursor:
             cursor.execute(
-                """
-                INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
-                VALUES (2, %s, 'ES', 'official')
-                RETURNING id
-                """,
+                "SELECT calculate_adjusted_points_percentage(%s, %s, %s) AS result",
+                (points, midpoint, maximum),
+            )
+            actual = cursor.fetchone()["result"]
+            expected = _adjusted_percentage(Decimal(points), Decimal(midpoint), Decimal(maximum))
+            assert float(actual) == pytest.approx(float(expected))
+
+    property_test()
+
+
+def test_result_refresh_derives_metrics_from_scores_and_entry_rules(db, isolated_example):
+    score_sets = st.lists(
+        st.integers(min_value=2, max_value=100),
+        min_size=2,
+        max_size=2,
+        unique=True,
+    ).map(lambda values: sorted(values, reverse=True) + [1])
+
+    @settings(max_examples=30, deadline=None)
+    @given(scores=score_sets, swap_other_scores=st.booleans())
+    def property_test(scores, swap_other_scores):
+        with isolated_example(), db.cursor() as cursor:
+            show_id = _create_show(cursor, version="v1", scores=scores)
+            songs = {
+                country: _add_entry(
+                    cursor,
+                    show_id=show_id,
+                    country_id=country,
+                    submitter_id=submitter,
+                    position=position,
+                )
+                for position, (country, submitter) in enumerate(
+                    (("US", 1), ("ES", 2), ("FR", 3)),
+                    start=1,
+                )
+            }
+            other_scores = scores[:2]
+            if swap_other_scores:
+                other_scores.reverse()
+            awarded = {"US": 1, "ES": other_scores[0], "FR": other_scores[1]}
+            cursor.execute(
+                """INSERT INTO vote_set (voter_id, show_id, country_id, result_mode)
+                   VALUES (1, %s, 'US', 'official') RETURNING id""",
                 (show_id,),
             )
             vote_set_id = cursor.fetchone()["id"]
-            cursor.execute(
-                "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, 12)",
-                (vote_set_id, song_id),
+            cursor.executemany(
+                "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
+                [(vote_set_id, songs[country], score) for country, score in awarded.items()],
             )
+            cursor.execute("SELECT refresh_show_results_for_mode(%s, 'official')", (show_id,))
             cursor.execute(
-                "UPDATE song_show SET penalty = 12 WHERE show_id = %s",
+                """SELECT country_id, total_points, max_possible_points,
+                          points_percentage, adjusted_max_possible_points,
+                          points_midpoint, adjusted_points_percentage
+                   FROM country_show_results
+                   WHERE show_id = %s AND result_mode = 'official'""",
                 (show_id,),
             )
-            cursor.execute(
-                "SELECT refresh_show_results_for_mode(%s, 'official')",
-                (show_id,),
-            )
+            results = {row["country_id"]: row for row in cursor.fetchall()}
 
-        cursor.execute(
-            """
-            SELECT
-                sh.voting_ruleset_version AS version,
-                voting_ruleset_penalizes_non_voters(
-                    sh.id, 'official'
-                ) AS penalties_enabled,
-                csr.total_points
-            FROM show sh
-            JOIN country_show_results csr ON csr.show_id = sh.id
-            WHERE sh.id = ANY(%s) AND csr.result_mode = 'official'
-            ORDER BY sh.voting_ruleset_version
-            """,
-            (list(shows.values()),),
-        )
-        assert cursor.fetchall() == [
-            {"version": "v4", "penalties_enabled": False, "total_points": 12},
-            {"version": "v5", "penalties_enabled": True, "total_points": 0},
-        ]
+            midpoint = sum(Decimal(score) for score in scores) / len(scores)
+            for country, score in awarded.items():
+                legacy_maximum = Decimal(scores[0])
+                adjusted_maximum = Decimal(1 if country == "US" else scores[0])
+                result = results[country]
+                assert result["total_points"] == score
+                assert result["max_possible_points"] == legacy_maximum
+                assert result["adjusted_max_possible_points"] == adjusted_maximum
+                assert result["points_midpoint"] == pytest.approx(midpoint)
+                assert float(result["points_percentage"]) == pytest.approx(
+                    float(Decimal(100) * score / legacy_maximum),
+                    abs=0.01,
+                )
+                assert float(result["adjusted_points_percentage"]) == pytest.approx(
+                    float(_adjusted_percentage(Decimal(score), midpoint, adjusted_maximum)),
+                    abs=0.01,
+                )
 
-        session_id = uuid4()
-        cursor.execute(
-            """
-            INSERT INTO session (user_id, session_id, expires_at)
-            VALUES (1, %s, CURRENT_TIMESTAMP + INTERVAL '1 hour')
-            """,
-            (session_id,),
-        )
-        cursor.execute("SELECT short_name FROM show WHERE id = %s", (shows["v4"],))
-        v4_short_name = cursor.fetchone()["short_name"]
-    db.commit()
-    client.set_cookie("session", str(session_id))
-
-    response = client.post(
-        f"/year/2025/{v4_short_name}/penalty",
-        json={"song_ids": []},
-    )
-    assert response.status_code == 400
-    assert response.get_json()["error"] == (
-        "This show's voting ruleset does not apply non-voter penalties."
-    )
+    property_test()

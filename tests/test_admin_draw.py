@@ -1,6 +1,8 @@
 import uuid
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 
 @pytest.fixture()
@@ -65,30 +67,30 @@ def draw_setup(db, client):
     db.commit()
 
 
-def test_draw_post_rejects_two_entries_from_same_pot_in_one_semifinal(client, draw_setup):
-    res = client.post(
-        "/admin/manage/2025/draw",
-        json={
-            "sf1": [draw_setup["US"], draw_setup["ES"]],
-            "sf2": [draw_setup["FR"], draw_setup["DE"]],
-        },
-    )
+def test_draw_accepts_exactly_the_assignments_that_separate_each_pot(client, db, draw_setup):
+    countries = ["US", "ES", "FR", "DE"]
+    pots = {"US": 1, "ES": 1, "FR": 2, "DE": 2}
 
-    assert res.status_code == 400
-    assert res.json["error"] == "Show sf1 contains multiple entries from pot 1"
+    @given(order=st.permutations(countries))
+    def property_test(order):
+        db.execute("DELETE FROM song_show")
+        db.commit()
+        assignments = {"sf1": order[:2], "sf2": order[2:]}
+        valid = all(
+            len({pots[country] for country in assigned}) == len(assigned)
+            for assigned in assignments.values()
+        )
 
+        response = client.post(
+            "/admin/manage/2025/draw",
+            json={
+                show: [draw_setup[country] for country in assigned]
+                for show, assigned in assignments.items()
+            },
+        )
 
-def test_draw_post_accepts_one_entry_per_pot_per_semifinal(client, db, draw_setup):
-    res = client.post(
-        "/admin/manage/2025/draw",
-        json={
-            "sf1": [draw_setup["US"], draw_setup["FR"]],
-            "sf2": [draw_setup["ES"], draw_setup["DE"]],
-        },
-    )
+        assert response.status_code == (204 if valid else 400)
+        count = db.execute("SELECT COUNT(*) AS n FROM song_show").fetchone()["n"]
+        assert count == (len(countries) if valid else 0)
 
-    assert res.status_code == 204
-
-    with db.cursor() as cur:
-        cur.execute("SELECT COUNT(*) AS n FROM song_show")
-        assert cur.fetchone()["n"] == 4
+    property_test()

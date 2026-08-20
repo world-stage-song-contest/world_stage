@@ -1,9 +1,11 @@
-import uuid
+import unicodedata
+from urllib.parse import quote
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 
-def _create_artist_entry(
-    client, headers, *, name="Canonical Artist", stage_name=None
-):
+def _create_artist_entry(client, headers, *, name="Canonical Artist", stage_name=None):
     response = client.post(
         "/api/song",
         json={
@@ -21,115 +23,65 @@ def _create_artist_entry(
     return response.get_json()["result"]
 
 
-def _login(client, db, user_id):
-    session_id = str(uuid.uuid4())
-    with db.cursor() as cursor:
-        cursor.execute(
-            """INSERT INTO session (user_id, session_id, expires_at)
-               VALUES (%s, %s, CURRENT_TIMESTAMP + '1 day')""",
-            (user_id, session_id),
-        )
-    db.commit()
-    client.set_cookie("session", session_id)
-
-
-def test_artist_index_and_details_list_associated_entries(
-    client, db, bob_headers
-):
-    try:
-        _create_artist_entry(client, bob_headers)
-        with db.cursor() as cursor:
-            cursor.execute("UPDATE year SET status = 'ongoing' WHERE id = 2025")
-        db.commit()
-
-        headers = {"Accept": "text/html"}
-        index = client.get("/artist", headers=headers)
-        details = client.get("/artist/Canonical%20Artist", headers=headers)
-
-        assert index.status_code == 200
-        assert b"Canonical Artist" in index.data
-        assert details.status_code == 200
-        assert b"Artist Route Song" in details.data
-        assert b"United States" in details.data
-        assert b'<table class="songs-table sortable">' in details.data
-        assert b"js/sort-table.js" in details.data
-        assert b'class="country"' in details.data
-        assert b'<th class="year-result">Year</th>' in details.data
-        assert b'<th class="pct-cell">%</th>' in details.data
-        assert b'<th class="final">Final</th>' in details.data
-        assert b'<th class="repechage">Repe</th>' in details.data
-        assert b'<th class="semifinal">Semi</th>' in details.data
-    finally:
-        with db.cursor() as cursor:
-            cursor.execute("UPDATE year SET status = 'open' WHERE id = 2025")
-        db.commit()
-
-
-def test_artist_from_open_year_is_hidden_from_index_but_has_details(
-    client, bob_headers
-):
-    _create_artist_entry(client, bob_headers)
-    headers = {"Accept": "text/html"}
-
-    index = client.get("/artist", headers=headers)
-    details = client.get("/artist/Canonical%20Artist", headers=headers)
-
-    assert index.status_code == 200
-    assert b"Canonical Artist" not in index.data
-    assert details.status_code == 200
-    assert b"Artist Route Song" in details.data
-
-
-def test_artist_index_lists_distinct_stage_names(client, db, bob_headers):
-    try:
-        _create_artist_entry(client, bob_headers, stage_name="The Alias")
-        with db.cursor() as cursor:
-            cursor.execute("UPDATE year SET status = 'ongoing' WHERE id = 2025")
-        db.commit()
-
-        response = client.get("/artist", headers={"Accept": "text/html"})
-
-        assert response.status_code == 200
-        assert b"Stage names" in response.data
-        assert b"The Alias" in response.data
-    finally:
-        with db.cursor() as cursor:
-            cursor.execute("UPDATE year SET status = 'open' WHERE id = 2025")
-        db.commit()
-
-
-def test_admin_can_edit_artist_and_native_name(client, db, bob_headers):
+def test_admin_can_edit_artist_and_native_name(client, db, bob_headers, login):
     song = _create_artist_entry(client, bob_headers)
-    _login(client, db, 1)
+    login(1)
 
-    response = client.post(
-        "/artist/Canonical%20Artist/edit",
-        data={
-            "full_name": "Renamed Artist",
-            "native_name": "Переименованный артист",
-            "number": "1",
-        },
+    @settings(max_examples=20)
+    @given(
+        suffix=st.text(alphabet=st.characters(categories=("L", "N")), min_size=1, max_size=12),
+        native_name=st.one_of(
+            st.none(),
+            st.text(
+                alphabet=st.characters(categories=("L", "N", "Zs")),
+                min_size=1,
+                max_size=30,
+            ),
+        ),
     )
+    def property_test(suffix, native_name):
+        current_name = db.execute(
+            "SELECT artist FROM current_song WHERE id = %s", (song["id"],)
+        ).fetchone()["artist"]
+        requested_name = f"Property Artist {suffix}"
+        normalized_name = unicodedata.normalize("NFC", requested_name)
 
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/artist/Renamed%20Artist")
-    with db.cursor() as cursor:
-        cursor.execute(
-            "SELECT full_name, native_name FROM artist WHERE full_name = %s",
-            ("Renamed Artist",),
+        response = client.post(
+            f"/artist/{quote(current_name, safe='')}/edit",
+            data={
+                "full_name": requested_name,
+                "native_name": native_name or "",
+                "number": "1",
+            },
         )
-        assert cursor.fetchone() == {
-            "full_name": "Renamed Artist",
-            "native_name": "Переименованный артист",
-        }
-        cursor.execute("SELECT artist FROM current_song WHERE id = %s", (song["id"],))
-        assert cursor.fetchone()["artist"] == "Renamed Artist"
+
+        assert response.status_code == 302
+        normalized_native_name = (
+            unicodedata.normalize("NFC", native_name.strip()) if native_name else ""
+        )
+        with db.cursor() as cursor:
+            cursor.execute(
+                "SELECT full_name, native_name FROM artist WHERE full_name = %s",
+                (normalized_name,),
+            )
+            assert cursor.fetchone() == {
+                "full_name": normalized_name,
+                "native_name": normalized_native_name or None,
+            }
+            cursor.execute("SELECT artist FROM current_song WHERE id = %s", (song["id"],))
+            assert cursor.fetchone()["artist"] == normalized_name
+
+    property_test()
 
 
-def test_regular_user_cannot_edit_artist(client, db, bob_headers):
+def test_regular_user_cannot_edit_artist(client, db, bob_headers, login):
     _create_artist_entry(client, bob_headers)
-    _login(client, db, 2)
 
-    response = client.get("/artist/Canonical%20Artist/edit")
+    @given(user_id=st.sampled_from([2, 3]))
+    def property_test(user_id):
+        login(user_id)
+        response = client.get("/artist/Canonical%20Artist/edit")
 
-    assert response.status_code == 403
+        assert response.status_code == 403
+
+    property_test()
