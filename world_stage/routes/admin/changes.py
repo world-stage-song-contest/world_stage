@@ -431,6 +431,175 @@ def _timestamp_parameter(name):
     return value, parsed
 
 
+def _execute_unfiltered_changes_query(
+    cursor, before_at, from_time_at, to_time_at, per_page
+):
+    """Load a page after paginating narrow audit identifiers.
+
+    Expanding ``song_change`` computes JSON diffs for a revision and its
+    predecessor. Keep that work out of the full-history scan used to locate the
+    current page.
+    """
+    cursor.execute(
+        """
+        WITH candidate_changes AS MATERIALIZED (
+            SELECT 'd'::text AS source, data.id, data.created_at AS changed_at
+            FROM song_data AS data
+            WHERE (%s::timestamptz IS NULL OR data.created_at < %s::timestamptz)
+              AND (%s::timestamptz IS NULL OR data.created_at >= %s::timestamptz)
+              AND (%s::timestamptz IS NULL OR data.created_at <= %s::timestamptz)
+
+            UNION ALL
+
+            SELECT 's'::text AS source, status.id, status.created_at AS changed_at
+            FROM song_status AS status
+            JOIN LATERAL (
+                SELECT older.approval_status, older.is_placeholder
+                FROM song_status AS older
+                WHERE older.song_id = status.song_id
+                  AND (older.created_at, older.id)
+                      < (status.created_at, status.id)
+                ORDER BY older.created_at DESC, older.id DESC
+                LIMIT 1
+            ) AS previous ON true
+            WHERE status.changed_by IS NOT NULL
+              AND (
+                  status.approval_status IS DISTINCT FROM previous.approval_status
+                  OR status.is_placeholder IS DISTINCT FROM previous.is_placeholder
+              )
+              AND (%s::timestamptz IS NULL OR status.created_at < %s::timestamptz)
+              AND (%s::timestamptz IS NULL OR status.created_at >= %s::timestamptz)
+              AND (%s::timestamptz IS NULL OR status.created_at <= %s::timestamptz)
+        ), page_candidates AS MATERIALIZED (
+            SELECT candidate.*
+            FROM candidate_changes AS candidate
+            ORDER BY candidate.changed_at DESC
+            FETCH FIRST %s ROWS WITH TIES
+        ), page_boundary AS (
+            SELECT MIN(changed_at) AS changed_at
+            FROM page_candidates
+        ), paging AS (
+            SELECT EXISTS (
+                SELECT 1
+                FROM candidate_changes AS older
+                CROSS JOIN page_boundary AS boundary
+                WHERE older.changed_at < boundary.changed_at
+            ) AS has_older
+        ), artist_names AS MATERIALIZED (
+            SELECT credit.artist_credit_set_id,
+                   STRING_AGG(
+                       COALESCE(credit.join_phrase, '')
+                       || COALESCE(credit.stage_name, artist.full_name),
+                       '' ORDER BY credit.position
+                   ) AS name
+            FROM artist_credit AS credit
+            JOIN artist ON artist.id = credit.artist_id
+            GROUP BY credit.artist_credit_set_id
+        ), page_changes AS MATERIALIZED (
+            SELECT
+                candidate.source,
+                0 AS source_order,
+                change.id,
+                change.changed_at,
+                change.song_id,
+                change.song_title,
+                change.song_artist,
+                change.song_country_id,
+                change.song_year_id,
+                change.changed_fields,
+                change.changed_by,
+                CASE
+                    WHEN change.event_type = 'create'
+                        THEN ARRAY['creation']::text[]
+                    WHEN change.event_type = 'delete'
+                        THEN ARRAY['deletion']::text[]
+                    WHEN change.event_type = 'song_replacement'
+                        THEN ARRAY['replacement']::text[]
+                    ELSE ARRAY['modification']::text[]
+                END AS event_categories
+            FROM page_candidates AS candidate
+            JOIN song_change AS change ON change.id = candidate.id
+            WHERE candidate.source = 'd'
+
+            UNION ALL
+
+            SELECT
+                candidate.source,
+                1 AS source_order,
+                status.id,
+                status.created_at AS changed_at,
+                data.song_id,
+                data.title AS song_title,
+                artist_names.name AS song_artist,
+                data.country_id AS song_country_id,
+                data.year_id AS song_year_id,
+                JSONB_STRIP_NULLS(JSONB_BUILD_OBJECT(
+                    'approval_status', CASE
+                        WHEN status.approval_status
+                             IS DISTINCT FROM previous.approval_status
+                        THEN JSONB_BUILD_OBJECT(
+                            'old', previous.approval_status,
+                            'new', status.approval_status
+                        ) END,
+                    'is_placeholder', CASE
+                        WHEN status.is_placeholder
+                             IS DISTINCT FROM previous.is_placeholder
+                        THEN JSONB_BUILD_OBJECT(
+                            'old', previous.is_placeholder,
+                            'new', status.is_placeholder
+                        ) END
+                )) AS changed_fields,
+                status.changed_by,
+                ARRAY_REMOVE(ARRAY[
+                    CASE WHEN status.approval_status
+                                   IS DISTINCT FROM previous.approval_status
+                         THEN 'status_change' END,
+                    CASE WHEN status.is_placeholder
+                                   IS DISTINCT FROM previous.is_placeholder
+                         THEN 'placeholder' END
+                ], NULL) AS event_categories
+            FROM page_candidates AS candidate
+            JOIN song_status AS status ON status.id = candidate.id
+            JOIN LATERAL (
+                SELECT older.approval_status, older.is_placeholder
+                FROM song_status AS older
+                WHERE older.song_id = status.song_id
+                  AND (older.created_at, older.id)
+                      < (status.created_at, status.id)
+                ORDER BY older.created_at DESC, older.id DESC
+                LIMIT 1
+            ) AS previous ON true
+            JOIN song_data AS data ON data.id = status.song_data_id
+            LEFT JOIN artist_names
+              ON artist_names.artist_credit_set_id = data.artist_credit_set_id
+            WHERE candidate.source = 's'
+        )
+        SELECT page.*, account.username AS changed_by_username,
+               country.name AS country_name, paging.has_older
+        FROM page_changes AS page
+        CROSS JOIN paging
+        LEFT JOIN account ON account.id = page.changed_by
+        LEFT JOIN country ON country.id = page.song_country_id
+        ORDER BY page.changed_at DESC, page.id DESC, page.source_order DESC
+        """,
+        (
+            before_at,
+            before_at,
+            from_time_at,
+            from_time_at,
+            to_time_at,
+            to_time_at,
+            before_at,
+            before_at,
+            from_time_at,
+            from_time_at,
+            to_time_at,
+            to_time_at,
+            per_page,
+        ),
+    )
+
+
 @bp.get("/changes")
 def changes():
     db = get_db()
@@ -445,9 +614,24 @@ def changes():
     from_time, from_time_at = _timestamp_parameter("from_time")
     to_time, to_time_at = _timestamp_parameter("to_time")
 
-    cursor.execute(
-        """
-        WITH raw_changes AS NOT MATERIALIZED (
+    if set(selected_categories) == set(EVENT_CATEGORIES) and not selected_filters:
+        _execute_unfiltered_changes_query(
+            cursor, before_at, from_time_at, to_time_at, per_page
+        )
+    else:
+        cursor.execute(
+            """
+        WITH artist_names AS MATERIALIZED (
+            SELECT credit.artist_credit_set_id,
+                   STRING_AGG(
+                       COALESCE(credit.join_phrase, '')
+                       || COALESCE(credit.stage_name, artist.full_name),
+                       '' ORDER BY credit.position
+                   ) AS name
+            FROM artist_credit AS credit
+            JOIN artist ON artist.id = credit.artist_id
+            GROUP BY credit.artist_credit_set_id
+        ), raw_changes AS NOT MATERIALIZED (
             SELECT
                 'd'::text AS source,
                 0 AS source_order,
@@ -478,7 +662,7 @@ def changes():
                 status.created_at AS changed_at,
                 data.song_id,
                 data.title AS song_title,
-                artist_credit_name(data.artist_credit_set_id) AS song_artist,
+                artist_names.name AS song_artist,
                 data.country_id AS song_country_id,
                 data.year_id AS song_year_id,
                 JSONB_STRIP_NULLS(JSONB_BUILD_OBJECT(
@@ -517,6 +701,8 @@ def changes():
                 LIMIT 1
             ) previous ON true
             JOIN song_data AS data ON data.id = status.song_data_id
+            LEFT JOIN artist_names
+              ON artist_names.artist_credit_set_id = data.artist_credit_set_id
             WHERE status.changed_by IS NOT NULL
               AND (
                   status.approval_status IS DISTINCT FROM previous.approval_status
@@ -530,8 +716,8 @@ def changes():
               AND (%s::timestamptz IS NULL OR raw.changed_at >= %s::timestamptz)
               AND (%s::timestamptz IS NULL OR raw.changed_at <= %s::timestamptz)
               AND ("""
-        + filter_expression
-        + """)
+            + filter_expression
+            + """)
         ), page_changes AS MATERIALIZED (
             SELECT filtered_changes.*
             FROM filtered_changes
@@ -555,19 +741,19 @@ def changes():
         LEFT JOIN account a ON a.id = page.changed_by
         LEFT JOIN country c ON c.id = page.song_country_id
         ORDER BY page.changed_at DESC, page.id DESC, page.source_order DESC
-        """,
-        (
-            selected_categories,
-            before_at,
-            before_at,
-            from_time_at,
-            from_time_at,
-            to_time_at,
-            to_time_at,
-            *filter_params,
-            per_page,
-        ),
-    )
+            """,
+            (
+                selected_categories,
+                before_at,
+                before_at,
+                from_time_at,
+                from_time_at,
+                to_time_at,
+                to_time_at,
+                *filter_params,
+                per_page,
+            ),
+        )
     audit_changes = cursor.fetchall()
     has_older = bool(audit_changes) and audit_changes[0]["has_older"]
     next_before = audit_changes[-1]["changed_at"].isoformat() if has_older else None

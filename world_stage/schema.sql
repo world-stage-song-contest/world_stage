@@ -1015,16 +1015,30 @@ CREATE TABLE IF NOT EXISTS show_result_refresh_queue (
 );
 
 CREATE OR REPLACE VIEW song_change AS
-WITH compared AS (
+WITH artist_names AS MATERIALIZED (
+    SELECT credit.artist_credit_set_id,
+           STRING_AGG(
+               COALESCE(credit.join_phrase, '')
+               || COALESCE(credit.stage_name, artist.full_name),
+               '' ORDER BY credit.position
+           ) AS name
+    FROM artist_credit AS credit
+    JOIN artist ON artist.id = credit.artist_id
+    GROUP BY credit.artist_credit_set_id
+), compared AS (
     SELECT data.*,
            TO_JSONB(data) || JSONB_BUILD_OBJECT(
-               'artist', artist_credit_name(data.artist_credit_set_id)
+               'artist', current_artist.name
            ) AS current_row,
            TO_JSONB(previous) || JSONB_BUILD_OBJECT(
-               'artist', artist_credit_name(previous.artist_credit_set_id)
+               'artist', previous_artist.name
            ) AS previous_row
     FROM song_data AS data
     LEFT JOIN song_data AS previous ON previous.id = data.previous_revision_id
+    LEFT JOIN artist_names AS current_artist
+      ON current_artist.artist_credit_set_id = data.artist_credit_set_id
+    LEFT JOIN artist_names AS previous_artist
+      ON previous_artist.artist_credit_set_id = previous.artist_credit_set_id
 ), values_compared AS (
     SELECT compared.*,
            current_row - ARRAY[
