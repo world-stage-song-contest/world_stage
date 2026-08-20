@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% from "macros/artists.html" import artist_links %}
 {% block title %}Predict – {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/predict.css') }}">
@@ -39,7 +38,7 @@
                 {{ flag(song.country.cc, 42, song.country.name, variant=song.country.flag_variant) }}
                 <div class="song-text">
                     <span class="song-title">{{ song.title }}</span>
-                    <span class="song-meta">{{ artist_links(song) }} · {{ song.country.name }}</span>
+                    <span class="song-meta">{{ song.artist }} · {{ song.country.name }}</span>
                 </div>
             </div>
         </div>
