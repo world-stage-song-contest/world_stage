@@ -146,6 +146,10 @@ function collectFormData() {
         languages: languages,
     };
 
+    if (nationalFinalId !== null) {
+        data.national_final_id = nationalFinalId;
+    }
+
     // Admin fields
     // 'none' means "no override" — let the server apply its default
     // (the requester's own account for new songs, the existing submitter
@@ -245,13 +249,13 @@ async function handleSubmit(e) {
                 return;
             }
             const cc = (song.country_id || '').toLowerCase();
-            // Specials use /country/<cc>/<short_name>/<entry_number>,
-            // regular years use /country/<cc>/<year>.
+            // Entry numbers uniquely identify candidates when a country has
+            // multiple songs in the same year (for example, a national final).
             let target;
             if (song.special_short_name) {
                 target = `/country/${cc}/${song.special_short_name}/${song.entry_number}`;
             } else {
-                target = `/country/${cc}/${song.year}`;
+                target = `/country/${cc}/${song.year}/${song.entry_number}`;
             }
             window.location.href = target;
         } else {
@@ -905,7 +909,11 @@ function removeLanguageRow() {
 
 async function fetchCountries(yearSelect) {
     const year = yearSelect.value;
-    const url = `/member/submit/${year}${nationalFinalId ? `?national_final_id=${nationalFinalId}` : ''}`;
+    const params = new URLSearchParams();
+    if (nationalFinalId) params.set("national_final_id", nationalFinalId);
+    if (entryNumber) params.set("entry_number", entryNumber);
+    const query = params.toString();
+    const url = `/member/submit/${year}${query ? `?${query}` : ''}`;
     const res = await fetch(url);
     const countries = await res.json();
     return countries;
@@ -981,6 +989,16 @@ async function populateSongData(entryNumberOverride) {
         return;
     }
     setSubmissionStage();
+
+    // Opening an NF submission form without a specific entry means "add a
+    // candidate". Looking up by country/year here would otherwise load the
+    // first existing candidate and turn the submission into an edit.
+    if (nationalFinalId !== null && !entryNumberOverride) {
+        clearFormFields();
+        setSubmissionStage();
+        return;
+    }
+
     const songData = await fetchSongData(year, country, entryNumberOverride);
 
     // Clear form before populating with new data

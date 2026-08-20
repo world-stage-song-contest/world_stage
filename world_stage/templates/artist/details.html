@@ -41,11 +41,11 @@
   {% endif %}
 {% endmacro %}
 
-{% macro entry_table(songs, special=False) %}
+{% macro entry_table(songs, special=False, national_final=False) %}
 <table class="songs-table sortable">
     <thead>
         <tr>
-            <th>{{ 'Special' if special else 'Year' }}</th>
+            <th>{{ 'National final' if national_final else 'Special' if special else 'Year' }}</th>
             <th>Country</th>
             <th>Artist</th>
             <th>Title</th>
@@ -66,7 +66,9 @@
         {% set result = results.get(song.id, {}) %}
         <tr data-value="{{ loop.index }}" class="{{ 'placeholder' if song.placeholder else 'finalised' }}">
             <td>
-                {% if special %}
+                {% if national_final %}
+                    <a href="{{ url_for('year.nf_details', year=song.year.id, nf_short_name=song.national_final_short_name) }}">{{ song.year.id }} — {{ song.national_final_name }}</a>
+                {% elif special %}
                     <a href="{{ url_for('year.special', short_name=song.year.special_short_name) }}">{{ song.year.special_name }}</a>
                 {% else %}
                     <a href="{{ url_for('year.year', year=song.year.id) }}">{{ song.year.id }}</a>
@@ -82,7 +84,9 @@
             </td>
             <td><div class="song-artist">{{ artist_links(song) }}</div></td>
             <td><div class="song-title">
-                {% if special %}
+                {% if national_final %}
+                    <a href="{{ url_for('country.details', code=song.country.cc|lower, year=song.year.id, entry_number=song.entry_number) }}">{{ song.title }}</a>
+                {% elif special %}
                     <a href="{{ url_for('country.special_details', code=song.country.cc|lower, special_short_name=song.year.special_short_name, entry_number=song.entry_number) }}">{{ song.title }}</a>
                 {% else %}
                     <a href="{{ url_for('country.details', code=song.country.cc|lower, year=song.year.id, entry_number=song.entry_number) }}">{{ song.title }}</a>
@@ -108,5 +112,9 @@
 {% if special_entries %}
 <h3>Specials</h3>
 {{ entry_table(special_entries, True) }}
+{% endif %}
+{% if national_final_entries %}
+<h3>National finals</h3>
+{{ entry_table(national_final_entries, False, True) }}
 {% endif %}
 {% endblock %}

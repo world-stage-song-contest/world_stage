@@ -511,6 +511,21 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
     return cursor.fetchone()
 
 
+def _can_edit_national_final_song(cursor, song_id: int, user_id: int) -> bool:
+    cursor.execute(
+        """
+        SELECT 1
+        FROM national_final_song
+        JOIN national_final
+          ON national_final.id = national_final_song.national_final_id
+        WHERE national_final_song.song_id = %s
+          AND national_final.owner_id = %s
+        """,
+        (song_id, user_id),
+    )
+    return cursor.fetchone() is not None
+
+
 _SONG_LIST_QUERY = sql.SQL(
     """
     WITH selected_song AS MATERIALIZED (
@@ -1460,7 +1475,12 @@ def replace_song(id: int, auth: tuple):
     # Non-admins may edit their own submissions, or claim a placeholder
     # belonging to someone else (which transfers ownership to them).
     is_claim = False
-    if not permissions.can_edit and row["submitter_id"] != user_id:
+    can_edit_nf_song = _can_edit_national_final_song(cursor, id, user_id)
+    if (
+        not permissions.can_edit
+        and row["submitter_id"] != user_id
+        and not can_edit_nf_song
+    ):
         if row["is_placeholder"]:
             is_claim = True
         else:
@@ -1676,7 +1696,11 @@ def update_song(id: int, auth: tuple):
         return err(ErrorID.NOT_FOUND, f"Song {id} not found")
 
     # ── Permission check ─────────────────────────────────────────
-    if not permissions.can_edit and row["submitter_id"] != user_id:
+    if (
+        not permissions.can_edit
+        and row["submitter_id"] != user_id
+        and not _can_edit_national_final_song(cursor, id, user_id)
+    ):
         return err(ErrorID.FORBIDDEN, "You can only edit your own submissions")
 
     artist_credits = None

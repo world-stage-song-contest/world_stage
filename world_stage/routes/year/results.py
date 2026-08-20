@@ -217,6 +217,8 @@ def special_results(short_name: str, show: str, user, permissions: UserPermissio
         penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=bool(show_data.progressions),
         revote_eligible=revote_eligible,
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
         special=short_name,
         special_name=special_year["special_name"],
     )
@@ -356,6 +358,8 @@ def results(year: int, show: str, user, permissions: UserPermissions):
         penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=bool(show_data.progressions),
         revote_eligible=revote_eligible,
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
     )
 
 
@@ -403,4 +407,6 @@ def detailed_results(year: int, show: str, user, permissions: UserPermissions):
         can_apply_penalty=elevated,
         penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=bool(show_data.progressions),
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
     )

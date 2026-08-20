@@ -151,19 +151,20 @@ def set_song_status(
     # (current_song defaults to non-placeholder) and true -> false changes.
     if not next_placeholder and (previous is None or previous["is_placeholder"]):
         cursor.execute(
-            """SELECT year_id FROM current_song WHERE id = %s""",
+            """SELECT year_id, main_participant FROM current_song WHERE id = %s""",
             (song_id,),
         )
         song = cursor.fetchone()
         if song is None:
             raise LookupError(f"Current song data for song {song_id} was not found")
         year_id = song["year_id"]
-        if year_id >= 0:
+        if year_id >= 0 and song["main_participant"]:
             cursor.execute("SELECT id FROM year WHERE id = %s FOR UPDATE", (year_id,))
             cursor.execute(
                 """SELECT COUNT(*) AS count
                    FROM current_song
-                   WHERE year_id = %s AND id <> %s AND NOT is_placeholder""",
+                   WHERE year_id = %s AND id <> %s
+                     AND main_participant AND NOT is_placeholder""",
                 (year_id, song_id),
             )
             if cursor.fetchone()["count"] >= MAX_YEAR_SUBMISSIONS:

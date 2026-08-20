@@ -114,7 +114,9 @@
         </tr>
     </thead>
     <tbody>
-    {% for song in songs %}
+    {% for overview_row in overview_rows %}
+        {% if overview_row.song %}
+        {% set song = overview_row.song %}
         {% set place = year_placements.get(song.id) %}
         {% set place_class = '' %}
         {% if place %}
@@ -181,9 +183,9 @@
             {% endif %}
             {% endif %}
         </tr>
-    {% endfor %}
-    {% for nf in ongoing_national_finals %}
-        <tr data-value="{{ songs|length + loop.index }}" class="finalised">
+        {% else %}
+        {% set nf = overview_row.national_final %}
+        <tr data-value="{{ loop.index }}" class="finalised">
             {% if is_closed %}<td class="number year-result"></td>{% endif %}
             <td>
                 <a href="{{ url_for('country.country', code=nf.country_id.lower()) }}">
@@ -210,6 +212,7 @@
             {% if has_sf %}<td></td><td></td>{% endif %}
             {% endif %}
         </tr>
+        {% endif %}
     {% endfor %}
     </tbody>
 </table>

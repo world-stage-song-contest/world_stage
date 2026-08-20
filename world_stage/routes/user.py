@@ -949,14 +949,16 @@ def submissions(username: str):
     songs = get_user_submission_history(user_id)
     results = get_show_results_for_songs([s.id for s in songs])
 
-    regular_songs = [s for s in songs if s.year.id >= 0]
-    special_songs = [s for s in songs if s.year.id < 0]
+    regular_songs = [s for s in songs if s.year.id >= 0 and s.main_participant]
+    special_songs = [s for s in songs if s.year.id < 0 and s.main_participant]
+    national_final_songs = [s for s in songs if s.national_final_id]
     ten_year_window = set(get_closed_years()[-10:])
 
     return render_template(
         "user/submissions.html",
         songs=regular_songs,
         special_songs=special_songs,
+        national_final_songs=national_final_songs,
         username=username,
         results=results,
         stats=_user_submission_stats(

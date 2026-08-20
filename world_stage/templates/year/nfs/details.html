@@ -34,13 +34,7 @@
     {% endif %}
 {% endblock %}
 {% block content %}
-<dl>
-    <dt>Owner</dt><dd>{{ nf.owner_username }}</dd>
-    {% if nf.owner_country_id %}<dt>Country</dt><dd>{{ nf.owner_country_name }}</dd>{% endif %}
-    <dt>Status</dt><dd>{{ nf.status|title }}</dd>
-</dl>
 
-<h2>Shows</h2>
 {% if shows %}
 <table>
     <thead><tr><th>Show</th><th>Date</th><th>Voting</th><th>Results</th></tr></thead>

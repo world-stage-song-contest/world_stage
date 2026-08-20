@@ -245,13 +245,27 @@ def special_song_votes(
         special_name=special_year["special_name"],
     )
 
-@bp.get("/<int:year>/<show>/song/<country_code>")
+@bp.get("/<int:year>/<show>/song/<country_code>", defaults={"entry_number": None})
+@bp.get("/<int:year>/<show>/song/<country_code>/<int:entry_number>")
 @with_permissions
-def song_votes(year: int, show: str, country_code: str, permissions: UserPermissions):
+def song_votes(
+    year: int,
+    show: str,
+    country_code: str,
+    entry_number: int | None,
+    permissions: UserPermissions,
+):
     canonical = resolve_country_code(country_code.upper())
     if canonical and canonical.lower() != country_code.lower():
         return redirect(
-            url_for("year.song_votes", year=year, show=show, country_code=canonical.lower()), 301
+            url_for(
+                "year.song_votes",
+                year=year,
+                show=show,
+                country_code=canonical.lower(),
+                entry_number=entry_number,
+            ),
+            301,
         )
 
     _year = year
@@ -285,8 +299,9 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
         JOIN song_show ON song.id = song_show.song_id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s AND song.country_id = UPPER(%s)
+          AND (%s IS NULL OR song.entry_number = %s)
     """,
-        (show_data.id, country_code),
+        (show_data.id, country_code, entry_number, entry_number),
     )
     song = cursor.fetchone()
 
@@ -395,4 +410,6 @@ def song_votes(year: int, show: str, country_code: str, permissions: UserPermiss
         total_voters=total_voters,
         voters_who_gave=voters_who_gave,
         other_shows=get_other_shows(_year, show),
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
     )

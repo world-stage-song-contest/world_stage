@@ -77,19 +77,48 @@
 
 <h2>Shows</h2>
 <table>
-    <thead><tr><th>Show</th><th>Date</th><th>Points</th><th>Voting and results</th></tr></thead>
+    <thead>
+        <tr>
+            <th>Show</th>
+            <th>Date</th>
+            <th>Voting</th>
+            <th>Predictions</th>
+            <th>Result visibility</th>
+            <th>Points</th>
+        </tr>
+    </thead>
     <tbody>
     {% for show in shows %}
     <tr>
         <td>{{ show.show_name }}</td>
-        <td>{{ show.date or '' }}</td>
-        <td>{{ show.points|join(', ') }}</td>
+        <td>
+            <form method="post">
+                <input type="hidden" name="show_id" value="{{ show.id }}">
+                <input type="date" name="date" value="{{ show.date.isoformat() if show.date else '' }}">
+                <button name="action" value="set_date">Save date</button>
+            </form>
+        </td>
         <td>
             <form method="post">
                 <input type="hidden" name="show_id" value="{{ show.id }}">
                 {% if show.voting_closes or not show.voting_opens %}
                 <button name="action" value="open_voting">{% if show.voting_closes %}Reopen{% else %}Open{% endif %} voting</button>
                 {% else %}<button name="action" value="close_voting">Close voting</button>{% endif %}
+            </form>
+        </td>
+        <td>
+            <form method="post">
+                <input type="hidden" name="show_id" value="{{ show.id }}">
+                {% if show.predictions_close %}
+                <button name="action" value="open_predictions">Reopen predictions</button>
+                {% else %}
+                <button name="action" value="close_predictions">Close predictions</button>
+                {% endif %}
+            </form>
+        </td>
+        <td>
+            <form method="post">
+                <input type="hidden" name="show_id" value="{{ show.id }}">
                 <select name="status">
                     {% for value in ['none', 'draw', 'partial', 'full'] %}
                     <option value="{{ value }}" {% if value == show.status %}selected{% endif %}>{{ value }}</option>
@@ -98,12 +127,14 @@
                 <button name="action" value="set_status">Change result visibility</button>
             </form>
         </td>
+        <td>{{ show.points|join(', ') }}</td>
     </tr>
     {% endfor %}
     </tbody>
 </table>
 
 <h2>Candidates</h2>
+<p>Selecting a candidate promotes that same song to the main contest; it does not copy it. National-final votes remain attached to their national-final shows. The selection is locked once the main entry has main-show assignments or votes.</p>
 {% if nf.status in ['draft', 'submissions'] %}
 <p><a href="{{ url_for('member.submit', national_final_id=nf.id) }}">Add a candidate</a></p>
 {% endif %}

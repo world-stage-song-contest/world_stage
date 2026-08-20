@@ -7,7 +7,7 @@
         function addShow() {
             const showInput = document.createElement('input');
             showInput.name = 'show';
-            showInput.placeholder = '<year>-<short name>';
+            showInput.placeholder = '<year>-<show key>, e.g. 1997-ar-f';
             showInput.required = true;
             showInput.type = 'text';
             const fieldset = document.querySelector('fieldset');
@@ -38,7 +38,7 @@
     </div>
     <fieldset style="display: flex; flex-direction: column; gap: 0.25em;">
         <legend>Shows</legend>
-        <input name="show" placeholder="<year>-<short name>" required type="text">
+        <input name="show" placeholder="<year>-<show key>, e.g. 1997-ar-f" required type="text">
     </fieldset>
     <div>
         <button type="button" onclick="addShow()">Add show</button>

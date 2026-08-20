@@ -1,3 +1,4 @@
+import datetime
 import re
 
 import psycopg
@@ -186,7 +187,7 @@ def _show_nf(
     cursor.execute(
         """
         SELECT show.id, show.short_name, show.show_name, show.date, show.status,
-               show.voting_opens, show.voting_closes,
+               show.voting_opens, show.voting_closes, show.predictions_close,
                array_agg(point.score ORDER BY point.place) AS points
         FROM show
         JOIN show_types ON show_types.id = show.show_type
@@ -399,7 +400,14 @@ def _manage_nf(year_id: int, nf_short_name: str, user, permissions: UserPermissi
                 "AND voting_closes IS NULL",
                 (nf["id"],),
             )
-    elif action in {"open_voting", "close_voting", "set_status"}:
+    elif action in {
+        "open_voting",
+        "close_voting",
+        "open_predictions",
+        "close_predictions",
+        "set_status",
+        "set_date",
+    }:
         show_id = request.form.get("show_id", type=int)
         cursor.execute(
             "SELECT id FROM show WHERE id = %s AND national_final_id = %s",
@@ -407,7 +415,21 @@ def _manage_nf(year_id: int, nf_short_name: str, user, permissions: UserPermissi
         )
         if not cursor.fetchone():
             return render_template("error.html", error="Show not found"), 404
-        if action == "open_voting":
+        if action == "set_date":
+            raw_date = request.form.get("date", "").strip()
+            try:
+                show_date = datetime.date.fromisoformat(raw_date) if raw_date else None
+            except ValueError:
+                return render_template("error.html", error="Invalid date format"), 400
+            cursor.execute("UPDATE show SET date = %s WHERE id = %s", (show_date, show_id))
+        elif action == "open_predictions":
+            cursor.execute("UPDATE show SET predictions_close = NULL WHERE id = %s", (show_id,))
+        elif action == "close_predictions":
+            cursor.execute(
+                "UPDATE show SET predictions_close = CURRENT_TIMESTAMP WHERE id = %s",
+                (show_id,),
+            )
+        elif action == "open_voting":
             if nf["status"] == "cancelled":
                 return render_template(
                     "error.html", error="A cancelled national final cannot be opened for voting"
@@ -519,6 +541,55 @@ def _manage_nf(year_id: int, nf_short_name: str, user, permissions: UserPermissi
         song = cursor.fetchone()
         if not song:
             return render_template("error.html", error="Candidate not found"), 404
+        cursor.execute(
+            """
+            SELECT existing.id,
+                   EXISTS (
+                       SELECT 1
+                       FROM song_show
+                       JOIN show ON show.id = song_show.show_id
+                       WHERE song_show.song_id = existing.id
+                         AND show.national_final_id IS NULL
+                   ) OR EXISTS (
+                       SELECT 1
+                       FROM vote
+                       JOIN vote_set ON vote_set.id = vote.vote_set_id
+                       JOIN show ON show.id = vote_set.show_id
+                       WHERE vote.song_id = existing.id
+                         AND show.national_final_id IS NULL
+                   ) OR EXISTS (
+                       SELECT 1
+                       FROM country_show_results
+                       JOIN show ON show.id = country_show_results.show_id
+                       WHERE country_show_results.song_id = existing.id
+                         AND show.national_final_id IS NULL
+                   ) OR EXISTS (
+                       SELECT 1
+                       FROM country_year_results
+                       WHERE country_year_results.song_id = existing.id
+                   ) AS has_main_show_data
+            FROM song AS existing
+            WHERE existing.year_id = %s
+              AND existing.country_id = %s
+              AND existing.main_participant
+            """,
+            (year_id, song["country_id"]),
+        )
+        selected = cursor.fetchone()
+        changing_selected_song = enabled and selected and selected["id"] != song_id
+        removing_selected_song = not enabled and selected and selected["id"] == song_id
+        if (
+            selected
+            and selected["has_main_show_data"]
+            and (changing_selected_song or removing_selected_song)
+        ):
+            return render_template(
+                "error.html",
+                error=(
+                    "The main-contest selection cannot be changed after that entry has "
+                    "been assigned to or voted on in a main-contest show"
+                ),
+            ), 409
         if enabled and year_id >= 0:
             cursor.execute(
                 "UPDATE song SET main_participant = false "

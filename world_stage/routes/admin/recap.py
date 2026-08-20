@@ -71,10 +71,22 @@ class Spec:
 
 def _parse_show_ids(form_data: list[str], cursor) -> list[int]:
     keys = [_parse_show_key(s) for s in form_data]
+    params = [(year, short_name, short_name) for year, short_name in keys]
     return _lookup_many(
         cursor,
-        "SELECT id FROM show WHERE year_id = %s AND short_name = %s",
-        keys,
+        """
+        SELECT show.id
+        FROM show
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
+        WHERE show.year_id = %s
+          AND (
+              (show.national_final_id IS NULL AND show.short_name = %s)
+              OR
+              (show.national_final_id IS NOT NULL
+               AND national_final.short_name || '-' || show.short_name = %s)
+          )
+        """,
+        params,
         not_found_msg=lambda p: f"Show '{p[0]}-{p[1]}' not found",
     )
 
@@ -113,7 +125,9 @@ _SQL_SHOW = """
 WITH song_data AS (
     SELECT DISTINCT ON (song.id, show.id)
            show.id as show_id, show.year_id AS year, account.username AS submitter,
-           show.year_id || short_name AS show, running_order AS ro,
+           show.year_id || COALESCE(national_final.short_name || '-', '')
+               || show.short_name AS show,
+           running_order AS ro,
            LOWER(country.id) AS cc, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
@@ -127,6 +141,7 @@ WITH song_data AS (
     FROM song_show
     JOIN current_song AS song ON song_show.song_id = song.id
     JOIN show ON song_show.show_id = show.id
+    LEFT JOIN national_final ON national_final.id = show.national_final_id
     JOIN country ON song.country_id = country.id
     LEFT JOIN account ON song.submitter_id = account.id
     WHERE show.id = ANY(%s) AND (%s OR (show.year_id < 0) = %s)
@@ -314,7 +329,7 @@ def _get_opening_act_country(cursor, year: int, short_name: str) -> str | None:
 
 
 def get_cytube_playlist(form_data: list[str]) -> str | None:
-    """Build a CyTube import playlist for one regular show."""
+    """Build a CyTube import playlist for one regular or national-final show."""
     if len(form_data) != 1:
         return None
 
@@ -326,10 +341,18 @@ def get_cytube_playlist(form_data: list[str]) -> str | None:
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT id FROM show
-        WHERE year_id = %s AND short_name = %s
+        SELECT show.id
+        FROM show
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
+        WHERE show.year_id = %s
+          AND (
+              (show.national_final_id IS NULL AND show.short_name = %s)
+              OR
+              (show.national_final_id IS NOT NULL
+               AND national_final.short_name || '-' || show.short_name = %s)
+          )
         """,
-        (year, short_name),
+        (year, short_name, short_name),
     )
     show = cursor.fetchone()
     if not show:

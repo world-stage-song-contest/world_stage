@@ -156,8 +156,11 @@ def details(name: str, permissions: UserPermissions):
     return render_template(
         "artist/details.html",
         artist=artist,
-        entries=[entry for entry in entries if entry.year.id >= 0],
-        special_entries=[entry for entry in entries if entry.year.id < 0],
+        entries=[entry for entry in entries if entry.year.id >= 0 and entry.main_participant],
+        special_entries=[
+            entry for entry in entries if entry.year.id < 0 and entry.main_participant
+        ],
+        national_final_entries=[entry for entry in entries if entry.national_final_id],
         results=results,
         can_edit=permissions.can_edit,
     )

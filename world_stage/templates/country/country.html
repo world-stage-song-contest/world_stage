@@ -270,6 +270,24 @@
     </tbody>
 </table>
 
+{% if national_final_songs %}
+<h2>National finals</h2>
+<table class="songs-table sortable">
+    <thead><tr><th>Year</th><th>National final</th><th>Artist</th><th>Title</th><th>Submitter</th></tr></thead>
+    <tbody>
+    {% for song in national_final_songs %}
+    <tr>
+        <td><a href="{{ url_for('year.year', year=song.year.id) }}">{{ song.year.id }}</a></td>
+        <td><a href="{{ url_for('year.nf_details', year=song.year.id, nf_short_name=song.national_final_short_name) }}">{{ song.national_final_name }}</a></td>
+        <td>{{ artist_links(song) }}</td>
+        <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id, entry_number=song.entry_number) }}">{{ song.title }}</a></td>
+        <td>{{ song.submitter or '' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
 {% if special_songs %}
 {{ stats_infobox(special_stats, 'Specials', 'First entry', 'Latest entry', False) }}
 <h2>Specials</h2>

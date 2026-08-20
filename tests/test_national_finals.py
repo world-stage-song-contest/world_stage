@@ -614,6 +614,83 @@ def test_national_final_is_created_without_creating_a_show(
         db.commit()
 
 
+def test_owner_can_edit_nf_candidate_from_entry_page(client, db, national_final):
+    with db.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO song (year_id, country_id, entry_number, main_participant)
+            VALUES (2025, 'ES', 42, false)
+            RETURNING id
+            """
+        )
+        song_id = cursor.fetchone()["id"]
+        cursor.execute(
+            """
+            INSERT INTO song_data (
+                song_id, title, artist_credit_set_id, submitter_id, sources
+            ) VALUES (
+                %s, 'NF Candidate', test_artist_credit('NF Artist'), 3,
+                'https://example.com/source'
+            )
+            """,
+            (song_id,),
+        )
+        cursor.execute(
+            "INSERT INTO national_final_song (national_final_id, song_id) "
+            "VALUES (%s, %s)",
+            (national_final["id"], song_id),
+        )
+    db.commit()
+    session_id = _set_session(client, db, 2)
+
+    try:
+        entry = client.get(
+            "/country/es/2025/42", headers={"Accept": "text/html"}
+        )
+
+        assert entry.status_code == 200
+        assert (
+            f"national_final_id={national_final['id']}" in entry.get_data(as_text=True)
+        )
+        assert "entry_number=42" in entry.get_data(as_text=True)
+
+        editor = client.get(
+            "/member/submit",
+            query_string={
+                "year": 2025,
+                "country": "es",
+                "entry_number": 42,
+                "national_final_id": national_final["id"],
+            },
+        )
+        assert editor.status_code == 200
+
+        updated = client.put(
+            f"/api/song/{song_id}",
+            json={
+                "year": 2025,
+                "country": "ES",
+                "entry_number": 42,
+                "national_final_id": national_final["id"],
+                "title": "Edited NF Candidate",
+                "artist": "NF Artist",
+                "sources": "https://example.com/source",
+                "languages": [20],
+            },
+        )
+        assert updated.status_code == 200
+        assert updated.get_json()["result"]["title"] == "Edited NF Candidate"
+    finally:
+        db.rollback()
+        with db.cursor() as cursor:
+            cursor.execute("DELETE FROM national_final_song WHERE song_id = %s", (song_id,))
+            cursor.execute("DELETE FROM song_status WHERE song_id = %s", (song_id,))
+            cursor.execute("DELETE FROM song_data WHERE song_id = %s", (song_id,))
+            cursor.execute("DELETE FROM song WHERE id = %s", (song_id,))
+            cursor.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
+        db.commit()
+
+
 def test_show_creation_context_lists_existing_point_system(
     client, db, national_final
 ):
@@ -886,32 +963,53 @@ def test_ongoing_nf_is_a_tbd_entry_on_year_overview(client, national_final):
     )
 
 
-def test_owner_can_create_candidate_as_non_main_participant(
+def test_owner_can_create_multiple_candidates_as_non_main_participants(
     client, db, bob_headers, national_final
 ):
-    response = client.post(
+    candidate = {
+        "year": 2025,
+        "country": "ES",
+        "artist": "Artist",
+        "sources": "https://example.com",
+        "languages": [20],
+        "national_final_id": national_final["id"],
+    }
+    first = client.post(
         "/api/song",
         headers=bob_headers,
-        json={
-            "year": 2025,
-            "country": "ES",
-            "title": "Candidate",
-            "artist": "Artist",
-            "sources": "https://example.com",
-            "languages": [20],
-            "national_final_id": national_final["id"],
-        },
+        json={**candidate, "title": "First candidate"},
     )
-    assert response.status_code == 201
-    song_id = response.get_json()["result"]["id"]
+    second = client.post(
+        "/api/song",
+        headers=bob_headers,
+        json={**candidate, "title": "Second candidate"},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    results = [first.get_json()["result"], second.get_json()["result"]]
+    assert [result["entry_number"] for result in results] == [1, 2]
+    song_ids = [result["id"] for result in results]
     with db.cursor() as cursor:
-        cursor.execute("SELECT main_participant FROM song WHERE id = %s", (song_id,))
-        assert cursor.fetchone()["main_participant"] is False
         cursor.execute(
-            "SELECT national_final_id FROM national_final_song WHERE song_id = %s",
-            (song_id,),
+            """
+            SELECT song.id, song.main_participant,
+                   national_final_song.national_final_id
+            FROM song
+            JOIN national_final_song ON national_final_song.song_id = song.id
+            WHERE song.id = ANY(%s)
+            ORDER BY song.entry_number
+            """,
+            (song_ids,),
         )
-        assert cursor.fetchone()["national_final_id"] == national_final["id"]
+        assert cursor.fetchall() == [
+            {
+                "id": song_id,
+                "main_participant": False,
+                "national_final_id": national_final["id"],
+            }
+            for song_id in song_ids
+        ]
 
 
 def test_country_backed_nf_rejects_other_country(client, bob_headers, national_final):

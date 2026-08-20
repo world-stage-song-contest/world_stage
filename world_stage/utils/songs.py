@@ -46,6 +46,10 @@ class Song:
     time_signature_timeline: list[dict] = field(default_factory=list)
     subgenres: list[str] = field(default_factory=list)
     hidden: bool = False
+    main_participant: bool = True
+    national_final_id: int | None = None
+    national_final_short_name: str | None = None
+    national_final_name: str | None = None
 
     @property
     def recap_end_seconds(self) -> int | None:
@@ -136,6 +140,10 @@ class Song:
             _recap_end_seconds=recap_end_seconds,
             recap2_start_seconds=recap2_start_seconds,
             _recap2_end_seconds=recap2_end_seconds,
+            main_participant=bool(song.get("main_participant", True)),
+            national_final_id=song.get("national_final_id"),
+            national_final_short_name=song.get("national_final_short_name"),
+            national_final_name=song.get("national_final_name"),
         )
 
     @property
@@ -653,7 +661,11 @@ _SONG_COLUMNS: LiteralString = """
     COALESCE(status.approval_status, 'pending') AS approval_status,
     data.native_language_id, data.title_language_id,
     data.native_lyrics, data.romanized_lyrics, data.translated_lyrics,
-    account.username, song.year_id, data.poster_link, data.vtt_link,
+    account.username, song.year_id, song.main_participant,
+    national_final.id AS national_final_id,
+    national_final.short_name AS national_final_short_name,
+    national_final.name AS national_final_name,
+    data.poster_link, data.vtt_link,
     data.video_link, data.duration, data.snippet_start, data.snippet_end,
     data.snippet2_start, data.snippet2_end,
     data.submitter_id, data.notes, data.sources, song.entry_number,
@@ -696,6 +708,8 @@ LEFT JOIN LATERAL (
 JOIN country ON song.country_id = country.id
 LEFT JOIN year ON year.id = song.year_id
 LEFT OUTER JOIN account ON data.submitter_id = account.id
+LEFT JOIN national_final_song ON national_final_song.song_id = song.id
+LEFT JOIN national_final ON national_final.id = national_final_song.national_final_id
 LEFT JOIN language title_language ON title_language.id = data.title_language_id
 LEFT JOIN language native_language ON native_language.id = data.native_language_id
 LEFT JOIN alternative_name an ON an.country_id = song.country_id
@@ -1377,6 +1391,28 @@ def get_country_history(code: str) -> list[Song]:
     """Load the rich rows displayed on one country's history page."""
     cursor = get_db().cursor()
     cursor.execute(_COUNTRY_HISTORY_SQL, {"cc": code})
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_languages(songs)
+    return songs
+
+
+_COUNTRY_NATIONAL_FINAL_HISTORY_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + """
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
+  AND (song.country_id = %(cc)s OR country.cc3 = %(cc)s)
+  AND song.year_id IS NOT NULL
+  AND national_final.id IS NOT NULL
+ORDER BY song.year_id, national_final.name, song.entry_number"""
+)
+
+
+def get_country_national_final_history(code: str) -> list[Song]:
+    """Load national-final candidates separately from main country entries."""
+    cursor = get_db().cursor()
+    cursor.execute(_COUNTRY_NATIONAL_FINAL_HISTORY_SQL, {"cc": code})
     songs = _songs_from_rows(cursor.fetchall())
     _attach_languages(songs)
     return songs

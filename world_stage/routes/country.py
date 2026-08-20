@@ -14,6 +14,7 @@ from ..utils import (
     get_countries,
     get_country_history,
     get_country_name,
+    get_country_national_final_history,
     get_entry_details,
     get_markdown_parser,
     get_show_results_for_songs,
@@ -29,6 +30,25 @@ from ..utils.song_revisions import create_song_revision
 from .member import playlists_for_user
 
 bp = Blueprint("country", __name__, url_prefix="/country")
+
+
+def _editable_national_final_id(song_id: int, user_id: int | None) -> int | None:
+    if user_id is None:
+        return None
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT national_final.id
+        FROM national_final_song
+        JOIN national_final
+          ON national_final.id = national_final_song.national_final_id
+        WHERE national_final_song.song_id = %s
+          AND national_final.owner_id = %s
+        """,
+        (song_id, user_id),
+    )
+    row = cursor.fetchone()
+    return row["id"] if row else None
 
 
 def _ordinal(n: int) -> str:
@@ -353,7 +373,8 @@ def country(code: str):
     if canonical and canonical.lower() != code.lower():
         return redirect(url_for("country.country", code=canonical.lower()), 301)
     songs = get_country_history(code.upper())
-    if not songs:
+    national_final_songs = get_country_national_final_history(code.upper())
+    if not songs and not national_final_songs:
         return render_template("error.html", error=f"Songs not found for country {code}")
     name = get_country_name(code.upper())
     results = get_show_results_for_songs([s.id for s in songs])
@@ -364,6 +385,7 @@ def country(code: str):
         "country/country.html",
         songs=regular_songs,
         special_songs=special_songs,
+        national_final_songs=national_final_songs,
         country=code,
         country_name=name,
         results=results,
@@ -502,7 +524,12 @@ def details(
     name = get_country_name(code.upper())
 
     user_id = user[0] if user else None
-    can_edit = permissions.can_edit or user_id == song.submitter_id
+    editable_national_final_id = _editable_national_final_id(song.id, user_id)
+    can_edit = (
+        permissions.can_edit
+        or user_id == song.submitter_id
+        or editable_national_final_id is not None
+    )
     translated_lyrics = []
     latin_lyrics = []
     native_lyrics = []
@@ -544,6 +571,7 @@ def details(
         latin_lyrics=latin_lyrics,
         translated_lyrics=translated_lyrics,
         can_edit=can_edit,
+        editable_national_final_id=editable_national_final_id,
         can_update_duration=permissions.can_edit,
         notes=notes,
         song_results=song_results,
@@ -614,7 +642,12 @@ def _render_song_details(
         embed = generate_iframe(url, song.poster_link, song.vtt_link)
 
     user_id = user[0] if user else None
-    can_edit = permissions.can_edit or user_id == song.submitter_id
+    editable_national_final_id = _editable_national_final_id(song.id, user_id)
+    can_edit = (
+        permissions.can_edit
+        or user_id == song.submitter_id
+        or editable_national_final_id is not None
+    )
 
     md = get_markdown_parser()
     translated_lyrics = render_lyrics(song.translated_lyrics) if song.translated_lyrics else []
@@ -647,6 +680,7 @@ def _render_song_details(
         latin_lyrics=latin_lyrics,
         translated_lyrics=translated_lyrics,
         can_edit=can_edit,
+        editable_national_final_id=editable_national_final_id,
         can_update_duration=permissions.can_edit,
         notes=notes,
         song_results=song_results,

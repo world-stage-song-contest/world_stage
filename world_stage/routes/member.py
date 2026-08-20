@@ -881,11 +881,44 @@ def submit(user: tuple[int, str], permissions: UserPermissions):
         national_final = cursor.fetchone()
         if not national_final:
             return render_template("error.html", error="National final not found"), 404
-        if national_final["status"] not in {"draft", "submissions"}:
+        cursor.execute(
+            """
+            SELECT current_song.submitter_id
+            FROM national_final_song
+            JOIN current_song ON current_song.id = national_final_song.song_id
+            WHERE national_final_song.national_final_id = %s
+              AND current_song.year_id = %s
+              AND current_song.country_id = %s
+              AND current_song.entry_number = %s
+            """,
+            (
+                national_final_id,
+                national_final["year_id"],
+                national_final["owner_country_id"] or country,
+                entry_number,
+            ),
+        )
+        candidate = cursor.fetchone() if entry_number else None
+        can_edit_candidate = bool(
+            candidate
+            and (
+                permissions.can_edit
+                or national_final["owner_id"] == user[0]
+                or candidate["submitter_id"] == user[0]
+            )
+        )
+        if (
+            national_final["status"] not in {"draft", "submissions"}
+            and not can_edit_candidate
+        ):
             return render_template(
                 "error.html", error="National final is not accepting candidates"
             ), 400
-        if not permissions.can_view_restricted and national_final["owner_id"] != user[0]:
+        if (
+            not can_edit_candidate
+            and not permissions.can_edit
+            and national_final["owner_id"] != user[0]
+        ):
             return render_template("error.html", error="Not authorized"), 403
         year = str(national_final["year_id"])
         country = national_final["owner_country_id"] or country
@@ -913,6 +946,7 @@ def get_countries_for_year(year: int):
     user_id = session_data[0] if session_data else None
     permissions = get_user_permissions(user_id)
     national_final_id = request.args.get("national_final_id", type=int)
+    entry_number = request.args.get("entry_number", type=int)
     if national_final_id is not None:
         cursor = get_db().cursor()
         cursor.execute(
@@ -921,9 +955,34 @@ def get_countries_for_year(year: int):
             (national_final_id, year),
         )
         nf = cursor.fetchone()
-        if not nf or (not permissions.can_view_restricted and nf["owner_id"] != user_id):
+        if not nf:
             return {"error": "Not authorized"}, 403
-        if nf["status"] not in {"draft", "submissions"}:
+        candidate = None
+        if entry_number is not None and nf["owner_country_id"]:
+            cursor.execute(
+                """
+                SELECT current_song.submitter_id
+                FROM national_final_song
+                JOIN current_song ON current_song.id = national_final_song.song_id
+                WHERE national_final_song.national_final_id = %s
+                  AND current_song.year_id = %s
+                  AND current_song.country_id = %s
+                  AND current_song.entry_number = %s
+                """,
+                (national_final_id, year, nf["owner_country_id"], entry_number),
+            )
+            candidate = cursor.fetchone()
+        can_edit_candidate = bool(
+            candidate
+            and (
+                permissions.can_edit
+                or nf["owner_id"] == user_id
+                or candidate["submitter_id"] == user_id
+            )
+        )
+        if not can_edit_candidate and not permissions.can_edit and nf["owner_id"] != user_id:
+            return {"error": "Not authorized"}, 403
+        if nf["status"] not in {"draft", "submissions"} and not can_edit_candidate:
             return {"error": "National final is not accepting candidates"}, 400
         if nf["owner_country_id"]:
             cursor.execute(

@@ -5,6 +5,7 @@ from flask import redirect, request, url_for
 from ...db import fetchone, get_db
 from ...utils import (
     Show,
+    Song,
     UserPermissions,
     get_show_results_for_songs,
     get_year_index_winners,
@@ -34,6 +35,26 @@ def _ongoing_national_finals(year_id: int) -> list[dict]:
         (year_id,),
     )
     return cursor.fetchall()
+
+
+def _overview_rows(
+    songs: list[Song], national_finals: list[dict], *, is_closed: bool
+) -> list[dict]:
+    rows = [
+        {"song": song, "national_final": None, "country_name": song.country.name}
+        for song in songs
+    ]
+    rows.extend(
+        {
+            "song": None,
+            "national_final": national_final,
+            "country_name": national_final["country_name"],
+        }
+        for national_final in national_finals
+    )
+    if not is_closed:
+        rows.sort(key=lambda row: row["country_name"].casefold())
+    return rows
 
 
 @bp.post("/<int(signed=True):year_id>/spot-watch")
@@ -226,6 +247,7 @@ def special(short_name: str, permissions: UserPermissions):
         "year/year.html",
         year=short_name,
         songs=songs,
+        overview_rows=_overview_rows(songs, ongoing_national_finals, is_closed=cl),
         free_countries=[],
         is_closed=cl,
         submissions_open=special_year["submissions_open"],
@@ -341,6 +363,7 @@ def year(year: int, permissions: UserPermissions):
         "year/year.html",
         year=year,
         songs=songs,
+        overview_rows=_overview_rows(songs, ongoing_national_finals, is_closed=cl),
         free_countries=free_countries,
         is_closed=cl,
         submissions_open=year_row["submissions_open"],
