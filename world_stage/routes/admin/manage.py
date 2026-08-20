@@ -219,7 +219,7 @@ def _create_show_post(year: int):
                 SELECT point_system_id
                 FROM point
                 GROUP BY point_system_id
-                HAVING array_agg(score ORDER BY place) = %s
+                HAVING array_agg(score::bigint ORDER BY place) = %s::bigint[]
                 LIMIT 1
                 """,
                 (scores,),

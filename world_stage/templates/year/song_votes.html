@@ -69,7 +69,7 @@
 {% endblock %}
 {% block navigation %}
     {% if is_revote %}
-    <a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ year }}</a>
+    <a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ special_name or year }}</a>
     <span class="nav-separator"></span>
     {% for other_show in other_revote_shows %}
     <a class="nav-item" href="{{ url_for('revote.results', year=revote_year, show=other_show.short_name) }}">{{ other_show.short_name|upper }}</a>

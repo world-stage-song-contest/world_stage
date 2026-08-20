@@ -27,17 +27,22 @@ def _resolve_revote_year(year_key: str) -> dict | None:
     cursor = get_db().cursor()
     try:
         year_id = int(year_key)
-        cursor.execute("SELECT id FROM year WHERE id = %s", (year_id,))
+        cursor.execute(
+            "SELECT id, special_name, special_short_name FROM year WHERE id = %s",
+            (year_id,),
+        )
     except ValueError:
         cursor.execute(
-            "SELECT id, special_name FROM year WHERE special_short_name = %s", (year_key,)
+            """SELECT id, special_name, special_short_name
+               FROM year WHERE LOWER(special_short_name) = LOWER(%s)""",
+            (year_key,),
         )
     row = cursor.fetchone()
     if not row:
         return None
     return {
         "id": row["id"],
-        "key": year_key,
+        "key": row.get("special_short_name") or str(row["id"]),
         "label": row.get("special_name") or str(row["id"]),
     }
 
@@ -271,6 +276,7 @@ def vote(year: str, show: str, user: tuple[int, str]):
         other_revote_shows=_other_revote_shows(show_data.year, show),
         revote_year=revote_year["key"],
         original_results_url=_original_results_url(show_data.year, show_data.short_name),
+        special_name=revote_year["label"] if show_data.year < 0 else None,
         rules_url=None,
     )
 
@@ -284,7 +290,8 @@ def song_votes(year: str, show: str, song_id: int):
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT song.id, song.title, song.artist, song.country_id, song.submitter_id,
+        SELECT song.id, song.title, song.artist, song.country_id, song.entry_number,
+               song.submitter_id,
                country.name AS country_name
         FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
@@ -546,6 +553,7 @@ def results(year: str, show: str):
         other_revote_shows=_other_revote_shows(show_data.year, show),
         revote_year=revote_year["key"],
         original_results_url=_original_results_url(show_data.year, show_data.short_name),
+        special_name=revote_year["label"] if show_data.year < 0 else None,
         rules_url=None,
     )
 
@@ -642,6 +650,7 @@ def detailed_results(year: str, show: str):
         revote_year=revote_year["key"],
         original_results_url=_original_results_url(show_data.year, show_data.short_name),
         is_revote=True,
+        special_name=revote_year["label"] if show_data.year < 0 else None,
     )
 
 

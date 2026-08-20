@@ -575,11 +575,15 @@ def _execute_unfiltered_changes_query(
             WHERE candidate.source = 's'
         )
         SELECT page.*, account.username AS changed_by_username,
-               country.name AS country_name, paging.has_older
+               country.name AS country_name,
+               year.special_name AS song_special_name,
+               year.special_short_name AS song_special_short_name,
+               paging.has_older
         FROM page_changes AS page
         CROSS JOIN paging
         LEFT JOIN account ON account.id = page.changed_by
         LEFT JOIN country ON country.id = page.song_country_id
+        LEFT JOIN year ON year.id = page.song_year_id
         ORDER BY page.changed_at DESC, page.id DESC, page.source_order DESC
         """,
         (
@@ -735,11 +739,15 @@ def changes():
             ) AS has_older
         )
         SELECT page.*, a.username AS changed_by_username,
-               c.name AS country_name, paging.has_older
+               c.name AS country_name,
+               y.special_name AS song_special_name,
+               y.special_short_name AS song_special_short_name,
+               paging.has_older
         FROM page_changes AS page
         CROSS JOIN paging
         LEFT JOIN account a ON a.id = page.changed_by
         LEFT JOIN country c ON c.id = page.song_country_id
+        LEFT JOIN year y ON y.id = page.song_year_id
         ORDER BY page.changed_at DESC, page.id DESC, page.source_order DESC
             """,
             (

@@ -12,14 +12,21 @@ from world_stage.utils.song_revisions import (
 )
 
 
-def _add_song(db, *, title="Original title", artist="Original artist") -> int:
+def _add_song(
+    db,
+    *,
+    title="Original title",
+    artist="Original artist",
+    year=2025,
+    entry_number=1,
+) -> int:
     with db.cursor() as cursor:
         cursor.execute("SELECT set_config('app.current_user_id', '2', false)")
         cursor.execute(
             """
             WITH inserted AS (
                 INSERT INTO song (country_id, year_id, entry_number)
-                VALUES ('ES', 2025, 1)
+                VALUES ('ES', %s, %s)
                 RETURNING id
             )
             INSERT INTO song_data (
@@ -28,7 +35,7 @@ def _add_song(db, *, title="Original title", artist="Original artist") -> int:
             SELECT id, 2, %s, test_artist_credit(%s) FROM inserted
             RETURNING song_id
             """,
-            (title, artist),
+            (year, entry_number, title, artist),
         )
         song_id = cursor.fetchone()["song_id"]
         set_song_status(cursor, song_id, changed_by=2, is_placeholder=False)

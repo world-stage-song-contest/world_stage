@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% from "macros/artists.html" import artist_links %}
-{% block title %}Revote results: {{ year }} {{ show_name }}{% endblock %}
+{% block title %}Revote results: {{ special_name or year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
     <script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
 {% block navigation %}
-<a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ year }}</a>
+<a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ special_name or year }}</a>
 <span class="nav-separator"></span>
 {% for other_show in other_revote_shows %}
 <a class="nav-item" href="{{ url_for('revote.results', year=revote_year, show=other_show.short_name, revoters_only='true' if revoters_only else none) }}">{{ other_show.short_name|upper }}</a>

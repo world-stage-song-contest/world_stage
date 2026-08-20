@@ -193,7 +193,11 @@
             </td>
             <td>
                 {% if entry.song_year_id %}
-                <a href="{{ url_for('year.year', year=entry.song_year_id) }}">{{ entry.song_year_id }}</a>
+                    {% if entry.song_special_short_name %}
+                    <a href="{{ url_for('year.special', short_name=entry.song_special_short_name) }}">{{ entry.song_special_name }}</a>
+                    {% else %}
+                    <a href="{{ url_for('year.year', year=entry.song_year_id) }}">{{ entry.song_year_id }}</a>
+                    {% endif %}
                 {% else %}—{% endif %}
             </td>
             <td>{{ entry.song_artist or '—' }}</td>
