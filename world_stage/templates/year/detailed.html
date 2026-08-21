@@ -117,7 +117,7 @@
                 {% elif special %}
                 <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('year.special_song_votes', short_name=special, show=show, country_code=song.country.cc.lower(), entry_number=song.entry_number) }}">{{ song.title }}</a></td>
                 {% else %}
-                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower(), entry_number=song.entry_number) }}">{{ song.title }}</a></td>
+                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('year.song_votes', year=year, show=show, country_code=song.country.cc.lower(), entry_number=none if song.main_participant else song.entry_number) }}">{{ song.title }}</a></td>
                 {% endif %}
                 <td class="number">{{ loop.index }}</td>
                 <td class="number{% if song.vote_data.penalty %} has-penalty{% endif %}"

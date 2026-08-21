@@ -502,10 +502,10 @@ def test_existing_candidates_remain_editable_after_submissions_close(
     property_test()
 
 
-def test_numbered_nf_result_links_identify_each_candidate(client, db, national_final):
+def test_nf_result_routes_distinguish_main_and_numbered_entries(client, db, national_final):
     @settings(max_examples=6, deadline=None)
-    @given(candidate_count=st.integers(2, 5))
-    def property_test(candidate_count):
+    @given(candidate_count=st.integers(2, 5), selected_index=st.integers(0, 20))
+    def property_test(candidate_count, selected_index):
         db.rollback()
         db.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
         db.commit()
@@ -513,7 +513,12 @@ def test_numbered_nf_result_links_identify_each_candidate(client, db, national_f
             _add_candidate(db, national_final["id"], submitter=3)
             for _ in range(candidate_count)
         ]
+        selected_id = candidates[selected_index % candidate_count]
         with db.cursor() as cursor:
+            cursor.execute(
+                "UPDATE song SET main_participant = true WHERE id = %s",
+                (selected_id,),
+            )
             cursor.executemany(
                 """INSERT INTO song_show (show_id, song_id, running_order)
                    VALUES (%s, %s, %s)""",
@@ -528,6 +533,13 @@ def test_numbered_nf_result_links_identify_each_candidate(client, db, national_f
             )
         db.commit()
         try:
+            response = client.get(
+                "/year/2025/test-es-f/song/es",
+                headers={"Accept": "application/json"},
+            )
+            assert response.status_code == 200
+            assert response.get_json()["song"]["id"] == selected_id
+
             rows = db.execute(
                 "SELECT id, entry_number FROM song WHERE id = ANY(%s)",
                 (candidates,),

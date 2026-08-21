@@ -293,13 +293,14 @@ def song_votes(
     cursor.execute(
         """
         SELECT song.id, song.title, song.artist, song.country_id, song.submitter_id,
+               song.entry_number, song.main_participant,
                country.name AS country_name, country.cc3,
                song_show.running_order
         FROM current_song AS song
         JOIN song_show ON song.id = song_show.song_id
         JOIN country ON song.country_id = country.id
         WHERE song_show.show_id = %s AND song.country_id = UPPER(%s)
-          AND (%s IS NULL OR song.entry_number = %s)
+          AND ((%s::integer IS NULL AND song.main_participant) OR song.entry_number = %s)
     """,
         (show_data.id, country_code, entry_number, entry_number),
     )

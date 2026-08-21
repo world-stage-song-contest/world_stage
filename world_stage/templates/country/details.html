@@ -243,7 +243,7 @@
                 {% elif special %}
                     {% set votes_url = url_for('year.special_song_votes', short_name=special, show=entry.short_name, country_code=song.country.cc.lower(), entry_number=song.entry_number) %}
                 {% else %}
-                    {% set votes_url = url_for('year.song_votes', year=song.year.id, show=entry.short_name, country_code=song.country.cc.lower()) %}
+                    {% set votes_url = url_for('year.song_votes', year=song.year.id, show=entry.short_name, country_code=song.country.cc.lower(), entry_number=none if song.main_participant else song.entry_number) %}
                 {% endif %}
                 <tr class="{{ cat_class }}">
                     <th><a href="{{ votes_url }}">{{ label }}</a></th>
