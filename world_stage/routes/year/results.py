@@ -122,6 +122,7 @@ def _prepare_qualification_results(show_data, songs, access: str, reveal: str):
             if placeholder.vote_data:
                 placeholder.vote_data.ro = -1
             placeholder.artist = ""
+            placeholder.artists = []
             placeholder.title = ""
             placeholder.country.name = ""
             placeholder.country.cc = "XX"
