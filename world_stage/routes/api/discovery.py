@@ -197,7 +197,8 @@ def shows():
         JOIN year ON year.id = show.year_id
         LEFT JOIN national_final ON national_final.id = show.national_final_id
         {where}
-        ORDER BY show.year_id, national_final.id NULLS FIRST,
+        ORDER BY (national_final.id IS NOT NULL),
+                 show.year_id, national_final.id NULLS FIRST,
                  show_types.sort_order, show.show_number NULLS FIRST, show.id
         """,
         params,

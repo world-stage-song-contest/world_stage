@@ -176,7 +176,8 @@ def index():
         WHERE voting_opens <= CURRENT_TIMESTAMP
           AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
           AND (national_final.id IS NULL OR national_final.status = 'voting')
-        ORDER BY (show.year_id < 0), show.year_id DESC,
+        ORDER BY (national_final.id IS NOT NULL),
+                 (show.year_id < 0), show.year_id DESC,
                  national_final.id NULLS FIRST, national_final.name,
                  show_types.sort_order, show.show_number NULLS FIRST, show.id
     """)

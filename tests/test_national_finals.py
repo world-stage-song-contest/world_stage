@@ -166,6 +166,59 @@ def test_national_final_show_keys_and_order_are_compositional(client, db, nation
     property_test()
 
 
+def test_open_votings_put_every_main_year_show_before_national_finals(
+    client, db, national_final
+):
+    @settings(max_examples=6, deadline=None)
+    @given(main_show_count=st.integers(1, 4))
+    def property_test(main_show_count):
+        main_show_ids = []
+        with db.cursor() as cursor:
+            for number in range(1, main_show_count + 1):
+                main_show_ids.append(
+                    cursor.execute(
+                        """INSERT INTO show (
+                               year_id, point_system_id, show_type, show_number,
+                               status, voting_opens
+                           ) VALUES (2024, %s, 'sf', %s, 'none', CURRENT_TIMESTAMP)
+                           RETURNING id""",
+                        (national_final["point_system_id"], number),
+                    ).fetchone()["id"]
+                )
+            cursor.execute(
+                "UPDATE national_final SET status = 'voting' WHERE id = %s",
+                (national_final["id"],),
+            )
+            cursor.execute(
+                "UPDATE show SET voting_opens = CURRENT_TIMESTAMP WHERE id = %s",
+                (national_final["show_id"],),
+            )
+        db.commit()
+        try:
+            relevant_ids = {*main_show_ids, national_final["show_id"]}
+            votings = [
+                show
+                for show in client.get("/api/voting/open").get_json()["result"]
+                if show["id"] in relevant_ids
+            ]
+            assert [show["national_final_short_name"] is None for show in votings] == [
+                True
+            ] * main_show_count + [False]
+        finally:
+            _remove_shows(db, main_show_ids)
+            db.execute(
+                "UPDATE show SET voting_opens = NULL WHERE id = %s",
+                (national_final["show_id"],),
+            )
+            db.execute(
+                "UPDATE national_final SET status = 'draft' WHERE id = %s",
+                (national_final["id"],),
+            )
+            db.commit()
+
+    property_test()
+
+
 def test_show_progression_qualifies_exactly_the_configured_prefix_and_is_acyclic(
     client, db, national_final
 ):
