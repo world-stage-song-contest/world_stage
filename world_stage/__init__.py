@@ -345,12 +345,29 @@ def create_app(config: dict | None = None) -> Flask:
     with contextlib.suppress(OSError):
         os.makedirs(app.instance_path)
 
-    from . import db, email, media, scrobble
+    from . import db, email, media, scrobble, show_notifications
 
     db.init_app(app)
     email.init_app(app)
     media.init_app(app)
     scrobble.init_app(app)
+    show_notifications.init_app(app)
+
+    @app.context_processor
+    def account_theme_context():
+        from flask import request
+
+        from .user_settings import get_user_settings, setting
+        from .utils import get_user_id_from_session
+
+        if request.cookies.get("preferences") is not None:
+            return {"account_theme": None}
+        user = get_user_id_from_session(request.cookies.get("session"))
+        if user is None:
+            return {"account_theme": None}
+        return {
+            "account_theme": setting(get_user_settings(user[0]), "theme", default="auto")
+        }
 
     from .routes import (
         admin,

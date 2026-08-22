@@ -22,9 +22,9 @@ function getKVCookieValue(cookie, key) {
     return null;
 }
 
-function setTheme() {
+function setTheme(accountTheme = null) {
     const preferences = getCookieValue('preferences');
-    const theme = getKVCookieValue(preferences, 'theme');
+    const theme = getKVCookieValue(preferences, 'theme') ?? accountTheme;
 
     if (theme == 'dark') {
         document.documentElement.dataset.theme = 'dark';

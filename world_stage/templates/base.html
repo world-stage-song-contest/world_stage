@@ -72,7 +72,7 @@
         {% block headercontents %}{% endblock %}
     </head>
     <body onload="{% block onload %}{% endblock %}">
-        <script>setTheme()</script>
+        <script>setTheme({{ account_theme|default(none)|tojson }})</script>
         <header id="page-header">
             <div id="header-logo">
                 <svg viewBox="0 0 605 72.5" id="header-logo-image">

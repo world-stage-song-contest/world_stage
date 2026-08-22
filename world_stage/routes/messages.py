@@ -9,13 +9,8 @@ from flask import Blueprint, current_app, redirect, request, url_for
 
 from ..db import get_db
 from ..messaging import mark_conversation_read, message_preview, notify_new_message
-from ..utils import (
-    UserPermissions,
-    get_markdown_parser,
-    parse_cookie,
-    render_template,
-    with_auth,
-)
+from ..user_settings import get_user_settings, setting
+from ..utils import UserPermissions, get_markdown_parser, render_template, with_auth
 
 bp = Blueprint("messages", __name__, url_prefix="/messages")
 
@@ -187,9 +182,9 @@ def _sender_colour(sender_id: int) -> str:
     return f"#{digest[:6]}"
 
 
-def _show_message_avatars() -> bool:
-    preferences = parse_cookie(request.cookies.get("preferences", ""))
-    return preferences["hide_message_avatars"] != "true"
+def _show_message_avatars(user_id: int) -> bool:
+    settings = get_user_settings(user_id)
+    return setting(settings, "messages", "hide_avatars", default=False) is not True
 
 
 def _message_rows(
@@ -680,7 +675,7 @@ def thread(
         page=page,
         has_older=has_older,
         max_message_length=MAX_MESSAGE_LENGTH,
-        show_avatars=_show_message_avatars(),
+        show_avatars=_show_message_avatars(user_id),
     )
 
 
@@ -836,7 +831,7 @@ def reply(
                 page=1,
                 has_older=has_older,
                 max_message_length=MAX_MESSAGE_LENGTH,
-                show_avatars=_show_message_avatars(),
+                show_avatars=_show_message_avatars(user_id),
             ),
             400,
         )

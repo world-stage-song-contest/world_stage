@@ -49,7 +49,7 @@
 {% endblock %}
 {% block content %}
     <p>Here you can configure the settings for the World Stage Song Contest.</p>
-    <p>Note that these settings are stored in a cookie, so they will only apply to this browser.</p>
+    <p>Your theme is cached in this browser and also saved to your account when signed in.</p>
     {% if message %}
         <p class="success">{{ message }}</p>
     {% endif %}
@@ -78,16 +78,18 @@
                 </div>
             </div>
         </fieldset>
+        {% if user %}
         <fieldset>
             <legend>Message display</legend>
             <div class="labels-row">
                 <div>
                     <input type="checkbox" id="hide-message-avatars" name="hide_message_avatars"
-                           value="true" {% if settings.hide_message_avatars == "true" %}checked{% endif %}>
+                           value="true" {% if settings.hide_message_avatars %}checked{% endif %}>
                     <label for="hide-message-avatars">Hide avatars in messages</label>
                 </div>
             </div>
         </fieldset>
+        {% endif %}
         <input type="submit" value="Save Settings">
     </form>
 
@@ -102,6 +104,60 @@
         </fieldset>
         <input type="submit" value="Save email">
     </form>
+
+    <h3>Show notifications</h3>
+    <p>
+        Show reminders arrive at 08:00 in your timezone. If a show starts before
+        12:00 for you, the reminder arrives at 08:00 on the previous day.
+    </p>
+    <form method="POST" action="{{ url_for('main.update_show_notifications') }}">
+        <fieldset class="nongrid">
+            <legend>Categories</legend>
+            <div class="labels-row">
+                <div>
+                    <input id="participating-shows" name="participating_shows" type="checkbox"
+                           value="true" {% if show_notification_preferences.participating_shows %}checked{% endif %}>
+                    <label for="participating-shows">Shows I am participating in</label>
+                </div>
+            </div>
+            <div class="labels-row">
+                <div>
+                    <input id="all-shows" name="all_shows" type="checkbox"
+                           value="true" {% if show_notification_preferences.all_shows %}checked{% endif %}>
+                    <label for="all-shows">All shows</label>
+                </div>
+            </div>
+        </fieldset>
+        <fieldset class="grid">
+            <label for="notification-timezone">Your timezone</label>
+            <select id="notification-timezone" name="timezone" required>
+                <option value="" disabled {% if not show_notification_preferences.timezone %}selected{% endif %}>
+                    Select timezone
+                </option>
+                {% for group, timezones in show_notification_timezone_groups %}
+                    <optgroup label="{{ group }}">
+                        {% for value, label in timezones %}
+                            <option value="{{ value }}" {% if show_notification_preferences.timezone == value %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+            </select>
+        </fieldset>
+        <small>Detected from this browser when no timezone has been saved. You can override it.</small>
+        <div><input type="submit" value="Save show notifications"></div>
+    </form>
+    <script>
+        (() => {
+            const select = document.getElementById("notification-timezone");
+            if (!select.value) {
+                const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const available = Array.from(select.options, option => option.value);
+                select.value = available.includes(detected) ? detected : "Europe/Warsaw";
+            }
+        })();
+    </script>
 
     <hr>
     <h2>Avatar</h2>

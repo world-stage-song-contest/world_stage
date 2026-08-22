@@ -1,6 +1,6 @@
 [project]
 name = "world-stage"
-version = "3.23.14"
+version = "3.23.15"
 description = "Voting website for World Stage."
 requires-python = ">= 3.12"
 dependencies = [
@@ -8,6 +8,7 @@ dependencies = [
     "markdown-it-py",
     "pillow>=12.3.0",
     "psycopg[binary,pool]",
+    "tzdata",
 ]
 
 [build-system]

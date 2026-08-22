@@ -1,6 +1,6 @@
 import hashlib
 
-from flask import Blueprint, Response, abort, make_response, redirect, request, url_for
+from flask import Blueprint, Response, abort, current_app, make_response, redirect, request, url_for
 
 from .. import scrobble
 from ..avatar import (
@@ -17,6 +17,8 @@ from ..messaging import (
     has_unread_admin_messages,
     has_unread_messages,
 )
+from ..show_notifications import grouped_timezones, valid_timezone
+from ..user_settings import get_user_settings, setting, update_user_settings
 from ..utils import (
     UserPermissions,
     create_cookie,
@@ -120,18 +122,56 @@ def _user_email(user_id: int) -> str:
     return row["email"] or "" if row else ""
 
 
+def _show_notification_preferences(user_id: int) -> dict:
+    settings = get_user_settings(user_id)
+    return {
+        "timezone": setting(settings, "notifications", "show_reminders", "timezone", default=""),
+        "participating_shows": setting(
+            settings,
+            "notifications",
+            "show_reminders",
+            "participating_shows",
+            default=False,
+        )
+        is True,
+        "all_shows": setting(
+            settings, "notifications", "show_reminders", "all_shows", default=False
+        )
+        is True,
+    }
+
+
+def _website_settings(user_id: int | None) -> dict:
+    cookie_value = request.cookies.get("preferences")
+    cookie = parse_cookie(cookie_value or "")
+    cookie_theme = cookie["theme"] if cookie["theme"] in {"auto", "light", "dark"} else "auto"
+    if user_id is None:
+        return {"theme": cookie_theme, "hide_message_avatars": False}
+    settings = get_user_settings(user_id)
+    account_theme = setting(settings, "theme", default="auto")
+    if account_theme not in {"auto", "light", "dark"}:
+        account_theme = "auto"
+    return {
+        "theme": cookie_theme if cookie_value is not None else account_theme,
+        "hide_message_avatars": setting(settings, "messages", "hide_avatars", default=False)
+        is True,
+    }
+
+
 def _settings_template(
     user: tuple[int, str] | None,
     *,
     settings: dict | None = None,
     message: str | None = None,
     error: str | None = None,
+    show_notification_preferences: dict | None = None,
+    new_token: str | None = None,
 ):
-    if settings is None:
-        preferences = request.cookies.get("preferences", "")
-        settings = parse_cookie(preferences)
-
     user_id = user[0] if user else None
+    if settings is None:
+        settings = _website_settings(user_id)
+    if user_id and show_notification_preferences is None:
+        show_notification_preferences = _show_notification_preferences(user_id)
     return render_template(
         "settings.html",
         settings=settings,
@@ -140,8 +180,15 @@ def _settings_template(
         scrobble_services=_scrobble_services(user_id) if user_id else [],
         has_custom_avatar=_has_custom_avatar(user_id) if user_id else False,
         email=_user_email(user_id) if user_id else "",
+        show_notification_preferences=show_notification_preferences,
+        show_notification_timezone_groups=grouped_timezones(
+            current_app.config["SHOW_NOTIFICATION_TIMEZONES"]
+        )
+        if user_id
+        else (),
         message=message,
         error=error,
+        new_token=new_token,
         max_avatar_dimension=MAX_AVATAR_DIMENSION,
         max_avatar_megabytes=MAX_AVATAR_BYTES // (1024 * 1024),
     )
@@ -170,15 +217,30 @@ def _scrobble_services(user_id: int) -> list[dict]:
 @bp.post("/settings")
 @with_user
 def settings_post(user: tuple[int, str] | None):
-    settings = {}
-    for key, value in request.form.items():
-        if key not in ("token_label", "delete_token"):
-            settings[key] = value
+    theme = request.form.get("theme", "auto")
+    if theme not in {"auto", "light", "dark"}:
+        return _settings_template(user, error="Choose a valid theme."), 400
+
+    settings = {
+        "theme": theme,
+        "hide_message_avatars": request.form.get("hide_message_avatars") == "true",
+    }
+    if user:
+        db = get_db()
+        update_user_settings(
+            db.cursor(),
+            user[0],
+            {
+                "theme": theme,
+                "messages": {"hide_avatars": settings["hide_message_avatars"]},
+            },
+        )
+        db.commit()
 
     resp = make_response(
         _settings_template(user, settings=settings, message="Settings saved successfully.")
     )
-    resp.set_cookie("preferences", create_cookie(**settings), max_age=60 * 60 * 24 * 30)
+    resp.set_cookie("preferences", create_cookie(theme=theme), max_age=60 * 60 * 24 * 30)
     return resp
 
 
@@ -211,6 +273,52 @@ def update_email(user: tuple[int, str]):
         user,
         message="Email address updated." if email else "Email address removed.",
     )
+
+
+@bp.post("/settings/show-notifications")
+@require_user(redirect_to_login=True)
+def update_show_notifications(user: tuple[int, str]):
+    user_id, _username = user
+    preferences = {
+        "timezone": request.form.get("timezone", "").strip(),
+        "participating_shows": request.form.get("participating_shows") == "true",
+        "all_shows": request.form.get("all_shows") == "true",
+    }
+    if not valid_timezone(
+        preferences["timezone"], current_app.config["SHOW_NOTIFICATION_TIMEZONES"]
+    ):
+        return (
+            _settings_template(
+                user,
+                show_notification_preferences=preferences,
+                error="Choose a valid IANA timezone, such as Europe/Warsaw.",
+            ),
+            400,
+        )
+    if (preferences["participating_shows"] or preferences["all_shows"]) and not _user_email(
+        user_id
+    ):
+        return (
+            _settings_template(
+                user,
+                show_notification_preferences=preferences,
+                error="Add an email address before enabling show notifications.",
+            ),
+            400,
+        )
+
+    db = get_db()
+    update_user_settings(
+        db.cursor(),
+        user_id,
+        {
+            "notifications": {
+                "show_reminders": preferences,
+            }
+        },
+    )
+    db.commit()
+    return _settings_template(user, message="Show notification settings updated.")
 
 
 @bp.get("/avatars/<int:user_id>")
@@ -315,15 +423,8 @@ def create_token(user: tuple[int, str]):
     )
     db.commit()
 
-    preferences = request.cookies.get("preferences", "")
-    settings = parse_cookie(preferences)
-    tokens = _get_user_tokens(user_id)
-
-    return render_template(
-        "settings.html",
-        settings=settings,
-        user=user,
-        tokens=tokens,
+    return _settings_template(
+        user,
         new_token=plaintext,
         message="API token created. Copy it now — it won't be shown again.",
     )

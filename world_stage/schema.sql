@@ -38,7 +38,9 @@ CREATE TABLE IF NOT EXISTS account (
     password bytea,
     salt bytea,
     approved boolean DEFAULT false,
-    role text DEFAULT 'user' REFERENCES account_role (name) ON UPDATE RESTRICT ON DELETE RESTRICT
+    role text DEFAULT 'user' REFERENCES account_role (name) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    settings jsonb NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT account_settings_object_check CHECK (jsonb_typeof(settings) = 'object')
 );
 
 CREATE TABLE IF NOT EXISTS account_avatar (
@@ -692,6 +694,15 @@ CREATE TABLE IF NOT EXISTS show (
     CONSTRAINT show_number_check CHECK (
         show_number IS NULL OR (show_type = 'sf' AND show_number > 0)
     )
+);
+
+CREATE TABLE IF NOT EXISTS show_email_notification_delivery (
+    account_id bigint NOT NULL
+        REFERENCES account (id) ON UPDATE RESTRICT ON DELETE CASCADE,
+    show_id bigint NOT NULL
+        REFERENCES show (id) ON UPDATE RESTRICT ON DELETE CASCADE,
+    sent_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (account_id, show_id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS show_main_short_name_unique
