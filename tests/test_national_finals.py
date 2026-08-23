@@ -615,6 +615,54 @@ def test_nf_result_routes_distinguish_main_and_numbered_entries(client, db, nati
     property_test()
 
 
+def test_nf_owner_can_open_breakdowns_while_previewing_unpublished_results(
+    client, db, national_final, login
+):
+    @settings(max_examples=6, deadline=None)
+    @given(status=st.sampled_from(["none", "draw"]))
+    def property_test(status):
+        db.rollback()
+        db.execute(
+            "INSERT INTO show_status (name) VALUES (%s) ON CONFLICT DO NOTHING",
+            (status,),
+        )
+        song_id = _add_candidate(db, national_final["id"], submitter=3)
+        candidate = db.execute("SELECT entry_number FROM song WHERE id = %s", (song_id,)).fetchone()
+        db.execute(
+            """INSERT INTO song_show (show_id, song_id, running_order)
+               VALUES (%s, %s, 1)""",
+            (national_final["show_id"], song_id),
+        )
+        db.execute(
+            "UPDATE show SET status = %s WHERE id = %s",
+            (status, national_final["show_id"]),
+        )
+        db.commit()
+        try:
+            login(2)
+            response = client.get(
+                f"/year/2025/test-es-f/song/es/{candidate['entry_number']}",
+                headers={"Accept": "application/json"},
+            )
+            assert response.status_code == 200
+            assert response.get_json()["song"]["id"] == song_id
+
+            client.delete_cookie("session")
+            login(3)
+            response = client.get(f"/year/2025/test-es-f/song/es/{candidate['entry_number']}")
+            assert response.status_code == 400
+        finally:
+            client.delete_cookie("session")
+            _remove_candidates(db, [song_id])
+            db.execute(
+                "UPDATE show SET status = 'none' WHERE id = %s",
+                (national_final["show_id"],),
+            )
+            db.commit()
+
+    property_test()
+
+
 def test_histories_render_with_separate_nf_candidates(client, db, national_final):
     @settings(max_examples=6, deadline=None)
     @given(candidate_count=st.integers(1, 5))

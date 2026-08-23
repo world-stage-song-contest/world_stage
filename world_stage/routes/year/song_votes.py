@@ -5,11 +5,12 @@ from flask import redirect, url_for
 from ...db import get_db
 from ...utils import (
     UserPermissions,
+    can_manage_show,
     dt_now,
     get_show_id,
     render_template,
     resolve_country_code,
-    with_permissions,
+    with_auth,
 )
 from ...utils.artists import fetch_song_artist_credits
 from .common import bp, get_other_shows, resolve_special
@@ -84,9 +85,14 @@ def special_song_votes_disambig(short_name: str, show: str, country_code: str):
 
 
 @bp.get("/special/<short_name>/<show>/song/<country_code>/<int:entry_number>")
-@with_permissions
+@with_auth
 def special_song_votes(
-    short_name: str, show: str, country_code: str, entry_number: int, permissions: UserPermissions
+    short_name: str,
+    show: str,
+    country_code: str,
+    entry_number: int,
+    user,
+    permissions: UserPermissions,
 ):
     special_year = resolve_special(short_name)
     if not special_year:
@@ -111,16 +117,13 @@ def special_song_votes(
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status not in ("full", "partial") and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status not in ("full", "partial") and not elevated:
         return render_template(
             "error.html", error="You aren't allowed to access the vote breakdown yet"
         ), 400
 
-    if (
-        show_data.voting_closes
-        and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
-    ):
+    if show_data.voting_closes and show_data.voting_closes > dt_now() and not elevated:
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
     db = get_db()
@@ -148,7 +151,7 @@ def special_song_votes(
         song["id"], []
     )
 
-    if show_data.status == "partial" and not permissions.can_view_restricted:
+    if show_data.status == "partial" and not elevated:
         qualifier_cutoff = show_data.total_qualifiers
         if qualifier_cutoff > 0:
             cursor.execute(
@@ -245,14 +248,16 @@ def special_song_votes(
         special_name=special_year["special_name"],
     )
 
+
 @bp.get("/<int:year>/<show>/song/<country_code>", defaults={"entry_number": None})
 @bp.get("/<int:year>/<show>/song/<country_code>/<int:entry_number>")
-@with_permissions
+@with_auth
 def song_votes(
     year: int,
     show: str,
     country_code: str,
     entry_number: int | None,
+    user,
     permissions: UserPermissions,
 ):
     canonical = resolve_country_code(country_code.upper())
@@ -274,16 +279,13 @@ def song_votes(
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status not in ("full", "partial") and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status not in ("full", "partial") and not elevated:
         return render_template(
             "error.html", error="You aren't allowed to access the vote breakdown yet"
         ), 400
 
-    if (
-        show_data.voting_closes
-        and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
-    ):
+    if show_data.voting_closes and show_data.voting_closes > dt_now() and not elevated:
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
     db = get_db()
@@ -313,7 +315,7 @@ def song_votes(
     )
 
     # In partial mode, block access to qualifier results
-    if show_data.status == "partial" and not permissions.can_view_restricted:
+    if show_data.status == "partial" and not elevated:
         qualifier_cutoff = show_data.total_qualifiers
         if qualifier_cutoff > 0:
             cursor.execute(
