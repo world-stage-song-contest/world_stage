@@ -108,8 +108,8 @@ def test_generated_schedules_are_gapless_complete_and_deterministic_snapshots(db
             )
             slots = cursor.fetchall()
 
-            assert current["starts_at"] == at
-            assert current["server_time"] == at
+            assert current["starts_at"].astimezone(UTC) == at
+            assert current["server_time"].astimezone(UTC) == at
             assert len(slots) == len(durations)
             assert {slot["source_song_id"] for slot in slots} == set(song_ids)
             assert all(

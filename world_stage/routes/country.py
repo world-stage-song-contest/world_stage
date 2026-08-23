@@ -118,11 +118,10 @@ def _qualification_stats(entries: list[dict]) -> dict | None:
             continue
 
         attempts += 1
-        if has_semi and has_second_chance:
-            score += Decimal("0.5")
-        if has_second_chance and has_final:
-            score += Decimal("0.5")
-        elif has_semi and has_final:
+        qualified = (has_semi and (has_second_chance or has_final)) or (
+            has_second_chance and has_final
+        )
+        if qualified:
             score += Decimal("1")
 
     if attempts == 0:
@@ -245,6 +244,12 @@ def _country_stats(
         for entry in entries
         if entry["results"].get("f")
     ]
+    qualified_finals = sum(
+        1
+        for entry in entries
+        if entry["results"].get("f")
+        and (entry["results"].get("sf") or entry["results"].get("sc"))
+    )
     _, worst_final_results = _best_worst_results(final_entries)
 
     closed_results = [entry["result"] for entry in entries if entry.get("result")]
@@ -277,6 +282,8 @@ def _country_stats(
         "best_results": best_results,
         "worst_results": worst_results,
         "finals": len(final_entries),
+        "qualified_finals": qualified_finals,
+        "automatic_finals": len(final_entries) - qualified_finals,
         "qualification": _qualification_stats(entries),
         "current_final_streak": _current_streak(
             qualification_periods,
