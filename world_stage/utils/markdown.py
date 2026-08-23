@@ -1,6 +1,7 @@
 import re
 from functools import lru_cache
 from html import escape
+from urllib.parse import urlsplit
 
 from markdown_it import MarkdownIt
 from markdown_it.rules_inline import StateInline
@@ -19,6 +20,9 @@ FONT_OPEN_TAG_RE = re.compile(
     r"""\[font(?P<attributes>(?:\s+[A-Za-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s\]]+))+\s*)\]"""
 )
 FONT_ATTRIBUTE_RE = re.compile(r"""\s+([A-Za-z]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s\]]+))""")
+ANCHOR_OPEN_TAG_RE = re.compile(r"""\[a=(?:"([^"]+)"|'([^']+)'|([^\s\]'\"]+))\]""")
+EXPLICIT_URL_SCHEME_RE = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*):")
+HOST_PORT_RE = re.compile(r"^[A-Za-z0-9.-]+:\d+(?:[/?#]|$)")
 FONT_SIZE_VALUES = {
     "xxx-small": "0.5rem",
     "xx-small": "xx-small",
@@ -83,6 +87,32 @@ def _trim_url_trailing_punctuation(value: str) -> str:
     return value
 
 
+def _normalise_anchor_href(md: MarkdownIt, value: str) -> str | None:
+    if value.startswith("//"):
+        value = f"https:{value}"
+    else:
+        scheme = EXPLICIT_URL_SCHEME_RE.match(value)
+        if scheme:
+            if scheme.group(1).lower() not in {"http", "https"}:
+                if not HOST_PORT_RE.match(value):
+                    return None
+                value = f"https://{value}"
+            elif not value[scheme.end() :].startswith("//"):
+                return None
+        else:
+            value = f"https://{value}"
+
+    href = md.normalizeLink(value)
+    try:
+        parsed = urlsplit(href)
+        _ = parsed.port
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        return None
+    return href
+
+
 def autolink_plugin(md: MarkdownIt):
     """Turn bare HTTP(S) URLs in rendered inline text into safe links."""
 
@@ -111,7 +141,11 @@ def autolink_plugin(md: MarkdownIt):
                             children.append(text_token)
 
                         open_token = Token("link_open", "a", 1)
-                        open_token.attrs = {"href": url, "rel": "noopener"}
+                        open_token.attrs = {
+                            "href": url,
+                            "rel": "noopener noreferrer nofollow",
+                            "target": "_blank",
+                        }
                         children.append(open_token)
                         link_text = Token("text", "", 0)
                         link_text.content = url
@@ -361,6 +395,7 @@ def make_bbcode_plugin(allowed_colours):
         "bg": "[/bg]",
         "font": "[/font]",
         "lang": "[/lang]",
+        "a": "[/a]",
     }
 
     def bbcode_plugin(md: MarkdownIt):
@@ -478,6 +513,40 @@ def make_bbcode_plugin(allowed_colours):
                 token.attrs = {"lang": language_tag}
                 state.md.inline.tokenize(state)
                 state.push("bb_lang_close", "span", -1)
+
+                state.pos = end_pos + len(close_tag)
+                state.posMax = old_max
+                return True
+
+            m = ANCHOR_OPEN_TAG_RE.match(src, pos)
+            if m and m.end() <= state.posMax and state.linkLevel == 0:
+                href = _normalise_anchor_href(
+                    state.md, next(group for group in m.groups() if group is not None)
+                )
+                if href is None:
+                    return False
+
+                close_tag = close_re["a"]
+                end_pos = src.find(close_tag, m.end(), state.posMax)
+                if end_pos == -1:
+                    return False
+                if silent:
+                    return True
+
+                old_max = state.posMax
+                state.pos = m.end()
+                state.posMax = end_pos
+
+                token = state.push("link_open", "a", 1)
+                token.attrs = {
+                    "href": href,
+                    "rel": "noopener noreferrer nofollow",
+                    "target": "_blank",
+                }
+                state.linkLevel += 1
+                state.md.inline.tokenize(state)
+                state.linkLevel -= 1
+                state.push("link_close", "a", -1)
 
                 state.pos = end_pos + len(close_tag)
                 state.posMax = old_max
