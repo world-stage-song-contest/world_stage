@@ -90,7 +90,7 @@
         </div>
     </td>
     {{ render_sources(entry, 'historical-' ~ entry.id) }}
-    <td class="verification-status">{% if entry.approval_status == 'accepted' %}<strong class="colour-green">Accepted</strong>{% elif entry.approval_status == 'rejected' %}<strong class="colour-red">Rejected</strong>{% elif entry.approval_status == 'more-info' %}<strong class="colour-yellow">More Information</strong>{% endif %}</td>
+    <td class="verification-status">{% if entry.approval_status == 'pending' %}<strong>Pending</strong>{% elif entry.approval_status == 'pending-second-opinion' %}<strong class="colour-purple">Pending second opinion</strong>{% elif entry.approval_status == 'accepted' %}<strong class="colour-green">Accepted</strong>{% elif entry.approval_status == 'rejected' %}<strong class="colour-red">Rejected</strong>{% elif entry.approval_status == 'more-info' %}<strong class="colour-yellow">More Information</strong>{% endif %}</td>
     <td class="verification-comments">
         {% if entry.comments %}{{ render_comments(entry.comments, entry, 'historical-' ~ entry.id) }}{% else %}<p><em>No comments.</em></p>{% endif %}
     </td>
@@ -112,6 +112,7 @@
 
 <p class="verification-stats">
     <strong>Pending:</strong> {{ verification_stats.pending }},
+    <strong>Pending second opinion:</strong> {{ verification_stats['pending-second-opinion'] }},
     <strong>Accepted:</strong> {{ verification_stats.accepted }},
     <strong>Rejected:</strong> {{ verification_stats.rejected }},
     <strong>Waiting for info:</strong> {{ verification_stats['more-info'] }},
@@ -128,6 +129,7 @@
     <fieldset>
         <legend>Status</legend>
         <label><input type="checkbox" class="verification-status-filter" value="pending" checked> Pending</label>
+        <label><input type="checkbox" class="verification-status-filter" value="pending-second-opinion" checked> Pending second opinion</label>
         <label><input type="checkbox" class="verification-status-filter" value="accepted" checked> Accepted</label>
         <label><input type="checkbox" class="verification-status-filter" value="rejected" checked> Rejected</label>
         <label><input type="checkbox" class="verification-status-filter" value="more-info" checked> Waiting for information</label>
@@ -171,6 +173,8 @@
                 <td class="verification-status">
                     {% if song.approval_status == 'pending' %}
                     <strong>Pending</strong>
+                    {% elif song.approval_status == 'pending-second-opinion' %}
+                    <strong class="colour-purple">Pending second opinion</strong>
                     {% elif song.approval_status == 'accepted' %}
                     <strong class="colour-green">Accepted</strong>
                     {% elif song.approval_status == 'rejected' %}
@@ -187,6 +191,7 @@
                         <div>
                             <select id="status-{{ song.id }}" name="status" aria-label="Status">
                                 <option value="pending" {% if song.approval_status == 'pending' %}selected{% endif %}>Pending</option>
+                                <option value="pending-second-opinion" {% if song.approval_status == 'pending-second-opinion' %}selected{% endif %}>Pending second opinion</option>
                                 <option value="accepted" {% if song.approval_status == 'accepted' %}selected{% endif %}>Accepted</option>
                                 <option value="rejected" {% if song.approval_status == 'rejected' %}selected{% endif %}>Rejected</option>
                                 <option value="more-info" {% if song.approval_status == 'more-info' %}selected{% endif %}>Information</option>

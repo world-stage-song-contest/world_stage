@@ -99,7 +99,9 @@ def test_moderation_state_changes_are_song_level_and_message_gated(client, db, l
 
     @settings(max_examples=12, deadline=None)
     @given(
-        status=st.sampled_from(["pending", "accepted", "rejected", "more-info"]),
+        status=st.sampled_from(
+            ["pending", "pending-second-opinion", "accepted", "rejected", "more-info"]
+        ),
         body=message,
     )
     def property_test(status, body):

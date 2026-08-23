@@ -111,7 +111,8 @@ def _seeded_db(_test_db):
 
         cur.execute("""
             INSERT INTO song_approval_status (name)
-            VALUES ('pending'), ('accepted'), ('rejected'), ('more-info')
+            VALUES ('pending'), ('pending-second-opinion'),
+                   ('accepted'), ('rejected'), ('more-info')
             ON CONFLICT DO NOTHING
         """)
 

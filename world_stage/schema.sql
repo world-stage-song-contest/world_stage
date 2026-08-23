@@ -16,7 +16,7 @@ INSERT INTO show_status (name) VALUES ('none'), ('draw'), ('partial'), ('full')
 
 CREATE TABLE IF NOT EXISTS song_approval_status (name text PRIMARY KEY);
 INSERT INTO song_approval_status (name) VALUES
-    ('pending'), ('accepted'), ('rejected'), ('more-info')
+    ('pending'), ('pending-second-opinion'), ('accepted'), ('rejected'), ('more-info')
     ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS account_role (

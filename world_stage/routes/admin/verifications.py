@@ -9,6 +9,13 @@ from ...utils.song_revisions import set_song_status
 from .common import _resolve_special, bp
 
 NOTIFICATION_STATUSES = {"rejected", "more-info"}
+VERIFICATION_STATUSES = {
+    "pending",
+    "pending-second-opinion",
+    "accepted",
+    "rejected",
+    "more-info",
+}
 MAX_NOTIFICATION_LENGTH = 5000
 
 
@@ -247,6 +254,7 @@ def _render_verifications(year: dict):
 
     verification_stats = {
         "pending": 0,
+        "pending-second-opinion": 0,
         "accepted": 0,
         "rejected": 0,
         "more-info": 0,
@@ -486,7 +494,7 @@ def set_verification_status(year: int, song_id: int, user: tuple[int, str]):
     if not cursor.fetchone():
         return render_template("error.html", error=f"Year {year} not found"), 404
     status = request.form.get("status")
-    if status not in {"pending", "accepted", "rejected", "more-info"}:
+    if status not in VERIFICATION_STATUSES:
         return render_template("error.html", error="Invalid verification status"), 400
     return _set_verification(
         year,
@@ -552,7 +560,7 @@ def set_verification_status_special(
     if not year:
         return render_template("error.html", error=f"Special '{short_name}' not found"), 404
     status = request.form.get("status")
-    if status not in {"pending", "accepted", "rejected", "more-info"}:
+    if status not in VERIFICATION_STATUSES:
         return render_template("error.html", error="Invalid verification status"), 400
     return _set_verification(
         year["id"],
