@@ -9,7 +9,9 @@
     <script src="{{ static('js/year.js') }}"></script>
     <script src="{{ static('js/footnote.js') }}"></script>
     <script src="{{ static('js/scrobble.js') }}"></script>
+    <script src="{{ static('js/audio-fallback.js') }}"></script>
     <link href="https://vjs.zencdn.net/8.23.3/video-js.css" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ static('css/videojs-overrides.css') }}">
     <style>
         #video-player-container {
             max-width: 560px;
@@ -461,8 +463,12 @@
             try {
                 const player = (videojs.getPlayer && videojs.getPlayer('video-player'))
                     || videojs('video-player');
-                tracker.durationProvider = () => player.duration();
                 tracker.attachVideoJs(player);
+                const audioFallback = WorldStageAudioFallback.attach(player);
+                tracker.attachMedia(audioFallback.audio);
+                tracker.durationProvider = () => audioFallback.isActive()
+                    ? audioFallback.audio.duration
+                    : player.duration();
                 return;
             } catch (e) { /* use the native element below */ }
         }

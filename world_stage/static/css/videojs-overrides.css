@@ -1,0 +1,15 @@
+/* The default Video.js menu uses overflow:auto, which can add a horizontal
+   scrollbar once the playback-rate list is tall enough to need scrolling. */
+.video-js .vjs-playback-rate .vjs-menu-content {
+    box-sizing: border-box;
+    max-height: none;
+    overflow: hidden;
+}
+
+.video-js .vjs-playback-rate .vjs-menu-title,
+.video-js .vjs-playback-rate .vjs-menu-item {
+    font-family: inherit;
+    font-size: 1.2em;
+    line-height: 1.4;
+    white-space: nowrap;
+}

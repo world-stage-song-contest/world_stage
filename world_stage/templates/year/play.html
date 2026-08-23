@@ -2,7 +2,9 @@
 {% block title %}Play: {{ collection_title or (year ~ ' ' ~ show_name) }}{% endblock %}
 {% block headercontents %}
     <link href="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video-js.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ static('css/videojs-overrides.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video.min.js"></script>
+    <script src="{{ static('js/audio-fallback.js') }}"></script>
     <script src="{{ static('js/scrobble.js') }}"></script>
     <style>
         #play-controls {
@@ -192,6 +194,7 @@
     const player = videojs('player-video', {
         fluid: true,
         aspectRatio: '16:9',
+        playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
     });
     const scrobbleTracker = new WorldStageScrobble.Tracker(
         {{ 'true' if scrobble_enabled else 'false' }}
@@ -200,6 +203,12 @@
 
     let currentIndex = -1;
     const listEl = document.getElementById('custom-playlist');
+    const audioFallback = WorldStageAudioFallback.attach(player, {
+        onEnded() {
+            if (currentIndex + 1 < ENTRIES.length) loadEntry(currentIndex + 1);
+        },
+    });
+    scrobbleTracker.attachMedia(audioFallback.audio);
 
     function entryGroups(entries) {
         const groups = [];
@@ -253,11 +262,12 @@
     function loadEntry(index, { autoplay = true } = {}) {
         const entry = ENTRIES[index];
         if (!entry) return;
+        audioFallback.reset();
         // Postcards and the final recap deliberately clear the tracker:
         // only full catalog songs are eligible for scrobbling.
         scrobbleTracker.setSong(
             entry.kind === 'song' ? entry : null,
-            () => player.duration()
+            () => audioFallback.isActive() ? audioFallback.audio.duration : player.duration()
         );
         currentIndex = index;
 

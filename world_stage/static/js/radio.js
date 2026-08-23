@@ -26,6 +26,7 @@
     // meaningless (the schedule always wins on the next tune()).
     const player = videojs('radio-player', {
         controlBar: { progressControl: false },
+        playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
     });
     // The schedule is gapless (slot_end = slot_start + stored
     // duration), so a song normally ends right at its window boundary.
@@ -33,7 +34,7 @@
     // events still fire in backgrounded mobile tabs, while setTimeout
     // is throttled to uselessness there. Without this, the radio would
     // fall silent after one song once the screen turns off.
-    player.on('ended', () => {
+    function handleEnded() {
         if (!current) return;
         freezeHeard();
         if (current.slot_end - serverNow() > 2) {
@@ -44,7 +45,19 @@
             return;
         }
         tune();
+    }
+    player.on('ended', handleEnded);
+
+    const audioFallback = WorldStageAudioFallback.attach(player, {
+        getStartTime: () => current ? Math.max(0, serverNow() - current.slot_start) : 0,
+        shouldPlay: () => tunedIn,
+        onEnded: handleEnded,
     });
+    audioFallback.audio.addEventListener('playing', () => {
+        if (playingSince === null) playingSince = Date.now() / 1000;
+    });
+    audioFallback.audio.addEventListener('pause', freezeHeard);
+    audioFallback.audio.addEventListener('waiting', freezeHeard);
 
     function videoElement() {
         // The underlying HTMLVideoElement that video.js wraps.
@@ -133,8 +146,8 @@
         // Jump back to the live position, e.g. after a pause from the
         // lock screen: a radio resumes at "now", not where it left off.
         if (current && serverNow() < current.slot_end) {
-            player.currentTime(Math.max(0, serverNow() - current.slot_start));
-            const p = player.play();
+            audioFallback.currentTime(Math.max(0, serverNow() - current.slot_start));
+            const p = audioFallback.play();
             if (p && typeof p.catch === 'function') p.catch(() => {});
         } else {
             tune();
@@ -153,7 +166,7 @@
             artwork: song.poster ? [{ src: song.poster }] : [],
         });
         navigator.mediaSession.setActionHandler('play', resync);
-        navigator.mediaSession.setActionHandler('pause', () => player.pause());
+        navigator.mediaSession.setActionHandler('pause', () => audioFallback.pause());
         // It's live radio: no seeking, no track skipping.
         for (const action of ['seekbackward', 'seekforward', 'seekto',
                               'previoustrack', 'nexttrack']) {
@@ -191,6 +204,7 @@
     }
 
     function playSong(song) {
+        audioFallback.reset();
         const videoEl = videoElement();
 
         // Chrome rejects sources whose URL ends in .mov when set via

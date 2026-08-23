@@ -438,6 +438,10 @@ def generate_iframe(url: str, img_url: str | None, vtt_url: str | None = None):
 
     elif (suffix := url.rsplit(".", 1)[-1].lower()) in mime_types:
         mime_type = mime_types[suffix]
+        videojs_options = (
+            '{"responsive": true, "playbackRates": '
+            "[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]}"
+        )
         poster = ""
         if mime_type.startswith("audio"):
             poster = f'poster="{img_url}"'
@@ -454,7 +458,7 @@ def generate_iframe(url: str, img_url: str | None, vtt_url: str | None = None):
                     crossorigin="anonymous"
                     {poster}
                     preload="metadata"
-                    data-setup='{{"responsive": true}}'>
+                    data-setup='{videojs_options}'>
         <source src="{url}" type="{mime_type}">
         {subtitles}
         This media format isn't supported for direct playback by your browser.
