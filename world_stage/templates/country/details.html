@@ -89,6 +89,15 @@
         }
     </script>
 {% endblock %}
+{% block navigation %}
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('country.country', code=song.country.cc.lower()) }}">{{ name }}</a>
+{% endblock %}
 {% block onload%}onLoad(){% endblock %}
 {% block content %}
 

@@ -110,7 +110,7 @@
             <tr data-value="{{ loop.index }}" class="{{ class }} {{ qclass }}"
                 {% if is_revote and original and original.special_qualifier %}title="Special qualifier"{% endif %}>
                 <td class="number header-like">{{ song.vote_data.ro }}</td>
-                <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
+                <td class="sticky"><a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></a></td>
                 <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
                 {% if is_revote %}
                 <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('revote.song_votes', year=revote_year, show=show, song_id=song.id) }}">{{ song.title }}</a></td>

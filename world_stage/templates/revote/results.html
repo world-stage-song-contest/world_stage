@@ -75,7 +75,7 @@
         {% set old_qclass = qualifier_class(original.entry_status) if original else '' %}
         <tr data-value="{{ place }}" class="{{ class }} {{ qclass }}">
             <th class="number">{{ song.vote_data.ro }}</th>
-            <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
+            <td class="sticky"><a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></a></td>
             <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
             <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('revote.song_votes', year=revote_year, show=show, song_id=song.id) }}">{{ song.title }}</a></td>
             <td class="number extra-visible">{{ place }}</td>

@@ -122,7 +122,13 @@
                 {%if song.hidden %}onclick="revealRow(this)"{% endif %}
                 class="{{ class }} {{ qclass }} {{ 'unrevealed' if song.hidden else '' }}">
                 <th class="number">{{ ro }}</td>
-                <td class="sticky"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></td>
+                <td class="sticky">
+                    {% if song.hidden %}
+                    <div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div>
+                    {% else %}
+                    <a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></a>
+                    {% endif %}
+                </td>
                 <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
                 {% if song.hidden %}
                 <td><span class="col-truncate" title="{{ song.title }}">{{ song.title }}</span></td>
