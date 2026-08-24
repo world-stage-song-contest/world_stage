@@ -113,6 +113,56 @@ def test_recap_snippet_export_follows_configured_values_and_fallbacks(client, db
     property_test()
 
 
+def test_recap_exports_distinct_entry_codes_separately_from_country_code(client, db):
+    first_song_id, show = _seed_show(db)
+    with db.cursor() as cursor:
+        second_song_id = cursor.execute(
+            """INSERT INTO song (country_id, year_id, entry_number)
+               VALUES ('US', 2025, 2) RETURNING id"""
+        ).fetchone()["id"]
+        cursor.execute(
+            """INSERT INTO song_data (
+                   song_id, submitter_id, artist_credit_set_id, title
+               ) VALUES (
+                   %s, 1, test_artist_credit('Second Artist'), 'Second Song'
+               )""",
+            (second_song_id,),
+        )
+        show_id = cursor.execute(
+            "SELECT id FROM show WHERE year_id || '-' || short_name = %s", (show,)
+        ).fetchone()["id"]
+        cursor.execute(
+            "INSERT INTO song_show (song_id, show_id, running_order) VALUES (%s, %s, 2)",
+            (second_song_id, show_id),
+        )
+    db.commit()
+
+    @given(swapped=st.booleans())
+    def property_test(swapped):
+        codes = ("RCP1", "RCP2") if not swapped else ("RCP2", "RCP1")
+        with db.cursor() as cursor:
+            cursor.execute(
+                "UPDATE song SET entry_code = NULL WHERE id = ANY(%s)",
+                ([first_song_id, second_song_id],),
+            )
+            cursor.execute(
+                "UPDATE song SET entry_code = %s WHERE id = %s",
+                (codes[0], first_song_id),
+            )
+            cursor.execute(
+                "UPDATE song SET entry_code = %s WHERE id = %s",
+                (codes[1], second_song_id),
+            )
+        db.commit()
+
+        rows = _recap(client, "show", show).get_json()["result"]
+        assert {row["cc"] for row in rows} == {"us"}
+        assert {row["entry_code"] for row in rows} == set(codes)
+        assert {row["song_id"] for row in rows} == {first_song_id, second_song_id}
+
+    property_test()
+
+
 def test_country_selection_accepts_equivalent_identifiers(client, db):
     with db.cursor() as cursor:
         cursor.execute(

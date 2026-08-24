@@ -229,6 +229,7 @@ CREATE TABLE IF NOT EXISTS song (
     country_id text NOT NULL REFERENCES country (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     year_id bigint NOT NULL REFERENCES year (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     entry_number integer DEFAULT 1,
+    entry_code text,
     main_participant boolean NOT NULL DEFAULT true,
     UNIQUE (year_id, country_id, entry_number)
 );
@@ -534,7 +535,7 @@ CREATE TABLE IF NOT EXISTS song_verification_hidden_revision (
 -- Deprecated compatibility view. New read paths should start from their small,
 -- task-specific ID set and join the latest song_data/song_status rows directly.
 CREATE OR REPLACE VIEW current_song AS
-SELECT song.id, song.country_id, song.year_id, song.entry_number,
+SELECT song.id, song.country_id, song.year_id, song.entry_number, song.entry_code,
        data.submitter_id, data.title,
        artist_credit_name(data.artist_credit_set_id) AS artist,
        data.created_at, data.changed_by,

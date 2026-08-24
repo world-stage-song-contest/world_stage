@@ -1030,7 +1030,7 @@ def get_country_data(year: int, country: str):
                    vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                    translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
-                   sources, entry_number
+                   sources, entry_number, entry_code
             FROM current_song AS song
             WHERE year_id = %s AND country_id = %s AND entry_number = %s
         """,
@@ -1047,7 +1047,7 @@ def get_country_data(year: int, country: str):
                        vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                        translated_lyrics,
                        romanized_lyrics, native_lyrics, notes, submitter_id,
-                       sources, entry_number
+                       sources, entry_number, entry_code
                 FROM current_song AS song
                 WHERE year_id = %s AND country_id = %s AND submitter_id = %s
                 ORDER BY entry_number
@@ -1064,7 +1064,7 @@ def get_country_data(year: int, country: str):
                    vtt_link, snippet_start, snippet_end, snippet2_start, snippet2_end,
                    translated_lyrics,
                    romanized_lyrics, native_lyrics, notes, submitter_id,
-                   sources, entry_number
+                   sources, entry_number, entry_code
             FROM current_song AS song
             WHERE year_id = %s AND country_id = %s
         """,
@@ -1165,6 +1165,7 @@ def get_country_data(year: int, country: str):
         "year": year,
         "country": country,
         "entry_number": row["entry_number"],
+        "entry_code": row["entry_code"],
         "title": row["title"],
         "native_title": row["native_title"],
         "artist": row["artist"],

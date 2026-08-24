@@ -155,6 +155,10 @@ function collectFormData() {
     // (the requester's own account for new songs, the existing submitter
     // for edits) rather than forcing submitter_id to null.
     const forceSubmitter = document.getElementById('force_submitter');
+    const entryCode = document.getElementById('entry_code');
+    if (entryCode) {
+        data.entry_code = entryCode.value || null;
+    }
     if (forceSubmitter && forceSubmitter.value !== 'none') {
         data.submitter_id = parseInt(forceSubmitter.value, 10);
     }

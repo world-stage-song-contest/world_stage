@@ -58,6 +58,7 @@ bp = Blueprint("song", __name__, url_prefix="/song")
 ENGLISH_LANG_ID = 20
 MAX_SNIPPET_DURATION = 20
 MAX_SNIPPET2_DURATION = 10
+MAX_ENTRY_CODE_LENGTH = 10
 MAX_USER_SUBMISSIONS = 2
 MAX_USER_SUBMISSIONS_SPECIAL = 1
 
@@ -173,6 +174,21 @@ def _normalize_text(value) -> str | None:
     return None if value == "" else value
 
 
+def _parse_entry_code(data: dict, permissions) -> tuple[str | None, tuple | None]:
+    """Validate an explicitly supplied admin entry code."""
+    if "entry_code" not in data:
+        return None, None
+    if not permissions.can_edit:
+        return None, err(ErrorID.FORBIDDEN, "Only admins can set entry codes")
+    entry_code = _normalize_text(data["entry_code"])
+    if entry_code is not None and len(entry_code) > MAX_ENTRY_CODE_LENGTH:
+        return None, err(
+            ErrorID.BAD_REQUEST,
+            f"entry_code must be at most {MAX_ENTRY_CODE_LENGTH} characters",
+        )
+    return entry_code, None
+
+
 def _parse_request_artists(data: dict) -> tuple[list[dict] | None, str | None]:
     try:
         return parse_artist_credits(data), None
@@ -268,7 +284,7 @@ def _get_request_data() -> tuple[dict | None, bool]:
             if field in form:
                 data[field] = _form_bool(form.get(field))
         # Scalars
-        for field in ("year", "country", "submitter_id", "entry_number"):
+        for field in ("year", "country", "submitter_id", "entry_number", "entry_code"):
             if field in form:
                 data[field] = form[field]
 
@@ -443,6 +459,7 @@ def _song_row_to_json(
         "id": row["id"],
         "year": row["year_id"],
         "entry_number": row.get("entry_number"),
+        "entry_code": row.get("entry_code"),
         "special_short_name": row.get("special_short_name"),
         "country_id": row["country_id"],
         "country_name": row["country_name"],
@@ -487,6 +504,7 @@ def _fetch_song(cursor, song_id: int) -> dict | None:
     cursor.execute(
         """
         SELECT song.id, song.year_id, song.country_id, country.name AS country_name,
+               song.entry_code,
                song.title, song.native_title, song.artist, song.is_placeholder,
                song.title_language_id, song.native_language_id,
                song.language_set_id, song.genre_set_id,
@@ -537,6 +555,7 @@ _SONG_LIST_QUERY = sql.SQL(
         song.id,
         song.year_id,
         song.country_id,
+        song.entry_code,
         country.name AS country_name,
         data.title,
         data.native_title,
@@ -1216,6 +1235,10 @@ def create_song(auth: tuple):
     db = get_db()
     cursor = db.cursor()
 
+    entry_code, entry_code_error = _parse_entry_code(data, permissions)
+    if entry_code_error:
+        return entry_code_error
+
     national_final_id = data.get("national_final_id")
     national_final = None
     if national_final_id is not None:
@@ -1383,11 +1406,13 @@ def create_song(auth: tuple):
 
     cursor.execute(
         """
-        INSERT INTO song (year_id, country_id, entry_number, main_participant)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO song (
+            year_id, country_id, entry_number, entry_code, main_participant
+        )
+        VALUES (%s, %s, %s, %s, %s)
         RETURNING id
     """,
-        (year, cc, entry_number, national_final is None),
+        (year, cc, entry_number, entry_code, national_final is None),
     )
     song_id = fetchone(cursor)["id"]
     if national_final_id is not None:
@@ -1470,6 +1495,11 @@ def replace_song(id: int, auth: tuple):
     row = _fetch_song(cursor, id)
     if not row:
         return err(ErrorID.NOT_FOUND, f"Song {id} not found")
+
+    entry_code, entry_code_error = _parse_entry_code(data, permissions)
+    if entry_code_error:
+        return entry_code_error
+    entry_code_supplied = "entry_code" in data
 
     # ── Permission check ─────────────────────────────────────────
     # Non-admins may edit their own submissions, or claim a placeholder
@@ -1640,7 +1670,10 @@ def replace_song(id: int, auth: tuple):
         for field, value in revision_changes.items()
         if row[field] != value
     }
-    if revision_changes:
+    entry_code_changed = entry_code_supplied and entry_code != row["entry_code"]
+    if entry_code_changed:
+        cursor.execute("UPDATE song SET entry_code = %s WHERE id = %s", (entry_code, id))
+    if revision_changes or entry_code_changed:
         create_song_revision(cursor, id, revision_changes, changed_by=user_id)
     try:
         status_change = set_song_status(
@@ -1694,6 +1727,11 @@ def update_song(id: int, auth: tuple):
     row = _fetch_song(cursor, id)
     if not row:
         return err(ErrorID.NOT_FOUND, f"Song {id} not found")
+
+    entry_code, entry_code_error = _parse_entry_code(data, permissions)
+    if entry_code_error:
+        return entry_code_error
+    entry_code_supplied = "entry_code" in data
 
     # ── Permission check ─────────────────────────────────────────
     if (
@@ -1806,6 +1844,7 @@ def update_song(id: int, auth: tuple):
         and subgenre_ids is None
         and artist_credits is None
         and "is_placeholder" not in data
+        and not entry_code_supplied
     ):
         return err(ErrorID.BAD_REQUEST, "No fields to update")
 
@@ -1904,7 +1943,10 @@ def update_song(id: int, auth: tuple):
                 cursor, artist_credits
             )
     changes = {field: value for field, value in changes.items() if row[field] != value}
-    if changes:
+    entry_code_changed = entry_code_supplied and entry_code != row["entry_code"]
+    if entry_code_changed:
+        cursor.execute("UPDATE song SET entry_code = %s WHERE id = %s", (entry_code, id))
+    if changes or entry_code_changed:
         create_song_revision(cursor, id, changes, changed_by=user_id)
 
     if "is_placeholder" in data:

@@ -119,6 +119,38 @@ def test_song_crud_round_trip_preserves_generated_catalog_values(
     property_test()
 
 
+def test_entry_code_is_admin_only_and_limited_to_ten_characters(
+    client, bob_headers, alice_headers
+):
+    created = _create_song(client, bob_headers, country="FR")
+    assert created.status_code == 201
+    song_id = _result(created)["id"]
+
+    @given(
+        method=st.sampled_from(["patch", "put"]),
+        is_admin=st.booleans(),
+        code=st.text(alphabet=string.ascii_letters + string.digits, min_size=1, max_size=12),
+    )
+    def property_test(method, is_admin, code):
+        headers = alice_headers if is_admin else bob_headers
+        response = (
+            client.patch(
+                f"/api/song/{song_id}", json={"entry_code": code}, headers=headers
+            )
+            if method == "patch"
+            else _put_song(client, headers, song_id, entry_code=code)
+        )
+        expected = 403 if not is_admin else (200 if len(code) <= 10 else 400)
+        assert response.status_code == expected
+        if expected == 200:
+            assert _result(response)["entry_code"] == code
+
+    try:
+        property_test()
+    finally:
+        _delete_if_current(client, alice_headers, song_id)
+
+
 def test_country_and_artist_lookup_accept_equivalent_public_identifiers(
     client, bob_headers, alice_headers
 ):

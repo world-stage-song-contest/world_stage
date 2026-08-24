@@ -127,8 +127,8 @@ WITH song_data AS (
            show.id as show_id, show.year_id AS year, account.username AS submitter,
            show.year_id || COALESCE(national_final.short_name || '-', '')
                || show.short_name AS show,
-           running_order AS ro,
-           LOWER(country.id) AS cc, country.name AS country,
+           song.id AS song_id, running_order AS ro,
+           LOWER(country.id) AS cc, song.entry_code, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
            poster_link AS image_link,
@@ -147,7 +147,7 @@ WITH song_data AS (
     WHERE show.id = ANY(%s) AND (%s OR (show.year_id < 0) = %s)
     ORDER BY song.id, show.id
 )
-SELECT year, submitter, show, ro, cc, country,
+SELECT song_id, year, submitter, show, ro, cc, entry_code, country,
        artist, title, media_link, snippet_start, snippet_end,
        snippet2_start, snippet2_end, language,
        type, image_link, _changed_at
@@ -158,8 +158,8 @@ ORDER BY show_id, ro
 _SQL_YEAR = """
 WITH song_data AS (
     SELECT song.year_id as show_id, song.year_id AS year, account.username AS submitter,
-           song.year_id AS show, UPPER(country.id) AS ro,
-           LOWER(country.id) AS cc, country.name AS country,
+           song.year_id AS show, song.id AS song_id, UPPER(country.id) AS ro,
+           LOWER(country.id) AS cc, song.entry_code, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
            poster_link AS image_link,
@@ -175,7 +175,7 @@ WITH song_data AS (
     WHERE song.year_id = ANY(%s) AND (%s OR (song.year_id < 0) = %s)
     ORDER BY LOWER(country.id)
 )
-SELECT year, submitter, show, ro, cc, country,
+SELECT song_id, year, submitter, show, ro, cc, entry_code, country,
        artist, title, media_link, snippet_start, snippet_end,
        snippet2_start, snippet2_end, language,
        type, image_link, _changed_at
@@ -187,8 +187,8 @@ _SQL_COUNTRY = """
 WITH song_data AS (
     SELECT song.year_id AS year, account.username AS submitter,
            LOWER(country.id) as show_id, LOWER(country.id) AS show,
-           MOD(song.year_id, 100) AS ro,
-           LOWER(country.id) AS cc, country.name AS country,
+           song.id AS song_id, MOD(song.year_id, 100) AS ro,
+           LOWER(country.id) AS cc, song.entry_code, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
            poster_link AS image_link,
@@ -206,7 +206,7 @@ WITH song_data AS (
       AND (%s OR (song.year_id < 0) = %s)
     ORDER BY song.year_id
 )
-SELECT year, submitter, show, ro, cc, country,
+SELECT song_id, year, submitter, show, ro, cc, entry_code, country,
        artist, title, media_link, snippet_start, snippet_end,
        snippet2_start, snippet2_end, language,
        type, image_link, _changed_at
@@ -218,8 +218,8 @@ _SQL_SUBMITTER = """
 WITH song_data AS (
     SELECT account.username as show_id, song.year_id AS year, account.username AS submitter,
            account.username AS show,
-           MOD(song.year_id, 100) AS ro,
-           LOWER(country.id) AS cc, country.name AS country,
+           song.id AS song_id, MOD(song.year_id, 100) AS ro,
+           LOWER(country.id) AS cc, song.entry_code, country.name AS country,
            artist, title, video_link AS media_link, snippet_start, snippet_end,
            snippet2_start, snippet2_end,
            poster_link AS image_link,
@@ -237,7 +237,7 @@ WITH song_data AS (
       AND (%s OR (song.year_id < 0) = %s)
     ORDER BY song.year_id, country
 )
-SELECT year, submitter, show, ro, cc, country,
+SELECT song_id, year, submitter, show, ro, cc, entry_code, country,
        artist, title, media_link, snippet_start, snippet_end,
        snippet2_start, snippet2_end, language,
        type, image_link, _changed_at

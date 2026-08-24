@@ -207,6 +207,9 @@
     {% if elevated %}
     <fieldset class="grid hidable" disabled>
         <legend>Admin options</legend>
+        <label for="entry_code">Entry code</label>
+        <input type="text" id="entry_code" name="entry_code" maxlength="10"
+               value="{{ data.entry_code or '' }}">
         <label for="force_submitter">Replacement submitter</label>
         <select id="force_submitter" name="force_submitter">
             <option value="none">None</option>
