@@ -19,18 +19,7 @@
     {% endfor %}
 </div>
 
-<h2>Ongoing years</h2>
-<div class="year-container">
-    {% for year in ongoing %}
-        <div class="upcoming-year">
-            <a href="{{ url_for('year.year', year=year.id) }}">
-                <div class="year-number">{{ year.id }}</div>
-            </a>
-        </div>
-    {% endfor %}
-</div>
-
-<h2>Done years</h2>
+<h2>Years</h2>
 
 <div class="detail-column-controls">
     <label>
@@ -41,7 +30,7 @@
 </div>
 
 <div class="sticky-header-table-container">
-    <table class="results-table sticky-header-table sortable song-table adjusted-percent-table hide-detail">
+    <table class="results-table sticky-header-table sortable song-table adjusted-percent-table hide-detail years-table">
         <thead>
             <tr>
                 <th>Year</th>
@@ -60,7 +49,13 @@
         {% set winner = year.winner %}
             <tr data-value="{{ loop.index }}">
                 <td class="year"><a href="{{ url_for('year.year', year=year.id) }}"><b>{{ year.id }}</b></a></td>
-                {% if winner %}
+                {% if year.status == 'ongoing' %}
+                <td colspan="8" class="ongoing-shows">
+                    {% for show in year.shows %}
+                    <a href="{{ url_for('year.results', year=year.id, show=show.short_name) }}">{{ show.show_name }}</a>{{ ', ' if not loop.last }}
+                    {% endfor %}
+                </td>
+                {% elif winner %}
                 <td><a href="{{ url_for('country.country', code=winner.country.cc) }}"><div class="country">
                     {{ flag(winner.country.cc, 42, winner.country.name, variant=winner.country.flag_variant) }}
                     {{ winner.country.name }}
@@ -94,7 +89,7 @@
 
 <h2>Specials</h2>
 <div class="sticky-header-table-container">
-    <table class="results-table sticky-header-table sortable song-table adjusted-percent-table hide-detail">
+    <table class="results-table sticky-header-table sortable song-table adjusted-percent-table hide-detail years-table">
         <thead>
             <tr>
                 <th>Special</th>

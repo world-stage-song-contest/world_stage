@@ -144,7 +144,6 @@ def index():
 
     years = []
     upcoming = []
-    ongoing = []
 
     cursor.execute(
         """
@@ -157,21 +156,39 @@ def index():
     for data in cursor.fetchall():
         if data["id"] < 0:
             specials.append(data)
-        elif data["status"] == "closed":
+        elif data["status"] in {"closed", "ongoing"}:
             years.append(data)
-        elif data["status"] == "ongoing":
-            ongoing.append(data)
         else:
             upcoming.append(data)
 
     upcoming.reverse()
+
+    ongoing_years = [year for year in years if year["status"] == "ongoing"]
+    for year in ongoing_years:
+        year["shows"] = []
+    if ongoing_years:
+        cursor.execute(
+            """
+            SELECT show.year_id, show.short_name, show.show_name
+            FROM show
+            JOIN show_types ON show_types.id = show.show_type
+            WHERE show.year_id = ANY(%s)
+              AND show.national_final_id IS NULL
+            ORDER BY show.year_id DESC, show_types.sort_order,
+                     show.show_number NULLS FIRST, show.id
+            """,
+            ([year["id"] for year in ongoing_years],),
+        )
+        shows_by_year = {year["id"]: year["shows"] for year in ongoing_years}
+        for show in cursor.fetchall():
+            shows_by_year[show["year_id"]].append(show)
 
     winners = get_year_index_winners()
     for item in (*years, *specials):
         item["winner"] = winners.get(item["id"])
 
     return render_template(
-        "year/index.html", years=years, upcoming=upcoming, specials=specials, ongoing=ongoing
+        "year/index.html", years=years, upcoming=upcoming, specials=specials
     )
 
 

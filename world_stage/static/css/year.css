@@ -40,6 +40,14 @@
     width: fit-content;
 }
 
+.years-table tbody tr {
+    height: 45px;
+}
+
+.years-table .ongoing-shows {
+    text-align: center;
+}
+
 /* These reuse the theme-aware audit backgrounds: both remain subtle enough
    for normal table text while switching to dark surfaces in dark mode. */
 .songs-table tr.verification-accepted {
