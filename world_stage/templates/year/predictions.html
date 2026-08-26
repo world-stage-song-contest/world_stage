@@ -183,7 +183,7 @@
                     </div>
                 </td>
                 <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
-                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">{{ song.title }}</a></td>
+                <td><a class="col-truncate" title="{{ song.title }}" href="{% if special %}{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special, entry_number=song.entry_number) }}{% else %}{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id, entry_number=song.entry_number if national_final_name or not song.main_participant else none) }}{% endif %}">{{ song.title }}</a></td>
                 {% set real = real_positions.get(song.id) %}
                 <td class="number" data-value="{{ real if real is not none else '' }}">{{ real if real is not none else '' }}</td>
                 <td class="number" data-value="{{ pred_rank[song.id] }}">{{ pred_rank[song.id] }}</td>
@@ -241,7 +241,7 @@
                     </div>
                 </td>
                 <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
-                <td><a class="col-truncate" title="{{ song.title }}" href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id) }}">{{ song.title }}</a></td>
+                <td><a class="col-truncate" title="{{ song.title }}" href="{% if special %}{{ url_for('country.special_details', code=song.country.cc.lower(), special_short_name=special, entry_number=song.entry_number) }}{% else %}{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id, entry_number=song.entry_number if national_final_name or not song.main_participant else none) }}{% endif %}">{{ song.title }}</a></td>
                 {% set real = real_positions.get(song.id) %}
                 <td class="number">{{ real if real is not none else '' }}</td>
                 <td class="number">{{ pred_rank[song.id] }}</td>

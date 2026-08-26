@@ -52,14 +52,28 @@ def _other_revote_shows(year_id: int, current_show: str) -> list[dict]:
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT show.short_name
+        WITH target AS (
+            SELECT show.national_final_id
+            FROM show
+            LEFT JOIN national_final ON national_final.id = show.national_final_id
+            WHERE show.year_id = %s
+              AND (
+                  (show.national_final_id IS NULL AND show.short_name = %s)
+                  OR national_final.short_name || '-' || show.short_name = %s
+              )
+        )
+        SELECT COALESCE(national_final.short_name || '-', '') || show.short_name
+                   AS short_name
         FROM show
         JOIN show_types ON show_types.id = show.show_type
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
+        CROSS JOIN target
         WHERE show.year_id = %s
+          AND show.national_final_id IS NOT DISTINCT FROM target.national_final_id
           AND show.revote_eligible_at IS NOT NULL
         ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
         """,
-        (year_id,),
+        (year_id, current_show, current_show, year_id),
     )
     shows = []
     for row in cursor.fetchall():
@@ -171,19 +185,35 @@ def index():
     cursor.execute(
         """
         SELECT show.show_name AS name, show.short_name, show.year_id AS year,
-               year.special_name, year.special_short_name
+               year.special_name, year.special_short_name,
+               national_final.id AS national_final_id,
+               national_final.name AS national_final_name,
+               national_final.short_name AS national_final_short_name
         FROM show
         JOIN show_types ON show_types.id = show.show_type
         JOIN year ON year.id = show.year_id
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
         WHERE show.revote_eligible_at IS NOT NULL
         ORDER BY (show.year_id < 0), show.year_id DESC,
-                 show_types.sort_order, show.show_number NULLS FIRST, show.id
+                 national_final.id NULLS FIRST, show_types.sort_order,
+                 show.show_number NULLS FIRST, show.id
         """
     )
     years: dict[int, dict] = {}
     specials: dict[str, dict] = {}
     for row in cursor.fetchall():
-        show = {"name": row["name"], "short_name": row["short_name"]}
+        show = {
+            "name": (
+                f"{row['national_final_name']}: {row['name']}"
+                if row["national_final_name"]
+                else row["name"]
+            ),
+            "short_name": (
+                f"{row['national_final_short_name']}-{row['short_name']}"
+                if row["national_final_short_name"]
+                else row["short_name"]
+            ),
+        }
         if row["special_short_name"]:
             special = specials.setdefault(
                 row["special_short_name"],
@@ -211,15 +241,34 @@ def year(year: str):
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT show.show_name AS name, show.short_name
+        SELECT show.show_name AS name, show.short_name,
+               national_final.name AS national_final_name,
+               national_final.short_name AS national_final_short_name
         FROM show
         JOIN show_types ON show_types.id = show.show_type
-        WHERE year_id = %s AND revote_eligible_at IS NOT NULL
-        ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
+        WHERE show.year_id = %s
+          AND show.revote_eligible_at IS NOT NULL
+        ORDER BY national_final.id NULLS FIRST, show_types.sort_order,
+                 show.show_number NULLS FIRST, show.id
         """,
         (year_data["id"],),
     )
-    shows = cursor.fetchall()
+    shows = [
+        {
+            "name": (
+                f"{row['national_final_name']}: {row['name']}"
+                if row["national_final_name"]
+                else row["name"]
+            ),
+            "short_name": (
+                f"{row['national_final_short_name']}-{row['short_name']}"
+                if row["national_final_short_name"]
+                else row["short_name"]
+            ),
+        }
+        for row in cursor.fetchall()
+    ]
     return render_template("revote/year.html", year=year_data, shows=shows)
 
 
@@ -265,7 +314,7 @@ def vote(year: str, show: str, user: tuple[int, str]):
         username=username,
         nickname=ballot["nickname"] if ballot else None,
         year=show_data.year,
-        show_name=show_data.name,
+        show_name=show_data.contextual_name,
         show=show,
         short_name=show_data.short_name,
         selected_country=selected_country,
@@ -397,7 +446,7 @@ def song_votes(year: str, show: str, song_id: int):
         "year/song_votes.html",
         song=song,
         show=show,
-        show_name=show_data.name,
+        show_name=show_data.contextual_name,
         year=show_data.year,
         point_groups=point_groups,
         no_points_voters=no_points_voters,
@@ -538,7 +587,7 @@ def results(year: str, show: str):
     return render_template(
         "revote/results.html",
         show=show,
-        show_name=show_data.name,
+        show_name=show_data.contextual_name,
         year=show_data.year,
         songs=songs,
         points=show_data.points,
@@ -636,7 +685,7 @@ def detailed_results(year: str, show: str):
     return render_template(
         "year/detailed.html",
         show=show,
-        show_name=show_data.name,
+        show_name=show_data.contextual_name,
         year=show_data.year,
         songs=songs,
         participants=len(songs),
@@ -739,7 +788,7 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
         username=username,
         nickname=nickname,
         year=show_data.year,
-        show_name=show_data.name,
+        show_name=show_data.contextual_name,
         show=show,
         short_name=show_data.short_name,
         selected_country=country_id,

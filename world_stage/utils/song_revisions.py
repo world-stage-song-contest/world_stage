@@ -67,7 +67,7 @@ def create_song_revision(
     """Copy the latest metadata into a new immutable revision.
 
     Comments follow edits unless artist or title changed beyond capitalization.
-    Song status is independent of content revisions.
+    Replacing the song resets its verification status to pending.
     """
     previous = latest_song_data(cursor, song_id)
     if previous is None or previous["song_id"] is None:
@@ -101,7 +101,14 @@ def create_song_revision(
         comparable(previous["rendered_artist"]) != comparable(rendered_artist)
         or comparable(previous["title"]) != comparable(values["title"])
     )
-    if not replaced:
+    if replaced:
+        set_song_status(
+            cursor,
+            song_id,
+            changed_by=changed_by,
+            approval_status="pending",
+        )
+    else:
         cursor.execute(
             """
             UPDATE song_verification_comment

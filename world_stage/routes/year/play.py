@@ -8,10 +8,11 @@ from ...db import fetchone, get_db
 from ...utils import (
     ShowData,
     UserPermissions,
+    can_manage_show,
     get_show_id,
     get_user_id_from_session,
     render_template,
-    with_permissions,
+    with_auth,
 )
 from .common import bp, get_other_shows, resolve_special
 
@@ -260,8 +261,8 @@ def _scrobble_enabled() -> bool:
 
 
 @bp.get("/<int:year>/<show>/play")
-@with_permissions
-def show_play(year: int, show: str, permissions: UserPermissions):
+@with_auth
+def show_play(year: int, show: str, user, permissions: UserPermissions):
     show_data = get_show_id(show, year)
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
@@ -270,7 +271,8 @@ def show_play(year: int, show: str, permissions: UserPermissions):
 
     entries, bad_countries = get_show_play_entries(show_data, postcards)
 
-    if not permissions.can_view_restricted and bad_countries:
+    elevated = can_manage_show(show_data, user, permissions)
+    if not elevated and bad_countries:
         bad_countries = sorted(set(bad_countries))
         return render_template(
             "error.html",
@@ -289,7 +291,7 @@ def show_play(year: int, show: str, permissions: UserPermissions):
         entries=entries,
         postcards=postcards,
         other_shows=get_other_shows(year, show),
-        can_apply_penalty=permissions.can_view_restricted,
+        can_apply_penalty=elevated,
         penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=bool(show_data.progressions),
         special=None,
@@ -299,8 +301,10 @@ def show_play(year: int, show: str, permissions: UserPermissions):
 
 
 @bp.get("/special/<short_name>/<show>/play")
-@with_permissions
-def special_show_play(short_name: str, show: str, permissions: UserPermissions):
+@with_auth
+def special_show_play(
+    short_name: str, show: str, user, permissions: UserPermissions
+):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -314,7 +318,8 @@ def special_show_play(short_name: str, show: str, permissions: UserPermissions):
 
     entries, bad_countries = get_show_play_entries(show_data, postcards)
 
-    if not permissions.can_view_restricted and bad_countries:
+    elevated = can_manage_show(show_data, user, permissions)
+    if not elevated and bad_countries:
         bad_countries = sorted(set(bad_countries))
         return render_template(
             "error.html",
@@ -333,7 +338,7 @@ def special_show_play(short_name: str, show: str, permissions: UserPermissions):
         entries=entries,
         postcards=postcards,
         other_shows=get_other_shows(_year, show),
-        can_apply_penalty=permissions.can_view_restricted,
+        can_apply_penalty=elevated,
         penalties_enabled=show_data.penalizes_non_voters,
         has_qualifiers=bool(show_data.progressions),
         special=short_name,

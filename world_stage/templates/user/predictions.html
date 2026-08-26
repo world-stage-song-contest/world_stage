@@ -22,9 +22,9 @@
 <div class="vote-card">
     <h3 class="card-show-name">
     {% if ps.special_short_name %}
-        <a href="{{ url_for('year.special_predictions', short_name=ps.special_short_name, show=ps.short_name) }}">{{ ps.special_name }} {{ ps.show_name }}</a>
+        <a href="{{ url_for('year.special_predictions', short_name=ps.special_short_name, show=ps.short_name) }}">{% if ps.national_final_name %}{{ ps.national_final_name }}: {{ ps.show_name }}{% else %}{{ ps.special_name }} {{ ps.show_name }}{% endif %}</a>
     {% else %}
-        <a href="{{ url_for('year.show_predictions', year=ps.year, show=ps.short_name) }}">{{ ps.year }} {{ ps.show_name }}</a>
+        <a href="{{ url_for('year.show_predictions', year=ps.year, show=ps.short_name) }}">{% if ps.national_final_name %}{{ ps.national_final_name }}: {{ ps.show_name }}{% else %}{{ ps.year }} {{ ps.show_name }}{% endif %}</a>
     {% endif %}
     </h3>
     <p class="vote-date">{{ ps.date }}</p>

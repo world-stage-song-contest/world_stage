@@ -247,6 +247,7 @@ def special(short_name: str, permissions: UserPermissions):
             FROM song_show ss
             JOIN show sh ON sh.id = ss.show_id
             WHERE sh.year_id = %s
+              AND sh.national_final_id IS NULL
               AND LEFT(sh.short_name, 2) = 'sf'
         """,
             (_year,),
@@ -258,7 +259,8 @@ def special(short_name: str, permissions: UserPermissions):
     else:
         cursor.execute(
             "SELECT 1 FROM show "
-            "WHERE year_id = %s AND status IN ('partial', 'full') LIMIT 1",
+            "WHERE year_id = %s AND national_final_id IS NULL "
+            "AND status IN ('partial', 'full') LIMIT 1",
             (_year,),
         )
         can_view_voters = cursor.fetchone() is not None
@@ -367,6 +369,7 @@ def year(year: int, permissions: UserPermissions):
             FROM song_show ss
             JOIN show sh ON sh.id = ss.show_id
             WHERE sh.year_id = %s
+              AND sh.national_final_id IS NULL
               AND LEFT(sh.short_name, 2) = 'sf'
         """,
             (_year,),
@@ -378,7 +381,8 @@ def year(year: int, permissions: UserPermissions):
     else:
         cursor.execute(
             "SELECT 1 FROM show "
-            "WHERE year_id = %s AND status IN ('partial', 'full') LIMIT 1",
+            "WHERE year_id = %s AND national_final_id IS NULL "
+            "AND status IN ('partial', 'full') LIMIT 1",
             (_year,),
         )
         can_view_voters = cursor.fetchone() is not None

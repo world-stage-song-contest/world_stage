@@ -158,6 +158,49 @@ def test_moderation_state_changes_are_song_level_and_message_gated(client, db, l
     missing_message_property()
 
 
+def test_replacing_song_content_resets_verification_while_metadata_edits_preserve_it(
+    db,
+):
+    @settings(max_examples=12, deadline=None)
+    @given(
+        status=st.sampled_from(
+            ["pending-second-opinion", "accepted", "rejected", "more-info"]
+        ),
+        change_kind=st.sampled_from(["title", "artist", "metadata"]),
+        value=st.text(
+            alphabet=string.ascii_letters + string.digits + " -_.,!?",
+            min_size=1,
+            max_size=40,
+        ).filter(
+            lambda value: bool(value.strip())
+            and value.strip().casefold() not in {"test song", "test artist"}
+        ),
+    )
+    def property_test(status, change_kind, value):
+        song_id = _add_song(db)
+        with db.cursor() as cursor:
+            set_song_status(cursor, song_id, changed_by=1, approval_status=status)
+            if change_kind == "artist":
+                artist_credit_set_id = cursor.execute(
+                    "SELECT test_artist_credit(%s) AS id", (value,)
+                ).fetchone()["id"]
+                changes = {"artist_credit_set_id": artist_credit_set_id}
+            else:
+                changes = {
+                    "title" if change_kind == "title" else "notes": value
+                }
+            create_song_revision(cursor, song_id, changes, changed_by=2)
+        db.commit()
+
+        current = db.execute(
+            "SELECT approval_status FROM current_song WHERE id = %s", (song_id,)
+        ).fetchone()
+        expected = status if change_kind == "metadata" else "pending"
+        assert current["approval_status"] == expected
+
+    property_test()
+
+
 def test_historical_revisions_can_be_merged_or_hidden_without_losing_comments(client, db, login):
     login(1)
 

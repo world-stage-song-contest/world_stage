@@ -5,10 +5,11 @@ from ...db import get_db
 from ...utils import (
     ShowData,
     UserPermissions,
+    can_manage_show,
     dt_now,
     get_show_id,
     render_template,
-    with_permissions,
+    with_auth,
 )
 from .common import bp, resolve_special
 
@@ -158,52 +159,56 @@ def _apply_penalty(show_data: ShowData):
 
 
 @bp.get("/<int:year>/<show>/penalty")
-@with_permissions
-def show_penalty(year: int, show: str, permissions: UserPermissions):
-    if not permissions.can_view_restricted:
-        return render_template("error.html", error="Admins only."), 403
+@with_auth
+def show_penalty(year: int, show: str, user, permissions: UserPermissions):
     show_data = get_show_id(show, year)
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
+    if not can_manage_show(show_data, user, permissions):
+        return render_template("error.html", error="Not authorized."), 403
     return _render_penalty(show_data, str(year), None, None)
 
 
 @bp.post("/<int:year>/<show>/penalty")
-@with_permissions
-def show_penalty_post(year: int, show: str, permissions: UserPermissions):
-    if not permissions.can_view_restricted:
-        return {"error": "Admins only"}, 403
+@with_auth
+def show_penalty_post(year: int, show: str, user, permissions: UserPermissions):
     show_data = get_show_id(show, year)
     if not show_data:
         return {"error": "Show not found"}, 404
+    if not can_manage_show(show_data, user, permissions):
+        return {"error": "Not authorized"}, 403
     return _apply_penalty(show_data)
 
 
 @bp.get("/special/<short_name>/<show>/penalty")
-@with_permissions
-def special_show_penalty(short_name: str, show: str, permissions: UserPermissions):
-    if not permissions.can_view_restricted:
-        return render_template("error.html", error="Admins only."), 403
+@with_auth
+def special_show_penalty(
+    short_name: str, show: str, user, permissions: UserPermissions
+):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
     show_data = get_show_id(show, special_year["id"])
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
+    if not can_manage_show(show_data, user, permissions):
+        return render_template("error.html", error="Not authorized."), 403
     return _render_penalty(
         show_data, short_name, short_name, special_year["special_name"]
     )
 
 
 @bp.post("/special/<short_name>/<show>/penalty")
-@with_permissions
-def special_show_penalty_post(short_name: str, show: str, permissions: UserPermissions):
-    if not permissions.can_view_restricted:
-        return {"error": "Admins only"}, 403
+@with_auth
+def special_show_penalty_post(
+    short_name: str, show: str, user, permissions: UserPermissions
+):
     special_year = resolve_special(short_name)
     if not special_year:
         return {"error": "Special not found"}, 404
     show_data = get_show_id(show, special_year["id"])
     if not show_data:
         return {"error": "Show not found"}, 404
+    if not can_manage_show(show_data, user, permissions):
+        return {"error": "Not authorized"}, 403
     return _apply_penalty(show_data)

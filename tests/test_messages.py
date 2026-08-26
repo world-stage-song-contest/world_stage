@@ -3,6 +3,9 @@ import string
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from world_stage.messaging import has_unread_messages
+from world_stage.utils import UserPermissions
+
 
 def _conversation(
     db,
@@ -134,13 +137,13 @@ def test_participants_control_their_own_conversation_preferences(client, db, log
     conversation_id = _conversation(db, owner=2, participants=[3])
     login(2)
 
-    @given(email=st.booleans(), suppress=st.booleans(), pinned=st.booleans())
-    def property_test(email, suppress, pinned):
+    @given(email=st.booleans(), website=st.booleans(), pinned=st.booleans())
+    def property_test(email, website, pinned):
         form = {}
         if email:
             form["email_notifications"] = "on"
-        if suppress:
-            form["suppress_unread_highlight"] = "on"
+        if website:
+            form["website_notifications"] = "on"
         if pinned:
             form["pinned"] = "on"
 
@@ -155,11 +158,37 @@ def test_participants_control_their_own_conversation_preferences(client, db, log
         ).fetchone()
         assert preferences == {
             "email_notifications": email,
-            "suppress_unread_highlight": suppress,
+            "suppress_unread_highlight": not website,
             "pinned": pinned,
         }
 
     property_test()
+
+
+def test_website_notification_preference_controls_unread_attention(app, db):
+    conversation_id = _conversation(db, owner=2, participants=[3])
+    db.execute(
+        """INSERT INTO message (conversation_id, sender_id, sender_kind, body)
+           VALUES (%s, 3, 'participant', 'Unread message')""",
+        (conversation_id,),
+    )
+    db.commit()
+
+    with app.app_context():
+
+        @given(website_notifications=st.booleans())
+        def property_test(website_notifications):
+            db.execute(
+                """UPDATE conversation_participant
+                   SET suppress_unread_highlight = %s
+                   WHERE conversation_id = %s AND account_id = 2""",
+                (not website_notifications, conversation_id),
+            )
+            db.commit()
+
+            assert has_unread_messages(2, UserPermissions()) is website_notifications
+
+        property_test()
 
 
 def test_reply_access_follows_participation_and_shared_admin_access(client, db, login):

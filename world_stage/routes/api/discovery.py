@@ -32,12 +32,16 @@ def _show_json(row: dict, points: list[int] | None = None) -> dict:
         if row.get("national_final_short_name") else local_short_name
     )
     special = row["special_short_name"] is not None
+    parent_name = row["special_name"] if special else str(row["year_id"])
+    national_final_name = row.get("national_final_name")
+    if national_final_name:
+        display_name = f"{national_final_name}: {row['show_name']}"
+    else:
+        display_name = f"{parent_name} {row['show_name']}"
     if special:
         key = f"{row['special_short_name']}-{route_short_name}"
-        display_name = f"{row['special_name']} {row['show_name']}"
     else:
         key = f"{row['year_id']}-{route_short_name}"
-        display_name = f"{row['year_id']} {row['show_name']}"
 
     return {
         "id": row["id"],
@@ -180,6 +184,7 @@ def shows():
                show.predictions_close, show.date,
                show.status, year.special_name, year.special_short_name,
                national_final.short_name AS national_final_short_name,
+               national_final.name AS national_final_name,
                COALESCE((
                    SELECT jsonb_agg(jsonb_build_object(
                        'target_show_id', progression.target_show_id,
@@ -227,6 +232,7 @@ def open_votings():
                show.predictions_close, show.date,
                show.status, year.special_name, year.special_short_name,
                national_final.short_name AS national_final_short_name,
+               national_final.name AS national_final_name,
                COALESCE((
                    SELECT jsonb_agg(jsonb_build_object(
                        'target_show_id', progression.target_show_id,

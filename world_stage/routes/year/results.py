@@ -275,6 +275,8 @@ def special_detailed_results(short_name: str, show: str, user, permissions: User
         has_qualifiers=bool(show_data.progressions),
         special=short_name,
         special_name=special_year["special_name"],
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
     )
 
 

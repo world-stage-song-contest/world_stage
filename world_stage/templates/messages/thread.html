@@ -99,10 +99,10 @@
             <legend>Notifications</legend>
             <div class="span-fieldset-left">
                 <div>
-                    <input id="suppress_unread_highlight"
-                        name="suppress_unread_highlight" type="checkbox"
-                        {% if conversation.suppress_unread_highlight %}checked{% endif %}>
-                    <label for="suppress_unread_highlight">Website</label>
+                    <input id="website_notifications"
+                        name="website_notifications" type="checkbox"
+                        {% if not conversation.suppress_unread_highlight %}checked{% endif %}>
+                    <label for="website_notifications">Website</label>
                 </div>
                 <div>
                     <input id="email_notifications" name="email_notifications" type="checkbox"

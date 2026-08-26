@@ -4,18 +4,21 @@ from collections import defaultdict
 from ...db import get_db
 from ...utils import (
     UserPermissions,
+    can_manage_show,
     dt_now,
     get_show_id,
     get_show_lineup,
     render_template,
-    with_permissions,
+    with_auth,
 )
 from .common import bp, get_other_shows, resolve_special
 
 
 @bp.get("/special/<short_name>/<show>/predictions")
-@with_permissions
-def special_predictions(short_name: str, show: str, permissions: UserPermissions):
+@with_auth
+def special_predictions(
+    short_name: str, show: str, user, permissions: UserPermissions
+):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
@@ -26,7 +29,8 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status != "full" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status != "full" and not elevated:
         return render_template(
             "error.html", error="You aren't allowed to access the predictions yet"
         ), 400
@@ -34,7 +38,7 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
     if (
         show_data.voting_closes
         and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
+        and not elevated
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
@@ -137,7 +141,8 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
         prob = odds[song.id]
         decimal_odds = (1 / prob) if prob > 0 else float("inf")
         pct = prob * 100
-        copy_lines.append(f"{i}. {song.country.name}: {decimal_odds:.2f} ({pct:.2f}%)")
+        label = song.title if show_data.national_final_name else song.country.name
+        copy_lines.append(f"{i}. {label}: {decimal_odds:.2f} ({pct:.2f}%)")
     copy_text = "\n".join(copy_lines)
 
     show_copy = show_data.status != "full"
@@ -168,6 +173,8 @@ def special_predictions(short_name: str, show: str, permissions: UserPermissions
         other_shows=get_other_shows(_year, show),
         special=short_name,
         special_name=special_year["special_name"],
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
         predictor_scores=predictor_scores,
         predictor_breakdown=predictor_breakdown,
         predictor_penalty=predictor_penalty,
@@ -432,15 +439,16 @@ def _compute_prediction_scores(
 
 
 @bp.get("/<int:year>/<show>/predictions")
-@with_permissions
-def show_predictions(year: int, show: str, permissions: UserPermissions):
+@with_auth
+def show_predictions(year: int, show: str, user, permissions: UserPermissions):
     _year = year
     show_data = get_show_id(show, _year)
 
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
 
-    if show_data.status != "full" and not permissions.can_view_restricted:
+    elevated = can_manage_show(show_data, user, permissions)
+    if show_data.status != "full" and not elevated:
         return render_template(
             "error.html", error="You aren't allowed to access the predictions yet"
         ), 400
@@ -448,7 +456,7 @@ def show_predictions(year: int, show: str, permissions: UserPermissions):
     if (
         show_data.voting_closes
         and show_data.voting_closes > dt_now()
-        and not permissions.can_view_restricted
+        and not elevated
     ):
         return render_template("error.html", error="Voting hasn't closed yet."), 400
 
@@ -560,10 +568,11 @@ def show_predictions(year: int, show: str, permissions: UserPermissions):
         prob = odds[song.id]
         decimal_odds = (1 / prob) if prob > 0 else float("inf")
         pct = prob * 100
-        copy_lines.append(f"{i}. {song.country.name}: {decimal_odds:.2f} ({pct:.2f}%)")
+        label = song.title if show_data.national_final_name else song.country.name
+        copy_lines.append(f"{i}. {label}: {decimal_odds:.2f} ({pct:.2f}%)")
     copy_text = "\n".join(copy_lines)
 
-    # Copy box is an admin tool — hide it when the page is publicly visible
+    # Copy box is a show-management tool — hide it when the page is publicly visible
     show_copy = show_data.status != "full"
 
     predictor_scores: dict[str, int] = {}
@@ -590,6 +599,8 @@ def show_predictions(year: int, show: str, permissions: UserPermissions):
         show_name=show_data.name,
         year=year,
         other_shows=get_other_shows(_year, show),
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
         predictor_scores=predictor_scores,
         predictor_breakdown=predictor_breakdown,
         predictor_penalty=predictor_penalty,

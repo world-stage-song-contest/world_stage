@@ -32,6 +32,12 @@ class ShowData:
     progressions: list[dict]
 
     @property
+    def contextual_name(self) -> str:
+        if self.national_final_name:
+            return f"{self.national_final_name}: {self.name}"
+        return self.name
+
+    @property
     def total_qualifiers(self) -> int:
         return sum(edge["qualifier_count"] for edge in self.progressions)
 

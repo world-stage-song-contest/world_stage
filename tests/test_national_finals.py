@@ -162,6 +162,7 @@ def test_national_final_show_keys_and_order_are_compositional(client, db, nation
                 show = discovered[show_id]
                 assert show["key"] == f"2025-test-es-{show['local_short_name']}"
                 assert show["short_name"] == f"test-es-{show['local_short_name']}"
+                assert show["display_name"] == f"Test Spanish Final: {show['name']}"
         finally:
             if extra_ids:
                 _remove_shows(db, extra_ids)
@@ -846,6 +847,85 @@ def test_nf_owner_can_open_breakdowns_while_previewing_unpublished_results(
     property_test()
 
 
+def test_nf_management_pages_are_available_only_to_staff_and_the_show_owner(
+    client, db, national_final, login
+):
+    @settings(max_examples=12, deadline=None)
+    @given(
+        actor=st.sampled_from([None, 1, 2, 3]),
+        page=st.sampled_from(["predictions", "penalty"]),
+    )
+    def property_test(actor, page):
+        db.rollback()
+        db.execute(
+            """UPDATE show
+               SET voting_ruleset_version = 'v5',
+                   voting_closes = CURRENT_TIMESTAMP - INTERVAL '1 minute'
+               WHERE id = %s""",
+            (national_final["show_id"],),
+        )
+        song_id = _add_candidate(db, national_final["id"], submitter=3)
+        db.execute(
+            """INSERT INTO song_show (show_id, song_id, running_order)
+               VALUES (%s, %s, 1)""",
+            (national_final["show_id"], song_id),
+        )
+        db.commit()
+        try:
+            client.delete_cookie("session")
+            if actor is not None:
+                login(actor)
+
+            response = client.get(f"/year/2025/test-es-f/{page}")
+            if actor in (1, 2):
+                assert response.status_code == 200
+            elif page == "predictions":
+                assert response.status_code == 400
+            else:
+                assert response.status_code == 403
+        finally:
+            client.delete_cookie("session")
+            _remove_candidates(db, [song_id])
+
+    property_test()
+
+
+def test_verifications_include_only_the_selected_national_final_candidate(
+    client, db, national_final, login
+):
+    login(1)
+
+    @settings(max_examples=8, deadline=None)
+    @given(candidate_count=st.integers(1, 5), selected_index=st.integers(0, 20))
+    def property_test(candidate_count, selected_index):
+        candidates = [
+            _add_candidate(db, national_final["id"], submitter=3)
+            for _ in range(candidate_count)
+        ]
+        selected_id = candidates[selected_index % candidate_count]
+        db.execute(
+            "UPDATE song SET main_participant = true WHERE id = %s",
+            (selected_id,),
+        )
+        db.commit()
+        try:
+            response = client.get(
+                "/admin/manage/2025/verifications",
+                headers={"Accept": "application/json"},
+            )
+            assert response.status_code == 200
+            visible_candidate_ids = {
+                group["song"]["song_id"]
+                for group in response.get_json()["verification_groups"]
+                if group["song"] and group["song"]["song_id"] in candidates
+            }
+            assert visible_candidate_ids == {selected_id}
+        finally:
+            _remove_candidates(db, candidates)
+
+    property_test()
+
+
 def test_histories_render_with_separate_nf_candidates(client, db, national_final):
     @settings(max_examples=6, deadline=None)
     @given(candidate_count=st.integers(1, 5))
@@ -867,7 +947,7 @@ def test_histories_render_with_separate_nf_candidates(client, db, national_final
     property_test()
 
 
-def test_aggregate_vote_views_ignore_national_final_entries_and_points(
+def test_aggregate_views_ignore_nfs_while_show_histories_keep_them_distinct(
     client, db, national_final
 ):
     scores = st.sampled_from([12, 10, 8])
@@ -909,6 +989,28 @@ def test_aggregate_vote_views_ignore_national_final_entries_and_points(
                    VALUES (1, %s, 'US') RETURNING id""",
                 (national_final["show_id"],),
             ).fetchone()["id"]
+            main_revote_set_id = cursor.execute(
+                """INSERT INTO vote_set (
+                       voter_id, show_id, country_id, result_mode
+                   ) VALUES (1, %s, 'US', 'revote') RETURNING id""",
+                (main_show_id,),
+            ).fetchone()["id"]
+            nf_revote_set_id = cursor.execute(
+                """INSERT INTO vote_set (
+                       voter_id, show_id, country_id, result_mode
+                   ) VALUES (1, %s, 'US', 'revote') RETURNING id""",
+                (national_final["show_id"],),
+            ).fetchone()["id"]
+            main_prediction_set_id = cursor.execute(
+                """INSERT INTO prediction_set (user_id, show_id)
+                   VALUES (1, %s) RETURNING id""",
+                (main_show_id,),
+            ).fetchone()["id"]
+            nf_prediction_set_id = cursor.execute(
+                """INSERT INTO prediction_set (user_id, show_id)
+                   VALUES (1, %s) RETURNING id""",
+                (national_final["show_id"],),
+            ).fetchone()["id"]
             cursor.executemany(
                 """INSERT INTO vote (vote_set_id, song_id, score)
                    VALUES (%s, %s, %s)""",
@@ -921,6 +1023,11 @@ def test_aggregate_vote_views_ignore_national_final_entries_and_points(
             cursor.execute(
                 "UPDATE show SET status = 'full' WHERE id = %s",
                 (national_final["show_id"],),
+            )
+            cursor.execute(
+                """UPDATE show SET date = CURRENT_TIMESTAMP
+                   WHERE id = ANY(%s)""",
+                ([main_show_id, national_final["show_id"]],),
             )
             cursor.execute("UPDATE year SET status = 'closed' WHERE id = 2025")
         db.commit()
@@ -943,6 +1050,51 @@ def test_aggregate_vote_views_ignore_national_final_entries_and_points(
                 assert [entry["title"] for entry in entries] == [selected_title]
                 assert entries[0]["total"] == main_score
                 assert entries[0]["final"]["pts"] == main_score
+
+            previous_votes = client.get(
+                "/user/alice/votes", headers={"Accept": "application/json"}
+            ).get_json()["votes"]
+            assert {vote["show_id"] for vote in previous_votes} == {
+                main_show_id,
+                national_final["show_id"],
+            }
+            nf_vote = next(
+                vote
+                for vote in previous_votes
+                if vote["show_id"] == national_final["show_id"]
+            )
+            assert nf_vote["short_name"] == "test-es-f"
+            assert nf_vote["national_final_name"] == "Test Spanish Final"
+
+            previous_revotes = client.get(
+                "/user/alice/revotes", headers={"Accept": "application/json"}
+            ).get_json()["votes"]
+            assert {vote["show_id"] for vote in previous_revotes} == {
+                main_show_id,
+                national_final["show_id"],
+            }
+
+            previous_predictions = client.get(
+                "/user/alice/predictions", headers={"Accept": "application/json"}
+            ).get_json()["predictions"]
+            assert {prediction["show_id"] for prediction in previous_predictions} == {
+                main_show_id,
+                national_final["show_id"],
+            }
+
+            voter_grid = client.get(
+                "/year/2025/voters", headers={"Accept": "application/json"}
+            ).get_json()
+            assert voter_grid["voter_show_names"] == ["f"]
+
+            revote_year = client.get(
+                "/revote/2025", headers={"Accept": "application/json"}
+            ).get_json()
+            assert [show["short_name"] for show in revote_year["shows"]] == [
+                "f",
+                "test-es-f",
+            ]
+            assert revote_year["shows"][1]["name"] == "Test Spanish Final: Final"
         finally:
             db.execute(
                 "DELETE FROM vote WHERE vote_set_id = ANY(%s)",
@@ -950,7 +1102,18 @@ def test_aggregate_vote_views_ignore_national_final_entries_and_points(
             )
             db.execute(
                 "DELETE FROM vote_set WHERE id = ANY(%s)",
-                ([main_vote_set_id, nf_vote_set_id],),
+                (
+                    [
+                        main_vote_set_id,
+                        nf_vote_set_id,
+                        main_revote_set_id,
+                        nf_revote_set_id,
+                    ],
+                ),
+            )
+            db.execute(
+                "DELETE FROM prediction_set WHERE id = ANY(%s)",
+                ([main_prediction_set_id, nf_prediction_set_id],),
             )
             db.commit()
             _remove_candidates(db, [selected_id, nf_only_id])

@@ -1257,6 +1257,7 @@ def get_show_results_for_songs(
         JOIN show ON show.id = csr.show_id
         WHERE csr.song_id = ANY(%s)
           AND show.status = 'full'
+          AND show.national_final_id IS NULL
           AND csr.result_mode = %s
         ORDER BY csr.song_id, csr.year_id, csr.short_name
     """,

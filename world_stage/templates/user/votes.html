@@ -210,11 +210,11 @@
 <div class="vote-card">
     <h3 class="card-show-name">
     {% if is_revote %}
-        <a href="{{ url_for('revote.results', year=vote.special_short_name if vote.special_short_name else vote.year, show=vote.short_name) }}">{{ (vote.special_name ~ ' ') if vote.special_short_name else (vote.year ~ ' ') }}{{ vote.show_name }}</a>
+        <a href="{{ url_for('revote.results', year=vote.special_short_name if vote.special_short_name else vote.year, show=vote.short_name) }}">{% if vote.national_final_name %}{{ vote.national_final_name }}: {{ vote.show_name }}{% elif vote.special_short_name %}{{ vote.special_name }} {{ vote.show_name }}{% else %}{{ vote.year }} {{ vote.show_name }}{% endif %}</a>
     {% elif vote.special_short_name %}
-        <a href="{{ url_for('year.special_results', short_name=vote.special_short_name, show=vote.short_name) }}">{{ vote.special_name }} {{ vote.show_name }}</a>
+        <a href="{{ url_for('year.special_results', short_name=vote.special_short_name, show=vote.short_name) }}">{% if vote.national_final_name %}{{ vote.national_final_name }}: {{ vote.show_name }}{% else %}{{ vote.special_name }} {{ vote.show_name }}{% endif %}</a>
     {% else %}
-        <a href="{{ url_for('year.results', year=vote.year, show=vote.short_name) }}">{{ vote.year }} {{ vote.show_name }}</a>
+        <a href="{{ url_for('year.results', year=vote.year, show=vote.short_name) }}">{% if vote.national_final_name %}{{ vote.national_final_name }}: {{ vote.show_name }}{% else %}{{ vote.year }} {{ vote.show_name }}{% endif %}</a>
     {% endif %}
     </h3>
     {% if vote.date %}

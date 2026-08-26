@@ -435,6 +435,7 @@ def _medal_table(cursor, user_id: int, username: str, *, revote=False):
         LEFT JOIN point ON point.point_system_id = sh.point_system_id
                        AND point.score = vote.score
         WHERE sh.status = 'full' {revote_filter} {final_filter}
+          AND sh.national_final_id IS NULL
         GROUP BY country.id, country.name
         ORDER BY first DESC, second DESC, third DESC, fourth DESC, fifth DESC,
                  votings ASC, country.name ASC
@@ -687,11 +688,14 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         """
         SELECT vote_set.id, vote_set.show_id, account.username, nickname, country_id,
                show.show_name, show.short_name, show.date, show.year_id, show.status,
-               year.special_name, year.special_short_name
+               year.special_name, year.special_short_name,
+               national_final.name AS national_final_name,
+               national_final.short_name AS national_final_short_name
         FROM vote_set
         JOIN account ON vote_set.voter_id = account.id
         JOIN show ON vote_set.show_id = show.id
         LEFT JOIN year ON show.year_id = year.id
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
           AND (show.status = 'full' OR show.status = 'partial')
         ORDER BY show.date DESC NULLS LAST, show.id DESC
@@ -707,12 +711,17 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
             "nickname": row["nickname"] or username,
             "code": row["country_id"],
             "show_name": row["show_name"],
-            "short_name": row["short_name"],
+            "short_name": (
+                f"{row['national_final_short_name']}-{row['short_name']}"
+                if row["national_final_short_name"]
+                else row["short_name"]
+            ),
             "status": row["status"],
             "date": row["date"],
             "year": row["year_id"],
             "special_name": row["special_name"],
             "special_short_name": row["special_short_name"],
+            "national_final_name": row["national_final_name"],
         }
         votes.append(val)
 
@@ -750,10 +759,13 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         """
         SELECT vote_set.id, vote_set.show_id, vote_set.nickname, vote_set.country_id,
                show.show_name, show.short_name, show.date, show.year_id,
-               year.special_name, year.special_short_name
+               year.special_name, year.special_short_name,
+               national_final.name AS national_final_name,
+               national_final.short_name AS national_final_short_name
         FROM vote_set
         JOIN show ON show.id = vote_set.show_id
         LEFT JOIN year ON year.id = show.year_id
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'revote'
           AND show.status = 'full'
         ORDER BY show.date DESC NULLS LAST, show.id DESC
@@ -767,11 +779,16 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
             "nickname": row["nickname"] or username,
             "code": row["country_id"],
             "show_name": row["show_name"],
-            "short_name": row["short_name"],
+            "short_name": (
+                f"{row['national_final_short_name']}-{row['short_name']}"
+                if row["national_final_short_name"]
+                else row["short_name"]
+            ),
             "date": row["date"],
             "year": row["year_id"],
             "special_name": row["special_name"],
             "special_short_name": row["special_short_name"],
+            "national_final_name": row["national_final_name"],
         }
         for row in cursor.fetchall()
     ]
@@ -810,11 +827,15 @@ def predictions(username: str):
         """
         SELECT prediction_set.id, prediction_set.show_id, prediction_set.created_at,
                show.show_name, show.short_name, show.date, show.year_id, show.status,
-               year.special_name, year.special_short_name
+               year.special_name, year.special_short_name,
+               national_final.name AS national_final_name,
+               national_final.short_name AS national_final_short_name
         FROM prediction_set
         JOIN show ON prediction_set.show_id = show.id
         LEFT JOIN year ON show.year_id = year.id
-        WHERE prediction_set.user_id = %s AND show.status = 'full'
+        LEFT JOIN national_final ON national_final.id = show.national_final_id
+        WHERE prediction_set.user_id = %s
+          AND show.status = 'full'
         ORDER BY show.date DESC
     """,
         (user_id,),
@@ -825,12 +846,17 @@ def predictions(username: str):
             "id": row["id"],
             "show_id": row["show_id"],
             "show_name": row["show_name"],
-            "short_name": row["short_name"],
+            "short_name": (
+                f"{row['national_final_short_name']}-{row['short_name']}"
+                if row["national_final_short_name"]
+                else row["short_name"]
+            ),
             "status": row["status"],
             "date": row["date"].strftime("%d %b %Y"),
             "year": row["year_id"],
             "special_name": row["special_name"],
             "special_short_name": row["special_short_name"],
+            "national_final_name": row["national_final_name"],
         })
 
     show_ids = list({p["show_id"] for p in predictions})

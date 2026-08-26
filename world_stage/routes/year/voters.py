@@ -40,7 +40,8 @@ def get_voter_participation(
         cursor.execute(
             "SELECT show.short_name FROM show "
             "JOIN show_types ON show_types.id = show.show_type "
-            "WHERE year_id = %s ORDER BY show_types.sort_order, "
+            "WHERE year_id = %s AND national_final_id IS NULL "
+            "ORDER BY show_types.sort_order, "
             "show.show_number NULLS FIRST, show.id",
             (year_id,),
         )
@@ -51,7 +52,8 @@ def get_voter_participation(
         cursor.execute(
             "SELECT show.short_name FROM show "
             "JOIN show_types ON show_types.id = show.show_type "
-            "WHERE year_id = %s ORDER BY show_types.sort_order, "
+            "WHERE year_id = %s AND national_final_id IS NULL "
+            "ORDER BY show_types.sort_order, "
             "show.show_number NULLS FIRST, show.id",
             (year_id,),
         )
@@ -72,6 +74,7 @@ def get_voter_participation(
         JOIN show ON vote_set.show_id = show.id
         JOIN account ON vote_set.voter_id = account.id
         WHERE show.year_id = %s AND show.short_name = ANY(%s)
+          AND show.national_final_id IS NULL
           AND vote_set.result_mode = 'official'
         """,
         (year_id, short_names),
@@ -88,6 +91,7 @@ def get_voter_participation(
         JOIN show ON song_show.show_id = show.id
         JOIN account ON song.submitter_id = account.id
         WHERE show.year_id = %s AND show.short_name = ANY(%s)
+          AND show.national_final_id IS NULL
           AND NOT song.is_placeholder
         """,
         (year_id, short_names),
@@ -152,7 +156,9 @@ def _render_year_voters(
             """
             SELECT short_name FROM show
             JOIN show_types ON show_types.id = show.show_type
-            WHERE year_id = %s AND status IN ('partial', 'full')
+            WHERE year_id = %s
+              AND national_final_id IS NULL
+              AND status IN ('partial', 'full')
             ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
             """,
             (year_id,),

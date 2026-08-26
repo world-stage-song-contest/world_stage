@@ -207,15 +207,13 @@ def has_unread_messages(user_id: int, _permissions: UserPermissions) -> bool:
             SELECT 1
             FROM conversation
             JOIN message ON message.conversation_id = conversation.id
+            JOIN conversation_participant AS current_participant
+              ON current_participant.conversation_id = conversation.id
+             AND current_participant.account_id = %s
             LEFT JOIN conversation_read_state
               ON conversation_read_state.conversation_id = conversation.id
              AND conversation_read_state.account_id = %s
-            WHERE EXISTS (
-                SELECT 1
-                FROM conversation_participant
-                WHERE conversation_participant.conversation_id = conversation.id
-                  AND conversation_participant.account_id = %s
-            )
+            WHERE NOT current_participant.suppress_unread_highlight
               AND message.id > COALESCE(
                   conversation_read_state.last_read_message_id,
                   0
@@ -242,10 +240,17 @@ def has_unread_admin_messages(user_id: int) -> bool:
             SELECT 1
             FROM conversation
             JOIN message ON message.conversation_id = conversation.id
+            LEFT JOIN conversation_participant AS current_participant
+              ON current_participant.conversation_id = conversation.id
+             AND current_participant.account_id = %s
             LEFT JOIN conversation_read_state
               ON conversation_read_state.conversation_id = conversation.id
              AND conversation_read_state.account_id = %s
             WHERE conversation.admin_accessible
+              AND NOT COALESCE(
+                  current_participant.suppress_unread_highlight,
+                  false
+              )
               AND message.id > COALESCE(
                   conversation_read_state.last_read_message_id,
                   0
@@ -253,7 +258,7 @@ def has_unread_admin_messages(user_id: int) -> bool:
               AND message.sender_id IS DISTINCT FROM %s
         ) AS has_unread
         """,
-        (user_id, user_id),
+        (user_id, user_id, user_id),
     )
     row = cursor.fetchone()
     return bool(row and row["has_unread"])

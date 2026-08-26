@@ -246,6 +246,8 @@ def special_song_votes(
         other_shows=get_other_shows(_year, show),
         special=short_name,
         special_name=special_year["special_name"],
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
     )
 
 

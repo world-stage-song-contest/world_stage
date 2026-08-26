@@ -709,9 +709,7 @@ def notification_preferences(
         "yes",
         "on",
     }
-    suppress_unread_highlight = request.form.get(
-        "suppress_unread_highlight", ""
-    ).lower() in {
+    website_notifications = request.form.get("website_notifications", "").lower() in {
         "1",
         "true",
         "yes",
@@ -735,7 +733,7 @@ def notification_preferences(
         """,
         (
             email_notifications,
-            suppress_unread_highlight,
+            not website_notifications,
             pinned,
             conversation_id,
             user_id,

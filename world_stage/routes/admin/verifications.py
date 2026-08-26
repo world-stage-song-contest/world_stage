@@ -151,10 +151,13 @@ def _render_verifications(year: dict):
         WHERE data.year_id = %s
           AND data.title IS NOT NULL
           AND data.artist_credit_set_id IS NOT NULL
-          AND NOT EXISTS (
-              SELECT 1
-              FROM national_final_song
-              WHERE national_final_song.song_id = song.id
+          AND (
+              song.main_participant
+              OR NOT EXISTS (
+                  SELECT 1
+                  FROM national_final_song
+                  WHERE national_final_song.song_id = song.id
+              )
           )
           AND manual_merge.song_data_id IS NULL
           AND hidden_revision.song_data_id IS NULL
