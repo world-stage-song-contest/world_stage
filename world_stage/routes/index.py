@@ -39,10 +39,10 @@ AVATAR_REQUEST_OVERHEAD = 64 * 1024
 @bp.get("/")
 @with_auth
 def home(user: tuple[int, str] | None, permissions: UserPermissions):
-    # Highlight the Vote tile when the signed-in user has at least one
-    # open voting they haven't cast a ballot in yet — a nudge to
-    # finish what they started. Anonymous visitors don't get the nudge
-    # because there's no per-user vote history to check against.
+    # Highlight the Vote tile only when one of the signed-in user's songs is
+    # competing in an open main-contest show and they have not cast that
+    # show's ballot. Unrelated shows and national finals do not create a
+    # personal voting obligation.
     has_pending_vote = False
     has_unread = False
     has_admin_unread = False
@@ -53,15 +53,24 @@ def home(user: tuple[int, str] | None, permissions: UserPermissions):
         cursor = db.cursor()
         cursor.execute(
             """
-            SELECT 1 FROM show
-            WHERE voting_opens <= CURRENT_TIMESTAMP
-              AND (voting_closes IS NULL OR voting_closes >= CURRENT_TIMESTAMP)
-              AND id NOT IN (
-                  SELECT show_id FROM vote_set WHERE voter_id = %s AND result_mode = 'official'
+            SELECT 1
+            FROM show
+            JOIN song_show ON song_show.show_id = show.id
+            JOIN current_song AS song ON song.id = song_show.song_id
+            WHERE show.voting_opens <= CURRENT_TIMESTAMP
+              AND (show.voting_closes IS NULL OR show.voting_closes >= CURRENT_TIMESTAMP)
+              AND show.national_final_id IS NULL
+              AND song.submitter_id = %s
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM vote_set
+                  WHERE vote_set.show_id = show.id
+                    AND vote_set.voter_id = %s
+                    AND vote_set.result_mode = 'official'
               )
             LIMIT 1
             """,
-            (user_id,),
+            (user_id, user_id),
         )
         has_pending_vote = cursor.fetchone() is not None
         has_unread = has_unread_messages(user_id, permissions)

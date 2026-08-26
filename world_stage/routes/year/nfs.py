@@ -7,12 +7,14 @@ from flask import redirect, request, url_for
 from ...db import get_db
 from ...utils import (
     UserPermissions,
+    get_languages_for_songs,
     get_lineup_issues,
     get_unassigned_lineup_issue,
     render_template,
     with_auth,
 )
 from ...utils.artists import fetch_song_artist_credits
+from ...utils.types import Language
 from .common import bp, resolve_special
 
 NF_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -42,6 +44,7 @@ def _archive_results(cursor, nf: dict) -> tuple[dict[int, dict], dict[int, dict[
     cursor.execute(
         """
         SELECT result.song_id, result.show_id, result.place, result.total_points,
+               result.total_countries,
                result.points_percentage, result.entry_status,
                result.special_qualifier
         FROM country_show_results AS result
@@ -79,48 +82,71 @@ def _archive_results(cursor, nf: dict) -> tuple[dict[int, dict], dict[int, dict[
             JOIN scoped_progression AS progression
               ON progression.source_show_id = paths.target_show_id
         ), show_tiers AS (
-            SELECT show.id AS show_id, COALESCE(MAX(paths.distance), 0) + 1 AS tier
+            SELECT show.id AS show_id,
+                   COALESCE(show.show_number, 0) AS show_number,
+                   COALESCE(MAX(paths.distance), 0) + 1 AS tier
             FROM show
             LEFT JOIN paths ON paths.source_show_id = show.id
             WHERE show.national_final_id = %s AND show.status = 'full'
-            GROUP BY show.id
+            GROUP BY show.id, show.show_number
+        ), tiered_shows AS (
+            SELECT show_tiers.*,
+                   COUNT(*) OVER (PARTITION BY tier) AS tier_show_count
+            FROM show_tiers
+        ), score_values AS (
+            SELECT GENERATE_SERIES(COALESCE(MAX(result.max_pts), 0), 1, -1) AS score
+            FROM country_show_results AS result
+            JOIN show ON show.id = result.show_id
+            WHERE show.national_final_id = %s
+              AND result.result_mode = 'official'
         ), candidates AS (
             SELECT result.song_id, result.show_id, result.place AS show_place,
                    result.total_points, result.points_percentage,
                    result.total_votes_received, result.running_order,
                    show.short_name AS reached_show, show.show_name AS reached_show_name,
-                   show_tiers.tier,
-                   STRING_AGG(
-                       LPAD(points.key, 3, '0') || ':' || LPAD(points.value, 3, '0'),
-                       ',' ORDER BY points.key::integer DESC
+                   tiered_shows.tier, tiered_shows.show_number,
+                   tiered_shows.tier_show_count,
+                   result.total_points::numeric
+                       / NULLIF(result.max_possible_points, 0) AS points_share,
+                   result.total_votes_received::numeric
+                       / NULLIF(result.total_voters, 0) AS voter_share,
+                   (
+                       SELECT ARRAY_AGG(
+                           COALESCE(
+                               (result.point_distribution ->> score_values.score::text)::numeric,
+                               0
+                           ) / NULLIF(result.total_voters, 0)
+                           ORDER BY score_values.score DESC
+                       )
+                       FROM score_values
                    ) AS countback,
                    ROW_NUMBER() OVER (
                        PARTITION BY result.song_id
-                       ORDER BY show_tiers.tier, result.place, result.show_id
+                       ORDER BY tiered_shows.tier, result.place, result.show_id
                    ) AS reached_order
             FROM country_show_results AS result
-            JOIN show_tiers ON show_tiers.show_id = result.show_id
+            JOIN tiered_shows ON tiered_shows.show_id = result.show_id
             JOIN show ON show.id = result.show_id
-            LEFT JOIN LATERAL
-                JSONB_EACH_TEXT(result.point_distribution) AS points ON true
             WHERE result.result_mode = 'official'
-            GROUP BY result.song_id, result.show_id, result.place,
-                     result.total_points, result.points_percentage,
-                     result.total_votes_received, result.running_order,
-                     show.short_name, show.show_name, show_tiers.tier
         ), reached AS (
             SELECT * FROM candidates WHERE reached_order = 1
         )
         SELECT reached.*,
                ROW_NUMBER() OVER (
-                   ORDER BY tier, points_percentage DESC,
-                            total_votes_received DESC, countback DESC NULLS LAST,
-                            running_order NULLS LAST, show_id, song_id
+                   ORDER BY tier,
+                            CASE WHEN tier_show_count = 1 THEN show_place END,
+                            CASE WHEN tier_show_count > 1 THEN points_share END
+                                DESC NULLS LAST,
+                            CASE WHEN tier_show_count > 1 THEN voter_share END
+                                DESC NULLS LAST,
+                            CASE WHEN tier_show_count > 1 THEN countback END
+                                DESC NULLS LAST,
+                            running_order NULLS LAST, show_number, song_id
                )::integer AS overall_place
         FROM reached
         ORDER BY overall_place
         """,
-        (nf["id"], nf["id"], nf["id"]),
+        (nf["id"], nf["id"], nf["id"], nf["id"]),
     )
     rankings = {result["song_id"]: result for result in cursor.fetchall()}
     return rankings, stage_results
@@ -186,7 +212,8 @@ def _show_nf(
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT show.id, show.short_name, show.show_name, show.date, show.status,
+        SELECT show.id, show.short_name, show.show_name, show.show_type,
+               show.date, show.status,
                show.voting_opens, show.voting_closes, show.predictions_close,
                array_agg(point.score ORDER BY point.place) AS points
         FROM show
@@ -202,12 +229,26 @@ def _show_nf(
     cursor.execute(
         """
         SELECT song.id, song.country_id, country.name AS country,
-               song.entry_number, song.title, song.artist, song.main_participant,
-               account.username AS submitter
+               song.entry_number, song.title, song.native_title, song.artist,
+               song.main_participant, account.username AS submitter,
+               title_language.name AS title_language_name,
+               title_language.tag AS title_language_tag,
+               title_language.extlang AS title_language_extlang,
+               title_language.region AS title_language_region,
+               title_language.subvariant AS title_language_subvariant,
+               title_language.suppress_script AS title_language_suppress_script,
+               native_language.name AS native_language_name,
+               native_language.tag AS native_language_tag,
+               native_language.extlang AS native_language_extlang,
+               native_language.region AS native_language_region,
+               native_language.subvariant AS native_language_subvariant,
+               native_language.suppress_script AS native_language_suppress_script
         FROM national_final_song
         JOIN current_song AS song ON song.id = national_final_song.song_id
         JOIN country ON country.id = song.country_id
         LEFT JOIN account ON account.id = song.submitter_id
+        LEFT JOIN language AS title_language ON title_language.id = song.title_language_id
+        LEFT JOIN language AS native_language ON native_language.id = song.native_language_id
         WHERE national_final_song.national_final_id = %s
         ORDER BY country.name, song.entry_number, song.id
         """,
@@ -217,17 +258,29 @@ def _show_nf(
     candidate_credits = fetch_song_artist_credits(
         cursor, [candidate["id"] for candidate in candidates]
     )
+    candidate_languages = get_languages_for_songs(
+        [candidate["id"] for candidate in candidates]
+    )
     for candidate in candidates:
         candidate["artists"] = candidate_credits.get(candidate["id"], [])
-    rankings, stage_results = _archive_results(cursor, nf)
-    if rankings:
-        candidates.sort(
-            key=lambda candidate: (
-                rankings.get(candidate["id"], {}).get("overall_place", len(candidates) + 1),
-                candidate["country"],
-                candidate["entry_number"],
-            )
+        candidate["languages"] = candidate_languages.get(candidate["id"], [])
+        candidate["title_lang"] = Language(
+            name=candidate["title_language_name"] or "",
+            tag=candidate["title_language_tag"] or "",
+            extlang=candidate["title_language_extlang"],
+            region=candidate["title_language_region"],
+            subvariant=candidate["title_language_subvariant"],
+            suppress_script=candidate["title_language_suppress_script"],
         )
+        candidate["native_lang"] = Language(
+            name=candidate["native_language_name"] or "",
+            tag=candidate["native_language_tag"] or "",
+            extlang=candidate["native_language_extlang"],
+            region=candidate["native_language_region"],
+            subvariant=candidate["native_language_subvariant"],
+            suppress_script=candidate["native_language_suppress_script"],
+        )
+    rankings, stage_results = _archive_results(cursor, nf)
     cursor.execute(
         """
         SELECT song_show.song_id, show.short_name, song_show.running_order
@@ -243,6 +296,55 @@ def _show_nf(
     assignments: dict[int, list[dict]] = {}
     for row in cursor.fetchall():
         assignments.setdefault(row["song_id"], []).append(row)
+    if nf["status"] == "finished":
+        rankings = {
+            song_id: ranking
+            for song_id, ranking in rankings.items()
+            if song_id in assignments
+        }
+        candidates.sort(
+            key=lambda candidate: (
+                candidate["id"] not in rankings,
+                candidate["id"] not in assignments,
+                rankings.get(candidate["id"], {}).get("overall_place", len(candidates) + 1),
+                candidate["country"],
+                candidate["entry_number"],
+            )
+        )
+        next_place = len(rankings) + 1
+        for candidate in candidates:
+            if candidate["id"] in assignments and candidate["id"] not in rankings:
+                rankings[candidate["id"]] = {"overall_place": next_place}
+                next_place += 1
+    result_columns: dict[int, dict[str, dict]] = {}
+    show_types = {show["id"]: show["show_type"] for show in shows}
+    for song_id, song_results in stage_results.items():
+        if song_id not in assignments:
+            continue
+        columns = result_columns.setdefault(song_id, {})
+        for show_id, result in song_results.items():
+            show_type = show_types.get(show_id)
+            if show_type in {"f", "sc", "sf"} and show_type not in columns:
+                columns[show_type] = {
+                    "pts": result["total_points"],
+                    "place": result["place"],
+                    "total_countries": result["total_countries"],
+                }
+    sf_numbers = {
+        song_id: next(
+            (
+                assignment["short_name"]
+                for assignment in song_assignments
+                if assignment["short_name"] == "sf"
+                or assignment["short_name"].startswith("sf")
+            ),
+            None,
+        )
+        for song_id, song_assignments in assignments.items()
+    }
+    has_sf = any(show["show_type"] == "sf" for show in shows)
+    has_sc = any(show["show_type"] == "sc" for show in shows)
+    has_f = any(show["show_type"] == "f" for show in shows)
     metadata_countries = []
     metadata_owners = []
     if management:
@@ -279,7 +381,13 @@ def _show_nf(
         candidates=candidates,
         rankings=rankings,
         stage_results=stage_results,
+        results=result_columns,
         assignments=assignments,
+        sf_numbers=sf_numbers,
+        has_f=has_f,
+        has_sf=has_sf,
+        has_sc=has_sc,
+        has_result_stages=has_f or has_sc or has_sf,
         metadata_countries=metadata_countries,
         metadata_owners=metadata_owners,
         can_reassign_owner=permissions.can_view_restricted,

@@ -2,13 +2,6 @@
 {% block title %}Homepage: {{ username }}{% endblock %}
 {% block content %}
 <div class="cards-container">
-    {% if owns_national_finals %}
-    <a href="{{ url_for('year.index') }}" class="card">
-        <h3>National Finals</h3>
-        <img src="{{ static('images/history.png') }}" alt="National Finals Icon">
-        <p>Manage the national finals assigned to you from their year pages.</p>
-    </a>
-    {% endif %}
     <a href="{{ url_for('member.submit') }}" class="card">
         <h3>Submit/Edit</h3>
         <img src="{{ static('images/submit.png') }}" alt="Submit Icon">
@@ -50,6 +43,13 @@
         <img src="{{ static('images/message.png') }}" alt="Message Icon">
         <p>Read your messages or start a conversation.</p>
     </a>
+    {% if owns_national_finals %}
+    <a href="{{ url_for('member.national_finals') }}" class="card">
+        <h3>National Finals</h3>
+        <img src="{{ static('images/history.png') }}" alt="National Finals Icon">
+        <p>View and manage the national finals assigned to you.</p>
+    </a>
+    {% endif %}
     <form id="logout-form" action="{{ url_for('session.logout') }}" method="POST">
         <a href="#" onclick="this.parentNode.submit()" class="card">
             <h3>Log out</h3>

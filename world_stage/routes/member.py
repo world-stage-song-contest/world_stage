@@ -712,6 +712,37 @@ def index(user: tuple[int, str], permissions: UserPermissions):
     )
 
 
+@bp.get("/national-finals")
+@require_user(redirect_to_login=True)
+def national_finals(user: tuple[int, str]):
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT national_final.id, national_final.year_id,
+               national_final.short_name, national_final.name,
+               national_final.status, national_final.owner_country_id,
+               country.name AS owner_country_name,
+               year.special_name, year.special_short_name,
+               COUNT(DISTINCT show.id) AS show_count,
+               COUNT(DISTINCT national_final_song.song_id) AS candidate_count
+        FROM national_final
+        JOIN year ON year.id = national_final.year_id
+        LEFT JOIN country ON country.id = national_final.owner_country_id
+        LEFT JOIN show ON show.national_final_id = national_final.id
+        LEFT JOIN national_final_song
+          ON national_final_song.national_final_id = national_final.id
+        WHERE national_final.owner_id = %s
+        GROUP BY national_final.id, country.id, year.id
+        ORDER BY national_final.year_id DESC, national_final.name
+        """,
+        (user[0],),
+    )
+    return render_template(
+        "member/national_finals.html",
+        national_finals=cursor.fetchall(),
+    )
+
+
 def _move_page(*, error=None):
     cursor = get_db().cursor()
     cursor.execute(

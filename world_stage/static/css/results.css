@@ -54,6 +54,10 @@ td.header-like {
     text-align: center;
 }
 
+.songs-table tr.selected-entry {
+    font-weight: bold;
+}
+
 /* A result-comparison cell must not pick up the new-result row colour when
    the corresponding old result has no highlight of its own.  This precedes
    the highlight rules so an old-result highlight can still override it. */

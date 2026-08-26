@@ -17,7 +17,9 @@ from .common import _resolve_special, bp
 NF_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
-def _show_creation_context(year: int, **extra):
+def _show_creation_context(
+    year: int, *, selected_national_final_id: int | None = None, **extra
+):
     cursor = get_db().cursor()
     cursor.execute(
         "SELECT special_name, special_short_name FROM year WHERE id = %s", (year,)
@@ -91,6 +93,7 @@ def _show_creation_context(year: int, **extra):
         national_finals=national_finals,
         main_next_semifinal_number=main_next_semifinal_number,
         progression_targets=progression_targets,
+        selected_national_final_id=selected_national_final_id,
         **extra,
     )
 
@@ -132,7 +135,10 @@ def _national_final_creation_context(year: int, **extra):
 @bp.route("/manage/<int(signed=True):year>/create/show", methods=["GET", "POST"])
 def create_show(year: int):
     if request.method == "GET":
-        return _show_creation_context(year)
+        return _show_creation_context(
+            year,
+            selected_national_final_id=request.args.get("national_final_id", type=int),
+        )
     return _create_show_post(year)
 
 

@@ -3,6 +3,7 @@
 {% block title %}{{ nf.name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
+    <link rel="stylesheet" href="{{ static('css/year.css') }}">
     <link rel="stylesheet" href="{{ static('css/song-table.css') }}">
     <link rel="stylesheet" href="{{ static('css/country.css') }}">
     <script src="{{ static('js/sort-table.js') }}"></script>
@@ -61,52 +62,110 @@
 
 <h2>{{ 'Full ranking' if nf.status == 'finished' else 'Entries' }}</h2>
 -->
+{% macro result_cells(entry, cat_class) %}
+  {% if entry %}
+    {% set place = entry.place %}
+    {% set total = entry.total_countries %}
+    {% set is_last = (place == total) %}
+    {% set place_class = (
+         'first'  if place == 1 else
+         'second' if place == 2 else
+         'third'  if place == 3 else ''
+       ) ~ (' last' if is_last else '') %}
+    {% set cell_class = place_class or 'uncoloured' %}
+    <td class="number {{ cat_class }} place-cell {{ cell_class }}">{{ place }}</td>
+    <td class="number {{ cat_class }} pts-cell {{ cell_class }}">{{ entry.pts }}</td>
+  {% else %}
+    <td class="number {{ cat_class }} place-cell no-entry"></td>
+    <td class="number {{ cat_class }} pts-cell no-entry"></td>
+  {% endif %}
+{% endmacro %}
+
 {% if candidates %}
-<table class="sortable song-table">
+{% set ranked_n = rankings|length %}
+<table class="songs-table sortable">
     <thead>
         <tr>
-            {% if nf.status == 'finished' %}<th rowspan="2">#</th>{% endif %}
-            <th rowspan="2">Country</th>
-            <th rowspan="2">Artist</th>
-            <th rowspan="2">Title</th>
-            <th rowspan="2">Submitter</th>
-            {% for show in shows %}
-            {% set show_suffix = nf.short_name ~ '-' ~ show.short_name %}
-            <th colspan="2">
-                {% if special %}
-                <a href="{{ url_for('year.special_results', short_name=special, show=show_suffix) }}">{{ show.show_name }}</a>
-                {% else %}
-                <a href="{{ url_for('year.results', year=year, show=show_suffix) }}">{{ show.show_name }}</a>
-                {% endif %}
-            </th>
-            {% endfor %}
-            <th rowspan="2">Selection</th>
+            {% if nf.status == 'finished' %}<th>#</th>{% endif %}
+            <th>Country</th>
+            <th>Artist</th>
+            <th>Title</th>
+            <th>Language</th>
+            <th>Submitter</th>
+            {% if has_sf %}<th>SF #</th>{% endif %}
+            {% if nf.status == 'finished' and has_result_stages %}
+            {% if has_f %}
+            <th class="final">Final</th>
+            <th class="final">Points</th>
+            {% endif %}
+            {% if has_sc %}
+            <th class="repechage">Repe</th>
+            <th class="repechage">Points</th>
+            {% endif %}
+            {% if has_sf %}
+            <th class="semifinal">Semi</th>
+            <th class="semifinal">Points</th>
+            {% endif %}
+            {% endif %}
         </tr>
-        {% if shows %}
-        <tr>{% for show in shows %}<th>Place</th><th>Points</th>{% endfor %}</tr>
-        {% endif %}
     </thead>
     <tbody>
     {% for song in candidates %}
     {% set ranking = rankings.get(song.id) %}
-    <tr>
-        {% if nf.status == 'finished' %}<td class="number">{{ ranking.overall_place if ranking else '' }}</td>{% endif %}
-        <td><div class="country">{{ flag(song.country_id, 24, song.country) }}{{ song.country }}</div></td>
+    {% set place = ranking.overall_place if ranking else none %}
+    {% set place_class = '' %}
+    {% if place %}
+        {% set place_class = 'first' if place == 1 else 'second' if place == 2 else 'third' if place == 3 else 'last' if place == ranked_n else '' %}
+    {% endif %}
+    {% set r = results.get(song.id, {}) %}
+    <tr data-value="{{ loop.index }}" class="finalised {{ place_class }}{% if song.main_participant %} selected-entry{% endif %}">
+        {% if nf.status == 'finished' %}<td class="number year-result {{ place_class }}">{{ place or '' }}</td>{% endif %}
+        <td><a href="{{ url_for('country.country', code=song.country_id.lower()) }}"><div class="country">
+            {{ flag(song.country_id, 42, song.country) }}
+            <span>{{ song.country }}</span>
+        </div></a></td>
         <td><div class="song-artist">{{ artist_links(song) }}</div></td>
         <td><div class="song-title">
             {% if special %}
-            <a href="{{ url_for('country.special_details', code=song.country_id.lower(), special_short_name=special, entry_number=song.entry_number) }}">{{ song.title }}</a>
+            <a href="{{ url_for('country.special_details', code=song.country_id.lower(), special_short_name=special, entry_number=song.entry_number) }}">
+                <span lang="{{ song.title_lang.str('Latn', song.country_id) }}">{{ song.title }}</span>
+            </a>
+            {% if song.native_title %}
+            <a href="{{ url_for('country.special_details', code=song.country_id.lower(), special_short_name=special, entry_number=song.entry_number) }}">
+                <bdi lang="{{ song.native_lang.str(None, song.country_id) }}">{{ song.native_title }}</bdi>
+            </a>
+            {% endif %}
             {% else %}
-            <a href="{{ url_for('country.details', code=song.country_id.lower(), year=year, entry_number=song.entry_number) }}">{{ song.title }}</a>
+            <a href="{{ url_for('country.details', code=song.country_id.lower(), year=year, entry_number=song.entry_number) }}">
+                <span lang="{{ song.title_lang.str('Latn', song.country_id) }}">{{ song.title }}</span>
+            </a>
+            {% if song.native_title %}
+            <a href="{{ url_for('country.details', code=song.country_id.lower(), year=year, entry_number=song.entry_number) }}">
+                <bdi lang="{{ song.native_lang.str(None, song.country_id) }}">{{ song.native_title }}</bdi>
+            </a>
+            {% endif %}
             {% endif %}
         </div></td>
+        <td>{{ song.languages|map(attribute='name')|join(', ') }}</td>
         <td>{{ song.submitter or '' }}</td>
-        {% for show in shows %}
-        {% set result = stage_results.get(song.id, {}).get(show.id) %}
-        <td class="number">{{ result.place if result else '' }}</td>
-        <td class="number">{{ result.total_points if result else '' }}</td>
-        {% endfor %}
-        <td>{% if song.main_participant %}Selected{% endif %}</td>
+        {% if has_sf %}
+        {% set sf_sn = sf_numbers.get(song.id) %}
+        {% if sf_sn %}
+        {% set sf_num = sf_sn[2:] %}
+        <td class="number">{{ 'SF' if not sf_num else sf_num }}</td>
+        {% elif assignments.get(song.id) %}
+        <td class="number">AQ</td>
+        {% else %}
+        <td class="number"></td>
+        {% endif %}
+        {% endif %}
+        {% if nf.status == 'finished' and has_result_stages %}
+        {% if has_f %}
+        {{ result_cells(r.get('f'), 'final') }}
+        {% endif %}
+        {% if has_sc %}{{ result_cells(r.get('sc'), 'repechage') }}{% endif %}
+        {% if has_sf %}{{ result_cells(r.get('sf'), 'semifinal') }}{% endif %}
+        {% endif %}
     </tr>
     {% endfor %}
     </tbody>

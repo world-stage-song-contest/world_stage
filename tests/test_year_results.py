@@ -2,6 +2,76 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 
+def test_final_only_year_exposes_its_final_results(client, db):
+    @given(total_points=st.integers(0, 100))
+    def property_test(total_points):
+        with db.cursor() as cursor:
+            cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
+            cursor.execute("INSERT INTO point_system (number) VALUES (1) RETURNING id")
+            point_system_id = cursor.fetchone()["id"]
+            cursor.execute(
+                """INSERT INTO point (point_system_id, place, score)
+                   VALUES (%s, 1, 12)""",
+                (point_system_id,),
+            )
+            cursor.execute(
+                """INSERT INTO show (year_id, point_system_id, show_type, status)
+                   VALUES (2024, %s, 'f', 'full') RETURNING id""",
+                (point_system_id,),
+            )
+            show_id = cursor.fetchone()["id"]
+            cursor.execute(
+                """INSERT INTO song (
+                       country_id, year_id, entry_number, main_participant
+                   ) VALUES ('US', 2024, 1, true) RETURNING id"""
+            )
+            song_id = cursor.fetchone()["id"]
+            cursor.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist_credit_set_id
+                   ) VALUES (
+                       %s, 3, 'Final-only entry', test_artist_credit('Final Artist')
+                   )""",
+                (song_id,),
+            )
+            cursor.execute(
+                """INSERT INTO country_show_results (
+                       country_id, country_name, show_id, short_name, year_id, song_id,
+                       running_order, total_points, total_votes_received,
+                       point_distribution, place, total_countries,
+                       placement_percentage, max_possible_points, points_percentage,
+                       adjusted_points_percentage, adjusted_max_possible_points,
+                       points_midpoint, max_pts, total_voters
+                   ) VALUES (
+                       'US', 'United States', %s, 'f', 2024, %s,
+                       1, %s, 1, '{}'::jsonb, 1, 1,
+                       100, 100, %s,
+                       %s, 100, 0, 12, 1
+                   )""",
+                (show_id, song_id, total_points, total_points, total_points),
+            )
+        db.commit()
+        try:
+            response = client.get("/year/2024", headers={"Accept": "application/json"})
+            assert response.status_code == 200
+            payload = response.get_json()
+            assert payload["has_f"] is True
+            assert payload["has_sc"] is False
+            assert payload["has_sf"] is False
+            assert payload["results"][str(song_id)]["f"]["pts"] == total_points
+            assert client.get("/year/2024").status_code == 200
+        finally:
+            db.execute("DELETE FROM country_show_results WHERE show_id = %s", (show_id,))
+            db.execute("DELETE FROM song_data WHERE song_id = %s", (song_id,))
+            db.execute("DELETE FROM song WHERE id = %s", (song_id,))
+            db.execute("DELETE FROM show WHERE id = %s", (show_id,))
+            db.execute("DELETE FROM point WHERE point_system_id = %s", (point_system_id,))
+            db.execute("DELETE FROM point_system WHERE id = %s", (point_system_id,))
+            db.commit()
+
+    property_test()
+
+
 def test_year_results_use_normalized_round_tiebreaks(db):
     with db.cursor() as cursor:
         cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Your national finals{% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('member.index') }}">Member</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ request.path }}">National Finals</a>
+{% endblock %}
+{% block content %}
+<h2>Your national finals</h2>
+{% if national_finals %}
+<table>
+    <thead>
+        <tr>
+            <th>Year</th>
+            <th>National final</th>
+            <th>Country</th>
+            <th>Status</th>
+            <th>Candidates</th>
+            <th>Shows</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for nf in national_finals %}
+        <tr>
+            <td>{{ nf.special_name or nf.year_id }}</td>
+            <td>{{ nf.name }}</td>
+            <td>{{ nf.owner_country_name or 'Multiple countries' }}</td>
+            <td>{{ nf.status|title }}</td>
+            <td class="number">{{ nf.candidate_count }}</td>
+            <td class="number">{{ nf.show_count }}</td>
+            <td>
+                {% if nf.special_short_name %}
+                <a href="{{ url_for('year.special_nf_details', short_name=nf.special_short_name, nf_short_name=nf.short_name) }}">Public view</a>
+                ·
+                <a href="{{ url_for('year.manage_special_nf', short_name=nf.special_short_name, nf_short_name=nf.short_name) }}">Manage</a>
+                {% else %}
+                <a href="{{ url_for('year.nf_details', year=nf.year_id, nf_short_name=nf.short_name) }}">Public view</a>
+                ·
+                <a href="{{ url_for('year.manage_nf', year=nf.year_id, nf_short_name=nf.short_name) }}">Manage</a>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>You do not manage any national finals.</p>
+{% endif %}
+{% endblock %}

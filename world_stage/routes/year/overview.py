@@ -230,11 +230,14 @@ def special(short_name: str, permissions: UserPermissions):
     year_placements = get_year_placements(_year) if cl else {}
 
     show_names = {s.short_name for s in shows}
+    has_f = "f" in show_names
     has_sc = "sc" in show_names
     has_sf = any(sn == "sf" or sn.startswith("sf") for sn in show_names)
-    multi_show = has_sc or has_sf
+    has_result_stages = has_f or has_sc or has_sf
 
-    results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl) else {}
+    results = (
+        get_show_results_for_songs([s.id for s in songs]) if (has_result_stages and cl) else {}
+    )
 
     sf_numbers: dict[int, str] = {}
     if has_sf:
@@ -273,7 +276,8 @@ def special(short_name: str, permissions: UserPermissions):
         placeholders=total_placeholders,
         year_placements=year_placements,
         results=results,
-        multi_show=multi_show,
+        has_result_stages=has_result_stages,
+        has_f=has_f,
         has_sc=has_sc,
         has_sf=has_sf,
         sf_numbers=sf_numbers,
@@ -344,11 +348,14 @@ def year(year: int, permissions: UserPermissions):
     year_placements = get_year_placements(_year) if cl else {}
 
     show_names = {s.short_name for s in shows}
+    has_f = "f" in show_names
     has_sc = "sc" in show_names
     has_sf = any(sn == "sf" or sn.startswith("sf") for sn in show_names)
-    multi_show = has_sc or has_sf
+    has_result_stages = has_f or has_sc or has_sf
 
-    results = get_show_results_for_songs([s.id for s in songs]) if (multi_show and cl == 1) else {}
+    results = (
+        get_show_results_for_songs([s.id for s in songs]) if (has_result_stages and cl) else {}
+    )
 
     # SF assignment: which semi-final each song competed in, regardless of
     # whether the show is published yet (no status gate).
@@ -389,7 +396,8 @@ def year(year: int, permissions: UserPermissions):
         placeholders=total_placeholders,
         year_placements=year_placements,
         results=results,
-        multi_show=multi_show,
+        has_result_stages=has_result_stages,
+        has_f=has_f,
         has_sc=has_sc,
         has_sf=has_sf,
         sf_numbers=sf_numbers,

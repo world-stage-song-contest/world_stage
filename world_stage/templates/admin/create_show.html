@@ -112,10 +112,12 @@
         <select name="national_final_id" id="national_final_id" required
                 onchange="updateShowNumber(); applyProgressionDefaults()">
             <option value="main" data-next-semifinal="{{ main_next_semifinal_number }}"
-                    {% if not form or form.national_final_id == 'main' %}selected{% endif %}>{{ year_data.special_name or year }} (main contest)</option>
+                    {% if (not form and selected_national_final_id is none)
+                          or (form and form.national_final_id == 'main') %}selected{% endif %}>{{ year_data.special_name or year }} (main contest)</option>
             {% for nf in national_finals %}
             <option value="{{ nf.id }}" data-next-semifinal="{{ nf.next_semifinal_number }}"
-                    {% if form and form.national_final_id == nf.id|string %}selected{% endif %}>
+                    {% if (form and form.national_final_id == nf.id|string)
+                          or (not form and selected_national_final_id == nf.id) %}selected{% endif %}>
                 {{ nf.name }}
             </option>
             {% endfor %}

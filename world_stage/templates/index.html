@@ -14,7 +14,7 @@
         <p>View information about yourself.</p>
     </a>
     <a href="{{ url_for('vote.index') }}" class="card{% if has_pending_vote %} card-attention{% endif %}"
-       {% if has_pending_vote %}title="You have an open vote you haven't cast yet"{% endif %}>
+       {% if has_pending_vote %}title="One of your songs is in an open show you haven't voted in yet"{% endif %}>
         <h3>Vote</h3>
         <img src="{{ static('images/ballot-box.png') }}" alt="Vote Icon">
         <p>Cast your vote for one of the ongoing votings.</p>

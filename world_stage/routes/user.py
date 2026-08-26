@@ -229,7 +229,9 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val, *, revote=F
                 WHERE point.point_system_id = sh.point_system_id) AS show_max
         FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
-        JOIN show sh ON song_show.show_id = sh.id AND sh.status = 'full'
+        JOIN show sh ON song_show.show_id = sh.id
+                    AND sh.status = 'full'
+                    AND sh.national_final_id IS NULL
         JOIN country ON song.country_id = country.id
         LEFT JOIN year ON sh.year_id = year.id
         {vote_set_join}
@@ -272,7 +274,9 @@ def _votes_by_country(cursor, user_id: int, username: str, *, revote=False):
         FROM country
         JOIN current_song AS song ON song.country_id = country.id
         JOIN song_show ON song_show.song_id = song.id
-        JOIN show sh ON sh.id = song_show.show_id AND sh.status = 'full'
+        JOIN show sh ON sh.id = song_show.show_id
+                    AND sh.status = 'full'
+                    AND sh.national_final_id IS NULL
         JOIN vote_set history_vote_set
           ON history_vote_set.show_id = sh.id
          AND history_vote_set.voter_id = %s
@@ -327,7 +331,9 @@ def _votes_by_user(cursor, user_id: int, username: str, *, revote=False):
         FROM account
         JOIN current_song AS song ON song.submitter_id = account.id
         JOIN song_show ON song_show.song_id = song.id
-        JOIN show sh ON sh.id = song_show.show_id AND sh.status = 'full'
+        JOIN show sh ON sh.id = song_show.show_id
+                    AND sh.status = 'full'
+                    AND sh.national_final_id IS NULL
         JOIN vote_set history_vote_set
           ON history_vote_set.show_id = sh.id
          AND history_vote_set.voter_id = %s
@@ -376,6 +382,7 @@ def _votes_by_year(cursor, user_id: int, username: str, *, revote=False):
         FROM year
         JOIN current_song AS song ON song.year_id = year.id
         WHERE year.status = 'closed'
+          AND song.main_participant
         ORDER BY year.id DESC
     """
     )

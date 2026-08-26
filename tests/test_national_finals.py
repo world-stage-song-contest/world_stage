@@ -151,6 +151,9 @@ def test_national_final_show_keys_and_order_are_compositional(client, db, nation
                 expected_local.append("sc")
             expected_local.append("f")
             assert [show["short_name"] for show in public.get_json()["shows"]] == expected_local
+            assert public.get_json()["has_f"] is True
+            assert public.get_json()["has_sf"] is (semifinals > 0)
+            assert public.get_json()["has_sc"] is repechage
 
             discovered = {
                 show["id"]: show for show in client.get("/api/show?year=2025").get_json()["result"]
@@ -215,6 +218,71 @@ def test_open_votings_put_every_main_year_show_before_national_finals(
                 (national_final["id"],),
             )
             db.commit()
+
+    property_test()
+
+
+def test_vote_tile_only_highlights_unvoted_main_shows_containing_the_users_song(
+    client, db, national_final, login
+):
+    @settings(max_examples=8, deadline=None)
+    @given(has_main_song=st.booleans(), has_main_ballot=st.booleans())
+    def property_test(has_main_song, has_main_ballot):
+        owned_song_id = _add_candidate(db, national_final["id"], submitter=3)
+        unrelated_song_id = _add_candidate(db, national_final["id"], submitter=2)
+        with db.cursor() as cursor:
+            main_show_id = cursor.execute(
+                """INSERT INTO show (
+                       year_id, point_system_id, show_type, status, voting_opens
+                   ) VALUES (2025, %s, 'f', 'none', CURRENT_TIMESTAMP)
+                   RETURNING id""",
+                (national_final["point_system_id"],),
+            ).fetchone()["id"]
+            assignments = [
+                (national_final["show_id"], owned_song_id, 1),
+                (main_show_id, unrelated_song_id, 1),
+            ]
+            if has_main_song:
+                assignments.append((main_show_id, owned_song_id, 2))
+            cursor.executemany(
+                """INSERT INTO song_show (show_id, song_id, running_order)
+                   VALUES (%s, %s, %s)""",
+                assignments,
+            )
+            cursor.execute(
+                """UPDATE show
+                   SET voting_opens = CURRENT_TIMESTAMP, voting_closes = NULL
+                   WHERE id = %s""",
+                (national_final["show_id"],),
+            )
+            main_vote_set_id = None
+            if has_main_ballot:
+                main_vote_set_id = cursor.execute(
+                    """INSERT INTO vote_set (voter_id, show_id, country_id)
+                       VALUES (3, %s, 'US') RETURNING id""",
+                    (main_show_id,),
+                ).fetchone()["id"]
+        db.commit()
+        try:
+            client.delete_cookie("session")
+            login(3)
+            response = client.get("/", headers={"Accept": "application/json"})
+            assert response.status_code == 200
+            assert response.get_json()["has_pending_vote"] is (
+                has_main_song and not has_main_ballot
+            )
+        finally:
+            client.delete_cookie("session")
+            if main_vote_set_id is not None:
+                db.execute("DELETE FROM vote_set WHERE id = %s", (main_vote_set_id,))
+                db.commit()
+            _remove_candidates(db, [owned_song_id, unrelated_song_id])
+            db.execute(
+                "UPDATE show SET voting_opens = NULL, voting_closes = NULL WHERE id = %s",
+                (national_final["show_id"],),
+            )
+            db.commit()
+            _remove_shows(db, [main_show_id])
 
     property_test()
 
@@ -317,6 +385,53 @@ def test_only_the_owner_can_manage_metadata(client, db, national_final, login):
                 "owner_country_id": None,
                 "short_name": f"nf-{suffix}",
             }
+
+    property_test()
+
+
+def test_member_national_final_view_contains_exactly_the_viewers_finals(
+    client, db, national_final, login
+):
+    @settings(max_examples=8, deadline=None)
+    @given(owners=st.lists(st.sampled_from([2, 3]), min_size=1, max_size=5))
+    def property_test(owners):
+        first_id = db.execute(
+            "SELECT COALESCE(MAX(id), 0) + 1000 AS id FROM national_final"
+        ).fetchone()["id"]
+        created_ids = [first_id + offset for offset in range(len(owners))]
+        with db.cursor() as cursor:
+            cursor.executemany(
+                """INSERT INTO national_final (
+                       id, year_id, owner_id, short_name, name
+                   ) VALUES (%s, 2025, %s, %s, %s)""",
+                [
+                    (nf_id, owner_id, f"owned-{nf_id}", f"Owned final {nf_id}")
+                    for nf_id, owner_id in zip(created_ids, owners, strict=True)
+                ],
+            )
+        db.commit()
+        try:
+            for viewer_id in (2, 3):
+                client.delete_cookie("session")
+                login(viewer_id)
+                response = client.get(
+                    "/member/national-finals",
+                    headers={"Accept": "application/json"},
+                )
+                assert response.status_code == 200
+                returned = response.get_json()["national_finals"]
+                expected_ids = {
+                    row["id"]
+                    for row in db.execute(
+                        "SELECT id FROM national_final WHERE owner_id = %s",
+                        (viewer_id,),
+                    ).fetchall()
+                }
+                assert {nf["id"] for nf in returned} == expected_ids
+        finally:
+            client.delete_cookie("session")
+            db.execute("DELETE FROM national_final WHERE id = ANY(%s)", (created_ids,))
+            db.commit()
 
     property_test()
 
@@ -615,6 +730,74 @@ def test_nf_result_routes_distinguish_main_and_numbered_entries(client, db, nati
     property_test()
 
 
+def test_finished_nf_orders_unassigned_candidates_last_without_placing_them(
+    client, db, national_final
+):
+    @settings(max_examples=8, deadline=None)
+    @given(candidate_count=st.integers(2, 5), assignment_seed=st.integers(0, 20))
+    def property_test(candidate_count, assignment_seed):
+        db.rollback()
+        db.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
+        candidates = [
+            _add_candidate(db, national_final["id"], submitter=3)
+            for _ in range(candidate_count)
+        ]
+        assigned_count = 1 + assignment_seed % (candidate_count - 1)
+        assigned = candidates[:assigned_count]
+        unassigned = candidates[assigned_count:]
+        with db.cursor() as cursor:
+            cursor.executemany(
+                """INSERT INTO song_show (show_id, song_id, running_order)
+                   VALUES (%s, %s, %s)""",
+                [
+                    (national_final["show_id"], song_id, position)
+                    for position, song_id in enumerate(assigned, start=1)
+                ],
+            )
+            cursor.execute(
+                "UPDATE show SET status = 'full' WHERE id = %s",
+                (national_final["show_id"],),
+            )
+            cursor.execute(
+                "UPDATE national_final SET status = 'finished' WHERE id = %s",
+                (national_final["id"],),
+            )
+        db.commit()
+        try:
+            response = client.get(
+                "/year/2025/nfs/test-es", headers={"Accept": "application/json"}
+            )
+            assert response.status_code == 200
+            payload = response.get_json()
+            ordered_ids = [candidate["id"] for candidate in payload["candidates"]]
+            result_ids = {int(song_id) for song_id in payload["results"]}
+            places = {
+                int(song_id): ranking["overall_place"]
+                for song_id, ranking in payload["rankings"].items()
+            }
+
+            assert set(ordered_ids[: len(result_ids)]) == result_ids
+            assert set(unassigned).isdisjoint(result_ids)
+            assert set(ordered_ids[-len(unassigned) :]) == set(unassigned)
+            assert set(places) == set(assigned)
+            assert [places[song_id] for song_id in ordered_ids if song_id in places] == list(
+                range(1, assigned_count + 1)
+            )
+        finally:
+            _remove_candidates(db, candidates)
+            db.execute(
+                "UPDATE show SET status = 'none' WHERE id = %s",
+                (national_final["show_id"],),
+            )
+            db.execute(
+                "UPDATE national_final SET status = 'draft' WHERE id = %s",
+                (national_final["id"],),
+            )
+            db.commit()
+
+    property_test()
+
+
 def test_nf_owner_can_open_breakdowns_while_previewing_unpublished_results(
     client, db, national_final, login
 ):
@@ -680,6 +863,104 @@ def test_histories_render_with_separate_nf_candidates(client, db, national_final
                 assert client.get(path).status_code == 200
         finally:
             _remove_candidates(db, candidates)
+
+    property_test()
+
+
+def test_aggregate_vote_views_ignore_national_final_entries_and_points(
+    client, db, national_final
+):
+    scores = st.sampled_from([12, 10, 8])
+
+    @settings(max_examples=8, deadline=None)
+    @given(main_score=scores, nf_selected_score=scores, nf_only_score=scores)
+    def property_test(main_score, nf_selected_score, nf_only_score):
+        db.rollback()
+        db.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
+        selected_id = _add_candidate(db, national_final["id"], submitter=3)
+        nf_only_id = _add_candidate(db, national_final["id"], submitter=3)
+        with db.cursor() as cursor:
+            cursor.execute(
+                "UPDATE song SET main_participant = true WHERE id = %s",
+                (selected_id,),
+            )
+            main_show_id = cursor.execute(
+                """INSERT INTO show (
+                       year_id, point_system_id, show_type, status
+                   ) VALUES (2025, %s, 'f', 'full') RETURNING id""",
+                (national_final["point_system_id"],),
+            ).fetchone()["id"]
+            cursor.executemany(
+                """INSERT INTO song_show (show_id, song_id, running_order)
+                   VALUES (%s, %s, %s)""",
+                [
+                    (national_final["show_id"], selected_id, 1),
+                    (national_final["show_id"], nf_only_id, 2),
+                    (main_show_id, selected_id, 1),
+                ],
+            )
+            main_vote_set_id = cursor.execute(
+                """INSERT INTO vote_set (voter_id, show_id, country_id)
+                   VALUES (1, %s, 'US') RETURNING id""",
+                (main_show_id,),
+            ).fetchone()["id"]
+            nf_vote_set_id = cursor.execute(
+                """INSERT INTO vote_set (voter_id, show_id, country_id)
+                   VALUES (1, %s, 'US') RETURNING id""",
+                (national_final["show_id"],),
+            ).fetchone()["id"]
+            cursor.executemany(
+                """INSERT INTO vote (vote_set_id, song_id, score)
+                   VALUES (%s, %s, %s)""",
+                [
+                    (main_vote_set_id, selected_id, main_score),
+                    (nf_vote_set_id, selected_id, nf_selected_score),
+                    (nf_vote_set_id, nf_only_id, nf_only_score),
+                ],
+            )
+            cursor.execute(
+                "UPDATE show SET status = 'full' WHERE id = %s",
+                (national_final["show_id"],),
+            )
+            cursor.execute("UPDATE year SET status = 'closed' WHERE id = 2025")
+        db.commit()
+        try:
+            selected_title = db.execute(
+                "SELECT title FROM current_song WHERE id = %s", (selected_id,)
+            ).fetchone()["title"]
+            views = (
+                ("country&country=ES", "regular_entries"),
+                ("user&user=3", "regular_entries"),
+                ("year&year=2025", "entries"),
+            )
+            for query, result_key in views:
+                response = client.get(
+                    f"/user/alice/votes?view={query}",
+                    headers={"Accept": "application/json"},
+                )
+                assert response.status_code == 200
+                entries = response.get_json()[result_key]
+                assert [entry["title"] for entry in entries] == [selected_title]
+                assert entries[0]["total"] == main_score
+                assert entries[0]["final"]["pts"] == main_score
+        finally:
+            db.execute(
+                "DELETE FROM vote WHERE vote_set_id = ANY(%s)",
+                ([main_vote_set_id, nf_vote_set_id],),
+            )
+            db.execute(
+                "DELETE FROM vote_set WHERE id = ANY(%s)",
+                ([main_vote_set_id, nf_vote_set_id],),
+            )
+            db.commit()
+            _remove_candidates(db, [selected_id, nf_only_id])
+            db.execute(
+                "UPDATE show SET status = 'none' WHERE id = %s",
+                (national_final["show_id"],),
+            )
+            _remove_shows(db, [main_show_id])
+            db.execute("UPDATE year SET status = 'open' WHERE id = 2025")
+            db.commit()
 
     property_test()
 

@@ -1,7 +1,30 @@
 {% extends "base.html" %}
 {% from "macros/artists.html" import artist_links %}
-{% block title %}Manage {{ nf.name }}{% endblock %}
+{% block title %}Manage shows: {{ nf.name }}{% endblock %}
 {% block headercontents %}
+<style>
+    .state-cell {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5em;
+    }
+
+    .candidate-actions,
+    .candidate-show-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5em;
+    }
+
+    .candidate-show-actions form {
+        display: flex;
+        align-items: center;
+        gap: 0.25em;
+        margin: 0;
+    }
+</style>
 <script>
     function updateIdentifier() {
         const country = document.getElementById('owner_country_id').value;
@@ -19,72 +42,50 @@
 </script>
 {% endblock %}
 {% block navigation %}
+    {% if can_reassign_owner %}
+    <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
+    <span class="nav-separator"></span>
+    {% if special %}
+    <a class="nav-item" href="{{ url_for('admin.manage_special', short_name=special) }}">{{ year_label }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('admin.manage', year=year) }}">{{ year_label }}</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    {% endif %}
+    <a class="nav-item" href="{{ request.path }}">{{ nf.name }}</a>
+    <span class="nav-separator"></span>
     {% if special %}
     <a class="nav-item" href="{{ url_for('year.special_nf_details', short_name=special, nf_short_name=nf.short_name) }}">Public view</a>
     {% else %}
     <a class="nav-item" href="{{ url_for('year.nf_details', year=year, nf_short_name=nf.short_name) }}">Public view</a>
     {% endif %}
-    <span class="nav-separator"></span>
-    <a class="nav-item" href="{{ request.path }}">Manage</a>
 {% endblock %}
 {% block content %}
-<h2>Metadata</h2>
-<form method="post">
-    <p>
-        <label class="req" for="name">Full name</label>
-        <input name="name" id="name" required value="{{ nf.name }}">
-    </p>
-    {% if can_reassign_owner %}
-    <p>
-        <label class="req" for="owner_id">Owner</label>
-        <select name="owner_id" id="owner_id" required>
-            {% for owner in metadata_owners %}
-            <option value="{{ owner.id }}" {% if owner.id == nf.owner_id %}selected{% endif %}>{{ owner.username }}</option>
-            {% endfor %}
-        </select>
-    </p>
-    {% else %}
-    <p>Owner: {{ nf.owner_username }}</p>
-    {% endif %}
-    <p>
-        <label for="owner_country_id">Owner country</label>
-        <select name="owner_country_id" id="owner_country_id" onchange="updateIdentifier()">
-            <option value=""></option>
-            {% for country in metadata_countries %}
-            <option value="{{ country.id }}" {% if country.id == nf.owner_country_id %}selected{% endif %}>{{ country.name }}</option>
-            {% endfor %}
-        </select>
-    </p>
-    <p>
-        <label class="req" for="short_name">Identifier</label>
-        <input name="short_name" id="short_name" required
-               pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value="{{ nf.short_name }}">
-    </p>
-    <button name="action" value="update_metadata">Save metadata</button>
-</form>
-<script>updateIdentifier();</script>
+<div>
+    <h2>Other links</h2>
+    <ul>
+        {% if special %}
+        <li><a href="{{ url_for('year.special_nf_details', short_name=special, nf_short_name=nf.short_name) }}">Public view</a></li>
+        {% else %}
+        <li><a href="{{ url_for('year.nf_details', year=year, nf_short_name=nf.short_name) }}">Public view</a></li>
+        {% endif %}
+        {% if can_reassign_owner %}
+        <li><a href="{{ url_for('admin.create_show', year=year, national_final_id=nf.id) }}">Create Show</a></li>
+        {% endif %}
+        {% if nf.status in ['draft', 'submissions'] %}
+        <li><a href="{{ url_for('member.submit', national_final_id=nf.id) }}">Add a Candidate</a></li>
+        {% endif %}
+    </ul>
+</div>
 
-<h2>Lifecycle</h2>
-<form method="post">
-    <label for="lifecycle-status">National final status</label>
-    <select id="lifecycle-status" name="lifecycle_status">
-        {% for value in ['draft', 'submissions', 'voting', 'finished', 'cancelled'] %}
-        <option value="{{ value }}" {% if value == nf.status %}selected{% endif %}>{{ value|title }}</option>
-        {% endfor %}
-    </select>
-    <button name="action" value="set_lifecycle">Change status</button>
-</form>
-
-<h2>Shows</h2>
 <table>
     <thead>
         <tr>
             <th>Show</th>
-            <th>Date</th>
             <th>Voting</th>
             <th>Predictions</th>
-            <th>Result visibility</th>
-            <th>Points</th>
+            <th>Change Status</th>
+            <th>Change Date</th>
         </tr>
     </thead>
     <tbody>
@@ -94,26 +95,32 @@
         <td>
             <form method="post">
                 <input type="hidden" name="show_id" value="{{ show.id }}">
-                <input type="date" name="date" value="{{ show.date.isoformat() if show.date else '' }}">
-                <button name="action" value="set_date">Save date</button>
-            </form>
-        </td>
-        <td>
-            <form method="post">
-                <input type="hidden" name="show_id" value="{{ show.id }}">
-                {% if show.voting_closes or not show.voting_opens %}
-                <button name="action" value="open_voting">{% if show.voting_closes %}Reopen{% else %}Open{% endif %} voting</button>
-                {% else %}<button name="action" value="close_voting">Close voting</button>{% endif %}
-            </form>
-        </td>
-        <td>
-            <form method="post">
-                <input type="hidden" name="show_id" value="{{ show.id }}">
-                {% if show.predictions_close %}
-                <button name="action" value="open_predictions">Reopen predictions</button>
+                <div class="state-cell">
+                {% if show.voting_closes %}
+                    <span>Closed</span>
+                    <button name="action" value="open_voting">Reopen</button>
+                {% elif show.voting_opens %}
+                    <span>Open</span>
+                    <button name="action" value="close_voting">Close</button>
                 {% else %}
-                <button name="action" value="close_predictions">Close predictions</button>
+                    <span>Not started</span>
+                    <button name="action" value="open_voting">Open</button>
                 {% endif %}
+                </div>
+            </form>
+        </td>
+        <td>
+            <form method="post">
+                <input type="hidden" name="show_id" value="{{ show.id }}">
+                <div class="state-cell">
+                {% if show.predictions_close %}
+                    <span title="{{ show.predictions_close }}">Closed</span>
+                    <button name="action" value="open_predictions">Reopen</button>
+                {% else %}
+                    <span>Open</span>
+                    <button name="action" value="close_predictions">Close</button>
+                {% endif %}
+                </div>
             </form>
         </td>
         <td>
@@ -124,23 +131,83 @@
                     <option value="{{ value }}" {% if value == show.status %}selected{% endif %}>{{ value }}</option>
                     {% endfor %}
                 </select>
-                <button name="action" value="set_status">Change result visibility</button>
+                <button name="action" value="set_status">Change</button>
             </form>
         </td>
-        <td>{{ show.points|join(', ') }}</td>
+        <td>
+            <form method="post">
+                <input type="hidden" name="show_id" value="{{ show.id }}">
+                <input type="date" name="date" value="{{ show.date.isoformat() if show.date else '' }}">
+                <button name="action" value="set_date">Change</button>
+            </form>
+        </td>
     </tr>
     {% endfor %}
     </tbody>
 </table>
 
+<div>
+    <h2>National Final settings</h2>
+    <form method="post">
+        <div>
+            <label for="lifecycle-status">National Final Status:</label>
+            <select id="lifecycle-status" name="lifecycle_status">
+                {% set statuses = [
+                    ('draft', 'Draft'),
+                    ('submissions', 'Submissions open'),
+                    ('voting', 'Voting'),
+                    ('finished', 'Finished'),
+                    ('cancelled', 'Cancelled')
+                ] %}
+                {% for value, label in statuses %}
+                <option value="{{ value }}" {% if value == nf.status %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button name="action" value="set_lifecycle">Change National Final Status</button>
+    </form>
+
+    <form method="post">
+        <p>
+            <label class="req" for="name">National Final Name:</label>
+            <input name="name" id="name" required value="{{ nf.name }}">
+        </p>
+        {% if can_reassign_owner %}
+        <p>
+            <label class="req" for="owner_id">Owner:</label>
+            <select name="owner_id" id="owner_id" required>
+                {% for owner in metadata_owners %}
+                <option value="{{ owner.id }}" {% if owner.id == nf.owner_id %}selected{% endif %}>{{ owner.username }}</option>
+                {% endfor %}
+            </select>
+        </p>
+        {% else %}
+        <p>Owner: {{ nf.owner_username }}</p>
+        {% endif %}
+        <p>
+            <label for="owner_country_id">Country:</label>
+            <select name="owner_country_id" id="owner_country_id" onchange="updateIdentifier()">
+                <option value="">Multiple countries</option>
+                {% for country in metadata_countries %}
+                <option value="{{ country.id }}" {% if country.id == nf.owner_country_id %}selected{% endif %}>{{ country.name }}</option>
+                {% endfor %}
+            </select>
+        </p>
+        <p>
+            <label class="req" for="short_name">Identifier:</label>
+            <input name="short_name" id="short_name" required
+                   pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value="{{ nf.short_name }}">
+        </p>
+        <button name="action" value="update_metadata">Save National Final Settings</button>
+    </form>
+</div>
+<script>updateIdentifier();</script>
+
 <h2>Candidates</h2>
 <p>Selecting a candidate promotes that same song to the main contest; it does not copy it. National-final votes remain attached to their national-final shows. The selection is locked once the main entry has main-show assignments or votes.</p>
-{% if nf.status in ['draft', 'submissions'] %}
-<p><a href="{{ url_for('member.submit', national_final_id=nf.id) }}">Add a candidate</a></p>
-{% endif %}
 {% if candidates %}
 <table>
-    <thead><tr><th>Country</th><th>Artist</th><th>Title</th><th>Submitter</th><th>Shows</th><th>Manage</th></tr></thead>
+    <thead><tr><th>Country</th><th>Artist</th><th>Title</th><th>Submitter</th><th>Shows</th><th>Actions</th></tr></thead>
     <tbody>
     {% for song in candidates %}
     <tr>
@@ -148,12 +215,13 @@
         <td><a href="{{ url_for('member.submit', national_final_id=nf.id, year=year, country=song.country_id, entry_number=song.entry_number) }}">{{ song.title }}</a></td>
         <td>{{ song.submitter or '' }}</td>
         <td>{% for assignment in assignments.get(song.id, []) %}{{ assignment.short_name|upper }} (#{{ assignment.running_order }}){% if not loop.last %}, {% endif %}{% endfor %}</td>
-        <td>
+        <td><div class="candidate-actions">
             <form method="post">
                 <input type="hidden" name="song_id" value="{{ song.id }}">
                 <input type="hidden" name="enabled" value="{{ 'false' if song.main_participant else 'true' }}">
                 <button name="action" value="set_main_participant">{% if song.main_participant %}Remove selection{% else %}Select for main contest{% endif %}</button>
             </form>
+            <div class="candidate-show-actions">
             {% for show in shows %}
             <form method="post">
                 <input type="hidden" name="song_id" value="{{ song.id }}">
@@ -166,7 +234,8 @@
                 {% endif %}
             </form>
             {% endfor %}
-        </td>
+            </div>
+        </div></td>
     </tr>
     {% endfor %}
     </tbody>

@@ -99,9 +99,11 @@
             <th>Language</th>
             <th>Submitter</th>
             {% if has_sf %}<th>SF #</th>{% endif %}
-            {% if is_closed and multi_show %}
+            {% if is_closed and has_result_stages %}
+            {% if has_f %}
             <th class="final">Final</th>
             <th class="final">Points</th>
+            {% endif %}
             {% if has_sc %}
             <th class="repechage">Repe</th>
             <th class="repechage">Points</th>
@@ -173,8 +175,10 @@
               <td class="number">AQ</td>
             {% endif %}
             {% endif %}
-            {% if is_closed and multi_show %}
+            {% if is_closed and has_result_stages %}
+            {% if has_f %}
             {{ result_cells(r.get('f'),  'final') }}
+            {% endif %}
             {% if has_sc %}
             {{ result_cells(r.get('sc'), 'repechage') }}
             {% endif %}
@@ -206,8 +210,8 @@
             <td></td>
             <td>{{ nf.owner_username }}</td>
             {% if has_sf %}<td class="number"></td>{% endif %}
-            {% if is_closed and multi_show %}
-            <td></td><td></td>
+            {% if is_closed and has_result_stages %}
+            {% if has_f %}<td></td><td></td>{% endif %}
             {% if has_sc %}<td></td><td></td>{% endif %}
             {% if has_sf %}<td></td><td></td>{% endif %}
             {% endif %}
