@@ -3,6 +3,7 @@
 {% block headercontents %}
 <link rel="stylesheet" href="{{ static('css/user-votes.css') }}">
 <script src="{{ static('js/sort-table.js') }}"></script>
+<script src="{{ static('js/local-datetime.js') }}" defer></script>
 {% endblock %}
 {% block navigation %}
     <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
@@ -216,7 +217,9 @@
         <a href="{{ url_for('year.results', year=vote.year, show=vote.short_name) }}">{{ vote.year }} {{ vote.show_name }}</a>
     {% endif %}
     </h3>
-    <p class="vote-date">{{ vote.date }}</p>
+    {% if vote.date %}
+    <p class="vote-date"><time datetime="{{ vote.date.isoformat() }}" data-local-datetime>{{ vote.date|warsaw_datetime }}</time></p>
+    {% endif %}
     <p class="voter-name">{{ flag(vote.code, 42) }}{{ vote.nickname }}</p>
     <table class="user-votes{% if is_revote %} revotes{% if vote.has_original_vote %} revotes-with-difference{% endif %}{% endif %}">
         <tbody>

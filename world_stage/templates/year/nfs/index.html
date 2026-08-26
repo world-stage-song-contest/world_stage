@@ -28,8 +28,8 @@
         <td>{{ nf.status|title }}</td>
         <td>{{ nf.show_count }}</td>
         <td>
-            {% if nf.first_date == nf.last_date %}{{ nf.first_date or '' }}
-            {% else %}{{ nf.first_date or '' }}–{{ nf.last_date or '' }}{% endif %}
+            {% if nf.first_date == nf.last_date %}{{ nf.first_date.strftime('%Y-%m-%d') if nf.first_date else '' }}
+            {% else %}{{ nf.first_date.strftime('%Y-%m-%d') if nf.first_date else '' }}–{{ nf.last_date.strftime('%Y-%m-%d') if nf.last_date else '' }}{% endif %}
         </td>
     </tr>
     {% endfor %}

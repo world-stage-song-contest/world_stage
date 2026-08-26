@@ -329,6 +329,10 @@ def create_app(config: dict | None = None) -> Flask:
 
     app.jinja_env.filters.update(urldecode=urllib.parse.unquote)
     app.jinja_env.filters.update(urlize_decoded=urlize_decoded)
+    from .utils.timefmt import format_utc_datetime, format_warsaw_datetime
+
+    app.jinja_env.filters.update(utc_datetime_input=format_utc_datetime)
+    app.jinja_env.filters.update(warsaw_datetime=format_warsaw_datetime)
 
     from . import performance
 

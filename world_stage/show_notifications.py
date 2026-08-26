@@ -1,5 +1,5 @@
 import smtplib
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from importlib.resources import files
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -9,8 +9,6 @@ from flask import current_app
 from .db import get_db
 from .email import external_url, is_configured, send_email
 
-SHOW_TIMEZONE = ZoneInfo("Europe/Warsaw")
-SHOW_START_TIME = time(19, 30)
 REMINDER_TIME = time(8)
 EARLY_SHOW_CUTOFF = time(12)
 GEOGRAPHIC_TIMEZONE_REGIONS = (
@@ -64,10 +62,11 @@ def grouped_timezones(timezones: tuple[str, ...]) -> tuple[TimezoneGroup, ...]:
     return tuple(groups)
 
 
-def notification_time(show_date: date, timezone_name: str) -> datetime:
+def notification_time(show_start: datetime, timezone_name: str) -> datetime:
     """Return the UTC instant when a user should be reminded about a show."""
+    if show_start.tzinfo is None:
+        raise ValueError("show_start must be timezone-aware")
     user_timezone = ZoneInfo(timezone_name)
-    show_start = datetime.combine(show_date, SHOW_START_TIME, SHOW_TIMEZONE)
     local_start = show_start.astimezone(user_timezone)
     reminder_date = local_start.date()
     if local_start.time() < EARLY_SHOW_CUTOFF:
@@ -86,7 +85,6 @@ def valid_timezone(value: str, allowed_timezones: tuple[str, ...] | None = None)
 
 
 def _candidates(now: datetime) -> list[dict]:
-    warsaw_date = now.astimezone(SHOW_TIMEZONE).date()
     cursor = get_db().cursor()
     cursor.execute(
         """
@@ -135,7 +133,7 @@ def _candidates(now: datetime) -> list[dict]:
           )
         ORDER BY show.date, show.id, account.id
         """,
-        (warsaw_date - timedelta(days=1), warsaw_date + timedelta(days=2)),
+        (now - timedelta(days=1), now + timedelta(days=2)),
     )
     return cursor.fetchall()
 
@@ -154,9 +152,7 @@ def send_due_notifications(now: datetime | None = None) -> int:
     delivered = 0
     for candidate in _candidates(now):
         due_at = notification_time(candidate["date"], candidate["timezone"])
-        show_start_utc = datetime.combine(
-            candidate["date"], SHOW_START_TIME, SHOW_TIMEZONE
-        ).astimezone(UTC)
+        show_start_utc = candidate["date"].astimezone(UTC)
         if due_at > now or now >= show_start_utc:
             continue
 
@@ -175,9 +171,7 @@ def send_due_notifications(now: datetime | None = None) -> int:
             continue
 
         local_timezone = ZoneInfo(candidate["timezone"])
-        show_start = datetime.combine(candidate["date"], SHOW_START_TIME, SHOW_TIMEZONE).astimezone(
-            local_timezone
-        )
+        show_start = candidate["date"].astimezone(local_timezone)
         event_name = candidate["year_name"]
         if candidate["national_final_name"]:
             event_name += f" {candidate['national_final_name']}"

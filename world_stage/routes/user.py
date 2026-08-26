@@ -694,7 +694,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         LEFT JOIN year ON show.year_id = year.id
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
           AND (show.status = 'full' OR show.status = 'partial')
-        ORDER BY show.date DESC
+        ORDER BY show.date DESC NULLS LAST, show.id DESC
     """,
         (user_id,),
     )
@@ -709,7 +709,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
             "show_name": row["show_name"],
             "short_name": row["short_name"],
             "status": row["status"],
-            "date": row["date"].strftime("%d %b %Y") if row["date"] else "",
+            "date": row["date"],
             "year": row["year_id"],
             "special_name": row["special_name"],
             "special_short_name": row["special_short_name"],
@@ -756,7 +756,7 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         LEFT JOIN year ON year.id = show.year_id
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'revote'
           AND show.status = 'full'
-        ORDER BY show.date DESC
+        ORDER BY show.date DESC NULLS LAST, show.id DESC
         """,
         (user_id,),
     )
@@ -768,7 +768,7 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
             "code": row["country_id"],
             "show_name": row["show_name"],
             "short_name": row["short_name"],
-            "date": row["date"].strftime("%d %b %Y") if row["date"] else "",
+            "date": row["date"],
             "year": row["year_id"],
             "special_name": row["special_name"],
             "special_short_name": row["special_short_name"],

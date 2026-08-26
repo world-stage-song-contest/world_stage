@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Open Votings{% endblock %}
 {% block headercontents %}
+<script src="{{ static('js/local-datetime.js') }}" defer></script>
 <style>
     .revote-card.card { width: 160px; height: auto; min-height: 5em; }
     .revote-card h4 { margin: 0 0 1em; }
+    .revote-card time { display: block; margin: 0 0 1em; }
     .revote-card-links { display: flex; justify-content: center; gap: 1em; }
 </style>
 {% endblock %}
@@ -15,6 +17,9 @@
         {% for show in section.shows %}
         <div class="card revote-card">
             <h4>{{ show.name }}</h4>
+            {% if show.date %}
+            <time datetime="{{ show.date.isoformat() }}" data-local-datetime>{{ show.date|warsaw_datetime }}</time>
+            {% endif %}
             <div class="revote-card-links">
                 <a href="{{ url_for('vote.vote', show=show.short_name) }}">Vote</a>
                 {% if show.predictions_open %}
@@ -33,6 +38,9 @@
             {% for show in section.shows %}
             <div class="card revote-card">
                 <h4>{{ show.name }}</h4>
+                {% if show.date %}
+                <time datetime="{{ show.date.isoformat() }}" data-local-datetime>{{ show.date|warsaw_datetime }}</time>
+                {% endif %}
                 <div class="revote-card-links">
                     <a href="{{ url_for('vote.vote', show=show.short_name) }}">Vote</a>
                     {% if show.predictions_open %}

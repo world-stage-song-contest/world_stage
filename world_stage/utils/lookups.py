@@ -48,7 +48,7 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
                    JOIN show AS target ON target.id = progression.target_show_id
                    WHERE progression.source_show_id = show.id
                ), '[]'::jsonb) AS progressions,
-               show.voting_opens, show.voting_closes, show.predictions_close,
+               show.voting_opens, show.voting_closes, show.predictions_close, show.date,
                show.status,
                show.voting_ruleset_version, show.revote_ruleset_version,
                official_rules.penalizes_non_voters,
@@ -99,6 +99,7 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         voting_opens=voting_opens,
         voting_closes=voting_closes,
         predictions_close=predictions_close,
+        date=show_row["date"],
         year=year_id,
         status=status,
         voting_ruleset_version=show_row["voting_ruleset_version"],

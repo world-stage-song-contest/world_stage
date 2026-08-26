@@ -1,4 +1,3 @@
-import datetime
 import re
 
 import psycopg
@@ -10,6 +9,7 @@ from ...utils import (
     get_languages_for_songs,
     get_lineup_issues,
     get_unassigned_lineup_issue,
+    parse_utc_datetime,
     render_template,
     with_auth,
 )
@@ -526,7 +526,7 @@ def _manage_nf(year_id: int, nf_short_name: str, user, permissions: UserPermissi
         if action == "set_date":
             raw_date = request.form.get("date", "").strip()
             try:
-                show_date = datetime.date.fromisoformat(raw_date) if raw_date else None
+                show_date = parse_utc_datetime(raw_date) if raw_date else None
             except ValueError:
                 return render_template("error.html", error="Invalid date format"), 400
             cursor.execute("UPDATE show SET date = %s WHERE id = %s", (show_date, show_id))

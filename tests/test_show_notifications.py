@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo, available_timezones
 
 from hypothesis import given, settings
@@ -24,19 +24,21 @@ def test_user_facing_timezones_are_geographic_or_utc(timezone_name):
 
 @settings(max_examples=100)
 @given(
-    show_date=st.dates(min_value=date(2000, 1, 1), max_value=date(2040, 12, 31)),
+    show_start=st.datetimes(
+        min_value=datetime(2000, 1, 1),
+        max_value=datetime(2040, 12, 31, 23, 59),
+        timezones=st.just(UTC),
+    ),
     timezone_name=st.sampled_from(sorted(available_timezones())),
 )
-def test_notification_time_obeys_the_users_local_calendar(show_date, timezone_name):
+def test_notification_time_obeys_the_users_local_calendar(show_start, timezone_name):
     user_timezone = ZoneInfo(timezone_name)
-    show_start = datetime.combine(show_date, time(19, 30), ZoneInfo("Europe/Warsaw")).astimezone(
-        user_timezone
-    )
+    local_start = show_start.astimezone(user_timezone)
 
-    reminder = notification_time(show_date, timezone_name).astimezone(user_timezone)
+    reminder = notification_time(show_start, timezone_name).astimezone(user_timezone)
 
-    expected_date = show_start.date() - (
-        timedelta(days=1) if show_start.time() < time(12) else timedelta()
+    expected_date = local_start.date() - (
+        timedelta(days=1) if local_start.time() < time(12) else timedelta()
     )
     assert reminder.date() == expected_date
     assert reminder.time() == time(8)
@@ -131,7 +133,7 @@ def test_show_delivery_follows_the_union_of_enabled_categories(app, db, configur
         show_id = db.execute(
             """
                 INSERT INTO show (year_id, show_type, show_number, date)
-                VALUES (2025, 'sf', 99, DATE '2026-09-01')
+                VALUES (2025, 'sf', 99, TIMESTAMPTZ '2026-09-01 17:30:00+00')
                 ON CONFLICT (year_id, short_name) WHERE national_final_id IS NULL
                 DO UPDATE SET date = EXCLUDED.date
                 RETURNING id

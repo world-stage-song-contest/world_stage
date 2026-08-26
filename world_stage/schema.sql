@@ -686,7 +686,7 @@ CREATE TABLE IF NOT EXISTS show (
     ) STORED,
     voting_opens timestamptz,
     voting_closes timestamptz,
-    date date,
+    date timestamptz,
     status text REFERENCES show_status (name) ON UPDATE RESTRICT ON DELETE RESTRICT,
     predictions_close timestamptz,
     revote_eligible_at timestamptz,

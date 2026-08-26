@@ -165,7 +165,7 @@ def index():
         SELECT show.id, show.show_name AS name,
                COALESCE(national_final.short_name || '-', '') || show.short_name AS short_name,
                show.year_id AS year, show.voting_opens, show.voting_closes,
-               show.predictions_close,
+               show.predictions_close, show.date,
                year.special_name, year.special_short_name,
                national_final.id AS national_final_id,
                national_final.name AS national_final_name
@@ -219,6 +219,7 @@ def index():
                 "voting_closes": row["voting_closes"],
                 "predictions_open": predictions_open,
                 "left": format_timedelta(left),
+                "date": row["date"],
             }
         )
     return render_template(
@@ -333,6 +334,7 @@ def vote(show: str, user: tuple[int, str]):
         country=country,
         year=show_data.year,
         show_name=show_data.name,
+        show_start=show_data.date,
         short_name=show_data.short_name,
         show=show,
         selected_country=country_id,
@@ -516,6 +518,7 @@ def vote_post(show: str, user: tuple[int, str]):
         nickname=nickname,
         year=show_data.year,
         show_name=show_data.name,
+        show_start=show_data.date,
         show=show,
         selected_country=country_id,
         countries=countries or get_countries(),

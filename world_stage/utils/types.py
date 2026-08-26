@@ -15,6 +15,7 @@ class ShowData:
     voting_opens: datetime.datetime | None
     voting_closes: datetime.datetime | None
     predictions_close: datetime.datetime | None
+    date: datetime.datetime | None
     year: int
     status: str
     voting_ruleset_version: str
@@ -217,9 +218,16 @@ class Show:
     year: int | None
     short_name: str
     name: str
-    date: datetime.date
+    date: datetime.datetime | None
 
-    def __init__(self, *, year: int | None, short_name: str, name: str, date: datetime.date):
+    def __init__(
+        self,
+        *,
+        year: int | None,
+        short_name: str,
+        name: str,
+        date: datetime.datetime | None,
+    ):
         self.year = year
         self.short_name = short_name
         self.name = name
@@ -230,15 +238,16 @@ class Show:
             return NotImplemented
 
         if self.year is None or other.year is None:
-            return self.date < other.date
+            latest = datetime.datetime.max.replace(tzinfo=datetime.UTC)
+            return (self.date or latest) < (other.date or latest)
 
         if self.year != other.year:
             return self.year < other.year
 
         return (
-            self.date or datetime.date.max,
+            self.date or datetime.datetime.max.replace(tzinfo=datetime.UTC),
             self.short_name,
         ) < (
-            other.date or datetime.date.max,
+            other.date or datetime.datetime.max.replace(tzinfo=datetime.UTC),
             other.short_name,
         )

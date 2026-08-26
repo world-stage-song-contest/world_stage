@@ -1,4 +1,35 @@
 import datetime
+import re
+from zoneinfo import ZoneInfo
+
+UTC_DATETIME_INPUT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
+SHOW_TIMEZONE = ZoneInfo("Europe/Warsaw")
+
+
+def parse_utc_datetime(value: str) -> datetime.datetime:
+    """Parse a timezone-less form value as an instant in UTC."""
+    if not UTC_DATETIME_INPUT.fullmatch(value):
+        raise ValueError("Show start time must include a date and time in UTC")
+    parsed = datetime.datetime.fromisoformat(value)
+    return parsed.replace(tzinfo=datetime.UTC)
+
+
+def format_utc_datetime(value: datetime.datetime | None) -> str:
+    """Format an instant for a ``datetime-local`` input whose stated zone is UTC."""
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        raise ValueError("Show start time must be timezone-aware")
+    return value.astimezone(datetime.UTC).strftime("%Y-%m-%dT%H:%M")
+
+
+def format_warsaw_datetime(value: datetime.datetime | None) -> str:
+    """Format an instant in Warsaw time for server-rendered fallbacks."""
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        raise ValueError("Show start time must be timezone-aware")
+    return value.astimezone(SHOW_TIMEZONE).strftime("%d %b %Y, %H:%M")
 
 
 def format_timedelta(td: datetime.timedelta | None) -> str | None:

@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from hypothesis import given
@@ -129,6 +130,39 @@ def test_scoreboard_style_accepts_only_supported_values(client, db, admin_sessio
         )
 
     property_test()
+
+
+def test_show_start_form_values_are_stored_as_utc_instants(client, db, admin_session):
+    db.execute("INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING")
+    show_id = db.execute(
+        """INSERT INTO show (year_id, show_type, status)
+           VALUES (2025, 'f', 'none') RETURNING id"""
+    ).fetchone()["id"]
+    db.commit()
+
+    @given(
+        value=st.datetimes(
+            min_value=datetime(1960, 1, 1),
+            max_value=datetime(9999, 12, 31, 23, 59),
+        )
+    )
+    def property_test(value):
+        submitted = value.isoformat(timespec="minutes")
+
+        response = client.post(
+            "/admin/manage/2025/f",
+            json={"action": "change_date", "date": submitted},
+        )
+
+        assert response.status_code == 200
+        stored = db.execute("SELECT date FROM show WHERE id = %s", (show_id,)).fetchone()["date"]
+        assert stored == value.replace(second=0, microsecond=0, tzinfo=UTC)
+
+    try:
+        property_test()
+    finally:
+        db.execute("DELETE FROM show WHERE id = %s", (show_id,))
+        db.commit()
 
 
 def test_lineup_issues_block_only_the_transition_they_make_unsafe(client, db, admin_session):

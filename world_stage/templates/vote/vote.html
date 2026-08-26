@@ -4,6 +4,7 @@
     <link rel="stylesheet" href="{{ static('css/vote.css') }}">
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
     <script src="{{ static('js/vote.js') }}"></script>
+    <script src="{{ static('js/local-datetime.js') }}" defer></script>
 {% endblock %}
 {% block navigation %}
 {% if is_revote %}
@@ -25,6 +26,9 @@
 {% endfor %}
 
 <div class="big">{{ vote_count }} people have already {{ 'revoted' if is_revote else 'voted' }}</div>
+{% if show_start %}
+<div class="big"><time datetime="{{ show_start.isoformat() }}" data-local-datetime>{{ show_start|warsaw_datetime }}</time></div>
+{% endif %}
 
 <div class="banner long-text">
     <div>

@@ -2,6 +2,8 @@
 {% from "macros/artists.html" import artist_links %}
 {% block title %}Manage shows: {{ nf.name }}{% endblock %}
 {% block headercontents %}
+<link rel="stylesheet" href="{{ static('css/utc-datetime.css') }}">
+<script src="{{ static('js/utc-datetime.js') }}" defer></script>
 <style>
     .state-cell {
         display: flex;
@@ -85,7 +87,7 @@
             <th>Voting</th>
             <th>Predictions</th>
             <th>Change Status</th>
-            <th>Change Date</th>
+            <th>Change Start Time (UTC)</th>
         </tr>
     </thead>
     <tbody>
@@ -137,8 +139,14 @@
         <td>
             <form method="post">
                 <input type="hidden" name="show_id" value="{{ show.id }}">
-                <input type="date" name="date" value="{{ show.date.isoformat() if show.date else '' }}">
-                <button name="action" value="set_date">Change</button>
+                <div class="utc-datetime-field">
+                    <div class="utc-datetime-controls">
+                        <input type="datetime-local" name="date" id="date_{{ show.id }}" step="60"
+                               data-utc-datetime value="{{ show.date|utc_datetime_input }}">
+                        <button name="action" value="set_date">Change</button>
+                    </div>
+                    <small data-local-datetime-for="date_{{ show.id }}"></small>
+                </div>
             </form>
         </td>
     </tr>

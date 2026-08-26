@@ -1,0 +1,12 @@
+.utc-datetime-field {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2em;
+}
+
+.utc-datetime-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.25em;
+}

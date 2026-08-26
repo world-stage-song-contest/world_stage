@@ -1,4 +1,3 @@
-import datetime
 import json
 import re
 
@@ -10,6 +9,7 @@ from ...utils import (
     get_lineup_issues,
     get_unassigned_lineup_issue,
     get_years,
+    parse_utc_datetime,
     render_template,
 )
 from .common import _resolve_special, bp
@@ -321,7 +321,8 @@ def _create_show_post(year: int):
                 if not cur.fetchone():
                     raise ValueError("Progression destination is not in this event")
 
-        date_value = request.form.get("date", "").strip() or None
+        raw_date = request.form.get("date", "").strip()
+        date_value = parse_utc_datetime(raw_date) if raw_date else None
         cur.execute(
         """
         INSERT INTO show (
@@ -686,7 +687,7 @@ def manage_show_post(year: int, show: str):
             if not date_str:
                 return render_template("error.html", error="No date provided"), 400
             try:
-                date = datetime.date.fromisoformat(date_str)
+                date = parse_utc_datetime(date_str)
             except ValueError:
                 return render_template("error.html", error="Invalid date format"), 400
             if not date:
