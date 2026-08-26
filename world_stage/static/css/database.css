@@ -36,7 +36,7 @@
 .db-row.result-row { grid-template-columns:minmax(10em,1fr) minmax(8em,1fr) auto; }
 .db-row.value-row { grid-template-columns:minmax(10em,1fr) minmax(8em,1fr) auto; }
 .db-row.order-row { grid-template-columns:minmax(10em,1fr) 8em auto; }
-.db-row.parameter-row { grid-template-columns:minmax(8em,1fr) 8em minmax(8em,1fr) auto; }
+.db-row.parameter-row { grid-template-columns:repeat(3,minmax(0,1fr)) auto; }
 .summary-expression { align-items:stretch; }
 .db-row > * { min-width:0; }
 .db-row select, .db-row input, .db-inline-fields select, .db-inline-fields input, dialog input, dialog textarea { box-sizing:border-box; width:100%; }

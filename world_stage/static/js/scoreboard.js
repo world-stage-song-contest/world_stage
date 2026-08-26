@@ -5,10 +5,10 @@ let points = []
 let maxPoints = 0;
 let associations = {}
 let userSongs = {}
-// In specials, country alone doesn't uniquely identify an entry (a
-// country can submit multiple songs), so the scoreboard shows the song
-// title in place of the country name. Set by ``onLoad``.
-let isSpecial = false;
+// In specials and national finals, country alone doesn't uniquely identify
+// an entry, so the scoreboard shows the song title in its place. Set by
+// ``onLoad``.
+let useSongTitleLabels = false;
 // {song_id: penalty} — populated from the server. Songs absent from the
 // map have no penalty.
 let penalties = {}
@@ -375,7 +375,7 @@ function populate() {
             title: c.title,
             ro: c.vote_data.ro,
             id: c.id,
-            name: isSpecial ? c.title : c.country.name,
+            name: useSongTitleLabels ? c.title : c.country.name,
             cc: c.country.cc
         });
         countries[c.id] = country;
@@ -634,10 +634,10 @@ async function reset() {
     await vote();
 }
 
-async function onLoad(year, show, special = false) {
+async function onLoad(year, show, songTitleLabels = false) {
     if (loaded) return;
     loaded = true;
-    isSpecial = !!special;
+    useSongTitleLabels = !!songTitleLabels;
 
     await loadVotes(year, show);
 

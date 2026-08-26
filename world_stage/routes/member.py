@@ -266,6 +266,12 @@ def playlist_rename(playlist_id: int, user: tuple[int, str]):
 @bp.post("/playlist/<int:playlist_id>/songs")
 @require_user(redirect_to_login=True)
 def playlist_add_song(playlist_id: int, user: tuple[int, str]):
+    selected_playlist_id = request.form.get("playlist_id")
+    if selected_playlist_id is not None:
+        try:
+            playlist_id = int(selected_playlist_id)
+        except ValueError:
+            return render_template("error.html", error="Invalid playlist"), 400
     playlist = _owned_playlist(playlist_id, user[0])
     if not playlist:
         return render_template("error.html", error="Playlist not found"), 404
@@ -302,7 +308,8 @@ def playlist_add_song(playlist_id: int, user: tuple[int, str]):
     db.commit()
     return_to = request.form.get("return_to", "")
     if return_to.startswith("/") and not return_to.startswith("//"):
-        return redirect(return_to)
+        separator = "&" if "?" in return_to else "?"
+        return redirect(f"{return_to}{separator}playlist_id={playlist_id}")
     if request.accept_mimetypes.accept_json:
         song = next(row for row in _playlist_rows(playlist_id) if row["id"] == song_id)
         details_url = (

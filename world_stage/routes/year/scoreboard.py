@@ -138,6 +138,7 @@ def special_scoreboard(short_name: str, show: str, user, permissions: UserPermis
         show_name=show_data.name,
         special=short_name,
         special_name=special_year["special_name"],
+        song_title_labels=True,
         **_scoreboard_theme(_year),
     )
 
@@ -192,6 +193,7 @@ def scoreboard(year: int, show: str, user, permissions: UserPermissions):
         show=show,
         year=year,
         show_name=show_data.name,
+        song_title_labels=show_data.national_final_id is not None,
         **_scoreboard_theme(_year),
     )
 

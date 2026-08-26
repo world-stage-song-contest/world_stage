@@ -222,3 +222,37 @@ def test_playlist_membership_is_an_idempotent_ordered_set(client, db, login):
             assert len(group) == (2 if postcards else 1)
 
     property_test()
+
+
+def test_entry_page_adds_to_and_preserves_the_selected_playlist(client, db, login):
+    song_id = _song(db, "ES", "Selected playlist song")
+    login(2)
+    playlist_ids = [
+        _create_playlist(client, db, "First playlist"),
+        _create_playlist(client, db, "Second playlist"),
+    ]
+
+    @given(selected_index=st.integers(min_value=0, max_value=1))
+    def property_test(selected_index):
+        db.execute("DELETE FROM custom_playlist_song WHERE song_id = %s", (song_id,))
+        db.commit()
+        selected_id = playlist_ids[selected_index]
+
+        response = client.post(
+            f"/member/playlist/{playlist_ids[0]}/songs",
+            data={
+                "song_id": song_id,
+                "playlist_id": selected_id,
+                "return_to": "/country/es/2024",
+            },
+        )
+
+        assert response.status_code == 302
+        assert response.location.endswith(f"/country/es/2024?playlist_id={selected_id}")
+        memberships = db.execute(
+            "SELECT playlist_id FROM custom_playlist_song WHERE song_id = %s",
+            (song_id,),
+        ).fetchall()
+        assert [row["playlist_id"] for row in memberships] == [selected_id]
+
+    property_test()

@@ -788,7 +788,8 @@ function initializeDatabaseWorkbench() {
         const type = document.createElement("select"); type.className = "sql-param-type";
         fillSelect(type, ["text", "integer", "number", "boolean", "date", "datetime"].map(value => ({ value, label: value })), data.type || "text");
         const defaultValue = document.createElement("input"); defaultValue.className = "sql-param-default"; defaultValue.placeholder = "Default (optional)"; defaultValue.value = data.default ?? "";
-        row.append(name, type, defaultValue, removeButton(row, () => {}));
+        const remove = removeButton(row, () => {}); remove.textContent = "-"; remove.setAttribute("aria-label", "Remove parameter");
+        row.append(name, type, defaultValue, remove);
         containers.sqlParameters.append(row);
     }
 
