@@ -7,7 +7,11 @@ from psycopg import sql
 
 from world_stage.db import fetchone, get_db
 from world_stage.media import duration_for_link
-from world_stage.messaging import create_spot_watch_notifications, notify_new_message
+from world_stage.messaging import (
+    create_spot_watch_notifications,
+    notify_new_message,
+    notify_placeholder_claim,
+)
 from world_stage.utils import (
     ErrorID,
     err,
@@ -1483,7 +1487,7 @@ def create_song(auth: tuple):
 @bp.put("/<int:id>")
 @require_api_auth
 def replace_song(id: int, auth: tuple):
-    user_id, _username, permissions = auth
+    user_id, username, permissions = auth
 
     data, _is_form = _get_request_data()
     if not data:
@@ -1701,6 +1705,8 @@ def replace_song(id: int, auth: tuple):
 
     updated = _fetch_song(cursor, id)
     assert updated is not None  # existence verified at the top of the handler
+    if is_claim:
+        notify_placeholder_claim(row, updated, username)
     langs = _fetch_song_languages(cursor, id)
     ks = _fetch_song_key_signatures(cursor, id)
     ts = _fetch_song_time_signatures(cursor, id)

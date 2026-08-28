@@ -134,6 +134,10 @@ def _user_email(user_id: int) -> str:
 def _show_notification_preferences(user_id: int) -> dict:
     settings = get_user_settings(user_id)
     return {
+        "placeholder_claims": setting(
+            settings, "notifications", "placeholder_claims", default=False
+        )
+        is True,
         "timezone": setting(settings, "notifications", "show_reminders", "timezone", default=""),
         "participating_shows": setting(
             settings,
@@ -289,6 +293,7 @@ def update_email(user: tuple[int, str]):
 def update_show_notifications(user: tuple[int, str]):
     user_id, _username = user
     preferences = {
+        "placeholder_claims": request.form.get("placeholder_claims") == "true",
         "timezone": request.form.get("timezone", "").strip(),
         "participating_shows": request.form.get("participating_shows") == "true",
         "all_shows": request.form.get("all_shows") == "true",
@@ -304,14 +309,16 @@ def update_show_notifications(user: tuple[int, str]):
             ),
             400,
         )
-    if (preferences["participating_shows"] or preferences["all_shows"]) and not _user_email(
-        user_id
-    ):
+    if (
+        preferences["placeholder_claims"]
+        or preferences["participating_shows"]
+        or preferences["all_shows"]
+    ) and not _user_email(user_id):
         return (
             _settings_template(
                 user,
                 show_notification_preferences=preferences,
-                error="Add an email address before enabling show notifications.",
+                error="Add an email address before enabling email notifications.",
             ),
             400,
         )
@@ -322,7 +329,12 @@ def update_show_notifications(user: tuple[int, str]):
         user_id,
         {
             "notifications": {
-                "show_reminders": preferences,
+                "placeholder_claims": preferences["placeholder_claims"],
+                "show_reminders": {
+                    "timezone": preferences["timezone"],
+                    "participating_shows": preferences["participating_shows"],
+                    "all_shows": preferences["all_shows"],
+                },
             }
         },
     )

@@ -1,10 +1,18 @@
 import re
+import string
 import uuid
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from psycopg.types.json import Jsonb
 
 from world_stage.routes.session import verify_password
+
+EMAIL_IDENTITY_TEXT = st.text(
+    alphabet=string.ascii_letters + string.digits + " .,_!?",
+    min_size=1,
+    max_size=30,
+).filter(lambda value: bool(value.strip()))
 
 
 def _clear_messaging_state(db):
@@ -147,3 +155,105 @@ def test_unknown_valid_addresses_never_receive_password_reset_mail(
         assert app.extensions["mail_outbox"] == []
 
     property_test()
+
+
+def test_claiming_a_placeholder_emails_its_original_submitter(
+    client,
+    app,
+    db,
+    login,
+    configured_email,
+    alice_headers,
+    bob_headers,
+    carol_headers,
+):
+    original_settings = db.execute(
+        "SELECT settings FROM account WHERE id = 3"
+    ).fetchone()["settings"]
+    session_id = login(3)
+
+    @settings(max_examples=12, deadline=None)
+    @given(
+        enabled=st.booleans(),
+        replaced=st.booleans(),
+        old_artist=EMAIL_IDENTITY_TEXT,
+        old_title=EMAIL_IDENTITY_TEXT,
+        new_artist=EMAIL_IDENTITY_TEXT,
+        new_title=EMAIL_IDENTITY_TEXT,
+    )
+    def property_test(enabled, replaced, old_artist, old_title, new_artist, new_title):
+        preference = client.post(
+            "/settings/show-notifications",
+            data={
+                "timezone": "Europe/Warsaw",
+                **({"placeholder_claims": "true"} if enabled else {}),
+            },
+        )
+        assert preference.status_code == 200
+
+        created = client.post(
+            "/api/song",
+            headers=carol_headers,
+            json={
+                "year": 2025,
+                "country": "ES",
+                "title": old_title,
+                "artist": old_artist,
+                "sources": "https://example.test/original",
+                "languages": [20],
+                "is_placeholder": True,
+            },
+        )
+        assert created.status_code == 201
+        original = created.get_json()["result"]
+        song_id = original["id"]
+
+        try:
+            app.extensions["mail_outbox"].clear()
+            claimed = client.put(
+                f"/api/song/{song_id}",
+                headers=bob_headers,
+                json={
+                    "title": new_title if replaced else old_title,
+                    "artist": new_artist if replaced else old_artist,
+                    "sources": "https://example.test/claimed",
+                    "languages": [20],
+                    "is_placeholder": not replaced,
+                },
+            )
+
+            assert claimed.status_code == 200
+            replacement = claimed.get_json()["result"]
+            assert len(app.extensions["mail_outbox"]) == int(enabled)
+            if not enabled:
+                return
+            message = app.extensions["mail_outbox"][0]
+            assert message["To"] == "carol@test"
+            action = "replaced" if replaced else "claimed"
+            assert message["Subject"] == (
+                f"Your placeholder for Spain 2025 has been {action}"
+            )
+            detail = (
+                f"replaced by {replacement['artist']} - {replacement['title']} by bob"
+                if replaced
+                else "claimed by bob"
+            )
+            assert message.get_content() == (
+                f"Your placeholder {original['artist']} - {original['title']} for Spain 2025 "
+                f"has been {detail}\n\n"
+                "https://worldstage.example/country/es/2025/"
+                f"{replacement['entry_number']}\n"
+            )
+        finally:
+            client.delete(f"/api/song/{song_id}", headers=alice_headers)
+
+    try:
+        property_test()
+    finally:
+        client.delete_cookie("session")
+        db.execute(
+            "UPDATE account SET settings = %s WHERE id = 3",
+            (Jsonb(original_settings),),
+        )
+        db.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
+        db.commit()

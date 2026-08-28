@@ -6,6 +6,7 @@ from flask import current_app, url_for
 
 from .db import get_db
 from .email import external_url, is_configured, send_email
+from .user_settings import setting
 from .utils import UserPermissions
 from .utils.markdown import strip_font_tags
 
@@ -83,6 +84,74 @@ def notify_new_message(conversation_id: int, message_id: int) -> None:
             current_app.logger.exception(
                 "Could not email message notification to %s", recipient
             )
+
+
+def notify_placeholder_claim(
+    original: dict,
+    replacement: dict,
+    claimed_by: str,
+) -> None:
+    """Email a placeholder's former owner after a successful claim."""
+    if not is_configured() or original["submitter_id"] is None:
+        return
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT email, settings FROM account WHERE id = %s",
+        (original["submitter_id"],),
+    )
+    account = cursor.fetchone()
+    if (
+        account is None
+        or setting(
+            account["settings"],
+            "notifications",
+            "placeholder_claims",
+            default=False,
+        )
+        is not True
+        or not (recipient := (account["email"] or "").strip())
+    ):
+        return
+
+    year = original["special_short_name"] or str(original["year_id"])
+    label = f"{original['country_name']} {year}"
+    if replacement["special_short_name"]:
+        path = url_for(
+            "country.special_details",
+            code=replacement["country_id"].lower(),
+            special_short_name=replacement["special_short_name"],
+            entry_number=replacement["entry_number"],
+        )
+    else:
+        path = url_for(
+            "country.details",
+            code=replacement["country_id"].lower(),
+            year=replacement["year_id"],
+            entry_number=replacement["entry_number"],
+        )
+
+    if replacement["is_placeholder"]:
+        action = "claimed"
+        detail = f"claimed by {claimed_by}"
+    else:
+        action = "replaced"
+        detail = (
+            f"replaced by {replacement['artist']} - {replacement['title']} "
+            f"by {claimed_by}"
+        )
+    subject = f"Your placeholder for {label} has been {action}"
+    body = (
+        f"Your placeholder {original['artist']} - {original['title']} for {label} "
+        f"has been {detail}\n\n{external_url(path)}\n"
+    )
+    try:
+        send_email(recipient, subject, body)
+    except (OSError, RuntimeError, ValueError, smtplib.SMTPException):
+        current_app.logger.exception(
+            "Could not email placeholder claim notification to account %s",
+            original["submitter_id"],
+        )
 
 
 def create_spot_watch_notifications(

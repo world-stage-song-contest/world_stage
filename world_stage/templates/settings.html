@@ -96,7 +96,7 @@
     {% if user %}
     <hr>
     <h2>Email</h2>
-    <p>Your email is used for new-message notifications and password resets.</p>
+    <p>Your email is used for notifications and password resets.</p>
     <form method="POST" action="{{ url_for('main.update_email') }}">
         <fieldset class="grid">
             <label for="email">Email address</label>
@@ -105,7 +105,7 @@
         <input type="submit" value="Save email">
     </form>
 
-    <h3>Show notifications</h3>
+    <h3>Notifications</h3>
     <p>
         Show reminders arrive at 08:00 in your timezone. If a show starts before
         12:00 for you, the reminder arrives at 08:00 on the previous day.
@@ -127,6 +127,13 @@
                     <label for="all-shows">All shows</label>
                 </div>
             </div>
+            <div class="labels-row">
+                <div>
+                    <input id="placeholder-claims" name="placeholder_claims" type="checkbox"
+                           value="true" {% if show_notification_preferences.placeholder_claims %}checked{% endif %}>
+                    <label for="placeholder-claims">My placeholders are claimed</label>
+                </div>
+            </div>
         </fieldset>
         <fieldset class="grid">
             <label for="notification-timezone">Your timezone</label>
@@ -146,7 +153,7 @@
             </select>
         </fieldset>
         <small>Detected from this browser when no timezone has been saved. You can override it.</small>
-        <div><input type="submit" value="Save show notifications"></div>
+        <div><input type="submit" value="Save notifications"></div>
     </form>
     <script>
         (() => {
