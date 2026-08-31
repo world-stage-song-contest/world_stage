@@ -61,6 +61,79 @@
     gap: 0.4em;
 }
 
+.history-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75em 1.5em;
+    margin-bottom: 1em;
+}
+
+.history-filters fieldset {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em 1em;
+    border: 1px solid var(--foreground2);
+    padding: 0.5em 0.75em 0.65em;
+}
+
+.history-filter-option {
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+}
+
+.history-filter-option label {
+    cursor: pointer;
+}
+
+.history-filters > button {
+    align-self: end;
+}
+
+.history-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.4em;
+    margin-top: 1em;
+}
+
+.history-page-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.4em;
+    min-height: 2.4em;
+    box-sizing: border-box;
+    padding: 0.35em 0.65em;
+    color: var(--foreground1);
+    background: var(--background3);
+    border: 2px solid var(--foreground2);
+    text-decoration: none;
+}
+
+.history-page-button:hover {
+    background: var(--background2);
+}
+
+.history-page-button.current {
+    color: var(--background1);
+    background: var(--foreground1);
+    border-color: var(--foreground1);
+    font-weight: bold;
+}
+
+.history-page-direction {
+    min-width: 2.8em;
+}
+
+.history-result-count,
+.history-empty {
+    text-align: center;
+    margin: 0.75em 0;
+}
+
 .vote-card-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

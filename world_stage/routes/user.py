@@ -3,7 +3,7 @@ import urllib.parse
 from collections import Counter, defaultdict
 from typing import Literal, overload
 
-from flask import Blueprint, request
+from flask import Blueprint, request, url_for
 
 from ..db import get_db
 from ..utils import (
@@ -20,6 +20,88 @@ from .country import _country_stats, _format_decimal
 from .member import playlists_for_user
 
 bp = Blueprint("user", __name__, url_prefix="/user")
+
+VOTE_HISTORY_PAGE_SIZE = 24
+VOTE_HISTORY_EDITIONS = ("normal", "special", "national-final")
+VOTE_HISTORY_DEFAULT_EDITIONS = ("normal", "special")
+VOTE_HISTORY_ROUNDS = ("sf", "sc", "f")
+VOTE_HISTORY_STATUSES = ("full", "partial")
+
+
+def _vote_history_filters() -> tuple[
+    tuple[str, ...], tuple[str, ...], str, list[list[str]]
+]:
+    edition_filtering = "filters" in request.args or "edition" in request.args
+    round_filtering = "filters" in request.args or "round" in request.args
+    editions = tuple(
+        value
+        for value in VOTE_HISTORY_EDITIONS
+        if (
+            value in request.args.getlist("edition")
+            if edition_filtering
+            else value in VOTE_HISTORY_DEFAULT_EDITIONS
+        )
+    )
+    rounds = tuple(
+        value
+        for value in VOTE_HISTORY_ROUNDS
+        if not round_filtering or value in request.args.getlist("round")
+    )
+
+    edition_conditions = []
+    if "normal" in editions:
+        edition_conditions.append("(show.national_final_id IS NULL AND show.year_id >= 0)")
+    if "special" in editions:
+        edition_conditions.append("(show.national_final_id IS NULL AND show.year_id < 0)")
+    if "national-final" in editions:
+        edition_conditions.append("show.national_final_id IS NOT NULL")
+
+    conditions = [
+        f"({' OR '.join(edition_conditions)})" if edition_conditions else "FALSE",
+        "show.show_type = ANY(%s)" if rounds else "FALSE",
+    ]
+    parameters = [list(rounds)] if rounds else []
+    return editions, rounds, " AND ".join(conditions), parameters
+
+
+def _vote_history_statuses() -> tuple[str, ...]:
+    filtering = "filters" in request.args or "status" in request.args
+    return tuple(
+        value
+        for value in VOTE_HISTORY_STATUSES
+        if not filtering or value in request.args.getlist("status")
+    )
+
+
+def _vote_history_pagination(total: int, endpoint: str, username: str) -> dict:
+    pages = max(1, (total + VOTE_HISTORY_PAGE_SIZE - 1) // VOTE_HISTORY_PAGE_SIZE)
+    page = min(max(request.args.get("page", type=int) or 1, 1), pages)
+
+    def page_url(target: int) -> str:
+        values = request.args.to_dict(flat=False)
+        if target == 1:
+            values.pop("page", None)
+        else:
+            values["page"] = [str(target)]
+        return url_for(endpoint, username=username, **values)
+
+    start = (page - 1) * VOTE_HISTORY_PAGE_SIZE
+    page_links = [
+        {"number": number, "url": page_url(number)}
+        for number in range(1, pages + 1)
+    ]
+
+    return {
+        "page": page,
+        "pages": pages,
+        "offset": start,
+        "result_start": start + 1 if total else 0,
+        "result_end": min(start + VOTE_HISTORY_PAGE_SIZE, total),
+        "total_votes": total,
+        "previous_url": page_url(page - 1) if page > 1 else None,
+        "next_url": page_url(page + 1) if page < pages else None,
+        "page_links": page_links,
+    }
 
 
 @bp.get("/")
@@ -684,8 +766,26 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
     if request.args.get("view") == "medals":
         return _medal_table(cursor, user_id, username)
 
+    selected_editions, selected_rounds, filter_sql, filter_parameters = (
+        _vote_history_filters()
+    )
+    selected_statuses = _vote_history_statuses()
     cursor.execute(
-        """
+        f"""
+        SELECT COUNT(*) AS total
+        FROM vote_set
+        JOIN show ON vote_set.show_id = show.id
+        WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
+          AND show.status = ANY(%s)
+          AND {filter_sql}
+        """,
+        (user_id, list(selected_statuses), *filter_parameters),
+    )
+    pagination = _vote_history_pagination(
+        cursor.fetchone()["total"], "user.votes", username
+    )
+    cursor.execute(
+        f"""
         SELECT vote_set.id, vote_set.show_id, account.username, nickname, country_id,
                show.show_name, show.short_name, show.date, show.year_id, show.status,
                year.special_name, year.special_short_name,
@@ -697,10 +797,18 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         LEFT JOIN year ON show.year_id = year.id
         LEFT JOIN national_final ON national_final.id = show.national_final_id
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
-          AND (show.status = 'full' OR show.status = 'partial')
+          AND show.status = ANY(%s)
+          AND {filter_sql}
         ORDER BY show.date DESC NULLS LAST, show.id DESC
+        LIMIT %s OFFSET %s
     """,
-        (user_id,),
+        (
+            user_id,
+            list(selected_statuses),
+            *filter_parameters,
+            VOTE_HISTORY_PAGE_SIZE,
+            pagination["offset"],
+        ),
     )
     votes = []
     for row in cursor.fetchall():
@@ -730,6 +838,9 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
     return render_template(
         "user/votes.html", votes=votes, username=username, view="shows",
         can_reveal=can_reveal, unredacted=unredacted,
+        selected_editions=selected_editions, selected_rounds=selected_rounds,
+        selected_statuses=selected_statuses,
+        **pagination,
     )
 
 
@@ -755,8 +866,25 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
     if request.args.get("view") == "medals":
         return _medal_table(cursor, user_id, username, revote=True)
 
+    selected_editions, selected_rounds, filter_sql, filter_parameters = (
+        _vote_history_filters()
+    )
     cursor.execute(
-        """
+        f"""
+        SELECT COUNT(*) AS total
+        FROM vote_set
+        JOIN show ON show.id = vote_set.show_id
+        WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'revote'
+          AND show.status = 'full'
+          AND {filter_sql}
+        """,
+        (user_id, *filter_parameters),
+    )
+    pagination = _vote_history_pagination(
+        cursor.fetchone()["total"], "user.revotes", username
+    )
+    cursor.execute(
+        f"""
         SELECT vote_set.id, vote_set.show_id, vote_set.nickname, vote_set.country_id,
                show.show_name, show.short_name, show.date, show.year_id,
                year.special_name, year.special_short_name,
@@ -768,9 +896,16 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         LEFT JOIN national_final ON national_final.id = show.national_final_id
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'revote'
           AND show.status = 'full'
+          AND {filter_sql}
         ORDER BY show.date DESC NULLS LAST, show.id DESC
+        LIMIT %s OFFSET %s
         """,
-        (user_id,),
+        (
+            user_id,
+            *filter_parameters,
+            VOTE_HISTORY_PAGE_SIZE,
+            pagination["offset"],
+        ),
     )
     votes = [
         {
@@ -801,6 +936,9 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         view="shows",
         is_revote=True,
         history_endpoint="user.revotes",
+        selected_editions=selected_editions,
+        selected_rounds=selected_rounds,
+        **pagination,
     )
 
 

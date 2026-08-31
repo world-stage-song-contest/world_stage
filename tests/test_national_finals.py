@@ -1051,8 +1051,14 @@ def test_aggregate_views_ignore_nfs_while_show_histories_keep_them_distinct(
                 assert entries[0]["total"] == main_score
                 assert entries[0]["final"]["pts"] == main_score
 
-            previous_votes = client.get(
+            default_votes = client.get(
                 "/user/alice/votes", headers={"Accept": "application/json"}
+            ).get_json()["votes"]
+            assert {vote["show_id"] for vote in default_votes} == {main_show_id}
+
+            previous_votes = client.get(
+                "/user/alice/votes?edition=normal&edition=national-final",
+                headers={"Accept": "application/json"},
             ).get_json()["votes"]
             assert {vote["show_id"] for vote in previous_votes} == {
                 main_show_id,
@@ -1066,8 +1072,14 @@ def test_aggregate_views_ignore_nfs_while_show_histories_keep_them_distinct(
             assert nf_vote["short_name"] == "test-es-f"
             assert nf_vote["national_final_name"] == "Test Spanish Final"
 
-            previous_revotes = client.get(
+            default_revotes = client.get(
                 "/user/alice/revotes", headers={"Accept": "application/json"}
+            ).get_json()["votes"]
+            assert {vote["show_id"] for vote in default_revotes} == {main_show_id}
+
+            previous_revotes = client.get(
+                "/user/alice/revotes?edition=normal&edition=national-final",
+                headers={"Accept": "application/json"},
             ).get_json()["votes"]
             assert {vote["show_id"] for vote in previous_revotes} == {
                 main_show_id,

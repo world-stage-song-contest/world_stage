@@ -136,9 +136,7 @@
     {% if can_reveal and view not in ('country', 'user', 'year') %}
     <label class="reveal-toggle">
         <input type="checkbox" {{ 'checked' if unredacted else '' }}
-               onchange="location.href = this.checked
-                   ? '{{ url_for('user.votes', username=username, hidden='false') }}'
-                   : '{{ url_for('user.votes', username=username) }}'">
+               onchange="const url = new URL(location.href); this.checked ? url.searchParams.set('hidden', 'false') : url.searchParams.delete('hidden'); location.href = url">
         <span>Reveal hidden votes</span>
     </label>
     {% endif %}
@@ -204,7 +202,55 @@
 </table>
 </div>
 {% else %}
-{% if votes %}
+<form class="history-filters" method="get" aria-label="Vote history filters">
+    <input type="hidden" name="filters" value="1">
+    {% if unredacted %}<input type="hidden" name="hidden" value="false">{% endif %}
+    <fieldset>
+        <legend>Edition</legend>
+        <div class="history-filter-option">
+            <input id="history-edition-normal" type="checkbox" name="edition" value="normal" {{ 'checked' if 'normal' in selected_editions else '' }}>
+            <label for="history-edition-normal">Years</label>
+        </div>
+        <div class="history-filter-option">
+            <input id="history-edition-special" type="checkbox" name="edition" value="special" {{ 'checked' if 'special' in selected_editions else '' }}>
+            <label for="history-edition-special">Specials</label>
+        </div>
+        <div class="history-filter-option">
+            <input id="history-edition-national-final" type="checkbox" name="edition" value="national-final" {{ 'checked' if 'national-final' in selected_editions else '' }}>
+            <label for="history-edition-national-final">National finals</label>
+        </div>
+    </fieldset>
+    <fieldset>
+        <legend>Round</legend>
+        <div class="history-filter-option">
+            <input id="history-round-semi-final" type="checkbox" name="round" value="sf" {{ 'checked' if 'sf' in selected_rounds else '' }}>
+            <label for="history-round-semi-final">Semi-finals</label>
+        </div>
+        <div class="history-filter-option">
+            <input id="history-round-repechage" type="checkbox" name="round" value="sc" {{ 'checked' if 'sc' in selected_rounds else '' }}>
+            <label for="history-round-repechage">Repechages</label>
+        </div>
+        <div class="history-filter-option">
+            <input id="history-round-final" type="checkbox" name="round" value="f" {{ 'checked' if 'f' in selected_rounds else '' }}>
+            <label for="history-round-final">Finals</label>
+        </div>
+    </fieldset>
+    {% if not is_revote %}
+    <fieldset>
+        <legend>Status</legend>
+        <div class="history-filter-option">
+            <input id="history-status-full" type="checkbox" name="status" value="full" {{ 'checked' if 'full' in selected_statuses else '' }}>
+            <label for="history-status-full">Full</label>
+        </div>
+        <div class="history-filter-option">
+            <input id="history-status-partial" type="checkbox" name="status" value="partial" {{ 'checked' if 'partial' in selected_statuses else '' }}>
+            <label for="history-status-partial">Partial</label>
+        </div>
+    </fieldset>
+    {% endif %}
+    <button type="submit">Apply filters</button>
+</form>
+{% if total_votes %}
 <div class="vote-card-container">
 {% for vote in votes %}
 <div class="vote-card">
@@ -236,6 +282,22 @@
 </div>
 {% endfor %}
 </div>
+{% if pages > 1 %}
+<nav class="history-pagination" aria-label="Vote history pages">
+    {% if previous_url %}<a class="history-page-button history-page-direction" href="{{ previous_url }}" aria-label="Previous page">&lt;&lt;</a>{% endif %}
+    {% for page_link in page_links %}
+        {% if page_link.number == page %}
+        <span class="history-page-button current" aria-current="page">{{ page_link.number }}</span>
+        {% else %}
+        <a class="history-page-button" href="{{ page_link.url }}" aria-label="Page {{ page_link.number }}">{{ page_link.number }}</a>
+        {% endif %}
+    {% endfor %}
+    {% if next_url %}<a class="history-page-button history-page-direction" href="{{ next_url }}" aria-label="Next page">&gt;&gt;</a>{% endif %}
+</nav>
+{% endif %}
+<p class="history-result-count">Showing {{ result_start }}–{{ result_end }} of {{ total_votes }}</p>
+{% else %}
+<p class="history-empty">No votes match these filters.</p>
 {% endif %}
 {% endif %}
 {% endblock %}
