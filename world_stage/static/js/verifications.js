@@ -93,23 +93,41 @@ function initializeVerifications() {
     document.querySelectorAll('.verification-status-form').forEach((form) => {
         const status = form.elements.status;
         const message = form.elements.message;
+        const confirmation = form.elements.country_connection_confirmed;
         const dialog = form.querySelector('.verification-status-dialog');
+        const title = dialog.querySelector('.verification-dialog-title');
         const prompt = dialog.querySelector('.verification-dialog-prompt');
+        const confirmationFields = dialog.querySelector('.verification-acceptance-confirmation');
+        const messageFields = dialog.querySelector('.verification-message-fields');
+        const dialogSubmit = dialog.querySelector('.verification-dialog-submit');
 
         form.addEventListener('submit', (event) => {
             const needsMessage = status.value === 'rejected' || status.value === 'more-info';
-            if (!needsMessage || dialog.open) return;
+            const needsConfirmation = status.value === 'accepted';
+            if ((!needsMessage && !needsConfirmation) || dialog.open) return;
 
             event.preventDefault();
-            prompt.textContent = status.value === 'rejected'
-                ? 'Tell the submitter why this song was rejected.'
-                : 'Tell the submitter what additional information is needed.';
-            message.required = true;
+            confirmationFields.hidden = !needsConfirmation;
+            messageFields.hidden = !needsMessage;
+            confirmation.required = needsConfirmation;
+            message.required = needsMessage;
+            if (needsConfirmation) {
+                confirmation.checked = false;
+                title.textContent = 'Confirm country connection';
+                dialogSubmit.textContent = 'Confirm and save';
+            } else {
+                title.textContent = 'Message to submitter';
+                prompt.textContent = status.value === 'rejected'
+                    ? 'Tell the submitter why this song was rejected.'
+                    : 'Tell the submitter what additional information is needed.';
+                dialogSubmit.textContent = 'Send message and save';
+            }
             dialog.showModal();
-            message.focus();
+            (needsConfirmation ? confirmation : message).focus();
         });
 
         dialog.addEventListener('close', () => {
+            confirmation.required = false;
             message.required = false;
         });
     });

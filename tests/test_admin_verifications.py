@@ -103,21 +103,29 @@ def test_moderation_state_changes_are_song_level_and_message_gated(client, db, l
             ["pending", "pending-second-opinion", "accepted", "rejected", "more-info"]
         ),
         body=message,
+        country_connection_confirmed=st.booleans(),
     )
-    def property_test(status, body):
+    def property_test(status, body, country_connection_confirmed):
         song_id = _add_song(db)
         revision_count = db.execute(
             "SELECT COUNT(*) AS count FROM song_data WHERE song_id = %s", (song_id,)
         ).fetchone()["count"]
         response = client.post(
             f"/admin/manage/2025/verifications/{song_id}/status",
-            data={"status": status, "message": body},
+            data={
+                "status": status,
+                "message": body,
+                "country_connection_confirmed": (
+                    "yes" if country_connection_confirmed else ""
+                ),
+            },
         )
-        assert response.status_code == 302
+        accepted = status != "accepted" or country_connection_confirmed
+        assert response.status_code == (302 if accepted else 400)
         current = db.execute(
             "SELECT approval_status FROM current_song WHERE id = %s", (song_id,)
         ).fetchone()
-        assert current["approval_status"] == status
+        assert current["approval_status"] == (status if accepted else "pending")
         assert (
             db.execute(
                 "SELECT COUNT(*) AS count FROM song_data WHERE song_id = %s", (song_id,)
@@ -132,7 +140,7 @@ def test_moderation_state_changes_are_song_level_and_message_gated(client, db, l
                  AND message.body = %s""",
             (body.strip(),),
         ).fetchall()
-        assert len(notifications) == int(status in {"rejected", "more-info"})
+        assert len(notifications) == int(accepted and status in {"rejected", "more-info"})
 
     property_test()
 

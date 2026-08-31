@@ -68,7 +68,7 @@
         <br>
         <em>{{ entry.title or 'Untitled' }}</em>
         <br>
-        <small>Submitted by {{ entry.submitter_username or 'Unknown user' }}</small>
+        <small>Submitter: {{ entry.submitter_username or 'Unknown user' }}</small>
         <br><em>{{ 'Withdrawn' if entry.song_deleted else 'Replaced' }}</em>
         <div class="verification-manipulation-buttons">
             {% if not entry.song_deleted %}
@@ -201,18 +201,26 @@
                         </div>
                         <dialog class="verification-dialog verification-status-dialog">
                             <button type="button" class="verification-dialog-close" aria-label="Close">[X]</button>
-                            <h3>Message to submitter</h3>
+                            <h3 class="verification-dialog-title"></h3>
                             <p>
                                 <strong>{{ song.country_name }}</strong><br>
                                 {{ song.artist or 'Unknown artist' }}<br>
                                 <em>{{ song.title or 'Untitled' }}</em>
                             </p>
-                            <p class="verification-dialog-prompt"></p>
-                            <label for="message-{{ song.id }}">Explain the decision</label>
-                            <textarea id="message-{{ song.id }}" name="message" rows="6" maxlength="5000"></textarea>
-                            <small>You may use standard formatting here</small>
+                            <div class="verification-acceptance-confirmation" hidden>
+                                <label>
+                                    <input type="checkbox" name="country_connection_confirmed" value="yes">
+                                    I confirm that the artist has a connection to {{ song.country_name }}.
+                                </label>
+                            </div>
+                            <div class="verification-message-fields" hidden>
+                                <p class="verification-dialog-prompt"></p>
+                                <label for="message-{{ song.id }}">Explain the decision</label>
+                                <textarea id="message-{{ song.id }}" name="message" rows="6" maxlength="5000"></textarea>
+                                <small>You may use standard formatting here</small>
+                            </div>
                             <div class="verification-dialog-actions">
-                                <button type="submit">Send message and save</button>
+                                <button type="submit" class="verification-dialog-submit"></button>
                             </div>
                         </dialog>
                     </form>

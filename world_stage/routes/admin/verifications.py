@@ -339,6 +339,11 @@ def _set_verification(
     redirect_url: str,
 ):
     message = request.form.get("message", "").strip()
+    if status == "accepted" and request.form.get("country_connection_confirmed") != "yes":
+        return render_template(
+            "error.html",
+            error="Confirm that the artist has a connection to the country",
+        ), 400
     if status in NOTIFICATION_STATUSES and not message:
         return render_template(
             "error.html",
