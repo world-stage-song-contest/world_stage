@@ -1349,6 +1349,24 @@ ORDER BY song.year_id,"""
     + _YEAR_PLACE_ORDER
 )
 
+_LANGUAGE_HISTORY_SQL: LiteralString = (
+    "SELECT"
+    + _SONG_COLUMNS
+    + _SONG_JOINS
+    + _CYR_JOIN
+    + """
+WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
+  AND song.year_id IS NOT NULL
+  AND EXISTS (
+      SELECT 1
+      FROM language_set_language AS linked_language
+      WHERE linked_language.language_set_id = data.language_set_id
+        AND linked_language.language_id = %(language_id)s
+  )
+ORDER BY song.year_id,"""
+    + _YEAR_PLACE_ORDER
+)
+
 _MAIN_ENTRY_DETAILS_SQL: LiteralString = (
     "SELECT"
     + _SONG_COLUMNS
@@ -1423,6 +1441,15 @@ def get_artist_history(artist_id: int) -> list[Song]:
     """Load the rich rows displayed on one artist's entry history page."""
     cursor = get_db().cursor()
     cursor.execute(_ARTIST_HISTORY_SQL, {"artist_id": artist_id})
+    songs = _songs_from_rows(cursor.fetchall())
+    _attach_languages(songs)
+    return songs
+
+
+def get_language_history(language_id: int) -> list[Song]:
+    """Load the rich rows displayed on one language's entry history page."""
+    cursor = get_db().cursor()
+    cursor.execute(_LANGUAGE_HISTORY_SQL, {"language_id": language_id})
     songs = _songs_from_rows(cursor.fetchall())
     _attach_languages(songs)
     return songs

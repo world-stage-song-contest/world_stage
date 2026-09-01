@@ -1,17 +1,21 @@
 {% extends "base.html" %}
 {% from "macros/artists.html" import artist_links %}
 {% from "macros/languages.html" import language_links %}
-{% block title %}{{ artist.display_name }}{% endblock %}
+{% block title %}{{ language.name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
     <link rel="stylesheet" href="{{ static('css/song-table.css') }}">
     <link rel="stylesheet" href="{{ static('css/country.css') }}">
     <script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
+{% block navigation %}
+    <a class="nav-item" href="{{ url_for('language.index') }}">Languages</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('language.details', name=language.name) }}">{{ language.name }}</a>
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ url_for('language.bias', name=language.name) }}">Received biases</a>
+{% endblock %}
 {% block content %}
-{% if artist.native_name %}<p class="subheading">{{ artist.native_name }}</p>{% endif %}
-{% if can_edit %}<p><a class="button" href="{{ url_for('artist.edit', name=artist.display_name) }}">Edit artist</a></p>{% endif %}
-
 {% macro year_result_cell(entry) %}
   {% if entry %}
     {% set place = entry.place %}
@@ -46,7 +50,12 @@
 <table class="songs-table sortable">
     <thead>
         <tr>
-            <th>{{ 'National final' if national_final else 'Special' if special else 'Year' }}</th>
+            {% if national_final %}
+            <th>Year</th>
+            <th>National final</th>
+            {% else %}
+            <th>{{ 'Special' if special else 'Year' }}</th>
+            {% endif %}
             <th>Country</th>
             <th>Artist</th>
             <th>Title</th>
@@ -66,15 +75,18 @@
     {% for song in songs %}
         {% set result = results.get(song.id, {}) %}
         <tr data-value="{{ loop.index }}" class="{{ 'placeholder' if song.placeholder else 'finalised' }}">
-            <td>
-                {% if national_final %}
-                    <a href="{{ url_for('year.nf_details', year=song.year.id, nf_short_name=song.national_final_short_name) }}">{{ song.year.id }} — {{ song.national_final_name }}</a>
-                {% elif special %}
+            {% if national_final %}
+                <td><a href="{{ url_for('year.year', year=song.year.id) }}">{{ song.year.id }}</a></td>
+                <td><a href="{{ url_for('year.nf_details', year=song.year.id, nf_short_name=song.national_final_short_name) }}">{{ song.national_final_name }}</a></td>
+            {% else %}
+                <td>
+                {% if special %}
                     <a href="{{ url_for('year.special', short_name=song.year.special_short_name) }}">{{ song.year.special_name }}</a>
                 {% else %}
                     <a href="{{ url_for('year.year', year=song.year.id) }}">{{ song.year.id }}</a>
                 {% endif %}
-            </td>
+                </td>
+            {% endif %}
             <td>
                 <a href="{{ url_for('country.country', code=song.country.cc|lower) }}">
                     <div class="country">
@@ -114,7 +126,7 @@
                     {% endif %}
                 {% endif %}
             </div></td>
-            <td>{{ language_links(song.languages) }}</td>
+            <td>{{ language_links(song.languages, language.name) }}</td>
             <td>{{ song.submitter or '' }}</td>
             {{ year_result_cell(result.get('year')) }}
             {{ result_cells(result.get('f'), 'final') }}
@@ -127,7 +139,6 @@
 {% endmacro %}
 
 {% if entries %}
-<h3>Entries</h3>
 {{ entry_table(entries) }}
 {% endif %}
 {% if special_entries %}
@@ -137,5 +148,8 @@
 {% if national_final_entries %}
 <h3>National finals</h3>
 {{ entry_table(national_final_entries, False, True) }}
+{% endif %}
+{% if not entries and not special_entries and not national_final_entries %}
+<p>No entries found.</p>
 {% endif %}
 {% endblock %}

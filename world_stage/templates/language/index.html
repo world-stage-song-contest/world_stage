@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Languages{% endblock %}
+{% block headercontents %}<link rel="stylesheet" href="{{ static('css/results.css') }}">{% endblock %}
+{% block content %}
+<table>
+    <thead><tr><th>Language</th><th>Tag</th><th>Entries</th></tr></thead>
+    <tbody>
+    {% for language in languages %}
+        <tr>
+            <td><a href="{{ url_for('language.details', name=language.name) }}">{{ language.name }}</a></td>
+            <td>{{ ([language.tag, language.extlang, language.region, language.subvariant]|select|join('-')) }}</td>
+            <td>{{ language.entry_count }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="3">No languages found.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

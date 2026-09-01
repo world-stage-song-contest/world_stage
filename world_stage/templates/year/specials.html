@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/languages.html" import language_links %}
 {% from "macros/artists.html" import artist_links %}
 {% block title %}Years{% endblock %}
 {% block headercontents %}
@@ -41,7 +42,7 @@
                 </div></td>
                 <td class="artist">{{ artist_links(winner) }}</td>
                 <td class="title">{{ winner.title }}</td>
-                <td class="language">{{ winner.languages|map(attribute="name")|join(', ') }}</td>
+                <td class="language">{{ language_links(winner.languages) }}</td>
                 <td class="points">{{ winner.vote_data.sum }}</td>
                 <td class="percent">{{ winner.vote_data.pct() }}</td>
                 <td class="percent detail-col">{{ winner.vote_data.adjusted_pct() }}</td>

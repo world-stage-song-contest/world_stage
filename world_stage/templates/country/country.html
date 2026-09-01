@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/artists.html" import artist_links %}
+{% from "macros/languages.html" import language_links %}
 {% block title %}Overview: {{ country_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -259,7 +260,7 @@
                 </a>
                 {% endif %}
             </div></td>
-            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+            <td>{{ language_links(song.languages) }}</td>
             <td>{{ song.submitter or '' }}</td>
             {{ year_result_cell(r.get('year'), 'year-result') }}
             {{ result_cells(r.get('f'),  'final') }}
@@ -328,7 +329,7 @@
                 </a>
                 {% endif %}
             </div></td>
-            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+            <td>{{ language_links(song.languages) }}</td>
             <td>{{ song.submitter or '' }}</td>
             {{ year_result_cell(r.get('year'), 'year-result') }}
             {{ result_cells(r.get('f'),  'final') }}

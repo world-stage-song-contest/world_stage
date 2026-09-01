@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/artists.html" import artist_links %}
+{% from "macros/languages.html" import language_links %}
 {% block title %}Overview: {{ name }} {{ year }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -163,7 +164,7 @@
         </tr>
         <tr>
             <th>Language</th>
-            <td>{{ song.languages|map(attribute="name")|join(', ') }}</td>
+            <td>{{ language_links(song.languages) }}</td>
         </tr>
         {% if song.key_signatures %}
         <tr>

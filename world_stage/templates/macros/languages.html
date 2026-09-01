@@ -1,0 +1,10 @@
+{% macro language_links(languages, current_name=none) -%}
+    {%- for language in languages -%}
+        {%- if not loop.first %}, {% endif -%}
+        {%- if language.name == current_name -%}
+            {{- language.name -}}
+        {%- else -%}
+            <a href="{{ url_for('language.details', name=language.name) }}">{{ language.name }}</a>
+        {%- endif -%}
+    {%- endfor -%}
+{%- endmacro %}

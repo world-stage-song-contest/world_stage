@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/artists.html" import artist_links %}
+{% from "macros/languages.html" import language_links %}
 {% block title %}{{ nf.name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -146,7 +147,7 @@
             {% endif %}
             {% endif %}
         </div></td>
-        <td>{{ song.languages|map(attribute='name')|join(', ') }}</td>
+        <td>{{ language_links(song.languages) }}</td>
         <td>{{ song.submitter or '' }}</td>
         {% if has_sf %}
         {% set sf_sn = sf_numbers.get(song.id) %}
