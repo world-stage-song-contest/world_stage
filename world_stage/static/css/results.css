@@ -39,9 +39,13 @@
 }
 
 .country {
-    display: flex;
+    display: inline-flex;
     gap: 0.25em;
     align-items: center;
+}
+
+a .country > span {
+    text-decoration: underline;
 }
 
 th.plain {
