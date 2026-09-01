@@ -258,6 +258,10 @@ def create_app(config: dict | None = None) -> Flask:
         MAIL_SENDER_NAME=os.environ.get("MAIL_SENDER_NAME", "World Stage"),
         MAIL_TIMEOUT=float(os.environ.get("MAIL_TIMEOUT", "10")),
         MAIL_SUPPRESS_SEND=_environment_boolean("MAIL_SUPPRESS_SEND"),
+        DISCORD_WEBHOOK_URL=os.environ.get("DISCORD_WEBHOOK_URL", ""),
+        DISCORD_WEBHOOK_TIMEOUT=float(os.environ.get("DISCORD_WEBHOOK_TIMEOUT", "5")),
+        DISCORD_FLAG_YU_EMOJI_ID=os.environ.get("DISCORD_FLAG_YU_EMOJI_ID", ""),
+        DISCORD_FLAG_DD_EMOJI_ID=os.environ.get("DISCORD_FLAG_DD_EMOJI_ID", ""),
         SITE_URL=os.environ.get("SITE_URL", ""),
         PASSWORD_RESET_MAX_AGE=int(
             os.environ.get("PASSWORD_RESET_MAX_AGE", str(60 * 60))

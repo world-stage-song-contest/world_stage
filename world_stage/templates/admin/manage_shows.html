@@ -71,6 +71,7 @@
             <th>Voting</th>
             <th>Predictions</th>
             <th>Change Status</th>
+            <th>Discord</th>
             <th>Change Start Time (UTC)</th>
         </tr>
     </thead>
@@ -117,6 +118,17 @@
                 </select>
                 <button data-select="show_status_{{ show.short_name }}"
                         onclick="changeShowStatus(this, '{{ show.short_name }}')">Change</button>
+            </td>
+            <td>
+                {% if show.voting_opens and not show.voting_closes %}
+                <button onclick="sendRunningOrderNotification(this, '{{ show.short_name }}')">Send RO</button>
+                {% endif %}
+                {% if show.status == 'partial' and show.has_progression %}
+                <button onclick="sendDiscordNotification(this, '{{ show.short_name }}')">Send Qs</button>
+                {% endif %}
+                {% if show.status == 'full' and show.show_type == 'f' %}
+                <button onclick="sendFinalResultsNotification(this, '{{ show.short_name }}')">Send Results</button>
+                {% endif %}
             </td>
             <td>
                 <div class="utc-datetime-field">

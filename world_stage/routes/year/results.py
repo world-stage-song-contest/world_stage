@@ -1,6 +1,5 @@
 from ...db import fetchone, get_db
 from ...utils import (
-    LCG,
     UserPermissions,
     can_manage_show,
     dt_now,
@@ -97,10 +96,7 @@ def _prepare_qualification_results(show_data, songs, access: str, reveal: str):
     qualifier_reveal = []
 
     if show_data.status == "partial":
-        lcg = LCG(show_data.id)
         for index, group in enumerate(groups):
-            shuffled = list(group)
-            lcg.shuffle(shuffled)
             qualifier_reveal.extend(
                 {
                     "cc": song.country.cc,
@@ -109,7 +105,7 @@ def _prepare_qualification_results(show_data, songs, access: str, reveal: str):
                     "cls": "qual-dtf" if index == 0 else "qual-sc",
                     "special": special,
                 }
-                for song, special in shuffled
+                for song, special in group
             )
 
     if access == "partial":

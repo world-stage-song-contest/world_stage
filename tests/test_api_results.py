@@ -168,3 +168,45 @@ def test_special_qualifiers_move_entries_from_results_to_the_qualifier_set(clien
             assert qualifiers[song_ids["ES"]]["special"] is True
 
     property_test()
+
+
+def test_saved_qualifier_order_controls_the_public_reveal_order(client, db):
+    show_id, target_show_id, song_ids = _seed_results_show(db)
+    ordered_ids = tuple(song_ids.values())
+    db.execute("UPDATE show SET status = 'partial' WHERE id = %s", (show_id,))
+    db.execute(
+        """UPDATE show_progression SET qualifier_count = 2
+           WHERE source_show_id = %s AND target_show_id = %s""",
+        (show_id, target_show_id),
+    )
+
+    @given(order=st.permutations(ordered_ids))
+    def property_test(order):
+        db.execute("DELETE FROM show_qualifier WHERE source_show_id = %s", (show_id,))
+        with db.cursor() as cursor:
+            cursor.executemany(
+                """INSERT INTO song_show (song_id, show_id)
+                   VALUES (%s, %s) ON CONFLICT DO NOTHING""",
+                [(song_id, target_show_id) for song_id in order],
+            )
+            cursor.executemany(
+                """INSERT INTO show_qualifier (
+                       source_show_id, target_show_id, song_id, qualifier_order
+                   ) VALUES (%s, %s, %s, %s)""",
+                [
+                    (show_id, target_show_id, song_id, position)
+                    for position, song_id in enumerate(order, 1)
+                ],
+            )
+        db.execute("SELECT refresh_show_results_for_mode(%s, 'official')", (show_id,))
+        db.commit()
+
+        response = client.get("/api/results/2024-sf81")
+
+        assert response.status_code == 200
+        assert [
+            qualifier["song_id"]
+            for qualifier in response.get_json()["result"]["qualifiers"]
+        ] == list(order)
+
+    property_test()

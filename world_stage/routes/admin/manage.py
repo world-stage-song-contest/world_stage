@@ -5,6 +5,15 @@ import psycopg
 from flask import redirect, request, url_for
 
 from ...db import get_db
+from ...discord import (
+    DiscordNotificationError,
+    send_final_results_notification,
+    send_final_results_notification_best_effort,
+    send_qualification_notification,
+    send_qualification_notification_best_effort,
+    send_running_order_notification,
+    send_running_order_notification_best_effort,
+)
 from ...utils import (
     get_lineup_issues,
     get_unassigned_lineup_issue,
@@ -386,8 +395,13 @@ def _render_manage(year_id: int, year_data: dict):
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT show.id, show.show_name, show.short_name, show.date, show.status,
-               show.voting_opens, show.voting_closes, show.predictions_close
+        SELECT show.id, show.show_name, show.short_name, show.show_type,
+               show.date, show.status,
+               show.voting_opens, show.voting_closes, show.predictions_close,
+               EXISTS (
+                   SELECT 1 FROM show_progression
+                   WHERE source_show_id = show.id
+               ) AS has_progression
         FROM show
         JOIN show_types ON show_types.id = show.show_type
         WHERE year_id = %s AND national_final_id IS NULL
@@ -599,11 +613,15 @@ def manage_show_post(year: int, show: str):
     if not action:
         return render_template("error.html", error="No action specified"), 400
 
+    notification_show_id = None
+    notification_kind = None
+    manual_notification = False
+
     match action:
         case "open_voting":
             cursor.execute(
                 """
-                SELECT id FROM show
+                SELECT id, voting_opens, voting_closes FROM show
                 WHERE year_id = %s AND short_name = %s
                   AND national_final_id IS NULL
                 """,
@@ -619,6 +637,9 @@ def manage_show_post(year: int, show: str):
                     + ", ".join(issue["message"] for issue in issues),
                     "lineup_issues": issues,
                 }, 400
+            if show_row["voting_opens"] is None or show_row["voting_closes"] is not None:
+                notification_show_id = show_row["id"]
+                notification_kind = "running_order"
             cursor.execute(
                 """
                 UPDATE show
@@ -667,7 +688,7 @@ def manage_show_post(year: int, show: str):
             if status in ("partial", "full"):
                 cursor.execute(
                     """
-                    SELECT id FROM show
+                    SELECT id, status, show_type FROM show
                     WHERE year_id = %s AND short_name = %s
                       AND national_final_id IS NULL
                     """,
@@ -683,6 +704,16 @@ def manage_show_post(year: int, show: str):
                         + ", ".join(issue["message"] for issue in issues),
                         "lineup_issues": issues,
                     }, 400
+                if status == "partial" and show_row["status"] != "partial":
+                    notification_show_id = show_row["id"]
+                    notification_kind = "qualifiers"
+                elif (
+                    status == "full"
+                    and show_row["status"] != "full"
+                    and show_row["show_type"] == "f"
+                ):
+                    notification_show_id = show_row["id"]
+                    notification_kind = "final_results"
 
             cursor.execute(
                 """
@@ -693,6 +724,63 @@ def manage_show_post(year: int, show: str):
             """,
                 (status, year, show),
             )
+        case "send_discord_notification":
+            cursor.execute(
+                """
+                SELECT id, status FROM show
+                WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
+                """,
+                (year, show),
+            )
+            show_row = cursor.fetchone()
+            if not show_row:
+                return {"error": "Show not found"}, 404
+            if show_row["status"] != "partial":
+                return {
+                    "error": "Discord notifications can only be sent for partial results"
+                }, 400
+            notification_show_id = show_row["id"]
+            notification_kind = "qualifiers"
+            manual_notification = True
+        case "send_running_order_notification":
+            cursor.execute(
+                """
+                SELECT id, voting_opens, voting_closes FROM show
+                WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
+                """,
+                (year, show),
+            )
+            show_row = cursor.fetchone()
+            if not show_row:
+                return {"error": "Show not found"}, 404
+            if show_row["voting_opens"] is None or show_row["voting_closes"] is not None:
+                return {
+                    "error": "Running-order notifications can only be sent while voting is open"
+                }, 400
+            notification_show_id = show_row["id"]
+            notification_kind = "running_order"
+            manual_notification = True
+        case "send_final_results_notification":
+            cursor.execute(
+                """
+                SELECT id, status, show_type FROM show
+                WHERE year_id = %s AND short_name = %s
+                  AND national_final_id IS NULL
+                """,
+                (year, show),
+            )
+            show_row = cursor.fetchone()
+            if not show_row:
+                return {"error": "Show not found"}, 404
+            if show_row["show_type"] != "f" or show_row["status"] != "full":
+                return {
+                    "error": "Final-results notifications require full final results"
+                }, 400
+            notification_show_id = show_row["id"]
+            notification_kind = "final_results"
+            manual_notification = True
         case "change_date":
             date_str = body.get("date")
             if not date_str:
@@ -717,6 +805,25 @@ def manage_show_post(year: int, show: str):
             return render_template("error.html", error=f"Unknown action '{action}'"), 400
 
     db.commit()
+
+    if notification_show_id is not None:
+        try:
+            if notification_kind == "running_order":
+                if manual_notification:
+                    send_running_order_notification(notification_show_id)
+                else:
+                    send_running_order_notification_best_effort(notification_show_id)
+            elif notification_kind == "final_results":
+                if manual_notification:
+                    send_final_results_notification(notification_show_id)
+                else:
+                    send_final_results_notification_best_effort(notification_show_id)
+            elif manual_notification:
+                send_qualification_notification(notification_show_id)
+            else:
+                send_qualification_notification_best_effort(notification_show_id)
+        except DiscordNotificationError as exc:
+            return {"error": str(exc)}, 502
 
     return {"status": "success"}, 200
 

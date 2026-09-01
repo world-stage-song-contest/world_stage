@@ -938,14 +938,22 @@ _SHOW_LINEUP_SQL: LiteralString = (
 ORDER BY selected.running_order, selected.song_show_id"""
 )
 
-_SHOW_REVEAL_SQL: LiteralString = (
+
+_SHOW_DRAW_ENTRIES_SQL: LiteralString = (
     _SHOW_ENTRY_QUERY
-    + """LEFT JOIN show_qualifier
-  ON show_qualifier.target_show_id = selected.show_id
- AND show_qualifier.song_id = song.id
+    + """LEFT JOIN show_qualifier AS qualifier
+  ON qualifier.target_show_id = selected.show_id
+ AND qualifier.song_id = song.id
+LEFT JOIN show AS source_show ON source_show.id = qualifier.source_show_id
 WHERE data.title IS NOT NULL AND data.artist_credit_set_id IS NOT NULL
-ORDER BY show_qualifier.source_show_id NULLS FIRST,
-         show_qualifier.qualifier_order NULLS FIRST,
+ORDER BY CASE
+             WHEN qualifier.song_id IS NULL AND song.country_id = year.host_id THEN 0
+             WHEN source_show.show_type = 'sf' THEN 1
+             WHEN source_show.show_type = 'sc' THEN 2
+             ELSE 3
+         END,
+         source_show.show_number NULLS LAST,
+         qualifier.qualifier_order NULLS LAST,
          selected.running_order, selected.song_show_id"""
 )
 
@@ -957,6 +965,16 @@ def get_show_lineup(year: int | None, short_name: str) -> list[Song] | None:
         return None
     cursor = get_db().cursor()
     cursor.execute(_SHOW_LINEUP_SQL, (show.id,))
+    return _songs_from_rows(cursor.fetchall())
+
+
+def get_show_draw_entries(year: int | None, short_name: str) -> list[Song] | None:
+    """Load entries in the stable source order used to seed a show draw."""
+    show = get_show_id(short_name, year)
+    if not show:
+        return None
+    cursor = get_db().cursor()
+    cursor.execute(_SHOW_DRAW_ENTRIES_SQL, (show.id,))
     return _songs_from_rows(cursor.fetchall())
 
 
@@ -972,16 +990,6 @@ def get_show_result_entries(
     songs = _songs_from_rows(cursor.fetchall())
     _attach_show_results(songs, show.id, result_mode)
     return songs
-
-
-def get_show_reveal_entries(year: int | None, short_name: str) -> list[Song] | None:
-    """Load lightweight entries in qualifier-aware reveal order."""
-    show = get_show_id(short_name, year)
-    if not show:
-        return None
-    cursor = get_db().cursor()
-    cursor.execute(_SHOW_REVEAL_SQL, (show.id,))
-    return _songs_from_rows(cursor.fetchall())
 
 
 def get_year_index_winners() -> dict[int, Song]:

@@ -61,7 +61,14 @@ def draw_setup(db, client):
 
     with db.cursor() as cur:
         cur.execute("DELETE FROM song_show")
-        cur.execute("DELETE FROM show WHERE year_id = 2025 AND short_name IN ('sf1', 'sf2')")
+        cur.execute(
+            """DELETE FROM show_progression
+               WHERE source_show_id IN (SELECT id FROM show WHERE year_id = 2025)
+                  OR target_show_id IN (SELECT id FROM show WHERE year_id = 2025)"""
+        )
+        cur.execute(
+            "DELETE FROM show WHERE year_id = 2025 AND short_name IN ('sf1', 'sf2', 'sc', 'f')"
+        )
         cur.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
         cur.execute("UPDATE country SET pot = NULL WHERE id IN ('US', 'ES', 'FR', 'DE')")
     db.commit()
@@ -92,5 +99,176 @@ def test_draw_accepts_exactly_the_assignments_that_separate_each_pot(client, db,
         assert response.status_code == (204 if valid else 400)
         count = db.execute("SELECT COUNT(*) AS n FROM song_show").fetchone()["n"]
         assert count == (len(countries) if valid else 0)
+
+    property_test()
+
+
+def test_published_individual_draw_uses_the_saved_running_order(client, db, draw_setup):
+    countries = tuple(draw_setup)
+    show_id = db.execute(
+        "SELECT id FROM show WHERE year_id = 2025 AND short_name = 'sf1'"
+    ).fetchone()["id"]
+
+    @given(
+        status=st.sampled_from(["draw", "partial", "full"]),
+        order=st.permutations(countries),
+    )
+    def property_test(status, order):
+        db.execute("DELETE FROM song_show WHERE show_id = %s", (show_id,))
+        with db.cursor() as cursor:
+            cursor.executemany(
+                """INSERT INTO song_show (song_id, show_id, running_order)
+                   VALUES (%s, %s, %s)""",
+                [
+                    (draw_setup[country], show_id, position)
+                    for position, country in enumerate(order, 1)
+                ],
+            )
+        db.execute("UPDATE show SET status = %s WHERE id = %s", (status, show_id))
+        db.commit()
+
+        response = client.get(
+            "/admin/manage/2025/draw/sf1", headers={"Accept": "application/json"}
+        )
+
+        assert response.status_code == 200
+        assert [song["id"] for song in response.get_json()["draw_order"]] == [
+            draw_setup[country] for country in order
+        ]
+
+    property_test()
+
+
+def test_unpublished_draw_uses_host_then_source_show_qualification_order(
+    client, db, draw_setup
+):
+    source_order = ["US", "ES", "FR", "DE"]
+    with db.cursor() as cursor:
+        cursor.execute("UPDATE year SET host_id = 'US' WHERE id = 2025")
+        final_id = cursor.execute(
+            """INSERT INTO show (year_id, show_type, status)
+               VALUES (2025, 'f', 'none') RETURNING id"""
+        ).fetchone()["id"]
+        repechage_id = cursor.execute(
+            """INSERT INTO show (year_id, show_type, status)
+               VALUES (2025, 'sc', 'none') RETURNING id"""
+        ).fetchone()["id"]
+        source_ids = {
+            row["short_name"]: row["id"]
+            for row in cursor.execute(
+                """SELECT id, short_name FROM show
+                   WHERE year_id = 2025 AND short_name IN ('sf1', 'sf2')"""
+            ).fetchall()
+        }
+        cursor.execute(
+            "DELETE FROM song_show WHERE show_id = ANY(%s)",
+            (list(source_ids.values()),),
+        )
+        final_progression_sources = [
+            source_ids["sf1"],
+            source_ids["sf2"],
+            repechage_id,
+        ]
+        cursor.executemany(
+            """INSERT INTO show_progression (
+                   source_show_id, target_show_id, qualifier_count, priority
+               ) VALUES (%s, %s, 1, %s)""",
+            [
+                (source_ids["sf1"], final_id, 1),
+                (source_ids["sf1"], repechage_id, 2),
+                (source_ids["sf2"], final_id, 1),
+                (source_ids["sf2"], repechage_id, 2),
+                (repechage_id, final_id, 1),
+            ],
+        )
+        cursor.executemany(
+            """INSERT INTO song_show (song_id, show_id, running_order)
+               VALUES (%s, %s, %s)""",
+            [
+                (draw_setup["US"], source_ids["sf1"], 1),
+                (draw_setup["ES"], source_ids["sf1"], 2),
+                (draw_setup["FR"], source_ids["sf2"], 1),
+                (draw_setup["DE"], source_ids["sf2"], 2),
+                (draw_setup["US"], repechage_id, 2),
+                (draw_setup["DE"], repechage_id, 1),
+            ],
+        )
+        cursor.executemany(
+            """INSERT INTO song_show (song_id, show_id, running_order)
+               VALUES (%s, %s, %s)""",
+            [
+                (draw_setup[country], final_id, position)
+                for position, country in enumerate(source_order, 1)
+            ],
+        )
+        cursor.executemany(
+            """INSERT INTO show_qualifier (
+                   source_show_id, target_show_id, song_id, qualifier_order
+               ) VALUES (%s, %s, %s, 1)""",
+            [
+                (source_id, final_id, draw_setup[country])
+                for source_id, country in zip(
+                    final_progression_sources, source_order[1:], strict=True
+                )
+            ]
+            + [
+                (source_ids["sf1"], repechage_id, draw_setup["US"]),
+                (source_ids["sf2"], repechage_id, draw_setup["DE"]),
+            ],
+        )
+    db.commit()
+
+    initial = client.get(
+        "/admin/manage/2025/draw/f", headers={"Accept": "application/json"}
+    ).get_json()
+    expected_input = [draw_setup[country] for country in source_order]
+    expected_draw = [song["id"] for song in initial["draw_order"]]
+    assert [song["id"] for song in initial["songs"]] == expected_input
+    initial_repechage = client.get(
+        "/admin/manage/2025/draw/sc", headers={"Accept": "application/json"}
+    ).get_json()
+    expected_repechage_input = [draw_setup["US"], draw_setup["DE"]]
+    expected_repechage_draw = [song["id"] for song in initial_repechage["draw_order"]]
+    assert [song["id"] for song in initial_repechage["songs"]] == expected_repechage_input
+
+    @given(
+        target_order=st.permutations(source_order),
+        repechage_order=st.permutations(("US", "DE")),
+    )
+    def property_test(target_order, repechage_order):
+        with db.cursor() as cursor:
+            cursor.executemany(
+                """UPDATE song_show SET running_order = %s
+                   WHERE show_id = %s AND song_id = %s""",
+                [
+                    (position, final_id, draw_setup[country])
+                    for position, country in enumerate(target_order, 1)
+                ],
+            )
+            cursor.executemany(
+                """UPDATE song_show SET running_order = %s
+                   WHERE show_id = %s AND song_id = %s""",
+                [
+                    (position, repechage_id, draw_setup[country])
+                    for position, country in enumerate(repechage_order, 1)
+                ],
+            )
+        db.commit()
+
+        payload = client.get(
+            "/admin/manage/2025/draw/f", headers={"Accept": "application/json"}
+        ).get_json()
+
+        assert [song["id"] for song in payload["songs"]] == expected_input
+        assert [song["id"] for song in payload["draw_order"]] == expected_draw
+        repechage_payload = client.get(
+            "/admin/manage/2025/draw/sc", headers={"Accept": "application/json"}
+        ).get_json()
+        assert [song["id"] for song in repechage_payload["songs"]] == (
+            expected_repechage_input
+        )
+        assert [song["id"] for song in repechage_payload["draw_order"]] == (
+            expected_repechage_draw
+        )
 
     property_test()

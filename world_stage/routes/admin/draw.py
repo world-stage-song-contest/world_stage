@@ -8,8 +8,9 @@ from ...db import get_db
 from ...utils import (
     draw_running_order,
     draw_semifinals,
+    get_show_draw_entries,
     get_show_id,
-    get_show_reveal_entries,
+    get_show_lineup,
     get_year_shows,
     render_template,
 )
@@ -261,7 +262,11 @@ def draw_final(
     if not show_data:
         return render_template("error.html", error=f"Invalid show '{show}' for {year}"), 404
 
-    songs = get_show_reveal_entries(year, show)
+    songs = (
+        get_show_draw_entries(year, show)
+        if show_data.status == "none"
+        else get_show_lineup(year, show)
+    )
 
     if not songs:
         return render_template("error.html", error="No show '{show}' found for {year}"), 404
@@ -288,21 +293,24 @@ def draw_final(
         ([s.id for s in songs],),
     )
     language_by_song = {row["song_id"]: row["language_id"] for row in cursor.fetchall()}
-    song_by_id = {song.id: song for song in songs}
-    draw_order_entries = draw_running_order(
-        [
-            {
-                "song_id": song.id,
-                "cc": song.country.cc,
-                "submitter": song.submitter_id,
-                "genre": genre_by_cc.get(song.country.cc),
-                "language": language_by_song.get(song.id),
-            }
-            for song in songs
-        ],
-        f"{year}:{show}",
-    )
-    draw_order = [song_by_id[entry["song_id"]] for entry in draw_order_entries]
+    if show_data.status == "none":
+        song_by_id = {song.id: song for song in songs}
+        draw_order_entries = draw_running_order(
+            [
+                {
+                    "song_id": song.id,
+                    "cc": song.country.cc,
+                    "submitter": song.submitter_id,
+                    "genre": genre_by_cc.get(song.country.cc),
+                    "language": language_by_song.get(song.id),
+                }
+                for song in songs
+            ],
+            f"{year}:{show}",
+        )
+        draw_order = [song_by_id[entry["song_id"]] for entry in draw_order_entries]
+    else:
+        draw_order = songs
 
     return render_template(
         "admin/draw_individual.html",

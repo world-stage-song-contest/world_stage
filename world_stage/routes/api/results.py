@@ -101,19 +101,49 @@ def _result_entries(cursor, show_id: int) -> list[dict]:
     return [dict(row) for row in cursor.fetchall()]
 
 
-def _qualifiers(entries: list[dict], show) -> list[dict]:
+def _qualifiers(cursor, entries: list[dict], show) -> list[dict]:
+    cursor.execute(
+        """
+        SELECT song_id, target_show_id, qualifier_order, is_special
+        FROM show_qualifier
+        WHERE source_show_id = %s
+        """,
+        (show.id,),
+    )
+    saved = {row["song_id"]: row for row in cursor.fetchall()}
     result = []
-    progressions = {edge["target_short_name"]: edge for edge in show.progressions}
-    for entry in entries:
-        progression = progressions.get(entry["entry_status"])
-        if progression:
+    for progression in show.progressions:
+        candidates = []
+        for fallback_order, entry in enumerate(entries, 1):
+            saved_entry = saved.get(entry["song_id"])
+            belongs_here = (
+                saved_entry["target_show_id"] == progression["target_show_id"]
+                if saved_entry
+                else entry["entry_status"] == progression["target_short_name"]
+            )
+            if belongs_here:
+                candidates.append(
+                    (
+                        saved_entry["qualifier_order"]
+                        if saved_entry
+                        else fallback_order,
+                        fallback_order,
+                        entry,
+                        saved_entry,
+                    )
+                )
+        for _order, _fallback, entry, saved_entry in sorted(candidates):
             result.append(
                 {
                     "song_id": entry["song_id"],
                     "country_id": entry["country_id"],
                     "target_show_id": progression["target_show_id"],
                     "target_short_name": progression["target_short_name"],
-                    "special": entry["special_qualifier"],
+                    "special": (
+                        saved_entry["is_special"]
+                        if saved_entry
+                        else entry["special_qualifier"]
+                    ),
                 }
             )
     return result
@@ -148,7 +178,9 @@ def results(show: str):
         (show_data.id,),
     )
     voter_count = cursor.fetchone()["count"]
-    qualifiers = _qualifiers(entries, show_data) if show_data.status == "partial" else []
+    qualifiers = (
+        _qualifiers(cursor, entries, show_data) if show_data.status == "partial" else []
+    )
 
     if access == "partial":
         qualifier_ids = {entry["song_id"] for entry in qualifiers}

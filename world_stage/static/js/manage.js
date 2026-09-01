@@ -30,8 +30,11 @@ async function openVoting(showId) {
     };
 
     const data = await fetchHelper(url, body);
-
-    setError(data.error);
+    if (data.error) {
+        setError(data.error);
+    } else {
+        location.reload();
+    }
 }
 
 async function closeVoting(showId) {
@@ -41,8 +44,11 @@ async function closeVoting(showId) {
     };
 
     const data = await fetchHelper(url, body);
-
-    setError(data.error);
+    if (data.error) {
+        setError(data.error);
+    } else {
+        location.reload();
+    }
 }
 
 async function closePredictions(showId) {
@@ -83,8 +89,68 @@ async function changeShowStatus(el, showId) {
     };
 
     const data = await fetchHelper(url, body);
+    if (data.error) {
+        setError(data.error);
+    } else {
+        location.reload();
+    }
+}
 
-    setError(data.error);
+async function sendDiscordNotification(button, showId) {
+    const label = button.textContent;
+    button.disabled = true;
+    const data = await fetchHelper(window.location.href + `/${showId}`, {
+        'action': 'send_discord_notification'
+    });
+    if (data.error) {
+        setError(data.error);
+        button.disabled = false;
+        return;
+    }
+    setError(null);
+    button.textContent = 'Sent';
+    setTimeout(() => {
+        button.textContent = label;
+        button.disabled = false;
+    }, 2000);
+}
+
+async function sendRunningOrderNotification(button, showId) {
+    const label = button.textContent;
+    button.disabled = true;
+    const data = await fetchHelper(window.location.href + `/${showId}`, {
+        'action': 'send_running_order_notification'
+    });
+    if (data.error) {
+        setError(data.error);
+        button.disabled = false;
+        return;
+    }
+    setError(null);
+    button.textContent = 'Sent';
+    setTimeout(() => {
+        button.textContent = label;
+        button.disabled = false;
+    }, 2000);
+}
+
+async function sendFinalResultsNotification(button, showId) {
+    const label = button.textContent;
+    button.disabled = true;
+    const data = await fetchHelper(window.location.href + `/${showId}`, {
+        'action': 'send_final_results_notification'
+    });
+    if (data.error) {
+        setError(data.error);
+        button.disabled = false;
+        return;
+    }
+    setError(null);
+    button.textContent = 'Sent';
+    setTimeout(() => {
+        button.textContent = label;
+        button.disabled = false;
+    }, 2000);
 }
 
 async function changeDate(el, showId) {

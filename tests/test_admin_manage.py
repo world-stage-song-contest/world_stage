@@ -1,3 +1,4 @@
+import importlib
 import uuid
 from datetime import UTC, datetime
 
@@ -204,6 +205,176 @@ def test_lineup_issues_block_only_the_transition_they_make_unsafe(client, db, ad
         db.execute("DELETE FROM song WHERE id = %s", (song_id,))
         db.execute("DELETE FROM show WHERE id = %s", (show_id,))
         db.commit()
+
+
+def test_discord_notification_follows_partial_publication_and_manual_retries(
+    client, db, admin_session, monkeypatch
+):
+    manage_module = importlib.import_module("world_stage.routes.admin.manage")
+    deliveries = []
+    monkeypatch.setattr(manage_module, "get_lineup_issues", lambda cursor, show_id: [])
+    monkeypatch.setattr(
+        manage_module,
+        "send_qualification_notification_best_effort",
+        lambda show_id: deliveries.append(("automatic", show_id)),
+    )
+    monkeypatch.setattr(
+        manage_module,
+        "send_qualification_notification",
+        lambda show_id: deliveries.append(("manual", show_id)),
+    )
+
+    @given(
+        initial_status=st.sampled_from(["none", "draw", "partial", "full"]),
+        manual=st.booleans(),
+    )
+    def property_test(initial_status, manual):
+        db.execute(
+            "INSERT INTO show_status (name) VALUES (%s) ON CONFLICT DO NOTHING",
+            (initial_status,),
+        )
+        db.execute("INSERT INTO show_status (name) VALUES ('partial') ON CONFLICT DO NOTHING")
+        stored_status = "partial" if manual else initial_status
+        show_id = db.execute(
+            """INSERT INTO show (year_id, show_type, show_number, status)
+               VALUES (2025, 'sf', 91, %s) RETURNING id""",
+            (stored_status,),
+        ).fetchone()["id"]
+        db.commit()
+        before = len(deliveries)
+        try:
+            payload = (
+                {"action": "send_discord_notification"}
+                if manual
+                else {"action": "set_status", "status": "partial"}
+            )
+            response = client.post("/admin/manage/2025/sf91", json=payload)
+
+            assert response.status_code == 200
+            expected = manual or initial_status != "partial"
+            assert len(deliveries) - before == int(expected)
+            if expected:
+                assert deliveries[-1] == (
+                    "manual" if manual else "automatic",
+                    show_id,
+                )
+        finally:
+            db.execute("DELETE FROM show WHERE id = %s", (show_id,))
+            db.commit()
+
+    property_test()
+
+
+def test_running_order_notification_follows_voting_open_and_manual_retries(
+    client, db, admin_session, monkeypatch
+):
+    manage_module = importlib.import_module("world_stage.routes.admin.manage")
+    deliveries = []
+    monkeypatch.setattr(manage_module, "get_lineup_issues", lambda cursor, show_id: [])
+    monkeypatch.setattr(
+        manage_module,
+        "send_running_order_notification_best_effort",
+        lambda show_id: deliveries.append(("automatic", show_id)),
+    )
+    monkeypatch.setattr(
+        manage_module,
+        "send_running_order_notification",
+        lambda show_id: deliveries.append(("manual", show_id)),
+    )
+
+    @given(
+        initial_state=st.sampled_from(["not_started", "open", "closed"]),
+        manual=st.booleans(),
+    )
+    def property_test(initial_state, manual):
+        stored_state = "open" if manual else initial_state
+        show_id = db.execute(
+            """INSERT INTO show (
+                   year_id, show_type, show_number, status,
+                   voting_opens, voting_closes
+               ) VALUES (
+                   2025, 'sf', 92, 'none',
+                   CASE WHEN %s = 'not_started' THEN NULL ELSE CURRENT_TIMESTAMP END,
+                   CASE WHEN %s = 'closed' THEN CURRENT_TIMESTAMP ELSE NULL END
+               ) RETURNING id""",
+            (stored_state, stored_state),
+        ).fetchone()["id"]
+        db.commit()
+        before = len(deliveries)
+        try:
+            payload = (
+                {"action": "send_running_order_notification"}
+                if manual
+                else {"action": "open_voting"}
+            )
+            response = client.post("/admin/manage/2025/sf92", json=payload)
+
+            assert response.status_code == 200
+            expected = manual or initial_state != "open"
+            assert len(deliveries) - before == int(expected)
+            if expected:
+                assert deliveries[-1] == (
+                    "manual" if manual else "automatic",
+                    show_id,
+                )
+        finally:
+            db.execute("DELETE FROM show WHERE id = %s", (show_id,))
+            db.commit()
+
+    property_test()
+
+
+def test_final_results_notification_follows_full_reveal_and_manual_retries(
+    client, db, admin_session, monkeypatch
+):
+    manage_module = importlib.import_module("world_stage.routes.admin.manage")
+    deliveries = []
+    monkeypatch.setattr(manage_module, "get_lineup_issues", lambda cursor, show_id: [])
+    monkeypatch.setattr(
+        manage_module,
+        "send_final_results_notification_best_effort",
+        lambda show_id: deliveries.append(("automatic", show_id)),
+    )
+    monkeypatch.setattr(
+        manage_module,
+        "send_final_results_notification",
+        lambda show_id: deliveries.append(("manual", show_id)),
+    )
+
+    @given(
+        initial_status=st.sampled_from(["none", "draw", "partial", "full"]),
+        manual=st.booleans(),
+    )
+    def property_test(initial_status, manual):
+        stored_status = "full" if manual else initial_status
+        show_id = db.execute(
+            """INSERT INTO show (year_id, show_type, status)
+               VALUES (2025, 'f', %s) RETURNING id""",
+            (stored_status,),
+        ).fetchone()["id"]
+        db.commit()
+        before = len(deliveries)
+        try:
+            payload = (
+                {"action": "send_final_results_notification"}
+                if manual
+                else {"action": "set_status", "status": "full"}
+            )
+            response = client.post("/admin/manage/2025/f", json=payload)
+
+            assert response.status_code == 200
+            expected = manual or initial_status != "full"
+            assert len(deliveries) - before == int(expected)
+            if expected:
+                assert deliveries[-1] == (
+                    "manual" if manual else "automatic",
+                    show_id,
+                )
+        finally:
+            db.execute("DELETE FROM show WHERE id = %s", (show_id,))
+            db.commit()
+
+    property_test()
 
 
 def test_creating_country_national_final_keeps_existing_slot_song(

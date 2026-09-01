@@ -568,7 +568,7 @@ def _manage_nf(year_id: int, nf_short_name: str, user, permissions: UserPermissi
             cursor.execute(
                 "UPDATE show SET voting_closes = CURRENT_TIMESTAMP WHERE id = %s", (show_id,)
             )
-        else:
+        elif action == "set_status":
             status = request.form.get("status")
             if status not in {"none", "draw", "partial", "full"}:
                 return render_template("error.html", error="Invalid show status"), 400
