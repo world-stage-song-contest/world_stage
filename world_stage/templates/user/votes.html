@@ -221,6 +221,27 @@
         </div>
     </fieldset>
     <fieldset>
+        <legend>Year range</legend>
+        <div class="history-filter-bound">
+            <label for="history-year-from">From</label>
+            <select id="history-year-from" name="from">
+                <option value="">—</option>
+                {% for history_year in history_years %}
+                <option value="{{ history_year }}" {{ 'selected' if year_from == history_year else '' }}>{{ history_year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="history-filter-bound">
+            <label for="history-year-to">To</label>
+            <select id="history-year-to" name="to">
+                <option value="">—</option>
+                {% for history_year in history_years %}
+                <option value="{{ history_year }}" {{ 'selected' if year_to == history_year else '' }}>{{ history_year }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </fieldset>
+    <fieldset>
         <legend>Round</legend>
         <div class="history-filter-option">
             <input id="history-round-semi-final" type="checkbox" name="round" value="sf" {{ 'checked' if 'sf' in selected_rounds else '' }}>

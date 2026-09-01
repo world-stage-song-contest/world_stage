@@ -82,6 +82,13 @@
     gap: 0.35em;
 }
 
+.history-filter-bound {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 0.35em;
+}
+
 .history-filter-option label {
     cursor: pointer;
 }

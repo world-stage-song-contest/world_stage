@@ -73,6 +73,32 @@ def _vote_history_statuses() -> tuple[str, ...]:
     )
 
 
+def _vote_history_year_filter() -> tuple[int | None, int | None, str, list[int]]:
+    year_from = request.args.get("from", type=int)
+    year_to = request.args.get("to", type=int)
+    bounds = []
+    parameters = []
+    if year_from is not None:
+        bounds.append("show.year_id >= %s")
+        parameters.append(year_from)
+    if year_to is not None:
+        bounds.append("show.year_id <= %s")
+        parameters.append(year_to)
+    sql = f"(show.year_id < 0 OR ({' AND '.join(bounds)}))" if bounds else "TRUE"
+    return year_from, year_to, sql, parameters
+
+
+def _vote_history_years(cursor) -> list[int]:
+    cursor.execute(
+        """
+        SELECT id FROM year
+        WHERE id > 0 AND status IN ('closed', 'ongoing')
+        ORDER BY id
+        """
+    )
+    return [row["id"] for row in cursor]
+
+
 def _vote_history_pagination(total: int, endpoint: str, username: str) -> dict:
     pages = max(1, (total + VOTE_HISTORY_PAGE_SIZE - 1) // VOTE_HISTORY_PAGE_SIZE)
     page = min(max(request.args.get("page", type=int) or 1, 1), pages)
@@ -770,6 +796,10 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         _vote_history_filters()
     )
     selected_statuses = _vote_history_statuses()
+    year_from, year_to, year_filter_sql, year_filter_parameters = (
+        _vote_history_year_filter()
+    )
+    history_years = _vote_history_years(cursor)
     cursor.execute(
         f"""
         SELECT COUNT(*) AS total
@@ -778,8 +808,14 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
           AND show.status = ANY(%s)
           AND {filter_sql}
+          AND {year_filter_sql}
         """,
-        (user_id, list(selected_statuses), *filter_parameters),
+        (
+            user_id,
+            list(selected_statuses),
+            *filter_parameters,
+            *year_filter_parameters,
+        ),
     )
     pagination = _vote_history_pagination(
         cursor.fetchone()["total"], "user.votes", username
@@ -799,6 +835,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
           AND show.status = ANY(%s)
           AND {filter_sql}
+          AND {year_filter_sql}
         ORDER BY show.date DESC NULLS LAST, show.id DESC
         LIMIT %s OFFSET %s
     """,
@@ -806,6 +843,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
             user_id,
             list(selected_statuses),
             *filter_parameters,
+            *year_filter_parameters,
             VOTE_HISTORY_PAGE_SIZE,
             pagination["offset"],
         ),
@@ -840,6 +878,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         can_reveal=can_reveal, unredacted=unredacted,
         selected_editions=selected_editions, selected_rounds=selected_rounds,
         selected_statuses=selected_statuses,
+        history_years=history_years, year_from=year_from, year_to=year_to,
         **pagination,
     )
 
@@ -869,6 +908,10 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
     selected_editions, selected_rounds, filter_sql, filter_parameters = (
         _vote_history_filters()
     )
+    year_from, year_to, year_filter_sql, year_filter_parameters = (
+        _vote_history_year_filter()
+    )
+    history_years = _vote_history_years(cursor)
     cursor.execute(
         f"""
         SELECT COUNT(*) AS total
@@ -877,8 +920,9 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'revote'
           AND show.status = 'full'
           AND {filter_sql}
+          AND {year_filter_sql}
         """,
-        (user_id, *filter_parameters),
+        (user_id, *filter_parameters, *year_filter_parameters),
     )
     pagination = _vote_history_pagination(
         cursor.fetchone()["total"], "user.revotes", username
@@ -897,12 +941,14 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'revote'
           AND show.status = 'full'
           AND {filter_sql}
+          AND {year_filter_sql}
         ORDER BY show.date DESC NULLS LAST, show.id DESC
         LIMIT %s OFFSET %s
         """,
         (
             user_id,
             *filter_parameters,
+            *year_filter_parameters,
             VOTE_HISTORY_PAGE_SIZE,
             pagination["offset"],
         ),
@@ -938,6 +984,9 @@ def revotes(username: str, user: tuple[int, str] | None, permissions: UserPermis
         history_endpoint="user.revotes",
         selected_editions=selected_editions,
         selected_rounds=selected_rounds,
+        history_years=history_years,
+        year_from=year_from,
+        year_to=year_to,
         **pagination,
     )
 

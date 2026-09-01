@@ -953,8 +953,13 @@ def test_aggregate_views_ignore_nfs_while_show_histories_keep_them_distinct(
     scores = st.sampled_from([12, 10, 8])
 
     @settings(max_examples=8, deadline=None)
-    @given(main_score=scores, nf_selected_score=scores, nf_only_score=scores)
-    def property_test(main_score, nf_selected_score, nf_only_score):
+    @given(
+        main_score=scores,
+        nf_selected_score=scores,
+        nf_only_score=scores,
+        year_floor=st.integers(2023, 2027),
+    )
+    def property_test(main_score, nf_selected_score, nf_only_score, year_floor):
         db.rollback()
         db.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
         selected_id = _add_candidate(db, national_final["id"], submitter=3)
@@ -1055,6 +1060,13 @@ def test_aggregate_views_ignore_nfs_while_show_histories_keep_them_distinct(
                 "/user/alice/votes", headers={"Accept": "application/json"}
             ).get_json()["votes"]
             assert {vote["show_id"] for vote in default_votes} == {main_show_id}
+
+            bounded_votes = client.get(
+                f"/user/alice/votes?from={year_floor}",
+                headers={"Accept": "application/json"},
+            ).get_json()["votes"]
+            expected_show_ids = {main_show_id} if year_floor <= 2025 else set()
+            assert {vote["show_id"] for vote in bounded_votes} == expected_show_ids
 
             previous_votes = client.get(
                 "/user/alice/votes?edition=normal&edition=national-final",
