@@ -1,7 +1,12 @@
-from flask import Blueprint
+from flask import Blueprint, request
 
 from ..db import get_db
-from ..utils import get_language_history, get_show_results_for_songs, render_template
+from ..utils import (
+    get_closed_years,
+    get_language_history,
+    get_show_results_for_songs,
+    render_template,
+)
 
 bp = Blueprint("language", __name__, url_prefix="/language")
 
@@ -59,4 +64,31 @@ def details(name: str):
         ],
         national_final_entries=[entry for entry in entries if entry.national_final_id],
         results=results,
+    )
+
+
+@bp.get("/<path:name>/bias")
+def bias(name: str):
+    language = _find_language(name)
+    if not language:
+        return render_template("error.html", error="Language not found"), 404
+
+    year_from = request.args.get("from", type=int)
+    year_to = request.args.get("to", type=int)
+    include_revotes = request.args.get("include_revotes") == "true"
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT * FROM language_voter_bias(%s, %s, %s, %s)",
+        (language["id"], year_from, year_to, include_revotes),
+    )
+    return render_template(
+        "inbound_bias.html",
+        subject_type="language",
+        subject_name=language["name"],
+        biases=[dict(row) for row in cursor],
+        closed_years=get_closed_years(),
+        year_from=year_from,
+        year_to=year_to,
+        include_specials=True,
+        include_revotes=include_revotes,
     )

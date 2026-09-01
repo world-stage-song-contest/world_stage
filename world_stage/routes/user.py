@@ -1182,6 +1182,18 @@ def get_country_biases(
         yield dict(r)
 
 
+def get_language_biases(
+    user_id: int, year_from: int | None, year_to: int | None, include_revotes: bool
+):
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT * FROM user_language_bias(%s, %s, %s, %s)",
+        (user_id, year_from, year_to, include_revotes),
+    )
+    for row in cursor:
+        yield dict(row)
+
+
 def get_submitter_biases(
     user_id: int, year_from: int | None, year_to: int | None,
     include_specials: bool, include_revotes: bool,
@@ -1227,6 +1239,10 @@ def bias(username: str):
         year_from, year_to = _parse_bias_filters(with_specials=False)
         include_specials = True  # N/A; template reads it for checkbox state only
         biases = get_country_biases(user_id, year_from, year_to, include_revotes)
+    elif bias_type == "language":
+        year_from, year_to = _parse_bias_filters(with_specials=False)
+        include_specials = True
+        biases = get_language_biases(user_id, year_from, year_to, include_revotes)
     else:
         return render_template(
             "error.html", error=f"Invalid bias type specified: {bias_type}."

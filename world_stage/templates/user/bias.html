@@ -10,6 +10,7 @@
     <a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('user.bias', username=username, type='country') }}">Countries</a>
+    <a class="nav-item" href="{{ url_for('user.bias', username=username, type='language') }}">Languages</a>
     <a class="nav-item" href="{{ url_for('user.bias', username=username, type='user') }}">Users</a>
     <span class="nav-separator"></span>
     <a class="nav-item" href="{{ url_for('user.bias_for', username=username) }}">Received biases</a>
@@ -63,7 +64,7 @@
         <tr>
             <th>#</th>
             <th>{{ bias_type.capitalize() }}</th>
-            <th title="Times you saw one of this {{ 'country' if bias_type == 'country' else 'user' }}'s entries">Votings</th>
+            <th title="Times you saw one of this {{ bias_type }}'s entries">Votings</th>
             <th class="detail-col" title="Votings where you awarded any points">Non-blank</th>
             <th class="detail-col" title="Votings where you awarded the maximum score">Max</th>
             <th title="Points you actually awarded">Given</th>
@@ -88,6 +89,8 @@
                 <a href="{{ url_for('country.country', code=bias.country_id) }}">{{ bias.country_name }}</a></td>
             {% elif bias_type == 'user' %}
             <td>{{ bias.submitter_name }}</td>
+            {% elif bias_type == 'language' %}
+            <td><a href="{{ url_for('language.details', name=bias.language_name) }}">{{ bias.language_name }}</a></td>
             {% else %}
             <td>ERROR - Unknown bias type</td>
             {% endif %}

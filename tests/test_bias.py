@@ -40,6 +40,16 @@ def _bias_reports(cursor, include_revotes=False):
             WHERE voter_id = 1""",
             (include_revotes,),
         ),
+        (
+            """SELECT * FROM user_language_bias(1, 2024, 2024, %s)
+            WHERE language_id = 20""",
+            (include_revotes,),
+        ),
+        (
+            """SELECT * FROM language_voter_bias(20, 2024, 2024, %s)
+            WHERE voter_id = 1""",
+            (include_revotes,),
+        ),
     )
     return tuple(dict(cursor.execute(query, params).fetchone()) for query, params in queries)
 
@@ -77,6 +87,20 @@ def test_national_final_ballots_never_change_bias_reports(db):
         national_final_id = cursor.execute(
             "SELECT COALESCE(MAX(id), 0) + 2000 AS id FROM national_final"
         ).fetchone()["id"]
+        language_set_id = cursor.execute(
+            """INSERT INTO language_set (language_ids)
+               VALUES (ARRAY[20]::bigint[])
+               ON CONFLICT (language_ids) DO UPDATE
+               SET language_ids = EXCLUDED.language_ids
+               RETURNING id"""
+        ).fetchone()["id"]
+        cursor.execute(
+            """INSERT INTO language_set_language (
+                   language_set_id, language_id, priority
+               ) VALUES (%s, 20, 0)
+               ON CONFLICT DO NOTHING""",
+            (language_set_id,),
+        )
         cursor.execute(
             """INSERT INTO national_final (
                    id, year_id, owner_id, owner_country_id, short_name, name
@@ -110,9 +134,12 @@ def test_national_final_ballots_never_change_bias_reports(db):
                 ).fetchone()["id"]
                 cursor.execute(
                     """INSERT INTO song_data (
-                           song_id, submitter_id, title, artist_credit_set_id
-                       ) VALUES (%s, %s, %s, test_artist_credit('Bias Artist'))""",
-                    (song_id, submitter_id, f"Bias song {song_id}"),
+                           song_id, submitter_id, title, artist_credit_set_id,
+                           language_set_id
+                       ) VALUES (
+                           %s, %s, %s, test_artist_credit('Bias Artist'), %s
+                       )""",
+                    (song_id, submitter_id, f"Bias song {song_id}", language_set_id),
                 )
                 cursor.execute(
                     """INSERT INTO song_show (song_id, show_id, running_order)

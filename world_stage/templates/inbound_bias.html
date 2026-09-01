@@ -11,6 +11,12 @@
         <a class="nav-item" href="{{ url_for('country.country', code=subject_code.lower()) }}">{{ subject_name }}</a>
         <span class="nav-separator"></span>
         <a class="nav-item" href="{{ url_for('country.bias', code=subject_code.lower()) }}">Received biases</a>
+    {% elif subject_type == 'language' %}
+        <a class="nav-item" href="{{ url_for('language.index') }}">Languages</a>
+        <span class="nav-separator"></span>
+        <a class="nav-item" href="{{ url_for('language.details', name=subject_name) }}">{{ subject_name }}</a>
+        <span class="nav-separator"></span>
+        <a class="nav-item" href="{{ url_for('language.bias', name=subject_name) }}">Received biases</a>
     {% else %}
         <a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
         <span class="nav-separator"></span>
@@ -21,14 +27,6 @@
     {% endif %}
 {% endblock %}
 {% block content %}
-<h1>
-    Voters biased toward
-    {% if subject_type == 'country' %}
-        {{ flag(subject_code, 24, subject_name) }} {{ subject_name }}
-    {% else %}
-        {{ subject_name }}
-    {% endif %}
-</h1>
 <form method="get" class="bias-filters">
     <input type="hidden" name="_submitted" value="1">
     <label>From
