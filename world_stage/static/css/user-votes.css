@@ -21,6 +21,9 @@
     align-items: center;
     gap: 0.4em;
     margin-left: auto;
+}
+
+.reveal-toggle label {
     cursor: pointer;
 }
 

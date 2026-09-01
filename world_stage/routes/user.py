@@ -84,7 +84,7 @@ def _vote_history_year_filter() -> tuple[int | None, int | None, str, list[int]]
     if year_to is not None:
         bounds.append("show.year_id <= %s")
         parameters.append(year_to)
-    sql = f"(show.year_id < 0 OR ({' AND '.join(bounds)}))" if bounds else "TRUE"
+    sql = f"(show.year_id > 0 AND {' AND '.join(bounds)})" if bounds else "TRUE"
     return year_from, year_to, sql, parameters
 
 

@@ -134,11 +134,10 @@
     </label>
     {% endif %}
     {% if can_reveal and view not in ('country', 'user', 'year') %}
-    <label class="reveal-toggle">
-        <input type="checkbox" {{ 'checked' if unredacted else '' }}
-               onchange="const url = new URL(location.href); this.checked ? url.searchParams.set('hidden', 'false') : url.searchParams.delete('hidden'); location.href = url">
-        <span>Reveal hidden votes</span>
-    </label>
+    <div class="reveal-toggle">
+        <input id="history-reveal-hidden" type="checkbox" name="hidden" value="false" form="history-filters" {{ 'checked' if unredacted else '' }} onchange="this.form.requestSubmit()">
+        <label for="history-reveal-hidden">Reveal hidden votes</label>
+    </div>
     {% endif %}
 </div>
 {% if view == 'country' %}
@@ -202,9 +201,8 @@
 </table>
 </div>
 {% else %}
-<form class="history-filters" method="get" aria-label="Vote history filters">
+<form id="history-filters" class="history-filters" method="get" aria-label="Vote history filters">
     <input type="hidden" name="filters" value="1">
-    {% if unredacted %}<input type="hidden" name="hidden" value="false">{% endif %}
     <fieldset>
         <legend>Edition</legend>
         <div class="history-filter-option">
