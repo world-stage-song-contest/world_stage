@@ -156,7 +156,7 @@ def test_show_start_form_values_are_stored_as_utc_instants(client, db, admin_ses
 
         assert response.status_code == 200
         stored = db.execute("SELECT date FROM show WHERE id = %s", (show_id,)).fetchone()["date"]
-        assert stored == value.replace(second=0, microsecond=0, tzinfo=UTC)
+        assert stored.astimezone(UTC) == value.replace(second=0, microsecond=0, tzinfo=UTC)
 
     try:
         property_test()
@@ -204,3 +204,94 @@ def test_lineup_issues_block_only_the_transition_they_make_unsafe(client, db, ad
         db.execute("DELETE FROM song WHERE id = %s", (song_id,))
         db.execute("DELETE FROM show WHERE id = %s", (show_id,))
         db.commit()
+
+
+def test_creating_country_national_final_keeps_existing_slot_song(
+    client, db, admin_session, alice_headers
+):
+    @given(country=st.sampled_from(["ES", "FR", "US"]), has_song=st.booleans())
+    def property_test(country, has_song):
+        song_id = None
+        if has_song:
+            song_id = db.execute(
+                """INSERT INTO song (country_id, year_id, entry_number)
+                   VALUES (%s, 2025, 1) RETURNING id""",
+                (country,),
+            ).fetchone()["id"]
+            db.execute(
+                """INSERT INTO song_data (
+                       song_id, submitter_id, title, artist_credit_set_id
+                   ) VALUES (
+                       %s, 2, 'Existing submission',
+                       test_artist_credit('Existing artist')
+                   )""",
+                (song_id,),
+            )
+        db.commit()
+
+        response = client.post(
+            "/admin/manage/2025/create/nf",
+            data={
+                "owner_id": "2",
+                "owner_country_id": country,
+                "name": f"{country} National Final",
+            },
+        )
+
+        assert response.status_code == 302
+        national_final_id = db.execute(
+            """SELECT id FROM national_final
+               WHERE year_id = 2025 AND owner_country_id = %s""",
+            (country,),
+        ).fetchone()["id"]
+        linked_song_ids = {
+            row["song_id"]
+            for row in db.execute(
+                """SELECT song_id FROM national_final_song
+                   WHERE national_final_id = %s""",
+                (national_final_id,),
+            ).fetchall()
+        }
+        assert linked_song_ids == ({song_id} if has_song else set())
+        if song_id is None:
+            candidate_response = client.post(
+                "/api/song",
+                headers=alice_headers,
+                json={
+                    "year": 2025,
+                    "country": country,
+                    "national_final_id": national_final_id,
+                    "title": "First candidate",
+                    "artist": "Candidate artist",
+                    "languages": [20],
+                },
+            )
+            assert candidate_response.status_code == 201
+            song_id = candidate_response.get_json()["result"]["id"]
+
+        if song_id is not None:
+            assert db.execute(
+                """SELECT song.main_participant,
+                          national_final_song.national_final_id
+                   FROM song
+                   JOIN national_final_song
+                     ON national_final_song.song_id = song.id
+                   WHERE song.id = %s""",
+                (song_id,),
+            ).fetchone() == {
+                "main_participant": False,
+                "national_final_id": national_final_id,
+            }
+
+        db.execute(
+            "DELETE FROM national_final_song WHERE national_final_id = %s",
+            (national_final_id,),
+        )
+        db.execute("DELETE FROM national_final WHERE id = %s", (national_final_id,))
+        if song_id is not None:
+            db.execute("DELETE FROM song_status WHERE song_id = %s", (song_id,))
+            db.execute("DELETE FROM song_data WHERE song_id = %s", (song_id,))
+            db.execute("DELETE FROM song WHERE id = %s", (song_id,))
+        db.commit()
+
+    property_test()

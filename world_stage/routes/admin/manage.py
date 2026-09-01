@@ -168,10 +168,21 @@ def _create_national_final_post(year: int):
             INSERT INTO national_final (
                 year_id, owner_id, owner_country_id, short_name, name
             ) VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
             """,
             (year, owner_id, owner_country_id, short_name, name),
         )
+        national_final_id = cursor.fetchone()["id"]
         if owner_country_id:
+            cursor.execute(
+                """
+                INSERT INTO national_final_song (national_final_id, song_id)
+                SELECT %s, id
+                FROM current_song
+                WHERE year_id = %s AND country_id = %s AND main_participant
+                """,
+                (national_final_id, year, owner_country_id),
+            )
             cursor.execute(
                 """
                 UPDATE song SET main_participant = false
