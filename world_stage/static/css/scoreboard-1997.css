@@ -166,7 +166,8 @@ body {
     color: var(--sb97-ink);
     background: var(--sb97-row);
     border: 2px solid var(--sb97-grid);
-    transition: top 1s ease, left 1s ease, filter 0.4s, opacity 0.4s;
+    transition: top 1s ease, left 1s ease,
+                background-color 0.4s ease var(--sb97-no-win-delay, 0ms);
 }
 
 .sb97-flag-frame {
@@ -259,7 +260,7 @@ body {
     color: #4b2030;
     background-color: #d8b2bd;
 }
-.sb97-row.no-win .sb97-flag { opacity: 0.6; filter: saturate(0.7); }
+.sb97-row.no-win { background-color: #48546c; }
 .sb97-row.main-moving { z-index: 20; }
 .sb97-row.winner {
     z-index: 30;

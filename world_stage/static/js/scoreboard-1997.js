@@ -193,7 +193,14 @@
         markReceived,
         applyPenalty(view) { view.element.classList.add("penalised"); },
         stopMoving(view) { view.element.classList.remove("main-moving"); },
-        markCannotWin(view) { view.element.classList.add("no-win"); },
+        markCannotWin(view, staggerIndex) {
+            const delay = staggerIndex * 60;
+            view.element.style.setProperty("--sb97-no-win-delay", `${delay}ms`);
+            view.element.classList.add("no-win");
+            setTimeout(() => {
+                view.element.style.removeProperty("--sb97-no-win-delay");
+            }, delay + 400);
+        },
         markWinner(view) {
             clearPointColours(view);
             view.element.classList.add("winner");

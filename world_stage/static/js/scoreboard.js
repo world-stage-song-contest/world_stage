@@ -331,14 +331,15 @@ class Country {
      * @param {number} leaderPts  Current leader's score.
      */
     setCanWin(leftVotes, leaderPts) {
-        if (!this.win) return;
+        if (!this.win) return false;
         // ``Math.max(points)`` returned NaN — Math.max doesn't accept
         // arrays. Spread the array so we get the actual max point value.
         const left = this.points + leftVotes * Math.max(...points);
         if (left <= leaderPts) {
             this.win = false;
-            theme.markCannotWin(this.view);
+            return true;
         }
+        return false;
     }
 
     setWinner() {
@@ -523,9 +524,16 @@ async function vote() {
         const leader = ro[0];
 
         if (juryCount != voterCount) {
+            const newlyEliminated = [];
             for (const c of ro) {
                 c.refresh();
-                c.setCanWin(voterCount - juryCount, leader.points);
+                if (c.setCanWin(voterCount - juryCount, leader.points)) {
+                    newlyEliminated.push(c);
+                }
+            }
+            newlyEliminated.reverse();
+            for (const [index, c] of newlyEliminated.entries()) {
+                theme.markCannotWin(c.view, index);
             }
         }
 
