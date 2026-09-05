@@ -85,6 +85,39 @@ def test_draw_separates_entries_that_share_a_submitter_or_country(
     assert sum(shared_counts) == duplicate_count
 
 
+@settings(max_examples=50, deadline=None)
+@given(
+    data=st.data(),
+    show_count=st.integers(min_value=2, max_value=len(SHOWS)),
+    seed=st.integers(),
+    constraint_kind=st.sampled_from(["include", "exclude"]),
+)
+def test_draw_obeys_semifinal_constraints(data, show_count, seed, constraint_kind):
+    shows = SHOWS[:show_count]
+    destinations = data.draw(st.permutations(range(1, show_count + 1)))
+    pots = _make_pots([show_count])
+
+    for entry, destination in zip(pots[1], destinations, strict=True):
+        if constraint_kind == "include":
+            entry["semifinal_constraints"] = [destination]
+        else:
+            entry["semifinal_constraints"] = [
+                -number for number in range(1, show_count + 1) if number != destination
+            ]
+
+    assignments = draw_semifinals(pots, shows, [1] * show_count, seed)
+
+    assigned_show = {
+        entry["song_id"]: number
+        for number, show in enumerate(shows, start=1)
+        for entry in assignments[show]
+    }
+    assert assigned_show == {
+        entry["song_id"]: destination
+        for entry, destination in zip(pots[1], destinations, strict=True)
+    }
+
+
 @settings(max_examples=30, deadline=None)
 @given(
     sizes=st.lists(st.integers(min_value=1, max_value=3), min_size=1, max_size=3),

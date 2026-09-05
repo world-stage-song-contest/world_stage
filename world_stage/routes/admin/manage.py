@@ -834,7 +834,8 @@ def set_pots(year: int):
 
     cursor.execute(
         """
-        SELECT country.id, name, pot, genre FROM current_song AS song
+        SELECT country.id, name, pot, genre, semifinal_constraints
+        FROM current_song AS song
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id
         WHERE year_id = %s AND year.host_id IS DISTINCT FROM country.id
@@ -852,20 +853,23 @@ def set_pots_post(year: int):
     db = get_db()
     cursor = db.cursor()
 
-    # Form fields are name-prefixed: ``pot_<country_id>`` and
-    # ``genre_<country_id>``. Both follow the same "0 → NULL" convention.
-    updates: dict[str, dict[str, int | None]] = {}
+    updates: dict[str, dict[str, int | list[int] | None]] = {}
     for key, value in request.form.items():
         if key.startswith("pot_"):
             field, country_id = "pot", key[len("pot_"):]
         elif key.startswith("genre_"):
             field, country_id = "genre", key[len("genre_"):]
+        elif key.startswith("semifinals_"):
+            field, country_id = "semifinals", key[len("semifinals_"):]
         else:
             continue
         try:
-            parsed: int | None = int(value)
-            if parsed == 0:
-                parsed = None
+            if field == "semifinals":
+                parsed = _parse_semifinal_constraints(value)
+            else:
+                parsed = int(value)
+                if parsed == 0:
+                    parsed = None
         except ValueError:
             return render_template(
                 "error.html",
@@ -873,35 +877,51 @@ def set_pots_post(year: int):
             ), 400
         updates.setdefault(country_id, {})[field] = parsed
 
-    # Clear all pots/genres first so countries no longer in the form
-    # (e.g. removed from this year) are reset.
-    cursor.execute("UPDATE country SET pot = NULL, genre = NULL")
+    cursor.execute(
+        "UPDATE country SET pot = NULL, genre = NULL, semifinal_constraints = NULL"
+    )
 
     for country_id, fields in updates.items():
         cursor.execute(
             """
             UPDATE country
-            SET pot = %s, genre = %s
+            SET pot = %s, genre = %s, semifinal_constraints = %s
             WHERE id = %s
         """,
-            (fields.get("pot"), fields.get("genre"), country_id),
+            (
+                fields.get("pot"),
+                fields.get("genre"),
+                fields.get("semifinals"),
+                country_id,
+            ),
         )
 
     db.commit()
     return redirect(url_for("admin.set_pots", year=year))
 
 
+def _parse_semifinal_constraints(value) -> list[int] | None:
+    if value is None or value == "":
+        return None
+    values = value if isinstance(value, list) else str(value).split(",")
+    try:
+        parsed = [int(str(item).strip()) for item in values if str(item).strip()]
+    except ValueError as err:
+        raise ValueError("expected comma-delimited non-zero numbers") from err
+    if any(number == 0 for number in parsed):
+        raise ValueError("semifinal numbers cannot be zero")
+    return list(dict.fromkeys(parsed)) or None
+
+
 @bp.post("/manage/<int:year>/setpots/json")
 def set_pots_json(year: int):
-    """Bulk-update pots/genres from a single JSON payload of the form
-    ``{"US": {"pot": 1, "genre": 1}, "RU": {"pot": 2, "genre": 3}, ...}``.
+    """Bulk-update draw settings from a JSON object keyed by country.
 
     Keys may be either a country code (the ``id``) or a full country
     name; both are matched case-insensitively.
 
-    Same conventions as the form-encoded endpoint: a value of 0 (or a
-    missing key) maps to NULL, and any country not listed in the payload
-    has its pot and genre cleared.
+    A pot or genre value of 0 maps to NULL. Countries not listed have all
+    three settings cleared.
     """
     # The payload may arrive as raw JSON in the request body or as a
     # ``payload`` form field (used by the textarea on the page).
@@ -952,7 +972,7 @@ def set_pots_json(year: int):
 
     # Validate everything before touching the database so a bad payload
     # doesn't half-apply.
-    parsed: dict[str, tuple[int | None, int | None]] = {}
+    parsed: dict[str, tuple[int | None, int | None, list[int] | None]] = {}
     for key, fields in raw_payload.items():
         # Ignore an empty-string key (e.g. a trailing blank entry).
         if not key.strip():
@@ -970,15 +990,20 @@ def set_pots_json(year: int):
         try:
             pot = _coerce("pot", key, fields.get("pot"))
             genre = _coerce("genre", key, fields.get("genre"))
+            semifinals = _parse_semifinal_constraints(fields.get("semifinals"))
         except ValueError as e:
             return render_template("error.html", error=str(e)), 400
-        parsed[country_id] = (pot, genre)
+        parsed[country_id] = (pot, genre, semifinals)
 
-    cursor.execute("UPDATE country SET pot = NULL, genre = NULL")
-    for country_id, (pot, genre) in parsed.items():
+    cursor.execute(
+        "UPDATE country SET pot = NULL, genre = NULL, semifinal_constraints = NULL"
+    )
+    for country_id, (pot, genre, semifinals) in parsed.items():
         cursor.execute(
-            "UPDATE country SET pot = %s, genre = %s WHERE id = %s",
-            (pot, genre, country_id),
+            """UPDATE country
+               SET pot = %s, genre = %s, semifinal_constraints = %s
+               WHERE id = %s""",
+            (pot, genre, semifinals, country_id),
         )
 
     db.commit()

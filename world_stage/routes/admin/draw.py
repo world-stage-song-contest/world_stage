@@ -32,6 +32,7 @@ def _render_draw(year_id: int, label: str, manage_url: str):
         SELECT song.id AS song_id, song.title, song.entry_number,
                song.submitter_id AS submitter,
                country.id AS cc, country.name, country.pot, country.genre,
+               country.semifinal_constraints,
                sl.language_id AS language
         FROM current_song AS song
         JOIN country ON song.country_id = country.id
@@ -175,6 +176,42 @@ def _validate_regular_draw_pots(cursor, year: int, data: dict[str, list[int]]) -
     return None
 
 
+def _validate_semifinal_constraints(cursor, year: int, data: dict[str, list[int]]) -> str | None:
+    cursor.execute(
+        """
+        SELECT short_name, show_number
+        FROM show
+        WHERE year_id = %s AND show_type = 'sf' AND national_final_id IS NULL
+        """,
+        (year,),
+    )
+    show_numbers = {row["short_name"]: row["show_number"] for row in cursor.fetchall()}
+
+    for show, song_ids in data.items():
+        if show not in show_numbers:
+            continue
+        cursor.execute(
+            """
+            SELECT song.id AS song_id, country.semifinal_constraints
+            FROM current_song AS song
+            JOIN country ON country.id = song.country_id
+            WHERE song.year_id = %s AND song.id = ANY(%s)
+            """,
+            (year, song_ids),
+        )
+        constraints_by_song = {
+            row["song_id"]: row["semifinal_constraints"] or [] for row in cursor.fetchall()
+        }
+        show_number = show_numbers[show]
+        for song_id, constraints in constraints_by_song.items():
+            included = {number for number in constraints if number > 0}
+            excluded = {-number for number in constraints if number < 0}
+            if (included and show_number not in included) or show_number in excluded:
+                return f"Song {song_id} is not permitted in semifinal {show_number}"
+
+    return None
+
+
 @bp.post("/manage/<int:year>/draw")
 def draw_post(year: int):
     # Each value is a list of song IDs in running order.
@@ -186,6 +223,7 @@ def draw_post(year: int):
     cursor = db.cursor()
 
     validation_error = _validate_regular_draw_pots(cursor, year, data)
+    validation_error = validation_error or _validate_semifinal_constraints(cursor, year, data)
     if validation_error:
         return {"error": validation_error}, 400
 

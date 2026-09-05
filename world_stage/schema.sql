@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS country (
     is_participating boolean,
     pot smallint,
     genre smallint,
+    semifinal_constraints smallint[],
     available_from smallint DEFAULT 0,
     available_until smallint DEFAULT 9999,
     priority integer,

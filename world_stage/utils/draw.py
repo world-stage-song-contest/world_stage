@@ -27,10 +27,17 @@ class DrawEntry:
     def tag(self, key: str) -> Any:
         return self.data.get(key)
 
+    def permits(self, show_number: int) -> bool:
+        constraints = self.data.get("semifinal_constraints") or []
+        included = {number for number in constraints if number > 0}
+        excluded = {-number for number in constraints if number < 0}
+        return (not included or show_number in included) and show_number not in excluded
+
 
 @dataclass
 class ShowState:
     name: str
+    number: int
     limit: int
     entries: list[DrawEntry] = field(default_factory=list)
     submitters: set[int] = field(default_factory=set)
@@ -54,6 +61,8 @@ def _can_place_regular(
     check_pot: bool = True,
 ):
     if len(show.entries) >= show.limit:
+        return False
+    if not entry.permits(show.number):
         return False
     if entry.submitter in show.submitters:
         return False
@@ -243,12 +252,9 @@ def _assign_single_pot(entries: list[DrawEntry], shows: list[ShowState], rng: ra
     for entry in entries:
         by_country[entry.code].append(entry)
 
-    dup_groups = [group for group in by_country.values() if len(group) > 1]
-    singletons = [group[0] for group in by_country.values() if len(group) == 1]
-    dup_groups.sort(key=len, reverse=True)
-    for group in dup_groups:
-        rng.shuffle(group)
-    rng.shuffle(singletons)
+    ordered_entries = entries[:]
+    rng.shuffle(ordered_entries)
+    ordered_entries.sort(key=lambda entry: len(by_country[entry.code]), reverse=True)
 
     def score(show: ShowState, entry: DrawEntry):
         balance_count = sum(
@@ -261,26 +267,31 @@ def _assign_single_pot(entries: list[DrawEntry], shows: list[ShowState], rng: ra
             + rng.random()
         )
 
-    def pick(entry: DrawEntry):
-        candidates = [
+    def candidates(entry: DrawEntry):
+        result = [
             show
             for show in shows
-            if len(show.entries) < show.limit and entry.submitter not in show.submitters
+            if len(show.entries) < show.limit
+            and entry.submitter not in show.submitters
+            and entry.permits(show.number)
         ]
-        if not candidates:
-            raise ValueError(
-                f"Cannot place entry from {entry.code}/{entry.submitter}: every show is full "
-                "or already has this submitter"
-            )
-        candidates.sort(key=lambda show: score(show, entry))
-        return candidates[0]
+        result.sort(key=lambda show: score(show, entry))
+        return result
 
-    for group in dup_groups:
-        for entry in group:
-            _place(pick(entry), entry, track_pot=False)
+    def visit(unplaced: list[DrawEntry]) -> bool:
+        if not unplaced:
+            return True
+        options = [(entry, candidates(entry)) for entry in unplaced]
+        entry, available = min(options, key=lambda item: len(item[1]))
+        for show in available:
+            _place(show, entry, track_pot=False)
+            if visit([candidate for candidate in unplaced if candidate is not entry]):
+                return True
+            _remove(show, entry, track_pot=False)
+        return False
 
-    for entry in singletons:
-        _place(pick(entry), entry, track_pot=False)
+    if not visit(ordered_entries):
+        raise ValueError("Cannot allocate entries without semifinal conflicts")
 
 
 def _conflicts(a: DrawEntry | None, b: DrawEntry | None):
@@ -360,8 +371,10 @@ def draw_semifinals(
 ) -> dict[str, list[dict]]:
     rng = random.Random(seed)
     shows = [
-        ShowState(name=name, limit=limit)
-        for name, limit in zip(show_names, show_limits, strict=True)
+        ShowState(name=name, number=number, limit=limit)
+        for number, (name, limit) in enumerate(
+            zip(show_names, show_limits, strict=True), start=1
+        )
     ]
     draw_pots = [
         [DrawEntry(data=dict(entry), pot=pot) for entry in entries] for pot, entries in pots.items()

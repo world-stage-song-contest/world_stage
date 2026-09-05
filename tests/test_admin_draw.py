@@ -21,6 +21,9 @@ def draw_setup(db, client):
         """)
         cur.execute("UPDATE country SET pot = 1 WHERE id IN ('US', 'ES')")
         cur.execute("UPDATE country SET pot = 2 WHERE id = 'FR'")
+        cur.execute(
+            "UPDATE country SET semifinal_constraints = NULL WHERE id IN ('US', 'ES', 'FR', 'DE')"
+        )
         cur.execute("""
             INSERT INTO show (year_id, show_type, show_number, status)
             VALUES (2025, 'sf', 1, 'draw'),
@@ -70,7 +73,11 @@ def draw_setup(db, client):
             "DELETE FROM show WHERE year_id = 2025 AND short_name IN ('sf1', 'sf2', 'sc', 'f')"
         )
         cur.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
-        cur.execute("UPDATE country SET pot = NULL WHERE id IN ('US', 'ES', 'FR', 'DE')")
+        cur.execute(
+            """UPDATE country
+               SET pot = NULL, semifinal_constraints = NULL
+               WHERE id IN ('US', 'ES', 'FR', 'DE')"""
+        )
     db.commit()
 
 
@@ -78,15 +85,31 @@ def test_draw_accepts_exactly_the_assignments_that_separate_each_pot(client, db,
     countries = ["US", "ES", "FR", "DE"]
     pots = {"US": 1, "ES": 1, "FR": 2, "DE": 2}
 
-    @given(order=st.permutations(countries))
-    def property_test(order):
+    @given(
+        order=st.permutations(countries),
+        constraint=st.sampled_from([1, 2, -1, -2]),
+    )
+    def property_test(order, constraint):
         db.execute("DELETE FROM song_show")
+        db.execute(
+            "UPDATE country SET semifinal_constraints = %s WHERE id = 'US'",
+            ([constraint],),
+        )
         db.commit()
         assignments = {"sf1": order[:2], "sf2": order[2:]}
-        valid = all(
+        separates_pots = all(
             len({pots[country] for country in assigned}) == len(assigned)
             for assigned in assignments.values()
         )
+        us_semifinal = next(
+            number
+            for number, assigned in enumerate(assignments.values(), start=1)
+            if "US" in assigned
+        )
+        obeys_constraint = (
+            us_semifinal == constraint if constraint > 0 else us_semifinal != -constraint
+        )
+        valid = separates_pots and obeys_constraint
 
         response = client.post(
             "/admin/manage/2025/draw",
