@@ -466,3 +466,64 @@ def test_creating_country_national_final_keeps_existing_slot_song(
         db.commit()
 
     property_test()
+
+
+def test_bulk_deletion_withdraws_only_placeholders_in_selected_year(client, db, login):
+    from world_stage.utils.song_revisions import latest_song_data, set_song_status
+
+    @given(
+        entries=st.lists(
+            st.tuples(st.sampled_from([2024, 2025]), st.booleans()), max_size=8
+        ),
+        target_year=st.sampled_from([2024, 2025]),
+        actor=st.sampled_from([1, 2]),
+    )
+    def property_test(entries, target_year, actor):
+        login(actor)
+        songs = []
+        try:
+            for number, (year, placeholder) in enumerate(entries, 1):
+                song_id = db.execute(
+                    """INSERT INTO song (country_id, year_id, entry_number)
+                       VALUES ('US', %s, %s) RETURNING id""",
+                    (year, number),
+                ).fetchone()["id"]
+                db.execute(
+                    """INSERT INTO song_data (song_id, submitter_id, title, artist_credit_set_id)
+                       VALUES (%s, 2, 'Song', test_artist_credit('Artist'))""",
+                    (song_id,),
+                )
+                set_song_status(db.cursor(), song_id, changed_by=2, is_placeholder=placeholder)
+                songs.append((song_id, year, placeholder))
+            db.commit()
+
+            for _ in range(2):
+                response = client.post(
+                    f"/admin/manage/{target_year}", json={"action": "delete_placeholders"}
+                )
+                assert response.status_code == (200 if actor == 1 else 302)
+                remaining = {
+                    row["id"] for row in db.execute("SELECT id FROM current_song").fetchall()
+                }
+                expected = {
+                    song_id for song_id, year, placeholder in songs
+                    if not (actor == 1 and year == target_year and placeholder)
+                }
+                assert remaining == expected
+                for song_id, _, _ in songs:
+                    latest = latest_song_data(db.cursor(), song_id)
+                    if song_id not in expected:
+                        assert latest["title"] is None
+                        assert latest["changed_by"] == actor
+                    assert db.execute(
+                        "SELECT 1 FROM song_data WHERE song_id = %s AND title = 'Song'",
+                        (song_id,),
+                    ).fetchone()
+        finally:
+            db.rollback()
+            db.execute("DELETE FROM song_status")
+            db.execute("DELETE FROM song_data")
+            db.execute("DELETE FROM song")
+            db.commit()
+
+    property_test()

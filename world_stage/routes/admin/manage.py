@@ -14,13 +14,16 @@ from ...discord import (
     send_running_order_notification,
     send_running_order_notification_best_effort,
 )
+from ...messaging import create_spot_watch_notifications, notify_new_message
 from ...utils import (
     get_lineup_issues,
     get_unassigned_lineup_issue,
+    get_user_id_from_session,
     get_years,
     parse_utc_datetime,
     render_template,
 )
+from ...utils.song_revisions import withdraw_song
 from .common import _resolve_special, bp
 
 NF_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -466,7 +469,24 @@ def manage_post(year: int):
     if not action:
         return render_template("error.html", error="No action specified"), 400
 
+    notifications = []
     match action:
+        case "delete_placeholders":
+            user = get_user_id_from_session(request.cookies.get("session"))
+            if user is None:
+                return {"error": "Authentication required"}, 401
+            cursor.execute("SELECT id FROM year WHERE id = %s", (year,))
+            if not cursor.fetchone():
+                return {"error": f"Year {year} not found"}, 404
+            cursor.execute(
+                "SELECT id FROM current_song WHERE year_id = %s AND is_placeholder",
+                (year,),
+            )
+            for song in cursor.fetchall():
+                withdraw_song(cursor, song["id"], changed_by=user[0])
+                notifications.extend(
+                    create_spot_watch_notifications(cursor, song["id"], "deleted")
+                )
         case "change_year_status":
             status = body.get("year_status")
             if status not in ("open", "closed", "ongoing"):
@@ -579,6 +599,8 @@ def manage_post(year: int):
         case _:
             return render_template("error.html", error=f"Unknown action '{action}'"), 400
     db.commit()
+    for notification in notifications:
+        notify_new_message(*notification)
     if is_form:
         return redirect(url_for("admin.manage", year=year))
     return {"status": "success"}, 200

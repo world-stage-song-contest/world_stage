@@ -220,6 +220,23 @@ async function changeScoreboardStyle() {
     setError(data.error);
 }
 
+async function deletePlaceholders(button) {
+    if (!confirm('Are you sure you want to delete all placeholders from this year?')) return;
+    button.disabled = true;
+    try {
+        const data = await fetchHelper(window.location.href, { action: 'delete_placeholders' });
+        if (data.error) {
+            setError(data.error);
+        } else {
+            location.reload();
+        }
+    } catch (error) {
+        setError(`Failed to delete placeholders: ${error.message}`);
+    } finally {
+        button.disabled = false;
+    }
+}
+
 const actionsWhitelist = ['approve', 'unapprove', 'annul_password'];
 async function modifyUser(userId, action, extraData) {
     if (!actionsWhitelist.includes(action)) {
