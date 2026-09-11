@@ -7,10 +7,12 @@ from flask import Blueprint, request, url_for
 
 from ..db import get_db
 from ..utils import (
+    DoubleEntryStats,
     Song,
     UserPermissions,
     get_closed_years,
     get_countries,
+    get_double_entry_stats,
     get_show_results_for_songs,
     get_user_submission_history,
     render_template,
@@ -220,6 +222,7 @@ def _user_submission_stats(
     *,
     special: bool = False,
     ten_year_window: set[int] | None = None,
+    double_entry: DoubleEntryStats | None = None,
 ) -> dict:
     stats = _country_stats(
         songs,
@@ -228,6 +231,7 @@ def _user_submission_stats(
         ten_year_window=ten_year_window,
     )
     stats["most_frequent_countries"] = _most_frequent_submission_countries(songs)
+    stats["double_entry"] = double_entry
     return stats
 
 
@@ -1185,6 +1189,7 @@ def submissions(username: str):
             regular_songs,
             results,
             ten_year_window=ten_year_window,
+            double_entry=get_double_entry_stats(user_id),
         ),
         special_stats=(
             _user_submission_stats(special_songs, results, special=True)

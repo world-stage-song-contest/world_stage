@@ -39,6 +39,7 @@ from .markdown import (
     make_entity_plugin,
     render_lyrics,
 )
+from .participations import DoubleEntryStats, get_double_entry_stats
 from .responses import (
     ErrorID,
     create_cookie,
@@ -111,6 +112,7 @@ __all__ = (
     "BallotEntryRule",
     "ChronologicalVoteSequencer",
     "Country",
+    "DoubleEntryStats",
     "ErrorID",
     "Language",
     "RandomVoteSequencer",
@@ -140,6 +142,7 @@ __all__ = (
     "get_country_name",
     "get_country_history",
     "get_country_national_final_history",
+    "get_double_entry_stats",
     "get_entry_details",
     "get_language",
     "get_language_history",

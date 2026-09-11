@@ -41,6 +41,46 @@ def _conversation(
     return conversation_id
 
 
+def test_banners_clear_only_when_the_recipient_dismisses_or_successfully_replies(client, db, login):
+    conversation_id = _conversation(db, owner=1, participants=[2, 3], admin_accessible=True)
+    db.execute("UPDATE conversation SET created_by_admin = true WHERE id = %s", (conversation_id,))
+    db.commit()
+
+    @settings(max_examples=40, deadline=None)
+    @given(
+        recipient=st.sampled_from([1, 2, 3]),
+        actor=st.sampled_from([None, 1, 2, 3]),
+        action=st.sampled_from(["dismiss-banner", "reply", "invalid-reply"]),
+    )
+    def property_test(recipient, actor, action):
+        db.execute(
+            """UPDATE conversation
+               SET metadata = jsonb_build_object('banner', true, 'submitter_id', %s::bigint)
+               WHERE id = %s""",
+            (recipient, conversation_id),
+        )
+        db.commit()
+        client.delete_cookie("session")
+        if actor is not None:
+            login(actor)
+        endpoint = "reply" if action == "invalid-reply" else action
+        response = client.post(
+            f"/messages/{conversation_id}/{endpoint}",
+            data={"body": "" if action == "invalid-reply" else "Reply"},
+        )
+        assert response.status_code == (
+            400 if action == "invalid-reply" and actor is not None else 302
+        )
+        login(recipient)
+        home = client.get("/", headers={"Accept": "application/json"}).get_json()
+        visible = {conversation["id"] for conversation in home["banner_conversations"]}
+        cleared = actor == recipient and action != "invalid-reply"
+        assert (conversation_id not in visible) == cleared
+        assert client.get(f"/messages/{conversation_id}").status_code == 200
+
+    property_test()
+
+
 def test_message_pages_require_authentication(client):
     @given(
         path=st.sampled_from(["/messages", "/messages/new", "/messages/search", "/messages/1/edit"])

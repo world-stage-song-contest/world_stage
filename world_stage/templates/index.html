@@ -4,6 +4,9 @@
 <div class="banner long-text verification-message-banner">
     <strong>{{ conversation.subject }}</strong>
     <p>A moderator left a message about your song verification. <a href="{{ url_for('messages.thread', conversation_id=conversation.id) }}">View message</a></p>
+    <form method="post" action="{{ url_for('messages.dismiss_banner', conversation_id=conversation.id) }}">
+        <button type="submit">Dismiss</button>
+    </form>
 </div>
 {% endfor %}
 <div class="cards-container">

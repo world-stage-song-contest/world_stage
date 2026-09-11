@@ -896,13 +896,32 @@ def test_verifications_include_only_the_selected_national_final_candidate(
     login(1)
 
     @settings(max_examples=8, deadline=None)
-    @given(candidate_count=st.integers(1, 5), selected_index=st.integers(0, 20))
-    def property_test(candidate_count, selected_index):
+    @given(
+        candidate_count=st.integers(1, 5),
+        selected_index=st.one_of(st.none(), st.integers(0, 20)),
+        linked=st.booleans(),
+        revised=st.booleans(),
+    )
+    def property_test(candidate_count, selected_index, linked, revised):
         candidates = [
             _add_candidate(db, national_final["id"], submitter=3)
             for _ in range(candidate_count)
         ]
-        selected_id = candidates[selected_index % candidate_count]
+        selected_id = (
+            candidates[selected_index % candidate_count] if selected_index is not None else None
+        )
+        if not linked:
+            db.execute(
+                "DELETE FROM national_final_song WHERE song_id = ANY(%s)",
+                (candidates,),
+            )
+        if revised:
+            for song_id in candidates:
+                db.execute(
+                    """INSERT INTO song_data (song_id, title, artist_credit_set_id)
+                       VALUES (%s, 'Replacement', test_artist_credit('Replacement Artist'))""",
+                    (song_id,),
+                )
         db.execute(
             "UPDATE song SET main_participant = true WHERE id = %s",
             (selected_id,),
@@ -915,11 +934,13 @@ def test_verifications_include_only_the_selected_national_final_candidate(
             )
             assert response.status_code == 200
             visible_candidate_ids = {
-                group["song"]["song_id"]
+                entry["song_id"]
                 for group in response.get_json()["verification_groups"]
-                if group["song"] and group["song"]["song_id"] in candidates
+                for entry in ([group["song"]] if group["song"] else [])
+                + group["historical_entries"]
+                if entry["song_id"] in candidates
             }
-            assert visible_candidate_ids == {selected_id}
+            assert visible_candidate_ids == ({selected_id} if selected_id is not None else set())
         finally:
             _remove_candidates(db, candidates)
 

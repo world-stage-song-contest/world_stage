@@ -19,6 +19,17 @@
 {% endblock %}
 {% block onload %}onLoad(){% endblock %}
 {% block content %}
+<div class="banner compact">
+    <p>
+        <strong>Double entries since 1995:</strong>
+        {% if double_entry.percentage is not none %}
+        {{ "%.1f%%" | format(double_entry.percentage|float) }}
+        {% else %}
+        &mdash;
+        {% endif %}
+        <br><small>For each year since 1995, two entries add 1 point and one entry adds no points. A year with no entries subtracts up to 1 point, depending on the share of that year's shows you voted in. The total is divided by the number of years in which you entered or voted.</small>
+    </p>
+</div>
 <div id="rules" class="banner compact">
 <p>Please remember that it's <b>your</b> responsibility to verify that:</p>
 <ul>

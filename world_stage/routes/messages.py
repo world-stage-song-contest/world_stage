@@ -8,7 +8,12 @@ import psycopg
 from flask import Blueprint, current_app, redirect, request, url_for
 
 from ..db import get_db
-from ..messaging import mark_conversation_read, message_preview, notify_new_message
+from ..messaging import (
+    dismiss_conversation_banner,
+    mark_conversation_read,
+    message_preview,
+    notify_new_message,
+)
 from ..user_settings import get_user_settings, setting
 from ..utils import UserPermissions, get_markdown_parser, render_template, with_auth
 
@@ -288,6 +293,23 @@ def _render_edit(
         ),
         status,
     )
+
+
+@bp.post("/<int:conversation_id>/dismiss-banner")
+@with_auth
+def dismiss_banner(
+    conversation_id: int,
+    user: tuple[int, str] | None,
+    permissions: UserPermissions,
+):
+    auth_error = _login_required(user)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    db = get_db()
+    dismiss_conversation_banner(db.cursor(), conversation_id, user[0])
+    db.commit()
+    return redirect(url_for("main.home"))
 
 
 @bp.get("")
@@ -880,6 +902,7 @@ def reply(
         inserted = cursor.fetchone()
         assert inserted is not None
         message_id = inserted["id"]
+        dismiss_conversation_banner(cursor, conversation_id, user_id)
         db.commit()
     except psycopg.Error:
         db.rollback()

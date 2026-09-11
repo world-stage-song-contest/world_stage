@@ -62,6 +62,18 @@
                     <th>Participations</th>
                     <td>{{ stats.participations }}</td>
                 </tr>
+                {% if stats.double_entry %}
+                <tr>
+                    <th>Double entries since 1995<sup>*</sup></th>
+                    <td>
+                        {% if stats.double_entry.percentage is not none %}
+                        {{ "%.1f%%" | format(stats.double_entry.percentage|float) }}
+                        {% else %}
+                        &mdash;
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
                 <tr>
                     <th>{{ first_label }}</th>
                     <td>{{ stats.first or '&mdash;'|safe }}</td>
@@ -336,5 +348,7 @@
     </tbody>
 </table>
 {% endif %}
+
+<p><small><sup>*</sup> For each year since 1995, two entries add 1 point and one entry adds no points. A year with no entries subtracts up to 1 point, depending on the share of that year's shows the user voted in. The total is divided by the number of years in which the user entered or voted.</small></p>
 
 {% endblock %}

@@ -7,6 +7,7 @@ from ..messaging import has_unread_messages
 from ..utils import (
     UserPermissions,
     format_seconds,
+    get_double_entry_stats,
     get_user_id_from_session,
     get_user_permissions,
     get_years_grouped,
@@ -975,6 +976,7 @@ def submit(user: tuple[int, str], permissions: UserPermissions):
         onLoad=True,
         users=get_users(),
         national_final=national_final,
+        double_entry=get_double_entry_stats(user[0]),
     )
 
 

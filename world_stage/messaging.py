@@ -354,6 +354,22 @@ def banner_conversations(user_id: int) -> list[dict]:
     return cursor.fetchall()
 
 
+def dismiss_conversation_banner(cursor, conversation_id: int, user_id: int) -> None:
+    cursor.execute(
+        """
+        UPDATE conversation
+        SET metadata = metadata - 'banner'
+        WHERE id = %s
+          AND metadata @> jsonb_build_object('submitter_id', %s::bigint)
+          AND EXISTS (
+              SELECT 1 FROM conversation_participant
+              WHERE conversation_id = conversation.id AND account_id = %s
+          )
+        """,
+        (conversation_id, user_id, user_id),
+    )
+
+
 def mark_conversation_read(
     conversation_id: int,
     user_id: int,
