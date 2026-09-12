@@ -483,6 +483,10 @@ def _manage_nf(year_id: int, nf_short_name: str, user, permissions: UserPermissi
                     """,
                     (year_id, owner_country_id),
                 )
+                cursor.execute(
+                    "SELECT normalize_national_final_entry_numbers(%s, %s)",
+                    (year_id, owner_country_id),
+                )
             db.commit()
             return short_name
         except (psycopg.Error, ValueError) as exc:
@@ -705,6 +709,10 @@ def _manage_nf(year_id: int, nf_short_name: str, user, permissions: UserPermissi
                 (year_id, song["country_id"], song_id),
             )
         cursor.execute("UPDATE song SET main_participant = %s WHERE id = %s", (enabled, song_id))
+        cursor.execute(
+            "SELECT normalize_national_final_entry_numbers(%s, %s)",
+            (year_id, song["country_id"]),
+        )
     else:
         return render_template("error.html", error="Unknown action"), 400
 

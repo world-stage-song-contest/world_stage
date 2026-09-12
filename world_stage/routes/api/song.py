@@ -1307,6 +1307,8 @@ def create_song(auth: tuple):
         (year, cc),
     )
     entry_number = fetchone(cursor)["next"]
+    if national_final is not None and year >= 0:
+        entry_number = max(2, entry_number)
 
     # ── Submission limits (non-admins) ───────────────────────────
     if national_final is None and not permissions.can_edit:

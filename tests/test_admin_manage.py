@@ -453,6 +453,9 @@ def test_creating_country_national_final_keeps_existing_slot_song(
                 "main_participant": False,
                 "national_final_id": national_final_id,
             }
+            assert db.execute(
+                "SELECT entry_number FROM song WHERE id = %s", (song_id,)
+            ).fetchone()["entry_number"] == 2
 
         db.execute(
             "DELETE FROM national_final_song WHERE national_final_id = %s",

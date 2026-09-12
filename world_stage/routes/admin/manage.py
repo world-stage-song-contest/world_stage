@@ -202,6 +202,10 @@ def _create_national_final_post(year: int):
                 """,
                 (year, owner_country_id),
             )
+            cursor.execute(
+                "SELECT normalize_national_final_entry_numbers(%s, %s)",
+                (year, owner_country_id),
+            )
         db.commit()
     except (psycopg.Error, ValueError) as exc:
         db.rollback()
@@ -861,6 +865,7 @@ def set_pots(year: int):
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id
         WHERE year_id = %s AND year.host_id IS DISTINCT FROM country.id
+          AND song.main_participant
         ORDER BY pot, name
     """,
         (year,),

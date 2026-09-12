@@ -4,7 +4,7 @@ from flask import redirect, request, url_for
 
 from ...db import get_db
 from ...messaging import notify_new_message
-from ...utils import get_markdown_parser, render_template, require_user
+from ...utils import get_markdown_parser, get_user_id_from_session, render_template, require_user
 from ...utils.song_revisions import set_song_status
 from .common import _resolve_special, bp
 
@@ -184,7 +184,7 @@ def _render_verifications(year: dict):
     cursor.execute(
         """
         SELECT comment.id, comment.song_data_id,
-               comment.body, comment.created_at,
+               comment.body, comment.created_at, comment.author_id,
                account.username AS author_username
         FROM song_verification_comment AS comment
         JOIN song_data AS data ON data.id = comment.song_data_id
@@ -195,7 +195,9 @@ def _render_verifications(year: dict):
         (year["id"],),
     )
     markdown = get_markdown_parser(autolink=True)
+    user = get_user_id_from_session(request.cookies.get("session"))
     for comment in cursor.fetchall():
+        comment["can_edit"] = user is not None and comment["author_id"] == user[0]
         comment["rendered_body"] = markdown.renderInline(comment["body"])
         comments_by_data[comment["song_data_id"]].append(comment)
 
@@ -322,6 +324,42 @@ def _add_comment(year_id: int, song_id: int, user: tuple[int, str], redirect_url
 
     db.commit()
     return redirect(f"{redirect_url}#song-{song_id}")
+
+
+def _change_comment(year_id: int, comment_id: int, user: tuple[int, str], redirect_url: str):
+    action = request.form.get("action")
+    if action not in {"edit", "delete"}:
+        return render_template("error.html", error="Invalid comment action"), 400
+    body = request.form.get("comment", "").strip()
+    if action == "edit" and not 1 <= len(body) <= 2000:
+        return render_template(
+            "error.html", error="Comment must contain between 1 and 2000 characters"
+        ), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        """
+        SELECT data.song_id
+        FROM song_verification_comment AS comment
+        JOIN song_data AS data ON data.id = comment.song_data_id
+        WHERE comment.id = %s AND comment.author_id = %s AND data.year_id = %s
+        FOR UPDATE OF comment
+        """,
+        (comment_id, user[0], year_id),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return render_template("error.html", error="Comment not found"), 404
+    if action == "delete":
+        cursor.execute("DELETE FROM song_verification_comment WHERE id = %s", (comment_id,))
+    else:
+        cursor.execute(
+            "UPDATE song_verification_comment SET body = %s WHERE id = %s", (body, comment_id)
+        )
+    db.commit()
+    anchor = f"#song-{row['song_id']}" if row["song_id"] is not None else ""
+    return redirect(f"{redirect_url}{anchor}")
 
 
 def _set_verification(
@@ -484,6 +522,24 @@ def add_verification_comment(year: int, song_id: int, user: tuple[int, str]):
         song_id,
         user,
         url_for("admin.verifications", year=year),
+    )
+
+
+@bp.post("/manage/<int:year>/verifications/comments/<int:comment_id>")
+@require_user()
+def change_verification_comment(year: int, comment_id: int, user: tuple[int, str]):
+    return _change_comment(year, comment_id, user, url_for("admin.verifications", year=year))
+
+
+@bp.post("/manage/special/<short_name>/verifications/comments/<int:comment_id>")
+@require_user()
+def change_verification_comment_special(short_name: str, comment_id: int, user: tuple[int, str]):
+    year = _resolve_special(short_name)
+    if not year:
+        return render_template("error.html", error=f"Special '{short_name}' not found"), 404
+    return _change_comment(
+        year["id"], comment_id, user,
+        url_for("admin.verifications_special", short_name=short_name),
     )
 
 

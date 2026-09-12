@@ -484,6 +484,12 @@ def test_candidate_creation_respects_event_country_and_main_entry_reservation(
                     }
                     for song_id in created
                 ]
+                assert all(
+                    row["entry_number"] >= 2
+                    for row in db.execute(
+                        "SELECT entry_number FROM song WHERE id = ANY(%s)", (created,)
+                    ).fetchall()
+                )
         finally:
             if created:
                 _remove_candidates(db, created)
@@ -1169,6 +1175,61 @@ def test_aggregate_views_ignore_nfs_while_show_histories_keep_them_distinct(
             _remove_shows(db, [main_show_id])
             db.execute("UPDATE year SET status = 'open' WHERE id = 2025")
             db.commit()
+
+    property_test()
+
+
+def test_main_selection_reserves_number_one_for_the_selected_candidate(
+    client, db, national_final, login
+):
+    login(2)
+
+    @settings(max_examples=12, deadline=None)
+    @given(
+        candidate_count=st.integers(2, 5),
+        initial_selection=st.one_of(st.none(), st.integers(0, 20)),
+        actions=st.lists(st.tuples(st.integers(0, 20), st.booleans()), min_size=1, max_size=8),
+    )
+    def property_test(candidate_count, initial_selection, actions):
+        candidates = [_add_candidate(db, national_final["id"]) for _ in range(candidate_count)]
+        selected_id = (
+            None if initial_selection is None else candidates[initial_selection % candidate_count]
+        )
+        try:
+            db.execute("UPDATE song SET main_participant = true WHERE id = %s", (selected_id,))
+            db.execute("SELECT normalize_national_final_entry_numbers(2025, 'ES')")
+            db.commit()
+
+            def check_numbers():
+                rows = db.execute(
+                    "SELECT id, entry_number FROM song WHERE id = ANY(%s)", (candidates,)
+                ).fetchall()
+                assert len({row["entry_number"] for row in rows}) == candidate_count
+                for row in rows:
+                    if row["id"] == selected_id:
+                        assert row["entry_number"] == 1
+                    else:
+                        assert row["entry_number"] >= 2
+
+            check_numbers()
+            for index, enabled in actions:
+                song_id = candidates[index % candidate_count]
+                response = client.post(
+                    "/year/2025/nfs/test-es/manage",
+                    data={
+                        "action": "set_main_participant",
+                        "song_id": song_id,
+                        "enabled": str(enabled).lower(),
+                    },
+                )
+                assert response.status_code == 302
+                if enabled:
+                    selected_id = song_id
+                elif selected_id == song_id:
+                    selected_id = None
+                check_numbers()
+        finally:
+            _remove_candidates(db, candidates)
 
     property_test()
 

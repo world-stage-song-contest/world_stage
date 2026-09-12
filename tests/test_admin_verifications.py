@@ -89,6 +89,86 @@ def test_verification_comments_append_in_order_with_the_authenticated_author(cli
     property_test()
 
 
+def test_comment_changes_require_the_author_and_preserve_other_comments(client, db, login):
+    db.execute("UPDATE account SET role = 'editor' WHERE id = 3")
+    db.execute(
+        """INSERT INTO year (id, status, special_name, special_short_name)
+           VALUES (-812, 'open', 'Comment test', 'comment-test') ON CONFLICT DO NOTHING"""
+    )
+    db.commit()
+    songs = {year: _add_song(db, year=year) for year in (2025, -812)}
+    text = st.text(alphabet=string.ascii_letters + " \n", min_size=1, max_size=80)
+
+    @settings(max_examples=50, deadline=None)
+    @given(
+        year=st.sampled_from([2025, -812]),
+        author=st.sampled_from([1, 3]),
+        actor=st.sampled_from([None, 1, 2, 3]),
+        action=st.sampled_from(["edit", "delete"]),
+        body=st.one_of(text, st.sampled_from(["", " \n ", "x" * 2001])),
+        wrong_year=st.booleans(),
+        historical=st.booleans(),
+    )
+    def property_test(year, author, actor, action, body, wrong_year, historical):
+        song_id = songs[year]
+        data_id = _current_data_id(db, song_id)
+        if historical:
+            with db.cursor() as cursor:
+                create_song_revision(
+                    cursor, song_id, {"title": f"Updated title {data_id}"}, changed_by=1
+                )
+        comment_ids = [
+            db.execute(
+                """INSERT INTO song_verification_comment (song_data_id, author_id, body)
+                   VALUES (%s, %s, %s) RETURNING id""",
+                (data_id, author, original),
+            ).fetchone()["id"]
+            for original in ("Original comment", "Other comment")
+        ]
+        db.commit()
+        before = db.execute(
+            "SELECT * FROM song_verification_comment WHERE id = ANY(%s) ORDER BY id",
+            (comment_ids,),
+        ).fetchall()
+        client.delete_cookie("session")
+        if actor is not None:
+            login(actor)
+        base = "/admin/manage/2025" if year == 2025 else "/admin/manage/special/comment-test"
+        if wrong_year:
+            base = "/admin/manage/2024"
+        try:
+            response = client.post(
+                f"{base}/verifications/comments/{comment_ids[0]}",
+                data={"action": action, "comment": body},
+            )
+            valid_body = action == "delete" or 1 <= len(body.strip()) <= 2000
+            allowed = actor == author and not wrong_year and valid_body
+            if actor in {1, 3}:
+                assert response.status_code == (
+                    400 if not valid_body else 302 if allowed else 404
+                )
+            else:
+                assert response.status_code == 302
+            after = db.execute(
+                "SELECT * FROM song_verification_comment WHERE id = ANY(%s) ORDER BY id",
+                (comment_ids,),
+            ).fetchall()
+            expected = [dict(row) for row in before]
+            if allowed:
+                if action == "delete":
+                    expected.pop(0)
+                else:
+                    expected[0]["body"] = body.strip()
+            assert after == expected
+            if actor in {1, 3}:
+                assert client.get(f"{base}/verifications").status_code == 200
+        finally:
+            db.execute("DELETE FROM song_verification_comment WHERE id = ANY(%s)", (comment_ids,))
+            db.commit()
+
+    property_test()
+
+
 def test_moderation_state_changes_are_song_level_and_message_gated(client, db, login):
     login(1)
     message = st.text(

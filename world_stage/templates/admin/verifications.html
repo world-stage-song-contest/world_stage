@@ -12,17 +12,33 @@
     <a class="nav-item" href="{{ url_for('admin.verifications', year=year.id) }}">Verifications</a>
     {% endif %}
 {% endblock %}
-{% macro render_comment_items(comments) %}
+{% macro render_comment_items(comments, location) %}
 {% for comment in comments %}
 <div class="verification-comment">
     <div class="verification-comment-body">{{ comment.rendered_body|safe }}</div>
     <div class="verification-comment-attribution">&ndash; <strong>{{ comment.author_username }}</strong>, <time datetime="{{ comment.created_at.isoformat() }}">{{ comment.created_at.strftime('%Y-%m-%d %H:%M') }}</time></div>
+    {% if comment.can_edit %}
+    <details>
+        <summary>Edit or delete comment</summary>
+        {% if year.special_short_name %}
+        {% set action_url = url_for('admin.change_verification_comment_special', short_name=year.special_short_name, comment_id=comment.id) %}
+        {% else %}
+        {% set action_url = url_for('admin.change_verification_comment', year=year.id, comment_id=comment.id) %}
+        {% endif %}
+        <form method="post" action="{{ action_url }}">
+            <label for="edit-comment-{{ location }}-{{ comment.id }}">Comment</label>
+            <textarea id="edit-comment-{{ location }}-{{ comment.id }}" name="comment" rows="3" maxlength="2000" required>{{ comment.body }}</textarea>
+            <button type="submit" name="action" value="edit">Save changes</button>
+            <button type="submit" name="action" value="delete" formnovalidate>Delete comment</button>
+        </form>
+    </details>
+    {% endif %}
 </div>
 {% endfor %}
 {% endmacro %}
 {% macro render_comments(comments, entry, dialog_key) %}
 <div class="verification-comment-list">
-    {{ render_comment_items(comments) }}
+    {{ render_comment_items(comments, dialog_key ~ '-inline') }}
 </div>
 <button type="button" class="verification-dialog-open" data-dialog="comments-dialog-{{ dialog_key }}">View all comments</button>
 <dialog id="comments-dialog-{{ dialog_key }}" class="verification-dialog">
@@ -35,7 +51,7 @@
     </p>
     <hr>
     <div class="verification-comment-list verification-comment-list-full">
-        {{ render_comment_items(comments) }}
+        {{ render_comment_items(comments, dialog_key ~ '-dialog') }}
     </div>
 </dialog>
 {% endmacro %}

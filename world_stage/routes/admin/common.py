@@ -17,6 +17,8 @@ def _require_admin():
         "admin.verifications",
         "admin.verifications_special",
         "admin.add_verification_comment",
+        "admin.change_verification_comment",
+        "admin.change_verification_comment_special",
         "admin.set_verification_status",
         "admin.merge_replaced_song",
         "admin.hide_verification_revision",
