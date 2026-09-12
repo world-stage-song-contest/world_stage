@@ -4,7 +4,17 @@ from dataclasses import dataclass, field
 from math import ceil
 from typing import Any
 
-BALANCE_KEYS = ("genre", "language")
+BALANCE_KEYS = ("genre", "language", "subgenre")
+
+
+@dataclass
+class SearchBudget:
+    remaining: int
+
+    def visit(self) -> None:
+        self.remaining -= 1
+        if self.remaining < 0:
+            raise ValueError("Draw search limit reached. Check the pots and semifinal constraints.")
 
 
 @dataclass
@@ -26,6 +36,12 @@ class DrawEntry:
 
     def tag(self, key: str) -> Any:
         return self.data.get(key)
+
+    def tags(self, key: str) -> frozenset:
+        value = self.tag(key)
+        if key == "genre" and isinstance(value, list):
+            return frozenset(tag for tag in value if tag)
+        return frozenset([value]) if value else frozenset()
 
     def permits(self, show_number: int) -> bool:
         constraints = self.data.get("semifinal_constraints") or []
@@ -49,7 +65,7 @@ class ShowState:
 
 
 def _ceiling_by_key(entries: list[DrawEntry], key: str, n_shows: int) -> dict[Any, int]:
-    counts = Counter(e.tag(key) for e in entries if e.tag(key))
+    counts = Counter(tag for entry in entries for tag in entry.tags(key))
     return {tag: ceil(count / n_shows) for tag, count in counts.items()}
 
 
@@ -72,9 +88,9 @@ def _can_place_regular(
         return False
     if balance_ceils:
         for key in BALANCE_KEYS:
-            tag = entry.tag(key)
-            if tag and show.balance_counts[key][tag] >= balance_ceils[key].get(tag, 10**9):
-                return False
+            for tag in entry.tags(key):
+                if show.balance_counts[key][tag] >= balance_ceils.get(key, {}).get(tag, 10**9):
+                    return False
     return True
 
 
@@ -85,8 +101,7 @@ def _place(show: ShowState, entry: DrawEntry, *, track_pot: bool = True):
         show.pots.add(entry.pot)
     show.codes.add(entry.code)
     for key in BALANCE_KEYS:
-        tag = entry.tag(key)
-        if tag:
+        for tag in entry.tags(key):
             show.balance_counts[key][tag] += 1
 
 
@@ -97,12 +112,10 @@ def _remove(show: ShowState, entry: DrawEntry, *, track_pot: bool = True):
         show.pots.remove(entry.pot)
     show.codes.remove(entry.code)
     for key in BALANCE_KEYS:
-        tag = entry.tag(key)
-        if not tag:
-            continue
-        show.balance_counts[key][tag] -= 1
-        if show.balance_counts[key][tag] <= 0:
-            del show.balance_counts[key][tag]
+        for tag in entry.tags(key):
+            show.balance_counts[key][tag] -= 1
+            if show.balance_counts[key][tag] <= 0:
+                del show.balance_counts[key][tag]
 
 
 def _regular_options(
@@ -112,12 +125,15 @@ def _regular_options(
     balance_ceils: dict[str, dict] | None,
     *,
     check_pot: bool = True,
+    budget: SearchBudget | None = None,
 ) -> list[list[tuple[ShowState, DrawEntry]]]:
     entries = pot[:]
     rng.shuffle(entries)
     options: list[list[tuple[ShowState, DrawEntry]]] = []
 
     def visit(index: int, used_shows: set[str], placements: list[tuple[ShowState, DrawEntry]]):
+        if budget is not None:
+            budget.visit()
         if index == len(entries):
             options.append(placements[:])
             return
@@ -174,6 +190,7 @@ def _assign_pot_rounds(
     rng: random.Random,
     balance_ceils: dict[str, dict] | None,
 ):
+    budget = SearchBudget(10_000 if balance_ceils else 100_000)
     complete, leftovers = _pot_rounds(pots, len(shows), rng)
     # The first leftover pot is distributed normally. Subsequent leftover
     # pots prefer shows which currently contain fewer entries.
@@ -181,17 +198,21 @@ def _assign_pot_rounds(
     rounds.extend((entries, index > 0) for index, entries in enumerate(leftovers))
 
     def option_score(option: list[tuple[ShowState, DrawEntry]], prioritize_short: bool) -> tuple:
+        balance = sum(_balance_cost(show, entry) for show, entry in option)
         if not prioritize_short:
-            return (0,)
+            return (balance,)
         sizes = sorted(len(show.entries) for show, _entry in option)
-        return (sum(sizes), sizes)
+        return (sum(sizes), sizes, balance)
 
     def visit(index: int) -> bool:
         if index == len(rounds):
             return True
 
         entries, prioritize_short = rounds[index]
-        options = _regular_options(entries, shows, rng, balance_ceils, check_pot=False)
+        budget.visit()
+        options = _regular_options(
+            entries, shows, rng, balance_ceils, check_pot=False, budget=budget
+        )
         rng.shuffle(options)
         options.sort(key=lambda option: option_score(option, prioritize_short))
         for option in options:
@@ -247,19 +268,40 @@ def _assign_regular(
         raise ValueError("Cannot allocate pots without semifinal conflicts")
 
 
+def _balance_cost(show: ShowState, entry: DrawEntry) -> int:
+    return sum(
+        (2 if key == "subgenre" else 1) * show.balance_counts[key][tag]
+        for key in BALANCE_KEYS
+        for tag in entry.tags(key)
+    )
+
+
 def _assign_single_pot(entries: list[DrawEntry], shows: list[ShowState], rng: random.Random):
+    budget = SearchBudget(100_000)
     by_country: dict[str, list[DrawEntry]] = defaultdict(list)
     for entry in entries:
         by_country[entry.code].append(entry)
 
     ordered_entries = entries[:]
     rng.shuffle(ordered_entries)
-    ordered_entries.sort(key=lambda entry: len(by_country[entry.code]), reverse=True)
+    tag_counts = {
+        key: Counter(tag for entry in entries for tag in entry.tags(key))
+        for key in BALANCE_KEYS
+    }
+    ordered_entries.sort(
+        key=lambda entry: (
+            len(by_country[entry.code]),
+            sum(
+                (2 if key == "subgenre" else 1) * (tag_counts[key][tag] - 1)
+                for key in BALANCE_KEYS
+                for tag in entry.tags(key)
+            ),
+        ),
+        reverse=True,
+    )
 
     def score(show: ShowState, entry: DrawEntry):
-        balance_count = sum(
-            show.balance_counts[key][entry.tag(key)] for key in BALANCE_KEYS if entry.tag(key)
-        )
+        balance_count = _balance_cost(show, entry)
         return (
             Counter(e.code for e in show.entries)[entry.code] * 1_000_000
             + balance_count * 1_000
@@ -279,6 +321,7 @@ def _assign_single_pot(entries: list[DrawEntry], shows: list[ShowState], rng: ra
         return result
 
     def visit(unplaced: list[DrawEntry]) -> bool:
+        budget.visit()
         if not unplaced:
             return True
         options = [(entry, candidates(entry)) for entry in unplaced]
@@ -300,7 +343,7 @@ def _conflicts(a: DrawEntry | None, b: DrawEntry | None):
     return (
         a.code == b.code
         or a.submitter == b.submitter
-        or any(a.tag(key) and a.tag(key) == b.tag(key) for key in BALANCE_KEYS)
+        or any(a.tags(key) & b.tags(key) for key in ("genre", "language"))
     )
 
 
@@ -358,7 +401,46 @@ def spread_running_order(entries: list[DrawEntry], rng: random.Random) -> list[D
         if not swapped:
             break
 
-    return [entry for entry in result if entry is not None]
+    ordered = [entry for entry in result if entry is not None]
+    if any(entry.tags("genre") or entry.tags("subgenre") for entry in ordered):
+        _spread_tags(ordered)
+    return ordered
+
+
+def _spread_tags(entries: list[DrawEntry]) -> None:
+    """Weight spacing by shared tags. Give subgenre matches twice the weight."""
+    def pair_cost(a: DrawEntry, b: DrawEntry, distance: int) -> tuple[float, ...]:
+        return (
+            float(distance == 1 and (a.code == b.code or a.submitter == b.submitter)),
+            float(a.code == b.code) / distance,
+            sum(
+                (2 if key == "subgenre" else 1) * len(a.tags(key) & b.tags(key))
+                for key in BALANCE_KEYS
+            ) / distance,
+        )
+
+    for _ in range(6):
+        improved = False
+        for i in range(len(entries)):
+            for j in range(i + 1, len(entries)):
+                delta = [0.0, 0.0, 0.0]
+                for k, entry in enumerate(entries):
+                    if k in (i, j):
+                        continue
+                    before = pair_cost(entries[i], entry, abs(i - k))
+                    other_before = pair_cost(entries[j], entry, abs(j - k))
+                    after = pair_cost(entries[j], entry, abs(i - k))
+                    other_after = pair_cost(entries[i], entry, abs(j - k))
+                    for component in range(len(delta)):
+                        delta[component] += (
+                            after[component] + other_after[component]
+                            - before[component] - other_before[component]
+                        )
+                if tuple(round(value, 10) for value in delta) < (0, 0, 0):
+                    entries[i], entries[j] = entries[j], entries[i]
+                    improved = True
+        if not improved:
+            break
 
 
 def draw_semifinals(
@@ -385,16 +467,23 @@ def draw_semifinals(
     else:
         all_entries = [entry for pot in draw_pots for entry in pot]
         balance_ceils = {key: _ceiling_by_key(all_entries, key, len(shows)) for key in BALANCE_KEYS}
-        try:
-            _assign_pot_rounds(draw_pots, shows, rng, balance_ceils)
-        except ValueError:
-            for show in shows:
-                show.entries.clear()
-                show.submitters.clear()
-                show.pots.clear()
-                show.codes.clear()
-                show.balance_counts = {key: Counter() for key in BALANCE_KEYS}
-            _assign_pot_rounds(draw_pots, shows, rng, None)
+        for ceilings in (
+            balance_ceils,
+            {key: value for key, value in balance_ceils.items() if key != "subgenre"},
+            None,
+        ):
+            try:
+                _assign_pot_rounds(draw_pots, shows, rng, ceilings)
+                break
+            except ValueError:
+                for show in shows:
+                    show.entries.clear()
+                    show.submitters.clear()
+                    show.pots.clear()
+                    show.codes.clear()
+                    show.balance_counts = {key: Counter() for key in BALANCE_KEYS}
+                if ceilings is None:
+                    raise
 
     for show in shows:
         if len(show.entries) != show.limit:

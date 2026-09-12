@@ -860,7 +860,7 @@ def set_pots(year: int):
 
     cursor.execute(
         """
-        SELECT country.id, name, pot, genre, semifinal_constraints
+        SELECT country.id, name, pot, genre, subgenre, semifinal_constraints
         FROM current_song AS song
         JOIN country ON song.country_id = country.id
         JOIN year ON song.year_id = year.id
@@ -886,12 +886,16 @@ def set_pots_post(year: int):
             field, country_id = "pot", key[len("pot_"):]
         elif key.startswith("genre_"):
             field, country_id = "genre", key[len("genre_"):]
+        elif key.startswith("subgenre_"):
+            field, country_id = "subgenre", key[len("subgenre_"):]
         elif key.startswith("semifinals_"):
             field, country_id = "semifinals", key[len("semifinals_"):]
         else:
             continue
         try:
-            if field == "semifinals":
+            if field == "genre":
+                parsed = _parse_draw_genres(value)
+            elif field == "semifinals":
                 parsed = _parse_semifinal_constraints(value)
             else:
                 parsed = int(value)
@@ -905,19 +909,20 @@ def set_pots_post(year: int):
         updates.setdefault(country_id, {})[field] = parsed
 
     cursor.execute(
-        "UPDATE country SET pot = NULL, genre = NULL, semifinal_constraints = NULL"
+        "UPDATE country SET pot = NULL, genre = NULL, subgenre = NULL, semifinal_constraints = NULL"
     )
 
     for country_id, fields in updates.items():
         cursor.execute(
             """
             UPDATE country
-            SET pot = %s, genre = %s, semifinal_constraints = %s
+            SET pot = %s, genre = %s, subgenre = %s, semifinal_constraints = %s
             WHERE id = %s
         """,
             (
                 fields.get("pot"),
                 fields.get("genre"),
+                fields.get("subgenre"),
                 fields.get("semifinals"),
                 country_id,
             ),
@@ -925,6 +930,19 @@ def set_pots_post(year: int):
 
     db.commit()
     return redirect(url_for("admin.set_pots", year=year))
+
+
+def _parse_draw_genres(value) -> list[int] | None:
+    if value is None or value == "":
+        return None
+    values = value if isinstance(value, list) else str(value).split(",")
+    try:
+        tags = [int(str(item).strip()) for item in values]
+    except (ValueError, TypeError) as err:
+        raise ValueError("Genres must be whole numbers from 1 to 32767") from err
+    if any(tag < 0 or tag > 32767 for tag in tags):
+        raise ValueError("Genres must be whole numbers from 1 to 32767")
+    return list(dict.fromkeys(tag for tag in tags if tag)) or None
 
 
 def _parse_semifinal_constraints(value) -> list[int] | None:
@@ -942,14 +960,7 @@ def _parse_semifinal_constraints(value) -> list[int] | None:
 
 @bp.post("/manage/<int:year>/setpots/json")
 def set_pots_json(year: int):
-    """Bulk-update draw settings from a JSON object keyed by country.
-
-    Keys may be either a country code (the ``id``) or a full country
-    name; both are matched case-insensitively.
-
-    A pot or genre value of 0 maps to NULL. Countries not listed have all
-    three settings cleared.
-    """
+    """Set draw fields by country code or name. Clear fields for omitted countries."""
     # The payload may arrive as raw JSON in the request body or as a
     # ``payload`` form field (used by the textarea on the page).
     raw_payload: dict | None = None
@@ -999,7 +1010,7 @@ def set_pots_json(year: int):
 
     # Validate everything before touching the database so a bad payload
     # doesn't half-apply.
-    parsed: dict[str, tuple[int | None, int | None, list[int] | None]] = {}
+    parsed: dict[str, tuple[int | None, list[int] | None, int | None, list[int] | None]] = {}
     for key, fields in raw_payload.items():
         # Ignore an empty-string key (e.g. a trailing blank entry).
         if not key.strip():
@@ -1016,21 +1027,28 @@ def set_pots_json(year: int):
             ), 400
         try:
             pot = _coerce("pot", key, fields.get("pot"))
-            genre = _coerce("genre", key, fields.get("genre"))
-            semifinals = _parse_semifinal_constraints(fields.get("semifinals"))
+            genre = _parse_draw_genres(fields.get("genre"))
+            subgenre = _coerce("subgenre", key, fields.get("subgenre"))
+            semifinal_values = fields.get("semifinals")
+            if semifinal_values is not None and (
+                not isinstance(semifinal_values, list)
+                or any(type(number) is not int for number in semifinal_values)
+            ):
+                raise ValueError("Semifinals must be an array of non-zero whole numbers")
+            semifinals = _parse_semifinal_constraints(semifinal_values)
         except ValueError as e:
             return render_template("error.html", error=str(e)), 400
-        parsed[country_id] = (pot, genre, semifinals)
+        parsed[country_id] = (pot, genre, subgenre, semifinals)
 
     cursor.execute(
-        "UPDATE country SET pot = NULL, genre = NULL, semifinal_constraints = NULL"
+        "UPDATE country SET pot = NULL, genre = NULL, subgenre = NULL, semifinal_constraints = NULL"
     )
-    for country_id, (pot, genre, semifinals) in parsed.items():
+    for country_id, (pot, genre, subgenre, semifinals) in parsed.items():
         cursor.execute(
             """UPDATE country
-               SET pot = %s, genre = %s, semifinal_constraints = %s
+               SET pot = %s, genre = %s, subgenre = %s, semifinal_constraints = %s
                WHERE id = %s""",
-            (pot, genre, semifinals, country_id),
+            (pot, genre, subgenre, semifinals, country_id),
         )
 
     db.commit()

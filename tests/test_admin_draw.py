@@ -75,7 +75,7 @@ def draw_setup(db, client):
         cur.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
         cur.execute(
             """UPDATE country
-               SET pot = NULL, semifinal_constraints = NULL
+               SET pot = NULL, genre = NULL, subgenre = NULL, semifinal_constraints = NULL
                WHERE id IN ('US', 'ES', 'FR', 'DE')"""
         )
     db.commit()
@@ -293,5 +293,61 @@ def test_unpublished_draw_uses_host_then_source_show_qualification_order(
         assert [song["id"] for song in repechage_payload["draw_order"]] == (
             expected_repechage_draw
         )
+
+    property_test()
+
+
+def test_set_pots_saves_and_clears_genres_and_subgenre(client, db, draw_setup):
+    @given(
+        tag=st.integers(min_value=0, max_value=32767),
+        use_json=st.booleans(),
+        genres=st.lists(st.integers(min_value=1, max_value=32767), max_size=6),
+        semifinals=st.lists(st.sampled_from([-4, -3, -2, -1, 1, 2, 3, 4]), max_size=6),
+    )
+    def property_test(tag, use_json, genres, semifinals):
+        db.execute("UPDATE country SET subgenre = 7 WHERE id IN ('ES', 'DE')")
+        db.commit()
+        if use_json:
+            response = client.post(
+                "/admin/manage/2025/setpots/json",
+                json={"ES": {
+                    "pot": 1, "genre": genres, "subgenre": tag, "semifinals": semifinals,
+                }},
+            )
+        else:
+            response = client.post(
+                "/admin/manage/2025/setpots",
+                data={
+                    "pot_ES": 1, "genre_ES": ", ".join(map(str, genres)), "subgenre_ES": tag,
+                    "semifinals_ES": ", ".join(map(str, semifinals)),
+                },
+            )
+        assert response.status_code == 302
+        saved = db.execute(
+            "SELECT pot, genre, subgenre FROM country WHERE id = 'ES'"
+        ).fetchone()
+        assert saved["pot"] == 1
+        assert set(saved["genre"] or []) == set(genres)
+        assert saved["subgenre"] == (tag or None)
+        assert db.execute(
+            "SELECT subgenre FROM country WHERE id = 'DE'"
+        ).fetchone()["subgenre"] is None
+        payload = client.get(
+            "/admin/manage/2025/setpots", headers={"Accept": "application/json"}
+        ).get_json()
+        country = next(row for row in payload["countries"] if row["id"] == "ES")
+        assert country["subgenre"] == (tag or None)
+        assert set(country["genre"] or []) == set(genres)
+        assert set(country["semifinal_constraints"] or []) == set(semifinals)
+        if use_json:
+            response = client.post(
+                "/admin/manage/2025/setpots/json",
+                json={"ES": {"semifinals": ", ".join(map(str, semifinals))}},
+            )
+            assert response.status_code == 400
+            unchanged = db.execute(
+                "SELECT semifinal_constraints FROM country WHERE id = 'ES'"
+            ).fetchone()
+            assert set(unchanged["semifinal_constraints"] or []) == set(semifinals)
 
     property_test()

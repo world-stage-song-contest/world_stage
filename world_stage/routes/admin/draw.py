@@ -31,7 +31,7 @@ def _render_draw(year_id: int, label: str, manage_url: str):
         """
         SELECT song.id AS song_id, song.title, song.entry_number,
                song.submitter_id AS submitter,
-               country.id AS cc, country.name, country.pot, country.genre,
+               country.id AS cc, country.name, country.pot, country.genre, country.subgenre,
                country.semifinal_constraints,
                sl.language_id AS language
         FROM current_song AS song
@@ -309,16 +309,14 @@ def draw_final(
     if not songs:
         return render_template("error.html", error="No show '{show}' found for {year}"), 404
 
-    # Genre is set per-country (not per-song) and isn't on the Country
-    # dataclass, so look it up separately and pass it as a {cc → genre}
-    # mapping to the template. Same idea for the per-song primary
-    # language ({song_id → language_id}).
     cursor = get_db().cursor()
     cursor.execute(
-        "SELECT id, genre FROM country WHERE id = ANY(%s)",
+        "SELECT id, genre, subgenre FROM country WHERE id = ANY(%s)",
         ([s.country.cc for s in songs],),
     )
-    genre_by_cc = {row["id"]: row["genre"] for row in cursor.fetchall()}
+    countries = cursor.fetchall()
+    genre_by_cc = {row["id"]: row["genre"] for row in countries}
+    subgenre_by_cc = {row["id"]: row["subgenre"] for row in countries}
 
     cursor.execute(
         """
@@ -340,6 +338,7 @@ def draw_final(
                     "cc": song.country.cc,
                     "submitter": song.submitter_id,
                     "genre": genre_by_cc.get(song.country.cc),
+                    "subgenre": subgenre_by_cc.get(song.country.cc),
                     "language": language_by_song.get(song.id),
                 }
                 for song in songs
@@ -355,6 +354,7 @@ def draw_final(
         songs=songs,
         draw_order=draw_order,
         genre_by_cc=genre_by_cc,
+        subgenre_by_cc=subgenre_by_cc,
         language_by_song=language_by_song,
         show=show,
         show_name=show_data.name,

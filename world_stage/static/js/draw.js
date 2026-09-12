@@ -146,6 +146,61 @@ async function save() {
 let shows = null;
 const rng = new Xoshiro256StarStar(year);
 
+function drawPositions(field) {
+    const semifinals = [...document.querySelectorAll('#shows .show')];
+    const positions = new Map();
+    semifinals.forEach((show, index) => {
+        for (const entry of show.querySelectorAll('.show-country')) {
+            const tags = new Set((entry.dataset[field] ?? '').split(',').map(Number));
+            for (const tag of tags) {
+                if (!Number.isInteger(tag) || tag <= 0) continue;
+                if (!positions.has(tag)) {
+                    positions.set(tag, Array.from({length: semifinals.length}, () => []));
+                }
+                positions.get(tag)[index].push(Number(entry.dataset.index));
+            }
+        }
+    });
+    return new Map([...positions].sort(([a], [b]) => a - b));
+}
+
+function drawBalance(field) {
+    return new Map([...drawPositions(field)].map(([tag, semifinals]) =>
+        [tag, semifinals.map(positions => positions.length)]));
+}
+
+function drawDistance(field) {
+    return new Map([...drawPositions(field)].map(([tag, semifinals]) =>
+        [tag, semifinals.map(positions => {
+            positions.sort((a, b) => a - b);
+            return positions.slice(1).map((position, index) => position - positions[index] - 1);
+        })]));
+}
+
+function potBalance() {
+    return drawBalance('pot');
+}
+
+function genreBalance() {
+    return drawBalance('genre');
+}
+
+function subgenreBalance() {
+    return drawBalance('subgenre');
+}
+
+function potDistance() {
+    return drawDistance('pot');
+}
+
+function genreDistance() {
+    return drawDistance('genre');
+}
+
+function subgenreDistance() {
+    return drawDistance('subgenre');
+}
+
 /**
  * Performs multi-show draw with constraint satisfaction
  */

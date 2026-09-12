@@ -14,10 +14,12 @@
 {% block content %}
 
 <div>
-    <p>Set the pot, genre, and semifinal constraints of each country.
-    <p>Set the pot to 0 to remove the country from the draw. Set the
-    genre to 0 to leave it untagged. Positive semifinal numbers restrict a
-    country to those semifinals; negative numbers exclude it from them.
+    <p>Set the pot, genre, subgenre, and semifinal constraints of each country.
+    <p>Set the pot to 0 to remove the country from the draw.
+    Enter genres as comma-separated numbers, such as 1, 2. Leave the field blank for no genres.
+    Use whole numbers from 1 to 32767. Countries with any shared genre get extra spacing. More shared genres mean stronger spacing.
+    Set subgenre to 0 to leave it untagged. Matching subgenres get further spacing.
+    Positive semifinal numbers restrict a country to those semifinals; negative numbers exclude it from them.
 </div>
 
 <div class="error" id="error">
@@ -25,7 +27,7 @@
 
 <style>
     #set-pots .grid {
-        grid-template-columns: 1fr auto auto auto;
+        grid-template-columns: 1fr auto auto auto auto;
         align-items: center;
         column-gap: 0.75em;
     }
@@ -53,6 +55,7 @@
         <span></span>
         <span class="col-header">Pot</span>
         <span class="col-header">Genre</span>
+        <span class="col-header">Subgenre</span>
         <span class="col-header">Semifinals</span>
     {% for country in countries %}
         <span>{{country.name}}</span>
@@ -60,8 +63,12 @@
         <input type="number" name="pot_{{country.id}}" id="pot_{{country.id}}"
                 value="{{ country.pot if country.pot is not none else 0 }}" min="0">
         <label class="field-label" for="genre_{{country.id}}">Genre for {{country.name}}</label>
-        <input type="number" name="genre_{{country.id}}" id="genre_{{country.id}}"
-                value="{{ country.genre if country.genre is not none else 0 }}" min="0">
+        <input type="text" name="genre_{{country.id}}" id="genre_{{country.id}}"
+                value="{{ country.genre|join(', ') if country.genre else '' }}"
+                placeholder="1, 2">
+        <label class="field-label" for="subgenre_{{country.id}}">Subgenre for {{country.name}}</label>
+        <input type="number" name="subgenre_{{country.id}}" id="subgenre_{{country.id}}"
+                value="{{ country.subgenre if country.subgenre is not none else 0 }}" min="0">
         <label class="field-label" for="semifinals_{{country.id}}">Semifinals for {{country.name}}</label>
         <input type="text" name="semifinals_{{country.id}}" id="semifinals_{{country.id}}"
                 value="{{ country.semifinal_constraints|join(', ') if country.semifinal_constraints else '' }}"
@@ -79,13 +86,13 @@
       action="{{ url_for('admin.set_pots_json', year=year) }}">
     <h2>Bulk update via JSON</h2>
     <p>Paste a JSON object of the form
-    <code>{"US": {"pot": 1, "genre": 1, "semifinals": "1, 2"}, ...}</code>
+    <code>{"US": {"pot": 1, "genre": [1, 2], "subgenre": 1, "semifinals": [1, 2]}, ...}</code>
     to update every country at once. Keys may be either a country code or
     a full country name (e.g. <code>"United States"</code>), matched
     case-insensitively. Countries omitted from the payload will have their
-    pot, genre, and semifinal constraints cleared.</p>
+    pot, genre, subgenre, and semifinal constraints cleared.</p>
     <textarea name="payload" rows="12" cols="80"
-              placeholder='{"US": {"pot": 1, "genre": 1, "semifinals": "1, 2"}}'></textarea>
+              placeholder='{"US": {"pot": 1, "genre": [1, 2], "subgenre": 1, "semifinals": [1, 2]}}'></textarea>
     <div>
         <button type="submit">Apply JSON</button>
     </div>
