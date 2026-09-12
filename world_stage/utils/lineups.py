@@ -196,7 +196,7 @@ def get_unassigned_lineup_issue(
     cursor.execute(
         """
         SELECT COUNT(*) AS count
-        FROM song
+        FROM current_song AS song
         WHERE song.year_id = %s
           AND song.main_participant
           AND NOT EXISTS (

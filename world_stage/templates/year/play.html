@@ -9,9 +9,15 @@
     <style>
         #play-controls {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 1rem;
             padding: 0.5rem 1rem;
+        }
+        #play-controls .play-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
         #play-layout {
             display: grid;
@@ -136,10 +142,18 @@
 {% block content %}
 <div id="play-controls">
     <button type="button" id="shuffle-playlist"><i class="ph ph-shuffle"></i> Shuffle</button>
-    <label style="margin-left: auto;">
+    <div class="play-option">
+        <label for="playlist-loop">Loop</label>
+        <select id="playlist-loop">
+            <option value="off">Off</option>
+            <option value="all">Whole playlist</option>
+            <option value="song">Current song</option>
+        </select>
+    </div>
+    <div class="play-option" style="margin-left: auto;">
         <input type="checkbox" id="postcards-toggle" {% if postcards %}checked{% endif %}>
-        Include postcards
-    </label>
+        <label for="postcards-toggle">Include postcards</label>
+    </div>
 </div>
 
 <div id="play-layout">
@@ -203,12 +217,28 @@
 
     let currentIndex = -1;
     const listEl = document.getElementById('custom-playlist');
-    const audioFallback = WorldStageAudioFallback.attach(player, {
-        onEnded() {
-            if (currentIndex + 1 < ENTRIES.length) loadEntry(currentIndex + 1);
-        },
-    });
+    const loopSelect = document.getElementById('playlist-loop');
+    const audioFallback = WorldStageAudioFallback.attach(player);
     scrobbleTracker.attachMedia(audioFallback.audio);
+    audioFallback.audio.addEventListener('ended', handleEnded);
+
+    function handleEnded() {
+        const entry = ENTRIES[currentIndex];
+        if (!entry) return;
+        if (loopSelect.value === 'song' && entry.kind === 'song') {
+            scrobbleTracker.setSong(
+                entry,
+                () => audioFallback.isActive() ? audioFallback.audio.duration : player.duration()
+            );
+            audioFallback.currentTime(0);
+            const promise = audioFallback.play();
+            if (promise && typeof promise.catch === 'function') promise.catch(() => {});
+        } else if (currentIndex + 1 < ENTRIES.length) {
+            loadEntry(currentIndex + 1);
+        } else if (loopSelect.value === 'all') {
+            loadEntry(0);
+        }
+    }
 
     function entryGroups(entries) {
         const groups = [];
@@ -367,10 +397,7 @@
         if (ENTRIES.length > 0) loadEntry(0);
     });
 
-    // Auto-advance on end of item.
-    player.on('ended', () => {
-        if (currentIndex + 1 < ENTRIES.length) loadEntry(currentIndex + 1);
-    });
+    player.on('ended', handleEnded);
 
     // Select the first entry, but wait for the listener to start playback.
     if (ENTRIES.length > 0) {

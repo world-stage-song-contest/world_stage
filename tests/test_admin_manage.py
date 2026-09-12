@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 
@@ -73,6 +73,64 @@ def test_host_selection_accepts_existing_countries_or_no_host(client, db, admin_
         db.execute("DELETE FROM song WHERE id = ANY(%s)", (song_ids,))
         db.execute("DELETE FROM show WHERE id = %s", (final_id,))
         db.commit()
+
+
+def test_host_assignment_requires_a_main_contest_final(client, db, admin_session):
+    db.execute("INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING")
+
+    @given(national_final_count=st.integers(min_value=1, max_value=4), main_final=st.booleans())
+    def property_test(national_final_count, main_final):
+        national_final_ids = []
+        show_ids = []
+        song_id = db.execute(
+            """INSERT INTO song (country_id, year_id, entry_number)
+               VALUES ('ES', 2025, 1) RETURNING id"""
+        ).fetchone()["id"]
+        try:
+            db.execute("UPDATE year SET host_id = 'US' WHERE id = 2025")
+            for number in range(national_final_count):
+                nf_id = db.execute(
+                    """INSERT INTO national_final (year_id, owner_id, short_name, name)
+                       VALUES (2025, 1, %s, 'National final') RETURNING id""",
+                    (f"host-test-{number}",),
+                ).fetchone()["id"]
+                national_final_ids.append(nf_id)
+                show_ids.append(db.execute(
+                    """INSERT INTO show (year_id, show_type, status, national_final_id)
+                       VALUES (2025, 'f', 'none', %s) RETURNING id""",
+                    (nf_id,),
+                ).fetchone()["id"])
+            final_id = None
+            if main_final:
+                final_id = db.execute(
+                    """INSERT INTO show (year_id, show_type, status)
+                       VALUES (2025, 'f', 'none') RETURNING id"""
+                ).fetchone()["id"]
+                show_ids.append(final_id)
+            db.commit()
+
+            for _ in range(2):
+                response = client.post(
+                    "/admin/manage/2025", json={"action": "set_host", "host_id": "ES"}
+                )
+
+                assert response.status_code == (200 if main_final else 400)
+                assert db.execute(
+                    "SELECT show_id, running_order FROM song_show WHERE song_id = %s",
+                    (song_id,),
+                ).fetchall() == ([{"show_id": final_id, "running_order": 1}] if main_final else [])
+                assert db.execute("SELECT host_id FROM year WHERE id = 2025").fetchone()[
+                    "host_id"
+                ] == ("ES" if main_final else "US")
+        finally:
+            db.rollback()
+            db.execute("DELETE FROM song_show WHERE song_id = %s", (song_id,))
+            db.execute("DELETE FROM song WHERE id = %s", (song_id,))
+            db.execute("DELETE FROM show WHERE id = ANY(%s)", (show_ids,))
+            db.execute("DELETE FROM national_final WHERE id = ANY(%s)", (national_final_ids,))
+            db.commit()
+
+    property_test()
 
 
 def test_submission_availability_is_independent_of_year_lifecycle(client, db, admin_session):
@@ -176,6 +234,11 @@ def test_lineup_issues_block_only_the_transition_they_make_unsafe(client, db, ad
         """INSERT INTO song (country_id, year_id, entry_number)
            VALUES ('ES', 2025, 1) RETURNING id"""
     ).fetchone()["id"]
+    db.execute(
+        """INSERT INTO song_data (song_id, title, artist_credit_set_id)
+           VALUES (%s, 'Song', test_artist_credit('Artist'))""",
+        (song_id,),
+    )
     db.commit()
     cases = [
         ("show", {"action": "open_voting"}, "lineup_empty"),
@@ -202,8 +265,90 @@ def test_lineup_issues_block_only_the_transition_they_make_unsafe(client, db, ad
     finally:
         db.rollback()
         db.execute("DELETE FROM song_show WHERE show_id = %s", (show_id,))
+        db.execute("DELETE FROM song_data WHERE song_id = %s", (song_id,))
         db.execute("DELETE FROM song WHERE id = %s", (song_id,))
         db.execute("DELETE FROM show WHERE id = %s", (show_id,))
+        db.commit()
+
+
+def test_year_start_requires_main_show_assignments_only_for_active_participants(
+    client, db, admin_session
+):
+    db.execute("INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING")
+    national_final_id = db.execute(
+        """INSERT INTO national_final (year_id, owner_id, short_name, name)
+           VALUES (2025, 1, 'test-final', 'Test final') RETURNING id"""
+    ).fetchone()["id"]
+    shows = {}
+    for kind, year, nf_id in [
+        ("main", 2025, None),
+        ("national", 2025, national_final_id),
+        ("other_year", 2024, None),
+    ]:
+        shows[kind] = db.execute(
+            """INSERT INTO show (year_id, show_type, status, national_final_id)
+               VALUES (%s, 'f', 'none', %s) RETURNING id""",
+            (year, nf_id),
+        ).fetchone()["id"]
+    db.commit()
+
+    @settings(max_examples=40)
+    @given(entries=st.lists(st.tuples(
+        st.sampled_from(["active", "withdrawn", "missing"]),
+        st.booleans(),
+        st.sets(st.sampled_from(list(shows))),
+    ), max_size=8))
+    def property_test(entries):
+        song_ids = []
+        try:
+            db.execute("UPDATE year SET status = 'open' WHERE id = 2025")
+            for number, (state, main_participant, assignments) in enumerate(entries, 1):
+                song_id = db.execute(
+                    """INSERT INTO song (country_id, year_id, entry_number, main_participant)
+                       VALUES ('US', 2025, %s, %s) RETURNING id""",
+                    (number, main_participant),
+                ).fetchone()["id"]
+                song_ids.append(song_id)
+                if state != "missing":
+                    db.execute(
+                        """INSERT INTO song_data (song_id, title, artist_credit_set_id)
+                           VALUES (%s, 'Song', test_artist_credit('Artist'))""",
+                        (song_id,),
+                    )
+                if state == "withdrawn":
+                    db.execute("INSERT INTO song_data (song_id) VALUES (%s)", (song_id,))
+                for assignment in assignments:
+                    db.execute(
+                        "INSERT INTO song_show (song_id, show_id) VALUES (%s, %s)",
+                        (song_id, shows[assignment]),
+                    )
+            db.commit()
+
+            response = client.post(
+                "/admin/manage/2025",
+                json={"action": "change_year_status", "year_status": "ongoing"},
+            )
+
+            blocked = any(
+                state == "active" and main and "main" not in assignments
+                for state, main, assignments in entries
+            )
+            assert response.status_code == (400 if blocked else 200)
+            assert db.execute("SELECT status FROM year WHERE id = 2025").fetchone()[
+                "status"
+            ] == ("open" if blocked else "ongoing")
+        finally:
+            db.rollback()
+            db.execute("DELETE FROM song_show WHERE song_id = ANY(%s)", (song_ids,))
+            db.execute("DELETE FROM song_data WHERE song_id = ANY(%s)", (song_ids,))
+            db.execute("DELETE FROM song WHERE id = ANY(%s)", (song_ids,))
+            db.commit()
+
+    try:
+        property_test()
+    finally:
+        db.execute("DELETE FROM show WHERE id = ANY(%s)", (list(shows.values()),))
+        db.execute("DELETE FROM national_final WHERE id = %s", (national_final_id,))
         db.commit()
 
 

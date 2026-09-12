@@ -558,7 +558,9 @@ def manage_post(year: int):
                     ), 400
 
                 cursor.execute(
-                    "SELECT id FROM show WHERE year_id = %s AND short_name = 'f'",
+                    """SELECT id FROM show
+                       WHERE year_id = %s AND short_name = 'f'
+                         AND national_final_id IS NULL""",
                     (year,),
                 )
                 final = cursor.fetchone()
