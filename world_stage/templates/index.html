@@ -32,6 +32,11 @@
         <img src="{{ static('images/calendar.png') }}" alt="Calendar Icon">
         <p>Check information about previous years.</p>
     </a>
+    <a href="{{ url_for('search.index') }}" class="card">
+        <h3>Search</h3>
+        <img src="{{ static('images/search.png') }}" alt="Search Icon">
+        <p>Find entries, years, countries, submitters, artists, and shows.</p>
+    </a>
     <a href="{{ url_for('user.index') }}" class="card">
         <h3>Users</h3>
         <img src="{{ static('images/users.png') }}" alt="User Icon">

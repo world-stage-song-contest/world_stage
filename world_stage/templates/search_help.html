@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block navigation %}{% include "search_navigation.html" %}{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="{{ static('css/search.css') }}">
+{% endblock %}
+{% block content %}
+<article class="search-guide">
+    {{ guide }}
+    {% if fields %}
+    <h2>Available fields</h2>
+    <div class="search-table-scroll">
+        <table>
+            <thead><tr><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Page categories</th></tr></thead>
+            <tbody>
+            {% for name, field in fields.items() %}
+                <tr><td><code>{{ name }}</code></td><td>{{ field.type }}{% if field.multiple %}, multiple values{% endif %}</td>
+                    <td>{% if name == 'relevance' %}Sort only{% else %}{{ field.resultTypes|join(', ') }}{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</article>
+{% endblock %}

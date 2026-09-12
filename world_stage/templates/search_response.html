@@ -1,0 +1,61 @@
+{% macro feedback() %}
+<div id="search-feedback">
+    {% if error %}
+    <p id="search-error" class="error" role="alert" tabindex="-1">
+        {{ error }}{% if location %} Line {{ location.line }}, column {{ location.column }}.{% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro results() %}
+<div id="search-results" data-offset="{{ offset }}" data-searched="{{ 'true' if result is not none or error else 'false' }}">
+    {% if result is not none %}
+    <section aria-labelledby="search-results-heading">
+        <h2 id="search-results-heading" tabindex="-1">Results</h2>
+        {% if result.results %}
+        <p>Showing {{ offset + 1 }}–{{ offset + result.results|length }}.</p>
+        <div class="search-table-scroll">
+            <table class="search-results">
+                <thead><tr><th scope="col">Page</th><th scope="col">Details</th></tr></thead>
+                <tbody>
+                {% for item in result.results %}
+                    <tr>
+                        <td><a href="{{ item.url }}">{{ item.title }}</a></td>
+                        <td>
+                            {% if item.type == 'entry' %}
+                                {{ item.data.countryName }}, {{ item.data.special or item.data.year }}{% if item.data.special or item.data.entryNumber != 1 %}, entry {{ item.data.entryNumber }}{% endif %}
+                            {% elif item.type == 'country' %}
+                                {{ item.data.countryName }}
+                            {% elif item.type in ('year', 'show') and item.data.special %}
+                                Special: {{ item.data.special }}
+                            {% elif item.type == 'submitter' %}
+                                Submissions
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p>No results on this page. Try fewer conditions or a different query.</p>
+        {% endif %}
+        {% if previous_offset is not none or next_offset is not none %}
+        <nav aria-label="Search result pages">
+            <form method="post" action="{{ url_for('search.index') }}" class="search-pagination">
+                <input type="hidden" name="q" value="{{ query_text }}">
+                <input type="hidden" name="type" value="{{ result_type }}">
+                {% if editing_saved %}<input type="hidden" name="editing_saved_id" value="{{ editing_saved.id }}">{% endif %}
+                {% if previous_offset is not none %}<button name="offset" value="{{ previous_offset }}" type="submit">Previous</button>{% endif %}
+                {% if next_offset is not none %}<button name="offset" value="{{ next_offset }}" type="submit">Next</button>{% endif %}
+            </form>
+        </nav>
+        {% endif %}
+    </section>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{{ feedback() }}
+{{ results() }}

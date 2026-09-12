@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Save query' if mode == 'save' else 'Query values' }}{% endblock %}
+{% block navigation %}{% include "search_navigation.html" %}{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="{{ static('css/forms.css') }}">
+<link rel="stylesheet" href="{{ static('css/search.css') }}">
+{% endblock %}
+{% block content %}
+{% include "search_parameters_form.html" %}
+<p><a href="{{ url_for('search.index') }}">Back to search</a></p>
+{% endblock %}

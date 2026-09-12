@@ -390,6 +390,7 @@ def create_app(config: dict | None = None) -> Flask:
         radio,
         results,
         revote,
+        search,
         session,
         user,
         vote,
@@ -414,5 +415,6 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(radio.bp)
     app.register_blueprint(scrobble_routes.bp)
     app.register_blueprint(revote.bp)
+    app.register_blueprint(search.bp)
 
     return app

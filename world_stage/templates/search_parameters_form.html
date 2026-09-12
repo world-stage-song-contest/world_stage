@@ -1,0 +1,46 @@
+<div class="search-parameters" data-mode="{{ mode }}">
+    <h2 id="search-dialog-title">{{ 'Save query' if mode == 'save' else 'Query values' }}</h2>
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    {% if mode != 'invalid' %}
+    <form method="post" action="{{ url_for('search.confirm_save') if mode == 'save' else url_for('search.use_saved') }}">
+        {% if mode == 'save' %}
+        {% if saved %}<input type="hidden" name="editing_saved_id" value="{{ saved.id }}">{% endif %}
+        <input type="hidden" name="q" value="{{ source }}">
+        <input type="hidden" name="type" value="{{ result_type }}">
+        <label for="saved-query-name">Name</label>
+        <input id="saved-query-name" name="name" maxlength="100" required value="{{ values.get('name', '') }}">
+        {% else %}
+        <input type="hidden" name="saved_id" value="{{ saved.id }}">
+        <p>{{ saved.name }}</p>
+        {% endif %}
+        {% for parameter in parameters %}
+        {% set name = parameter.name %}
+        <fieldset class="search-parameter-row">
+            <legend>${{ name }}</legend>
+            {% if mode == 'save' %}
+            <label for="parameter-type-{{ name }}">Type</label>
+            <select id="parameter-type-{{ name }}" name="parameter_type.{{ name }}" required>
+                <option value="">Choose a type</option>
+                {% for type_name in parameter_types %}
+                <option value="{{ type_name }}"{% if values.get('parameter_type.' + name, parameter.type) == type_name %} selected{% endif %}>{{ type_name|capitalize }}</option>
+                {% endfor %}
+            </select>
+            <div>
+                <input type="checkbox" id="default-enabled-{{ name }}" name="default_enabled.{{ name }}"{% if values.get('default_enabled.' + name) %} checked{% endif %}>
+                <label for="default-enabled-{{ name }}">Use a default</label>
+                <input type="checkbox" id="default-null-{{ name }}" name="default_null.{{ name }}"{% if values.get('default_null.' + name) %} checked{% endif %}>
+                <label for="default-null-{{ name }}">Use NULL</label>
+            </div>
+            <label for="parameter-default-{{ name }}">Default value</label>
+            <textarea id="parameter-default-{{ name }}" name="default.{{ name }}" rows="2">{{ values.get('default.' + name, '') }}</textarea>
+            {% else %}
+            <label for="parameter-value-{{ name }}">Value ({{ parameter.type }})</label>
+            <textarea id="parameter-value-{{ name }}" name="value.{{ name }}" rows="2"{% if parameter.type != 'text' %} required{% endif %}>{{ values.get('value.' + name, '') }}</textarea>
+            {% endif %}
+        </fieldset>
+        {% endfor %}
+        {% if parameters %}<p>Enter text without quotes. Boolean values are true or false. Dates use YYYY-MM-DD.</p>{% endif %}
+        <div class="buttons"><button type="submit">{{ 'Save' if mode == 'save' else 'Load' }}</button></div>
+    </form>
+    {% endif %}
+</div>

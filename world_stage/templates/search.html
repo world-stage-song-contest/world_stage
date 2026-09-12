@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "search_response.html" as search_response with context %}
+{% block title %}Search{% endblock %}
+{% block navigation %}{% include "search_navigation.html" %}{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="{{ static('css/forms.css') }}">
+<link rel="stylesheet" href="{{ static('css/search.css') }}">
+<script src="{{ static('js/search.js') }}" type="module"></script>
+<script src="{{ static('js/saved-search.js') }}" type="module"></script>
+{% endblock %}
+{% block content %}
+<div class="page-search">
+    {% if can_save %}
+    <form id="saved-search-form" method="get" action="{{ url_for('search.use_saved') }}">
+        <label for="saved-search">Saved queries</label>
+        <div class="saved-search-controls">
+            <select id="saved-search" name="saved_id" required>
+                <option value="">Select a saved query</option>
+                {% for saved in saved_queries %}<option value="{{ saved.id }}"{% if editing_saved and saved.id == editing_saved.id %} selected{% endif %}>{{ saved.name }}</option>{% endfor %}
+            </select>
+            <button type="submit">Load</button>
+            <button type="submit" formaction="{{ url_for('search.edit_saved') }}">Edit</button>
+        </div>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('search.index') }}" class="search-form" role="search">
+        <input type="hidden" id="editing-saved-id" name="editing_saved_id" value="{{ editing_saved.id if editing_saved else '' }}">
+        <label for="search-type">Page type</label>
+        <select id="search-type" name="type" required>
+            <option value="">Select a page type</option>
+            {% for value, label in result_labels.items() %}
+            <option value="{{ value }}"{% if result_type == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <div class="search-query-heading">
+            <label for="search-query">Query</label>
+            <div id="search-autocomplete-control" hidden>
+                <input type="checkbox" id="search-autocomplete" checked>
+                <label for="search-autocomplete">Autocomplete</label>
+            </div>
+        </div>
+        <div class="search-query-editor">
+            <textarea id="search-query" name="q" rows="6" maxlength="65536" required
+                      spellcheck="false" autocapitalize="off" autocorrect="off"
+                      {% if error %}aria-describedby="search-error" aria-invalid="true"{% endif %}
+                      placeholder='title CONTAINS "love" AND 2000 &lt;= year &lt; 2020'>{{ query_text }}</textarea>
+            <div id="search-suggestions" role="listbox" aria-label="WSQL suggestions" hidden></div>
+        </div>
+        {{ search_response.feedback() }}
+        <div class="buttons">
+            <p id="search-status" role="status" hidden></p>
+            {% if can_save %}<button id="save-query" type="submit" formaction="{{ url_for('search.prepare_save') }}">Save query</button>{% endif %}
+            <button id="search-submit" type="submit" name="offset" value="0">Search</button>
+        </div>
+    </form>
+
+    {{ search_response.results() }}
+</div>
+{% if can_save %}
+<dialog id="saved-search-dialog" aria-labelledby="search-dialog-title">
+    <button type="button" id="close-saved-search-dialog" aria-label="Close">[X]</button>
+    <div id="saved-search-dialog-content"></div>
+</dialog>
+{% endif %}
+<script id="search-schema" type="application/json" data-choices-url="{{ url_for('api.search.choices') }}" data-choice-fields='{{ choice_fields|tojson }}'>{{ search_schema|tojson }}</script>
+{% endblock %}
