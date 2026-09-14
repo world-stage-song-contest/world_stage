@@ -5,6 +5,7 @@
     <link rel="stylesheet" href="{{ static('css/videojs-overrides.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video.min.js"></script>
     <script src="{{ static('js/audio-fallback.js') }}"></script>
+    <script src="{{ static('js/media-source.js') }}"></script>
     <script src="{{ static('js/scrobble.js') }}"></script>
     <style>
         #play-controls {
@@ -94,7 +95,6 @@
     {% if collection_title %}
     <a class="nav-item" href="{{ collection_back_url }}">{{ collection_title }}</a>
     <span class="nav-separator"></span>
-    <a class="nav-item" href="{{ collection_download_url }}">Download .m3u</a>
     {% else %}
     {% if special %}
     <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
@@ -122,7 +122,6 @@
     {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>{% endif %}
     {% endif %}
     <span class="nav-separator"></span>
-    <a class="nav-item" href="{{ url_for('playlist.show', key=special ~ show) }}">Download .m3u</a>
     {% else %}
     <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
     <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
@@ -135,7 +134,6 @@
     {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>{% endif %}
     {% endif %}
     <span class="nav-separator"></span>
-    <a class="nav-item" href="{{ url_for('playlist.show', key='%04d'|format(year|abs) ~ show) }}">Download .m3u</a>
     {% endif %}
     {% endif %}
 {% endblock %}
@@ -150,11 +148,18 @@
             <option value="song">Current song</option>
         </select>
     </div>
-    <div class="play-option" style="margin-left: auto;">
-        <input type="checkbox" id="postcards-toggle" {% if postcards %}checked{% endif %}>
-        <label for="postcards-toggle">Include postcards</label>
-    </div>
+    {% from 'macros/playlist.html' import download_playlist %}
+    {% if collection_title %}
+    {{ download_playlist(collection_download_url, postcards=postcards, player=true) }}
+    {% else %}
+    {% set playlist_key = (special or ('%04d'|format(year|abs))) ~ show %}
+    {{ download_playlist(url_for('playlist.show', key=playlist_key), show=true,
+                         host_available=host_available, postcards=postcards,
+                         host=include_host, intervals=full_show, player=true) }}
+    {% endif %}
 </div>
+
+<p id="play-error" class="error" role="alert" hidden></p>
 
 <div id="play-layout">
     <div id="player-wrap">
@@ -168,15 +173,18 @@
 <script>
     let ENTRIES = {{ entries|tojson }};
 
-    document.getElementById('postcards-toggle').addEventListener('change', (e) => {
+    document.querySelector('[data-playlist-player]').addEventListener('change', (event) => {
         const url = new URL(window.location.href);
-        url.searchParams.set('postcards', e.target.checked ? 'true' : 'false');
+        for (const [name, value] of new FormData(event.currentTarget)) {
+            url.searchParams.set(name, value);
+        }
+        url.searchParams.delete('full_show');
         window.location.href = url.toString();
     });
 
     function entryName(entry) {
         if (entry.kind === 'postcard') return `Postcard: ${entry.country}`;
-        if (entry.kind === 'recap') return 'Recap';
+        if (entry.kind !== 'song') return entry.title;
         return `${entry.artist} — ${entry.title}`;
     }
 
@@ -289,17 +297,33 @@
         }
     }
 
-    function loadEntry(index, { autoplay = true } = {}) {
+    let loadVersion = 0;
+
+    async function loadEntry(index, { autoplay = true } = {}) {
         const entry = ENTRIES[index];
         if (!entry) return;
         audioFallback.reset();
-        // Postcards and the final recap deliberately clear the tracker:
-        // only full catalog songs are eligible for scrobbling.
+        // Only catalog songs count as listens.
         scrobbleTracker.setSong(
             entry.kind === 'song' ? entry : null,
             () => audioFallback.isActive() ? audioFallback.audio.duration : player.duration()
         );
         currentIndex = index;
+        const version = ++loadVersion;
+        player.pause();
+        setActive(index);
+        const error = document.getElementById('play-error');
+        error.hidden = true;
+        let media;
+        try {
+            media = await WorldStageMediaSource.resolve(entry.url);
+        } catch (cause) {
+            if (version !== loadVersion) return;
+            error.textContent = `Cannot load ${entryName(entry)}. ${cause.message}`;
+            error.hidden = false;
+            return;
+        }
+        if (version !== loadVersion) return;
 
         const videoEl = videoElement();
         if (!videoEl) return;
@@ -310,12 +334,12 @@
         Array.from(videoEl.querySelectorAll('source')).forEach(s => s.remove());
 
         const source = document.createElement('source');
-        source.src = entry.url;
-        source.type = entryMime(entry.url);
+        source.src = media.url;
+        source.type = media.contentType || entryMime(media.url);
         videoEl.appendChild(source);
 
         // Update poster via video.js so its overlay stays in sync.
-        player.poster(entry.poster || '');
+        player.poster(entry.poster || media.thumbnail || '');
 
         // Replace the previous entry's subtitles with this entry's
         // track. Remote tracks are not cleared when the media source

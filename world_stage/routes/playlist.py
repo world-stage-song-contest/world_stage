@@ -15,6 +15,10 @@ from ..utils import (
     with_permissions,
     write_m3u,
 )
+from ..utils.booleans import query_bool
+from ..utils.playlist_media import PlaylistMediaError
+from ..utils.playlist_options import playlist_options
+from ..utils.playlists import song_play_entries
 from .year import generate_playlist
 
 bp = Blueprint("playlist", __name__, url_prefix="/playlist")
@@ -71,50 +75,6 @@ def _scrobble_enabled() -> bool:
     return bool(user) and scrobble.has_enabled_account(user[0])
 
 
-def _play_entries(rows: list[dict], postcards: bool) -> tuple[list[dict], list[str]]:
-    """Turn the same catalog rows used by an M3U into browser-player entries."""
-    entries: list[dict] = []
-    bad_countries: list[str] = []
-    for index, row in enumerate(rows):
-        cc = (row.get("cc") or "").lower()
-        url = row.get("video_link") or ""
-        shuffle_group = f"entry-{index}"
-        if "media.world-stage.org" not in url:
-            bad_countries.append(cc)
-        if postcards:
-            entries.append(
-                {
-                    "kind": "postcard",
-                    "shuffle_group": shuffle_group,
-                    "shuffleable": True,
-                    "cc": cc,
-                    "country": row.get("country") or "",
-                    "title": "",
-                    "artist": "",
-                    "url": f"https://media.world-stage.org/postcards/{cc}.mov",
-                    "poster": None,
-                    "vtt": None,
-                }
-            )
-        entries.append(
-            {
-                "kind": "song",
-                "shuffle_group": shuffle_group,
-                "shuffleable": True,
-                "id": row["id"],
-                "cc": cc,
-                "country": row.get("country") or "",
-                "title": row.get("title") or "",
-                "artist": row.get("artist") or "",
-                "duration": row.get("duration"),
-                "url": url,
-                "poster": row.get("poster_link") or None,
-                "vtt": row.get("vtt_link") or None,
-            }
-        )
-    return entries, bad_countries
-
-
 def _render_player(
     *,
     rows: list[dict],
@@ -123,8 +83,8 @@ def _render_player(
     back_url: str,
     download_url: str,
 ):
-    postcards = request.args.get("postcards", "false") == "true"
-    entries, bad_countries = _play_entries(rows, postcards)
+    postcards = query_bool(request.args, "postcards", True)
+    entries, bad_countries = song_play_entries(rows, postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:
         return err
@@ -137,28 +97,6 @@ def _render_player(
         postcards=postcards,
         scrobble_enabled=_scrobble_enabled(),
     )
-
-
-def _split_np(stem: str) -> tuple[str, bool]:
-    if stem.endswith("-np"):
-        return stem[:-3], False
-    return stem, True
-
-
-def _split_show_flags(stem: str) -> tuple[str, bool, bool]:
-    """Strip ``-np``/``-nh`` flags from the stem in any order. Returns
-    ``(stem, postcards, include_host)``."""
-    postcards = True
-    include_host = True
-    while True:
-        if stem.endswith("-np"):
-            postcards = False
-            stem = stem[:-3]
-        elif stem.endswith("-nh"):
-            include_host = False
-            stem = stem[:-3]
-        else:
-            return stem, postcards, include_host
 
 
 def _bad_links_error(bad_countries, permissions):
@@ -185,18 +123,23 @@ def _m3u(value: str, filename_stem: str) -> Response:
 @bp.get("/show/<key>.m3u")
 @with_permissions
 def show(key: str, permissions: UserPermissions):
-    stem, postcards, include_host = _split_show_flags(key)
+    options = playlist_options(key, request.args, show=True)
+    stem = options.stem
 
     db = get_db()
     cursor = db.cursor()
     cursor.execute(
         """
-        SELECT show.short_name AS show_short, year.id AS year_id
+        SELECT COALESCE(nf.short_name || '-', '') || show.short_name AS show_short,
+               year.id AS year_id
         FROM show
         JOIN year ON year.id = show.year_id
-        WHERE LOWER(LPAD(ABS(year.id)::text, 4, '0') || show.short_name) = LOWER(%(k)s)
+        LEFT JOIN national_final AS nf ON nf.id = show.national_final_id
+        WHERE LOWER(LPAD(ABS(year.id)::text, 4, '0')
+                   || COALESCE(nf.short_name || '-', '') || show.short_name) = LOWER(%(k)s)
            OR (year.special_short_name IS NOT NULL
-               AND LOWER(year.special_short_name || show.short_name) = LOWER(%(k)s))
+               AND LOWER(year.special_short_name
+                        || COALESCE(nf.short_name || '-', '') || show.short_name) = LOWER(%(k)s))
         LIMIT 1
         """,
         {"k": stem},
@@ -209,13 +152,18 @@ def show(key: str, permissions: UserPermissions):
     if not show_data:
         return render_template("error.html", error=f"Show not found: {stem}"), 404
 
-    value, bad_countries = generate_playlist(show_data, postcards, include_host)
+    try:
+        value, bad_countries = generate_playlist(
+            show_data, options.postcards, options.host, options.intervals
+        )
+    except PlaylistMediaError as exc:
+        return render_template("error.html", error=str(exc)), 502
 
     err = _bad_links_error(bad_countries, permissions)
     if err:
         return err
 
-    return _m3u(value, key)
+    return _m3u(value, options.filename)
 
 
 def _resolve_year(stem: str) -> int | None:
@@ -255,7 +203,8 @@ def _year_rows(year_id: int) -> list[dict]:
 @bp.get("/year/<key>.m3u")
 @with_permissions
 def year(key: str, permissions: UserPermissions):
-    stem, postcards = _split_np(key)
+    options = playlist_options(key, request.args)
+    stem = options.stem
 
     year_id = _resolve_year(stem)
     if year_id is None:
@@ -266,12 +215,12 @@ def year(key: str, permissions: UserPermissions):
         return render_template("error.html", error=f"No entries for {stem}"), 404
 
     entries = [(r["cc"], r["video_link"]) for r in rows]
-    value, bad_countries = write_m3u(entries, postcards=postcards)
+    value, bad_countries = write_m3u(entries, postcards=options.postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:
         return err
 
-    return _m3u(value, key)
+    return _m3u(value, options.filename)
 
 
 @bp.get("/year/<key>/play")
@@ -300,7 +249,8 @@ def year_play(key: str, permissions: UserPermissions):
 @bp.get("/country/<key>.m3u")
 @with_permissions
 def country(key: str, permissions: UserPermissions):
-    stem, postcards = _split_np(key)
+    options = playlist_options(key, request.args)
+    stem = options.stem
     canonical = resolve_country_code(stem.upper())
     if not canonical:
         return render_template("error.html", error=f"Country not found: {stem}"), 404
@@ -310,12 +260,12 @@ def country(key: str, permissions: UserPermissions):
         return render_template("error.html", error=f"No published entries for {canonical}"), 404
 
     entries = [(r["cc"], r["video_link"]) for r in rows]
-    value, bad_countries = write_m3u(entries, postcards=postcards)
+    value, bad_countries = write_m3u(entries, postcards=options.postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:
         return err
 
-    return _m3u(value, key)
+    return _m3u(value, options.filename)
 
 
 def _country_rows(canonical: str) -> list[dict]:
@@ -360,7 +310,8 @@ def country_play(key: str, permissions: UserPermissions):
 @bp.get("/user/<key>.m3u")
 @with_permissions
 def user(key: str, permissions: UserPermissions):
-    stem, postcards = _split_np(key)
+    options = playlist_options(key, request.args)
+    stem = options.stem
     stem, normalized = _normalize_user_key(stem)
 
     rows = _user_rows(normalized)
@@ -368,12 +319,12 @@ def user(key: str, permissions: UserPermissions):
         return render_template("error.html", error=f"No published entries for {stem}"), 404
 
     entries = [(r["cc"], r["video_link"]) for r in rows]
-    value, bad_countries = write_m3u(entries, postcards=postcards)
+    value, bad_countries = write_m3u(entries, postcards=options.postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:
         return err
 
-    return _m3u(value, key)
+    return _m3u(value, options.filename)
 
 
 def _normalize_user_key(stem: str) -> tuple[str, str]:

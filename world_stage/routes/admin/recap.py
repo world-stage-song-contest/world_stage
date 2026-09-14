@@ -11,6 +11,7 @@ from ...db import get_db
 from ...utils import (
     render_template,
 )
+from ...utils.show_metadata import get_show_segments
 from .common import bp
 
 
@@ -301,32 +302,6 @@ def drop_none(obj):
 
 _MEDIA_URL = "https://media.world-stage.org"
 
-_OPENING_ACT_PLACEMENTS = {
-    "f": 1,
-    "sc": 2,
-    "sf4": 3,
-    "sf3": 4,
-    "sf2": 5,
-    "sf1": 6,
-}
-
-
-def _get_opening_act_country(cursor, year: int, short_name: str) -> str | None:
-    placement = _OPENING_ACT_PLACEMENTS.get(short_name)
-    if placement is None:
-        return None
-
-    cursor.execute(
-        """
-        SELECT LOWER(country_id) AS cc
-        FROM country_year_results
-        WHERE year_id = %s AND place = %s
-        """,
-        (year - 1, placement),
-    )
-    row = cursor.fetchone()
-    return row["cc"] if row else None
-
 
 def get_cytube_playlist(form_data: list[str]) -> str | None:
     """Build a CyTube import playlist for one regular or national-final show."""
@@ -371,8 +346,7 @@ def get_cytube_playlist(form_data: list[str]) -> str | None:
     )
     songs = cursor.fetchall()
 
-    # The host performs halfway through odd-numbered semi-finals, but is not
-    # normally assigned to a semi-final's song_show rows.
+    # The host is not in the semifinal lineup.
     if short_name in ("sf1", "sf3"):
         cursor.execute(
             """
@@ -393,11 +367,8 @@ def get_cytube_playlist(form_data: list[str]) -> str | None:
 
     output = io.StringIO(newline="")
     writer = csv.writer(output, delimiter=";", lineterminator="\n")
-    writer.writerow((f"WS {year} Opening", f"{_MEDIA_URL}/openings/{year}.mov"))
-
-    opening_act_country = _get_opening_act_country(cursor, year, short_name)
-    if opening_act_country:
-        writer.writerow(("Opening act", f"{_MEDIA_URL}/ws{year - 1}{opening_act_country}.json"))
+    intro, outro = get_show_segments(cursor, show["id"])
+    writer.writerows((entry["title"], entry["url"]) for entry in intro)
 
     for song in songs:
         cc = song["cc"]
@@ -407,13 +378,7 @@ def get_cytube_playlist(form_data: list[str]) -> str | None:
         writer.writerow((postcard_name, f"{_MEDIA_URL}/postcards/{cc}.mov"))
         writer.writerow((song_name, f"{_MEDIA_URL}/ws{year}{cc}.json"))
 
-    writer.writerow(("Voting announcement", f"{_MEDIA_URL}/silence/silence.mov"))
-    writer.writerow(("Recap 1", f"{_MEDIA_URL}/recaps/{year}{short_name}.mov"))
-    writer.writerow(("", f"{_MEDIA_URL}/intervals/{year}/{short_name}/i1.json"))
-    writer.writerow(("Recap 2", f"{_MEDIA_URL}/recaps/{year}{short_name}s.mov"))
-    writer.writerow(("", f"{_MEDIA_URL}/intervals/{year}/{short_name}/i2.json"))
-    writer.writerow(("", f"{_MEDIA_URL}/countdown/countdown_with_sound.json"))
-    writer.writerow(("", f"{_MEDIA_URL}/intervals/{year}/{short_name}/i3.json"))
+    writer.writerows((entry["title"], entry["url"]) for entry in outro)
     return output.getvalue()
 
 

@@ -213,7 +213,7 @@ def _show_nf(
     cursor.execute(
         """
         SELECT show.id, show.short_name, show.show_name, show.show_type,
-               show.date, show.status,
+               show.date, show.status, show.metadata,
                show.voting_opens, show.voting_closes, show.predictions_close,
                array_agg(point.score ORDER BY point.place) AS points
         FROM show

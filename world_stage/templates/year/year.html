@@ -61,8 +61,8 @@
 {% endif %}
 <div>
     <strong>Download playlist:</strong>
-    <a href="{{ url_for('playlist.year', key=year_key) }}">With postcards</a>/<a
-    href="{{ url_for('playlist.year', key=year_key ~ '-np') }}">Without postcards</a>
+    {% from 'macros/playlist.html' import download_playlist %}
+    {{ download_playlist(url_for('playlist.year', key=year_key)) }}
 </div>
 
 {#

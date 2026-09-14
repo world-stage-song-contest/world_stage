@@ -1284,3 +1284,51 @@ def test_main_selection_is_immutable_after_main_show_assignment(
             _remove_shows(db, [main_show_id])
 
     property_test()
+
+
+def test_show_media_stays_in_its_contest_management(client, db, national_final, login):
+    login(1)
+    main_show = db.execute(
+        "INSERT INTO show (year_id, show_type) VALUES (2025, 'f') RETURNING id"
+    ).fetchone()["id"]
+    db.execute(
+        """INSERT INTO year (id, special_name, special_short_name)
+           VALUES (-2034, 'Media Special', 'nf-media-special') ON CONFLICT DO NOTHING"""
+    )
+    db.commit()
+
+    @settings(max_examples=8, deadline=None)
+    @given(
+        special=st.booleans(),
+        name=st.text(alphabet=string.ascii_lowercase, min_size=1, max_size=8),
+    )
+    def check(special, name):
+        year = -2034 if special else 2025
+        db.execute(
+            "UPDATE national_final SET year_id = %s WHERE id = %s", (year, national_final["id"])
+        )
+        db.execute("UPDATE show SET year_id = %s WHERE id IN (%s, %s)",
+                   (year, main_show, national_final['show_id']))
+        db.commit()
+        year_url = '/admin/manage/special/nf-media-special' if special else '/admin/manage/2025'
+        nf_url = (
+            '/year/special/nf-media-special/nfs/test-es/manage' if special
+            else '/year/2025/nfs/test-es/manage'
+        )
+        year_data = client.get(year_url, headers={'Accept': 'application/json'}).get_json()
+        assert [show['id'] for show in year_data['shows']] == [main_show]
+        nf_data = client.get(nf_url, headers={'Accept': 'application/json'}).get_json()
+        assert [show['id'] for show in nf_data['shows']] == [national_final['show_id']]
+        opening = f'https://media.world-stage.org/{name}.mov'
+        response = client.post(
+            f"/api/show/{'nf-media-special' if special else year}-test-es-f/metadata",
+            data={'opening': opening, 'intervals': '', 'return_to': 'manage'},
+        )
+        assert response.status_code == 303
+        assert response.location == nf_url
+        assert client.get(nf_url, headers={'Accept': 'text/html'}).status_code == 200
+        assert client.get(year_url, headers={'Accept': 'text/html'}).status_code == 200
+        data = client.get(nf_url, headers={'Accept': 'application/json'}).get_json()
+        assert data['shows'][0]['metadata'] == {'opening': opening, 'intervals': []}
+
+    check()

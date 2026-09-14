@@ -6,25 +6,6 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
     db = get_db()
     cursor = db.cursor()
 
-    if year:
-        short_show_name = show
-    else:
-        # Format: "year-show" e.g. "2025-f" or "cs24-f" for specials
-        parts = show.split("-", 1)
-        if len(parts) == 2:
-            short_show_name = parts[1]
-            try:
-                year = int(parts[0])
-            except ValueError:
-                # Non-numeric prefix: look up as special short name
-                cursor.execute("SELECT id FROM year WHERE special_short_name = %s", (parts[0],))
-                row = cursor.fetchone()
-                if not row:
-                    return None
-                year = row["id"]
-        else:
-            return None
-
     cursor.execute(
         """
         SELECT show.id, show.year_id, show.point_system_id, show.show_name,
@@ -54,20 +35,21 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
                official_rules.penalizes_non_voters,
                revote_rules.penalizes_non_voters AS revote_penalizes_non_voters
         FROM show
+        JOIN year ON year.id = show.year_id
         LEFT JOIN national_final ON national_final.id = show.national_final_id
         JOIN voting_ruleset official_rules
           ON official_rules.version = show.voting_ruleset_version
         JOIN voting_ruleset revote_rules
           ON revote_rules.version = show.revote_ruleset_version
-        WHERE show.year_id = %s
-          AND (
-              (show.national_final_id IS NULL AND show.short_name = %s)
-              OR
-              (show.national_final_id IS NOT NULL
-               AND national_final.short_name || '-' || show.short_name = %s)
-          )
+        WHERE (
+            show.year_id = %s
+            AND COALESCE(national_final.short_name || '-', '') || show.short_name = %s
+        ) OR (
+            %s AND COALESCE(year.special_short_name, year.id::text) || '-'
+                || COALESCE(national_final.short_name || '-', '') || show.short_name = %s
+        )
     """,
-        (year, short_show_name, short_show_name),
+        (year, show, year is None, show),
     )
 
     show_row = cursor.fetchone()

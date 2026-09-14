@@ -178,8 +178,8 @@
 </div>
 <div>
     <strong>Download playlist:</strong>
-    <a href="{{ url_for('playlist.country', key=country.lower()) }}">With postcards</a>/<a
-    href="{{ url_for('playlist.country', key=country.lower() ~ '-np') }}">Without postcards</a>
+    {% from 'macros/playlist.html' import download_playlist %}
+    {{ download_playlist(url_for('playlist.country', key=country.lower())) }}
 </div>
 
 {#

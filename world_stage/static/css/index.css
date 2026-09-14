@@ -800,3 +800,17 @@ table.hide-detail .detail-col {
 .year-result {
     font-weight: bold;
 }
+
+.playlist-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin: 0.5rem 0;
+}
+
+.playlist-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}

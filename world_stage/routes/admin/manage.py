@@ -3,6 +3,7 @@ import re
 
 import psycopg
 from flask import redirect, request, url_for
+from psycopg.types.json import Jsonb
 
 from ...db import get_db
 from ...discord import (
@@ -23,6 +24,8 @@ from ...utils import (
     parse_utc_datetime,
     render_template,
 )
+from ...utils.booleans import query_bool
+from ...utils.show_metadata import validate_metadata
 from ...utils.song_revisions import withdraw_song
 from .common import _resolve_special, bp
 
@@ -403,7 +406,7 @@ def _render_manage(year_id: int, year_data: dict):
     cursor.execute(
         """
         SELECT show.id, show.show_name, show.short_name, show.show_type,
-               show.date, show.status,
+               show.date, show.status, show.metadata,
                show.voting_opens, show.voting_closes, show.predictions_close,
                EXISTS (
                    SELECT 1 FROM show_progression
@@ -423,7 +426,11 @@ def _render_manage(year_id: int, year_data: dict):
     )
     national_finals = cursor.fetchall()
     cursor.execute(
-        "SELECT id, name FROM country WHERE id <> 'XX' ORDER BY name, id"
+        """SELECT id, name FROM country
+           WHERE is_participating AND id <> 'XX'
+             AND available_from <= %s AND available_until >= %s
+           ORDER BY name, id""",
+        (year_id, year_id),
     )
     countries = cursor.fetchall()
     return render_template(
@@ -439,7 +446,7 @@ def _render_manage(year_id: int, year_data: dict):
 def manage(year: int):
     cursor = get_db().cursor()
     cursor.execute(
-        """SELECT id, status, submissions_open, host_id, scoreboard_style
+        """SELECT id, status, submissions_open, host_id, scoreboard_style, metadata
            FROM year WHERE id = %s AND id >= 0""",
         (year,),
     )
@@ -459,7 +466,126 @@ def manage_special(short_name: str):
     return _render_manage(year_data["id"], year_data)
 
 
-@bp.post("/manage/<int:year>")
+def _is_host_country(cursor, host_id: str, year: int) -> bool:
+    cursor.execute(
+        """SELECT 1 FROM country WHERE id = %s AND is_participating AND id <> 'XX'
+           AND available_from <= %s AND available_until >= %s""", (host_id, year, year),
+    )
+    return cursor.fetchone() is not None
+
+
+def _set_year_host(cursor, year: int, raw_host_id):
+    if year < 0:
+        return render_template(
+            "error.html", error="Special years cannot have a host"
+        ), 400
+
+    if raw_host_id is not None and not isinstance(raw_host_id, str):
+        return render_template(
+            "error.html", error="Invalid host country"
+        ), 400
+    host_id = (raw_host_id or "").strip() or None
+    if host_id is not None:
+        if not _is_host_country(cursor, host_id, year):
+            return render_template(
+                "error.html", error=f"Invalid host country '{host_id}'"
+            ), 400
+
+        cursor.execute(
+            """SELECT id FROM show
+               WHERE year_id = %s AND short_name = 'f'
+                 AND national_final_id IS NULL""",
+            (year,),
+        )
+        final = cursor.fetchone()
+        if not final:
+            return render_template(
+                "error.html", error=f"Final show for {year} not found"
+            ), 400
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM song
+            WHERE year_id = %s AND country_id = %s
+            ORDER BY entry_number NULLS LAST, id
+            LIMIT 1
+            """,
+            (year, host_id),
+        )
+        host_entry = cursor.fetchone()
+        if not host_entry:
+            return render_template(
+                "error.html",
+                error=f"No {host_id} entry found for {year}",
+            ), 400
+
+        cursor.execute(
+            """
+            INSERT INTO song_show (song_id, show_id, running_order)
+            VALUES (%s, %s, 1)
+            ON CONFLICT (song_id, show_id) DO UPDATE
+            SET running_order = 1
+            """,
+            (host_entry["id"], final["id"]),
+        )
+
+    cursor.execute(
+        "UPDATE year SET host_id = %s WHERE id = %s AND id >= 0",
+        (host_id, year),
+    )
+    if cursor.rowcount == 0:
+        return render_template("error.html", error=f"Year {year} not found"), 404
+    return None
+
+
+def _save_year_settings(cursor, year: int, body, is_form: bool):
+    cursor.execute("SELECT * FROM year WHERE id = %s FOR UPDATE", (year,))
+    previous = cursor.fetchone()
+    if previous is None:
+        return render_template("error.html", error="Year not found"), 404
+    status = body.get("year_status")
+    if status not in ("open", "closed", "ongoing"):
+        return render_template("error.html", error="Invalid year status"), 400
+    style = body.get("scoreboard_style") or None
+    if style not in (None, "esc-1997"):
+        return render_template("error.html", error="Invalid scoreboard style"), 400
+    flags = {
+        key: query_bool(body, key, False) if is_form else body.get(key, False)
+        for key in ("opening", "countdown", "submissions_open")
+    }
+    if not all(isinstance(value, bool) for value in flags.values()):
+        return render_template("error.html", error="Invalid checkbox value"), 400
+    host = body.get("host_id")
+    if host is not None and not isinstance(host, str):
+        return render_template("error.html", error="Invalid host country"), 400
+    host = (host or "").strip() or None
+    if year < 0 and host is not None:
+        return render_template("error.html", error="Special years cannot have a host"), 400
+    if (host is not None and host == previous["host_id"]
+            and not _is_host_country(cursor, host, year)):
+        return render_template("error.html", error=f"Invalid host country '{host}'"), 400
+    if year >= 0 and host != previous["host_id"] and (
+        error := _set_year_host(cursor, year, host)
+    ):
+        return error
+    if status == "ongoing" and previous["status"] != "ongoing":
+        issue = get_unassigned_lineup_issue(cursor, year, None)
+        if issue:
+            return render_template(
+                "error.html", error="The contest cannot start: " + issue["message"],
+                lineup_issues=[issue],
+            ), 400
+    submissions_open = flags.pop("submissions_open")
+    cursor.execute(
+        """UPDATE year SET status = %s, submissions_open = %s, scoreboard_style = %s,
+                  metadata = metadata || %s WHERE id = %s""",
+        (status, submissions_open, style, Jsonb(flags), year),
+    )
+    return None
+
+
+@bp.post("/manage/<int(signed=True):year>")
 def manage_post(year: int):
     is_form = not request.is_json
     body = request.form if is_form else request.get_json(silent=True)
@@ -469,12 +595,26 @@ def manage_post(year: int):
     db = get_db()
     cursor = db.cursor()
 
-    action = body.get("action")
+    action = body.get("action", "save_year" if is_form else None)
     if not action:
         return render_template("error.html", error="No action specified"), 400
 
     notifications = []
     match action:
+        case "save_year":
+            if error := _save_year_settings(cursor, year, body, is_form):
+                db.rollback()
+                return error
+        case "set_metadata":
+            metadata = body.get("metadata")
+            if error := validate_metadata(metadata, year=True):
+                return {"error": error}, 400
+            cursor.execute(
+                "UPDATE year SET metadata = metadata || %s WHERE id = %s",
+                (Jsonb(metadata), year),
+            )
+            if cursor.rowcount == 0:
+                return {"error": "Year not found"}, 404
         case "delete_placeholders":
             user = get_user_id_from_session(request.cookies.get("session"))
             if user is None:
@@ -539,75 +679,20 @@ def manage_post(year: int):
             if cursor.rowcount == 0:
                 return render_template("error.html", error=f"Year {year} not found"), 404
         case "set_host":
-            if year < 0:
-                return render_template(
-                    "error.html", error="Special years cannot have a host"
-                ), 400
-
-            raw_host_id = body.get("host_id")
-            if raw_host_id is not None and not isinstance(raw_host_id, str):
-                return render_template(
-                    "error.html", error="Invalid host country"
-                ), 400
-            host_id = (raw_host_id or "").strip() or None
-            if host_id is not None:
-                cursor.execute("SELECT 1 FROM country WHERE id = %s", (host_id,))
-                if not cursor.fetchone():
-                    return render_template(
-                        "error.html", error=f"Invalid host country '{host_id}'"
-                    ), 400
-
-                cursor.execute(
-                    """SELECT id FROM show
-                       WHERE year_id = %s AND short_name = 'f'
-                         AND national_final_id IS NULL""",
-                    (year,),
-                )
-                final = cursor.fetchone()
-                if not final:
-                    return render_template(
-                        "error.html", error=f"Final show for {year} not found"
-                    ), 400
-
-                cursor.execute(
-                    """
-                    SELECT id
-                    FROM song
-                    WHERE year_id = %s AND country_id = %s
-                    ORDER BY entry_number NULLS LAST, id
-                    LIMIT 1
-                    """,
-                    (year, host_id),
-                )
-                host_entry = cursor.fetchone()
-                if not host_entry:
-                    return render_template(
-                        "error.html",
-                        error=f"No {host_id} entry found for {year}",
-                    ), 400
-
-                cursor.execute(
-                    """
-                    INSERT INTO song_show (song_id, show_id, running_order)
-                    VALUES (%s, %s, 1)
-                    ON CONFLICT (song_id, show_id) DO UPDATE
-                    SET running_order = 1
-                    """,
-                    (host_entry["id"], final["id"]),
-                )
-
-            cursor.execute(
-                "UPDATE year SET host_id = %s WHERE id = %s AND id >= 0",
-                (host_id, year),
-            )
-            if cursor.rowcount == 0:
-                return render_template("error.html", error=f"Year {year} not found"), 404
+            if error := _set_year_host(cursor, year, body.get("host_id")):
+                return error
         case _:
             return render_template("error.html", error=f"Unknown action '{action}'"), 400
     db.commit()
     for notification in notifications:
         notify_new_message(*notification)
     if is_form:
+        if year < 0:
+            cursor.execute("SELECT special_short_name FROM year WHERE id = %s", (year,))
+            special = cursor.fetchone()
+            return redirect(url_for(
+                "admin.manage_special", short_name=special["special_short_name"]
+            ))
         return redirect(url_for("admin.manage", year=year))
     return {"status": "success"}, 200
 
@@ -646,6 +731,22 @@ def manage_show_post(year: int, show: str):
     manual_notification = False
 
     match action:
+        case "set_metadata":
+            metadata = body.get("metadata")
+            if error := validate_metadata(metadata):
+                return {"error": error}, 400
+            cursor.execute(
+                """UPDATE show SET metadata = metadata || %s
+                   WHERE show.id IN (
+                       SELECT s.id FROM show AS s
+                       LEFT JOIN national_final AS nf ON nf.id = s.national_final_id
+                       WHERE s.year_id = %s
+                         AND COALESCE(nf.short_name || '-', '') || s.short_name = %s
+                   )""",
+                (Jsonb(metadata), year, show),
+            )
+            if cursor.rowcount == 0:
+                return {"error": "Show not found"}, 404
         case "open_voting":
             cursor.execute(
                 """

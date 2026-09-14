@@ -43,7 +43,7 @@ def _resolve_special(short_name: str) -> dict | None:
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT id, status, submissions_open, scoreboard_style,
+        SELECT id, status, submissions_open, scoreboard_style, metadata,
                special_name, special_short_name
         FROM year
         WHERE special_short_name = %s

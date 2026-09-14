@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "macros/show_media.html" import media_button, media_dialog %}
 {% from "macros/artists.html" import artist_links %}
 {% block title %}Manage shows: {{ nf.name }}{% endblock %}
 {% block headercontents %}
+<link rel="stylesheet" href="{{ static('css/manage-shows.css') }}">
+<script src="{{ static('js/show-media.js') }}"></script>
 <link rel="stylesheet" href="{{ static('css/utc-datetime.css') }}">
 <script src="{{ static('js/utc-datetime.js') }}" defer></script>
 <style>
@@ -88,6 +91,7 @@
             <th>Predictions</th>
             <th>Change Status</th>
             <th>Change Start Time (UTC)</th>
+            {% if can_reassign_owner %}<th>Media</th>{% endif %}
         </tr>
     </thead>
     <tbody>
@@ -149,10 +153,16 @@
                 </div>
             </form>
         </td>
+        {% if can_reassign_owner %}<td>{{ media_button(show) }}</td>{% endif %}
     </tr>
     {% endfor %}
     </tbody>
 </table>
+{% if can_reassign_owner %}
+{% for show in shows %}
+{{ media_dialog(show, (special or year) ~ '-' ~ nf.short_name ~ '-' ~ show.short_name) }}
+{% endfor %}
+{% endif %}
 
 <div>
     <h2>National Final settings</h2>

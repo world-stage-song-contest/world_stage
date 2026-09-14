@@ -1,9 +1,8 @@
 from collections import defaultdict
 
-from flask import Blueprint, request
+from flask import Blueprint
 
 from world_stage.db import fetchone, get_db
-from world_stage.routes.member import get_countries as get_submission_countries
 from world_stage.utils import (
     UserPermissions,
     dt_now,
@@ -11,8 +10,9 @@ from world_stage.utils import (
     get_api_auth,
     get_points_for_system,
     resp,
-    url_bool,
 )
+
+from .show import _show_json
 
 bp = Blueprint("discovery", __name__)
 
@@ -22,46 +22,6 @@ def _permissions_json(permissions: UserPermissions) -> dict:
         "role": permissions.role,
         "can_edit": permissions.can_edit,
         "can_view_restricted": permissions.can_view_restricted,
-    }
-
-
-def _show_json(row: dict, points: list[int] | None = None) -> dict:
-    local_short_name = row["short_name"]
-    route_short_name = (
-        f"{row['national_final_short_name']}-{local_short_name}"
-        if row.get("national_final_short_name") else local_short_name
-    )
-    special = row["special_short_name"] is not None
-    parent_name = row["special_name"] if special else str(row["year_id"])
-    national_final_name = row.get("national_final_name")
-    if national_final_name:
-        display_name = f"{national_final_name}: {row['show_name']}"
-    else:
-        display_name = f"{parent_name} {row['show_name']}"
-    if special:
-        key = f"{row['special_short_name']}-{route_short_name}"
-    else:
-        key = f"{row['year_id']}-{route_short_name}"
-
-    return {
-        "id": row["id"],
-        "key": key,
-        "name": row["show_name"],
-        "display_name": display_name,
-        "short_name": route_short_name,
-        "local_short_name": local_short_name,
-        "national_final_short_name": row.get("national_final_short_name"),
-        "year": row["year_id"],
-        "special_name": row["special_name"],
-        "special_short_name": row["special_short_name"],
-        "date": row["date"],
-        "status": row["status"],
-        "point_system_id": row["point_system_id"],
-        "points": points,
-        "voting_opens": row["voting_opens"],
-        "voting_closes": row["voting_closes"],
-        "predictions_close": row["predictions_close"],
-        "progressions": row["progressions"],
     }
 
 
@@ -159,69 +119,6 @@ def point_systems():
     return resp(list(systems.values()))
 
 
-@bp.get("/show")
-def shows():
-    year = request.args.get("year", type=int)
-    status = request.args.get("status")
-    include_points = request.args.get("points", default="true", type=url_bool)
-
-    clauses = []
-    params = {}
-    if year is not None:
-        clauses.append("show.year_id = %(year)s")
-        params["year"] = year
-    if status:
-        clauses.append("show.status = %(status)s")
-        params["status"] = status
-
-    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-
-    cursor = get_db().cursor()
-    cursor.execute(
-        f"""
-        SELECT show.id, show.year_id, show.point_system_id, show.show_name,
-               show.short_name, show.voting_opens, show.voting_closes,
-               show.predictions_close, show.date,
-               show.status, year.special_name, year.special_short_name,
-               national_final.short_name AS national_final_short_name,
-               national_final.name AS national_final_name,
-               COALESCE((
-                   SELECT jsonb_agg(jsonb_build_object(
-                       'target_show_id', progression.target_show_id,
-                       'target_short_name', target.short_name,
-                       'target_name', target.show_name,
-                       'qualifier_count', progression.qualifier_count,
-                       'priority', progression.priority
-                   ) ORDER BY progression.priority)
-                   FROM show_progression AS progression
-                   JOIN show AS target ON target.id = progression.target_show_id
-                   WHERE progression.source_show_id = show.id
-               ), '[]'::jsonb) AS progressions
-        FROM show
-        JOIN show_types ON show_types.id = show.show_type
-        JOIN year ON year.id = show.year_id
-        LEFT JOIN national_final ON national_final.id = show.national_final_id
-        {where}
-        ORDER BY (national_final.id IS NOT NULL),
-                 show.year_id, national_final.id NULLS FIRST,
-                 show_types.sort_order, show.show_number NULLS FIRST, show.id
-        """,
-        params,
-    )
-
-    point_cache: dict[int, list[int]] = {}
-    data = []
-    for row in cursor.fetchall():
-        points = None
-        if include_points:
-            point_system_id = row["point_system_id"]
-            if point_system_id not in point_cache:
-                point_cache[point_system_id] = get_points_for_system(point_system_id)
-            points = point_cache[point_system_id]
-        data.append(_show_json(row, points))
-    return resp(data)
-
-
 @bp.get("/voting/open")
 def open_votings():
     cursor = get_db().cursor()
@@ -275,17 +172,6 @@ def open_votings():
         data.append(item)
 
     return resp(data)
-
-
-@bp.get("/year/<int(signed=True):year>/submission-countries")
-def submission_countries(year: int):
-    auth = get_api_auth()
-    user_id = auth[0] if auth else None
-    permissions = auth[2] if auth else UserPermissions()
-    show_all = request.args.get("all", default=str(permissions.can_edit).lower(), type=url_bool)
-
-    countries = get_submission_countries(year, user_id, all=show_all)
-    return resp(countries)
 
 
 @bp.get("/submission-context")

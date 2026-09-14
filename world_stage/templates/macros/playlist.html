@@ -1,0 +1,24 @@
+{% macro download_playlist(url, show=false, host_available=false, postcards=true, host=false, intervals=false, player=false) %}
+<form method="get" action="{{ url }}" class="playlist-options" {% if player %}data-playlist-player{% endif %}>
+    <input type="hidden" name="postcards" value="false">
+    <div class="playlist-option">
+    <input type="checkbox" name="postcards" value="true" id="playlist-postcards" {% if postcards %}checked{% endif %}>
+    <label for="playlist-postcards">Postcards</label>
+    </div>
+    {% if show %}
+    <input type="hidden" name="host" value="{{ 'false' if host_available else 'true' }}">
+    {% if host_available %}
+    <div class="playlist-option">
+    <input type="checkbox" name="host" value="true" id="playlist-host" {% if host %}checked{% endif %}>
+    <label for="playlist-host">Host entry</label>
+    </div>
+    {% endif %}
+    <input type="hidden" name="intervals" value="false">
+    <div class="playlist-option">
+    <input type="checkbox" name="intervals" value="true" id="playlist-intervals" {% if intervals %}checked{% endif %}>
+    <label for="playlist-intervals">Intervals</label>
+    </div>
+    {% endif %}
+    <button type="submit">Download .m3u</button>
+</form>
+{% endmacro %}

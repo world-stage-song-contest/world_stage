@@ -185,8 +185,8 @@
 
 <div>
     <strong>Download playlist:</strong>
-    <a href="{{ url_for('playlist.user', key=username) }}">With postcards</a>/<a
-    href="{{ url_for('playlist.user', key=username ~ '-np') }}">Without postcards</a>
+    {% from 'macros/playlist.html' import download_playlist %}
+    {{ download_playlist(url_for('playlist.user', key=username)) }}
 </div>
 
 {% macro year_result_cell(entry, cat_class) %}

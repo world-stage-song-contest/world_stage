@@ -5,11 +5,13 @@ from .discovery import bp as d_bp
 from .recap import bp as recap_bp
 from .results import bp as r_bp
 from .search import bp as search_bp
+from .show import bp as show_bp
 from .song import bp as s_bp
 from .voting import bp as v_bp
 from .year import bp as y_bp
 
 bp = Blueprint("api", __name__, url_prefix="/api")
+bp.register_blueprint(show_bp)
 bp.register_blueprint(c_bp)
 bp.register_blueprint(s_bp)
 bp.register_blueprint(y_bp)

@@ -1,0 +1,26 @@
+{% macro media_button(show) %}
+<button type="button" data-dialog="show-media-{{ show.short_name }}"
+        aria-haspopup="dialog" aria-controls="show-media-{{ show.short_name }}"
+        onclick="openShowMedia(this)">Edit media</button>
+{% endmacro %}
+
+{% macro media_dialog(show, key) %}
+<dialog id="show-media-{{ show.short_name }}" class="show-media-dialog"
+        aria-labelledby="show-media-title-{{ show.short_name }}">
+    <h2 id="show-media-title-{{ show.short_name }}">{{ show.show_name }} media</h2>
+    <form method="post" action="{{ url_for('api.show.set_show_metadata', key=key) }}">
+    <input type="hidden" name="return_to" value="manage">
+    <div class="show-media-fields">
+        <label for="opening_{{ show.short_name }}">Opening act URL</label>
+        <input type="url" name="opening" id="opening_{{ show.short_name }}"
+               value="{{ show.metadata.get('opening') or '' }}">
+        <label for="intervals_{{ show.short_name }}">Interval act URLs, one per line</label>
+        <textarea name="intervals" id="intervals_{{ show.short_name }}" rows="5">{{ show.metadata.get('intervals', [])|join('\n') }}</textarea>
+    </div>
+    <div class="show-media-actions">
+        <button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+        <button type="submit">Save media</button>
+    </div>
+    </form>
+</dialog>
+{% endmacro %}

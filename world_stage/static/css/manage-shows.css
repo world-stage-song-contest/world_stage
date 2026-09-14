@@ -1,0 +1,47 @@
+.show-media-dialog {
+    width: min(38rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    box-sizing: border-box;
+    padding: 1.5rem;
+    border: 1px solid var(--foreground1);
+    border-radius: 0.5rem;
+    background: var(--background1);
+    color: var(--foreground1);
+}
+
+.show-media-dialog::backdrop {
+    background: rgb(0 0 0 / 55%);
+}
+
+.show-media-dialog h2 {
+    margin: 0 0 1.25rem;
+}
+
+.show-media-fields {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.show-media-fields input,
+.show-media-fields textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+}
+
+.show-media-fields textarea {
+    min-height: 9rem;
+    resize: vertical;
+}
+
+.show-media-fields p {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+}
+
+.show-media-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}

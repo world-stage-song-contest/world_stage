@@ -19,8 +19,10 @@ from ..utils import (
 )
 from ..utils.artists import fetch_artist_credits
 from ..utils.entry_moves import EntryMoveError, move_entry
+from ..utils.playlist_options import playlist_options
+from ..utils.playlists import format_m3u, song_play_entries
 from ..utils.song_revisions import MAX_YEAR_SUBMISSIONS
-from .playlist import _bad_links_error, _m3u, _play_entries, _render_player
+from .playlist import _bad_links_error, _m3u, _render_player
 
 bp = Blueprint("member", __name__, url_prefix="/member")
 
@@ -456,15 +458,12 @@ def playlist_download(
     rows = _playlist_rows(playlist_id)
     if not rows:
         return render_template("error.html", error="This playlist is empty"), 400
-    postcards = request.args.get("postcards", "false") == "true"
-    entries, bad_countries = _play_entries(rows, postcards)
+    options = playlist_options(f"playlist-{playlist_id}", request.args)
+    entries, bad_countries = song_play_entries(rows, options.postcards)
     error = _bad_links_error(bad_countries, permissions)
     if error:
         return error
-    lines = ["#EXTM3U"]
-    for entry in entries:
-        lines.extend(("#EXTINF:0", "#EXTVLCOPT:network-caching=3000", entry["url"]))
-    return _m3u("\r\n".join(lines) + "\r\n", f"playlist-{playlist_id}")
+    return _m3u(format_m3u(entry["url"] for entry in entries), options.filename)
 
 
 def get_languages() -> list[dict]:

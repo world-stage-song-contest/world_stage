@@ -1,8 +1,12 @@
+import csv
+import io
 import json
 import uuid
 
 from hypothesis import given
 from hypothesis import strategies as st
+
+from world_stage.routes.admin.recap import get_cytube_playlist
 
 
 def test_cytube_playlist_inserts_and_labels_the_host(client, db):
@@ -86,7 +90,7 @@ def test_cytube_playlist_inserts_and_labels_the_host(client, db):
     property_test()
 
 
-def test_cytube_playlist_adds_opening_act_by_prior_year_placement(client, db):
+def test_cytube_playlist_adds_opening_act_by_prior_year_placement(app, client, db):
     session_id = str(uuid.uuid4())
     opening_act_shows = (
         ("f", 1, "US"),
@@ -165,17 +169,13 @@ def test_cytube_playlist_adds_opening_act_by_prior_year_placement(client, db):
     @given(show=st.sampled_from(opening_act_shows))
     def property_test(show):
         short_name, _placement, country = show
-        response = client.post(
-            "/admin/recapdata",
-            data={"type": "show", "show": f"2026-{short_name}", "action": "cytube"},
-            headers={"Accept": "text/html"},
-        )
-
-        assert response.status_code == 200
-        assert (
-            "WS 2026 Opening;https://media.world-stage.org/openings/2026.mov\n"
-            f"Opening act;https://media.world-stage.org/ws2025{country.lower()}.json"
-        ) in response.text
+        with app.app_context():
+            playlist = get_cytube_playlist([f"2026-{short_name}"])
+        rows = list(csv.reader(io.StringIO(playlist), delimiter=";"))
+        assert rows[0][1] == "https://media.world-stage.org/openings/ws_opening.json"
+        assert rows[1] == [
+            "Opening act", f"https://media.world-stage.org/ws2025{country.lower()}.json"
+        ]
 
     property_test()
 

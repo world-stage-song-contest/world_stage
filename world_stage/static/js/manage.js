@@ -175,51 +175,6 @@ async function changeDate(el, showId) {
     setError(data.error);
 }
 
-async function changeYearStatus() {
-    const select = document.getElementById('year_status');
-    if (!select) {
-        const msg = `Select element with ID year_status not found.`;
-        setError(msg);
-        console.error(msg);
-        return;
-    }
-    const url = window.location.href;
-    const body = {
-        'action': 'change_year_status',
-        'year_status': select.value
-    };
-    const data = await fetchHelper(url, body);
-    setError(data.error);
-}
-
-async function changeSubmissionsOpen() {
-    const checkbox = document.getElementById('submissions_open');
-    if (!checkbox) {
-        const msg = `Checkbox with ID submissions_open not found.`;
-        setError(msg);
-        console.error(msg);
-        return;
-    }
-    const data = await fetchHelper(window.location.href, {
-        'action': 'set_submissions_open',
-        'submissions_open': checkbox.checked
-    });
-    setError(data.error);
-}
-
-async function changeScoreboardStyle() {
-    const select = document.getElementById('scoreboard_style');
-    if (!select) {
-        setError('Scoreboard style selector not found.');
-        return;
-    }
-    const data = await fetchHelper(window.location.href, {
-        'action': 'set_scoreboard_style',
-        'scoreboard_style': select.value || null
-    });
-    setError(data.error);
-}
-
 async function deletePlaceholders(button) {
     if (!confirm('Are you sure you want to delete all placeholders from this year?')) return;
     button.disabled = true;

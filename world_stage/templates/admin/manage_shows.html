@@ -1,4 +1,5 @@
 {% extends "admin/base.html" %}
+{% from "macros/show_media.html" import media_button, media_dialog %}
 {% block title %}Manage shows: {{ year.special_name or year.id }}{% endblock %}
 {% block admin_navigation %}
     <a class="nav-item" href="{{ url_for('admin.manage_index') }}">Manage</a>
@@ -11,7 +12,9 @@
 {% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/utc-datetime.css') }}">
+    <link rel="stylesheet" href="{{ static('css/manage-shows.css') }}">
     <script src="{{ static('js/manage.js') }}"></script>
+    <script src="{{ static('js/show-media.js') }}"></script>
     <script src="{{ static('js/utc-datetime.js') }}" defer></script>
 {% endblock %}
 {% block content %}
@@ -64,6 +67,8 @@
     </ul>
 </div>
 
+
+
 <table>
     <thead>
         <tr>
@@ -73,6 +78,7 @@
             <th>Change Status</th>
             <th>Discord</th>
             <th>Change Start Time (UTC)</th>
+            <th>Media</th>
         </tr>
     </thead>
     <tbody>
@@ -141,28 +147,32 @@
                     <small data-local-datetime-for="date_{{ show.short_name }}"></small>
                 </div>
             </td>
+            <td>{{ media_button(show) }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 
+{% for show in shows %}
+{{ media_dialog(show, (year.special_short_name or year.id) ~ '-' ~ show.short_name) }}
+{% endfor %}
+
 <div>
     <h2>Year settings</h2>
-    {% if not year.special_short_name %}
     <form method="post" action="{{ url_for('admin.manage_post', year=year.id) }}">
-        <input type="hidden" name="action" value="set_host">
-        <label for="host_id">Host:</label>
-        <select name="host_id" id="host_id">
-            <option value="" {% if year.host_id is none %}selected{% endif %}>No host</option>
-            {% for country in countries %}
-            <option value="{{ country.id }}" {% if country.id == year.host_id %}selected{% endif %}>
-                {{ country.name or country.id }}
-            </option>
-            {% endfor %}
-        </select>
-        <button type="submit">Set Host</button>
-    </form>
-    {% endif %}
+    <div>
+        <input type="checkbox" name="opening" value="true" id="year_opening" {% if year.metadata.get('opening') %}checked{% endif %}>
+        <label for="year_opening">Use custom opener</label>
+    </div>
+    <div>
+        <input type="checkbox" name="countdown" value="true" id="year_countdown" {% if year.metadata.get('countdown') %}checked{% endif %}>
+        <label for="year_countdown">Use custom countdown</label>
+    </div>
+    <div>
+        <input type="checkbox" name="submissions_open" value="true" id="submissions_open"
+               {% if year.submissions_open %}checked{% endif %}>
+        <label for="submissions_open">Submissions open</label>
+    </div>
     <div>
         <label for="year_status">Year Status:</label>
         <select name="year_status" id="year_status">
@@ -174,21 +184,26 @@
             {% endfor %}
         </select>
     </div>
-    <button onclick="changeYearStatus()">Change Year Status</button>
+    {% if not year.special_short_name %}
+        <label for="host_id">Host</label>
+        <select name="host_id" id="host_id">
+            <option value="" {% if year.host_id is none %}selected{% endif %}>No host</option>
+            {% for country in countries %}
+            <option value="{{ country.id }}" {% if country.id == year.host_id %}selected{% endif %}>
+                {{ country.name or country.id }}
+            </option>
+            {% endfor %}
+        </select>
+    {% endif %}
     <div>
-        <input type="checkbox" id="submissions_open"
-               {% if year.submissions_open %}checked{% endif %}>
-        <label for="submissions_open">Submissions open</label>
-    </div>
-    <button onclick="changeSubmissionsOpen()">Change Submission Status</button>
-    <div>
-        <label for="scoreboard_style">Scoreboard style:</label>
-        <select id="scoreboard_style">
+        <label for="scoreboard_style">Scoreboard style</label>
+        <select name="scoreboard_style" id="scoreboard_style">
             <option value="" {% if year.scoreboard_style is none %}selected{% endif %}>Default</option>
             <option value="esc-1997" {% if year.scoreboard_style == 'esc-1997' %}selected{% endif %}>ESC 1997</option>
         </select>
     </div>
-    <button onclick="changeScoreboardStyle()">Change Scoreboard Style</button>
+    <button type="submit">Save year settings</button>
+    </form>
     <div>
         <button type="button" onclick="deletePlaceholders(this)">Delete All Placeholders</button>
     </div>

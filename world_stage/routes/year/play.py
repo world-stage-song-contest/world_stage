@@ -1,10 +1,7 @@
-import io
-import math
-
 from flask import request
 
 from ... import scrobble
-from ...db import fetchone, get_db
+from ...db import get_db
 from ...utils import (
     ShowData,
     UserPermissions,
@@ -14,114 +11,27 @@ from ...utils import (
     render_template,
     with_auth,
 )
+from ...utils.booleans import query_bool
+from ...utils.playlist_media import resolve_playlist_media
+from ...utils.playlists import format_m3u, song_play_entries
+from ...utils.show_metadata import get_show_segments
 from .common import bp, get_other_shows, resolve_special
 
 
 def generate_playlist(
-    show_data: ShowData, postcards: bool, include_host: bool = True
+    show_data: ShowData, postcards: bool, include_host: bool = True, intervals: bool = False
 ) -> tuple[str, list[str]]:
-    def write(buf: io.StringIO, val: str):
-        buf.write(val)
-        buf.write("\n")
-
-    def write_header(buf: io.StringIO):
-        write(buf, "#EXTINF:0")
-        write(buf, "#EXTVLCOPT:network-caching=3000")
-
-    def write_country(buf: io.StringIO, cc: str, url: str) -> str | None:
-        if postcards:
-            write_header(buf)
-            write(buf, f"https://media.world-stage.org/postcards/{cc.lower()}.mov")
-
-        write_header(buf)
-        v = None
-        if "media.world-stage.org" not in url:
-            v = cc
-
-        write(buf, url or "BAD LINK REPLACE ME THIS IS A BUG")
-
-        return v
-
-    def show_needs_host(show_data: ShowData) -> bool:
-        # Specials have no host country, so never insert a host entry for them.
-        if show_data.year is None or show_data.year < 0:
-            return False
-
-        if show_data.status != "draw":
-            return False
-
-        if not show_data.short_name.startswith("sf"):
-            return False
-
-        sn = int(show_data.short_name[2])
-        return sn % 2 != 0
-
-    db = get_db()
-    cursor = db.cursor()
-
-    insert_after = -1
-    host = ""
-    host_link = ""
-    if include_host and show_needs_host(show_data):
-        cursor.execute(
-            """
-            SELECT LOWER(country.id) AS cc, video_link FROM year
-            JOIN country ON year.host_id = country.id
-            JOIN current_song AS song ON song.country_id = year.host_id
-            WHERE year.id = %(y)s AND song.year_id = %(y)s
-        """,
-            {"y": show_data.year},
-        )
-        data = cursor.fetchone()
-        if data:
-            cursor.execute(
-                """
-                SELECT COUNT(id) AS c FROM song_show
-                WHERE show_id = %s
-            """,
-                (show_data.id,),
-            )
-            insert_after = math.ceil(fetchone(cursor)["c"] / 2) - 1
-            host = data.get("cc") or ""
-            host_link = data.get("video_link") or ""
-
-    cursor.execute(
-        """
-        SELECT LOWER(country.id) AS cc, video_link FROM current_song AS song
-        JOIN song_show ON song_show.song_id = song.id
-        JOIN country ON song.country_id = country.id
-        WHERE song_show.show_id = %s
-        ORDER BY running_order
-    """,
-        (show_data.id,),
+    entries, bad_countries = get_show_play_entries(
+        show_data, postcards, intervals, include_host
     )
-
-    output = io.StringIO(newline="\r\n")
-    output.write("#EXTM3U\n")
-
-    bad_countries = []
-
-    for i, song in enumerate(cursor.fetchall()):
-        cc = song.get("cc") or ""
-        url = song.get("video_link") or ""
-        b = write_country(output, cc, url)
-        if b is not None:
-            bad_countries.append(b)
-
-        if i == insert_after:
-            write_country(output, host, host_link)
-
-    write_header(output)
-    write(
-        output,
-        f"https://media.world-stage.org/recaps/{abs(show_data.year):04d}{show_data.short_name}.mov",
-    )
-
-    return output.getvalue(), bad_countries
+    urls = (entry["url"] for entry in entries)
+    if intervals:
+        urls = (resolve_playlist_media(url) for url in urls)
+    return format_m3u(urls), bad_countries
 
 
 def get_show_play_entries(
-    show_data: ShowData, postcards: bool
+    show_data: ShowData, postcards: bool, full_show: bool = False, include_host: bool = True
 ) -> tuple[list[dict], list[str]]:
     db = get_db()
     cursor = db.cursor()
@@ -129,15 +39,14 @@ def get_show_play_entries(
     def show_needs_host(show_data: ShowData) -> bool:
         if show_data.year is None or show_data.year < 0:
             return False
-        if show_data.status != "draw":
+        if show_data.status not in ("draw", "partial", "full"):
             return False
-        if not show_data.short_name.startswith("sf"):
+        if show_data.national_final_id is not None or not show_data.short_name.startswith("sf"):
             return False
-        return int(show_data.short_name[2]) % 2 != 0
+        return int(show_data.short_name[2:]) % 2 != 0
 
-    insert_after = -1
     host_row: dict | None = None
-    if show_needs_host(show_data):
+    if include_host and show_needs_host(show_data):
         cursor.execute(
             """
             SELECT LOWER(country.id) AS cc,
@@ -146,23 +55,23 @@ def get_show_play_entries(
                    song.title,
                    song.artist,
                    song.duration,
-                   song.video_link AS url,
+                   song.video_link,
                    song.poster_link,
                    song.vtt_link
             FROM year
             JOIN country ON year.host_id = country.id
             JOIN current_song AS song ON song.country_id = year.host_id
             WHERE year.id = %(y)s AND song.year_id = %(y)s
+              AND NOT EXISTS (
+                  SELECT 1 FROM song_show WHERE song_show.show_id = %(show_id)s
+                    AND song_show.song_id = song.id
+              )
+            ORDER BY song.entry_number
+            LIMIT 1
             """,
-            {"y": show_data.year},
+            {"y": show_data.year, "show_id": show_data.id},
         )
         host_row = cursor.fetchone()
-        if host_row:
-            cursor.execute(
-                "SELECT COUNT(id) AS c FROM song_show WHERE show_id = %s",
-                (show_data.id,),
-            )
-            insert_after = math.ceil(fetchone(cursor)["c"] / 2) - 1
 
     cursor.execute(
         """
@@ -172,7 +81,7 @@ def get_show_play_entries(
                song.title,
                song.artist,
                song.duration,
-               song.video_link AS url,
+               song.video_link,
                song.poster_link,
                song.vtt_link
         FROM current_song AS song
@@ -185,54 +94,13 @@ def get_show_play_entries(
     )
     songs = cursor.fetchall()
 
-    entries: list[dict] = []
-    bad_countries: list[str] = []
-    next_shuffle_group = 0
+    if host_row and songs:
+        songs.insert((len(songs) + 1) // 2, host_row)
+    entries, bad_countries = song_play_entries(songs, postcards)
 
-    def append_song(row: dict):
-        nonlocal next_shuffle_group
-        cc = (row.get("cc") or "").lower()
-        url = row.get("url") or ""
-        shuffle_group = f"entry-{next_shuffle_group}"
-        next_shuffle_group += 1
-        if "media.world-stage.org" not in url:
-            bad_countries.append(cc)
-        if postcards:
-            entries.append(
-                {
-                    "kind": "postcard",
-                    "shuffle_group": shuffle_group,
-                    "shuffleable": True,
-                    "cc": cc,
-                    "country": row.get("country") or "",
-                    "title": "",
-                    "artist": "",
-                    "url": f"https://media.world-stage.org/postcards/{cc}.mov",
-                    "poster": None,
-                    "vtt": None,
-                }
-            )
-        entries.append(
-            {
-                "kind": "song",
-                "shuffle_group": shuffle_group,
-                "shuffleable": True,
-                "id": row["id"],
-                "cc": cc,
-                "country": row.get("country") or "",
-                "title": row.get("title") or "",
-                "artist": row.get("artist") or "",
-                "duration": row.get("duration"),
-                "url": url,
-                "poster": row.get("poster_link") or None,
-                "vtt": row.get("vtt_link") or None,
-            }
-        )
-
-    for i, song in enumerate(songs):
-        append_song(song)
-        if i == insert_after and host_row:
-            append_song(host_row)
+    if full_show:
+        intro, outro = get_show_segments(cursor, show_data.id)
+        return intro + entries + outro, bad_countries
 
     entries.append(
         {
@@ -260,88 +128,61 @@ def _scrobble_enabled() -> bool:
     return bool(user) and scrobble.has_enabled_account(user[0])
 
 
+def _render_show_player(show_data: ShowData, user, permissions: UserPermissions, special_year=None):
+    postcards = query_bool(request.args, "postcards", True)
+
+    full_show = query_bool(request.args, "intervals", query_bool(request.args, "full_show", False))
+    include_host = query_bool(request.args, "host", show_data.status != "full")
+    entries, bad_countries = get_show_play_entries(show_data, postcards, full_show, include_host)
+
+    elevated = can_manage_show(show_data, user, permissions)
+    if not elevated and bad_countries:
+        bad_countries = sorted(set(bad_countries))
+        return render_template(
+            "error.html",
+            error=(
+                "Not all links for this show have been corrected. "
+                "Please ping one of the admins. "
+                f"Invalid links: {', '.join(bad_countries)}."
+            ),
+        )
+
+    return render_template(
+        "year/play.html",
+        year=special_year["special_short_name"] if special_year else show_data.year,
+        show=show_data.short_name,
+        show_name=show_data.name,
+        entries=entries,
+        postcards=postcards,
+        full_show=full_show,
+        include_host=include_host,
+        host_available=show_data.status == "full",
+        other_shows=get_other_shows(show_data.year, show_data.short_name),
+        can_apply_penalty=elevated,
+        penalties_enabled=show_data.penalizes_non_voters,
+        has_qualifiers=bool(show_data.progressions),
+        special=special_year["special_short_name"] if special_year else None,
+        special_name=special_year["special_name"] if special_year else None,
+        scrobble_enabled=_scrobble_enabled(),
+    )
+
+
 @bp.get("/<int:year>/<show>/play")
 @with_auth
 def show_play(year: int, show: str, user, permissions: UserPermissions):
     show_data = get_show_id(show, year)
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    postcards = request.args.get("postcards", "false") == "true"
-
-    entries, bad_countries = get_show_play_entries(show_data, postcards)
-
-    elevated = can_manage_show(show_data, user, permissions)
-    if not elevated and bad_countries:
-        bad_countries = sorted(set(bad_countries))
-        return render_template(
-            "error.html",
-            error=(
-                "Not all links for this show have been corrected. "
-                "Please ping one of the admins. "
-                f"Invalid links: {', '.join(bad_countries)}."
-            ),
-        )
-
-    return render_template(
-        "year/play.html",
-        year=year,
-        show=show,
-        show_name=show_data.name,
-        entries=entries,
-        postcards=postcards,
-        other_shows=get_other_shows(year, show),
-        can_apply_penalty=elevated,
-        penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=bool(show_data.progressions),
-        special=None,
-        special_name=None,
-        scrobble_enabled=_scrobble_enabled(),
-    )
+    return _render_show_player(show_data, user, permissions)
 
 
 @bp.get("/special/<short_name>/<show>/play")
 @with_auth
-def special_show_play(
-    short_name: str, show: str, user, permissions: UserPermissions
-):
+def special_show_play(short_name: str, show: str, user, permissions: UserPermissions):
     special_year = resolve_special(short_name)
     if not special_year:
         return render_template("error.html", error="Special not found"), 404
-
-    _year = special_year["id"]
-    show_data = get_show_id(show, _year)
+    show_data = get_show_id(show, special_year["id"])
     if not show_data:
         return render_template("error.html", error="Show not found"), 404
-
-    postcards = request.args.get("postcards", "false") == "true"
-
-    entries, bad_countries = get_show_play_entries(show_data, postcards)
-
-    elevated = can_manage_show(show_data, user, permissions)
-    if not elevated and bad_countries:
-        bad_countries = sorted(set(bad_countries))
-        return render_template(
-            "error.html",
-            error=(
-                "Not all links for this show have been corrected. "
-                "Please ping one of the admins. "
-                f"Invalid links: {', '.join(bad_countries)}."
-            ),
-        )
-
-    return render_template(
-        "year/play.html",
-        year=short_name,
-        show=show,
-        show_name=show_data.name,
-        entries=entries,
-        postcards=postcards,
-        other_shows=get_other_shows(_year, show),
-        can_apply_penalty=elevated,
-        penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=bool(show_data.progressions),
-        special=short_name,
-        special_name=special_year["special_name"],
-        scrobble_enabled=_scrobble_enabled(),
-    )
+    return _render_show_player(show_data, user, permissions, special_year)

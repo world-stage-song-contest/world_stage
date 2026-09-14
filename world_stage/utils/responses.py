@@ -1,4 +1,3 @@
-import io
 import urllib.parse
 from collections import defaultdict
 from collections.abc import Iterable
@@ -7,6 +6,8 @@ from typing import Any
 
 import flask
 from flask import Response, request
+
+from .playlists import format_m3u
 
 
 def create_cookie(**kwargs: str) -> str:
@@ -85,22 +86,13 @@ def url_bool(datum: str) -> bool:
 def write_m3u(
     entries: Iterable[tuple[str, str | None]], postcards: bool = False
 ) -> tuple[str, list[str]]:
-    """Emit an .m3u from (cc, video_link) pairs in the order given. When
-    postcards is True, each entry is preceded by a postcard video. Returns
-    (text, bad_ccs) where bad_ccs collects country codes whose link is empty
-    or not hosted on media.world-stage.org."""
-    output = io.StringIO(newline="\r\n")
-    output.write("#EXTM3U\n")
+    """Build a playlist and report countries with unsupported song links."""
+    urls: list[str | None] = []
     bad: list[str] = []
     for cc, url in entries:
-        url = url or ""
         if postcards:
-            output.write("#EXTINF:0\n")
-            output.write("#EXTVLCOPT:network-caching=3000\n")
-            output.write(f"https://media.world-stage.org/postcards/{cc.lower()}.mov\n")
-        output.write("#EXTINF:0\n")
-        output.write("#EXTVLCOPT:network-caching=3000\n")
-        if "media.world-stage.org" not in url:
+            urls.append(f"https://media.world-stage.org/postcards/{cc.lower()}.mov")
+        if "media.world-stage.org" not in (url or ""):
             bad.append(cc)
-        output.write((url or "BAD LINK REPLACE ME THIS IS A BUG") + "\n")
-    return output.getvalue(), bad
+        urls.append(url)
+    return format_m3u(urls), bad

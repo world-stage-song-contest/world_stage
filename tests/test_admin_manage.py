@@ -30,7 +30,7 @@ def admin_session(client, db):
     db.commit()
 
 
-def test_host_selection_accepts_existing_countries_or_no_host(client, db, admin_session):
+def test_host_selection_accepts_participating_countries_or_no_host(client, db, admin_session):
     db.execute("INSERT INTO show_status (name) VALUES ('none') ON CONFLICT DO NOTHING")
     final_id = db.execute(
         """INSERT INTO show (year_id, show_type, status)
@@ -47,28 +47,62 @@ def test_host_selection_accepts_existing_countries_or_no_host(client, db, admin_
             ).fetchone()["id"]
         )
     db.commit()
+    availability = db.execute(
+        "SELECT id, available_from, available_until FROM country WHERE id = ANY(%s)",
+        (eligible_hosts,),
+    ).fetchall()
     cases = [*eligible_hosts, "", "ZZZ"]
 
-    @given(host=st.sampled_from(cases))
-    def property_test(host):
+    @settings(max_examples=40, deadline=None)
+    @given(host=st.sampled_from(cases), eligible=st.sets(st.sampled_from(eligible_hosts)),
+           unified=st.booleans(), bounds=st.dictionaries(
+               st.sampled_from(eligible_hosts),
+               st.tuples(st.sampled_from([None, 2024, 2025, 2026]),
+                         st.sampled_from([None, 2024, 2025, 2026])),
+               min_size=3, max_size=3,
+           ))
+    def property_test(host, eligible, unified, bounds):
         db.execute("UPDATE year SET host_id = 'US' WHERE id = 2025")
+        db.execute(
+            "UPDATE country SET is_participating = (id = ANY(%s)) WHERE id = ANY(%s)",
+            (list(eligible), eligible_hosts),
+        )
+        for country, (start, end) in bounds.items():
+            db.execute(
+                "UPDATE country SET available_from = %s, available_until = %s WHERE id = %s",
+                (start, end, country),
+            )
+        eligible = {country for country in eligible
+                    if bounds[country][0] is not None and bounds[country][1] is not None
+                    and bounds[country][0] <= 2025 <= bounds[country][1]}
         db.commit()
-
-        response = client.post(
-            "/admin/manage/2025",
-            data={"action": "set_host", "host_id": host},
-        )
-
-        expected = None if host == "" else host if host in eligible_hosts else "US"
-        assert response.status_code == (302 if host in eligible_hosts or host == "" else 400)
-        assert (
-            db.execute("SELECT host_id FROM year WHERE id = 2025").fetchone()["host_id"] == expected
-        )
+        page = client.get("/admin/manage/2025", headers={"Accept": "application/json"})
+        offered = {country["id"] for country in page.get_json()["countries"]}
+        assert offered.intersection(eligible_hosts) == eligible
+        form = {"host_id": host}
+        if unified:
+            form.update(year_status="open", scoreboard_style="")
+        else:
+            form["action"] = "set_host"
+        response = client.post("/admin/manage/2025", data=form)
+        accepted = host in eligible or host == ""
+        expected = (host or None) if accepted else "US"
+        assert response.status_code == (302 if accepted else 400)
+        saved = db.execute("SELECT host_id FROM year WHERE id = 2025").fetchone()
+        assert saved["host_id"] == expected
 
     try:
         property_test()
     finally:
         db.rollback()
+        db.execute(
+            "UPDATE country SET is_participating = true WHERE id = ANY(%s)", (eligible_hosts,)
+        )
+        for country in availability:
+            db.execute(
+                "UPDATE country SET available_from = %s, available_until = %s WHERE id = %s",
+                (country["available_from"], country["available_until"], country["id"]),
+            )
         db.execute("DELETE FROM song_show WHERE show_id = %s", (final_id,))
         db.execute("DELETE FROM song WHERE id = ANY(%s)", (song_ids,))
         db.execute("DELETE FROM show WHERE id = %s", (final_id,))

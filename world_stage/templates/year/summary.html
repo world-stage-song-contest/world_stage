@@ -80,8 +80,8 @@
     {% else %}
     {% set show_key = '%04d'|format(year|abs) ~ show %}
     {% endif %}
-    <a href="{{ url_for('playlist.show', key=show_key) }}">With postcards</a>/<a
-    href="{{ url_for('playlist.show', key=show_key ~ '-np') }}">Without postcards</a>
+    {% from 'macros/playlist.html' import download_playlist %}
+    {{ download_playlist(url_for('playlist.show', key=show_key), show=true, host_available=host_available) }}
 </div>
 {% if access != 'none' and access != 'draw' %}
 <div class="detail-column-controls">
