@@ -110,6 +110,7 @@
             <tr data-value="{{ loop.index }}">
                 <td data-value="{{ loop.index }}" class="year"><a href="{{ url_for('year.special', short_name=special.special_short_name) }}"><b>{{ special.special_name }}</b></a></td>
                 {% if winner %}
+                {% set winner_url = url_for('country.special_details', code=winner.country.cc.lower(), special_short_name=special.special_short_name, entry_number=winner.entry_number) %}
                 <td><a href="{{ url_for('country.country', code=winner.country.cc) }}"><div class="country">
                     {{ flag(winner.country.cc, 42, winner.country.name, variant=winner.country.flag_variant) }}
                     {{ winner.country.name }}
@@ -117,9 +118,13 @@
                 <td class="artist"><div class="song-artist">{{ artist_links(winner) }}</div></td>
                 <td class="title">
                     <div class="song-title">
-                        <span lang="{{winner.title_lang.str('Latn', winner.country.cc)}}">{{ winner.title }}</span>
+                        <a href="{{ winner_url }}">
+                            <span lang="{{winner.title_lang.str('Latn', winner.country.cc)}}">{{ winner.title }}</span>
+                        </a>
                     {% if winner.native_title %}
-                        <bdi lang="{{winner.native_lang.str(None, winner.country.cc)}}">{{ winner.native_title }}</bdi>
+                        <a href="{{ winner_url }}">
+                            <bdi lang="{{winner.native_lang.str(None, winner.country.cc)}}">{{ winner.native_title }}</bdi>
+                        </a>
                     {% endif %}
                     </div>
                 </td>

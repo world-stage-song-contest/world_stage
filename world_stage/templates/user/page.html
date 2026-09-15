@@ -42,5 +42,10 @@
         <img src="{{ static('images/playlist.png') }}" alt="Playlist Icon">
         <p>View the user's playlists.</p>
     </a>
+    <a href="{{ url_for('user.listen_history', username=username) }}" class="card">
+        <h3>Listen history</h3>
+        <img src="{{ static('images/listen-history.png') }}" alt="Listen History Icon">
+        <p>View the songs this user has played.</p>
+    </a>
 </div>
 {% endblock %}

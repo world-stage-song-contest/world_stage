@@ -1,6 +1,6 @@
 from flask import request
 
-from ... import scrobble
+from ... import listens, scrobble
 from ...db import get_db
 from ...utils import (
     ShowData,
@@ -147,6 +147,7 @@ def _render_show_player(show_data: ShowData, user, permissions: UserPermissions,
             ),
         )
 
+    listens.attach_snapshots(entries)
     return render_template(
         "year/play.html",
         year=special_year["special_short_name"] if special_year else show_data.year,
@@ -164,6 +165,7 @@ def _render_show_player(show_data: ShowData, user, permissions: UserPermissions,
         special=special_year["special_short_name"] if special_year else None,
         special_name=special_year["special_name"] if special_year else None,
         scrobble_enabled=_scrobble_enabled(),
+        play_count_enabled=bool(user),
     )
 
 

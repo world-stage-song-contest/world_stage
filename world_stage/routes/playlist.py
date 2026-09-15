@@ -4,7 +4,7 @@ import urllib.parse
 
 from flask import Blueprint, Response, request, url_for
 
-from .. import scrobble
+from .. import listens, scrobble
 from ..db import get_db
 from ..utils import (
     UserPermissions,
@@ -88,6 +88,7 @@ def _render_player(
     err = _bad_links_error(bad_countries, permissions)
     if err:
         return err
+    listens.attach_snapshots(entries)
     return render_template(
         "year/play.html",
         collection_title=title,
@@ -96,6 +97,7 @@ def _render_player(
         entries=entries,
         postcards=postcards,
         scrobble_enabled=_scrobble_enabled(),
+        play_count_enabled=bool(get_user_id_from_session(request.cookies.get("session"))),
     )
 
 

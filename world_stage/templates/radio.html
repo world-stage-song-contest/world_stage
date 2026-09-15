@@ -5,6 +5,7 @@
 <link rel="stylesheet" href="{{ static('css/videojs-overrides.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/video.js@8.23.3/dist/video.min.js"></script>
 <script src="{{ static('js/audio-fallback.js') }}"></script>
+<script src="{{ static('js/scrobble.js') }}"></script>
 <link rel="stylesheet" href="{{ static('css/radio.css') }}">
 {% endblock %}
 {% block content %}
@@ -27,6 +28,9 @@
     <p id="radio-error"></p>
 </div>
 
-<script>window.SCROBBLE_ENABLED = {{ 'true' if scrobble_enabled else 'false' }};</script>
+<script>
+window.SCROBBLE_ENABLED = {{ 'true' if scrobble_enabled else 'false' }};
+window.PLAY_COUNT_ENABLED = {{ 'true' if play_count_enabled else 'false' }};
+</script>
 <script src="{{ static('js/radio.js') }}"></script>
 {% endblock %}

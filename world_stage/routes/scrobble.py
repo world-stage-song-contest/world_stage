@@ -1,10 +1,11 @@
-"""Site-wide scrobbling endpoints for catalog-song playback."""
+"""Record song plays and send optional scrobbles."""
 
 import time
+from typing import TypeGuard
 
 from flask import Blueprint, request
 
-from .. import scrobble
+from .. import listens, scrobble
 from ..db import get_db
 from ..utils import get_user_id_from_session
 
@@ -44,10 +45,54 @@ def _submission() -> tuple[int, dict, dict] | None:
     if user_id is None:
         return None
     data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return None
     song = _catalog_song(data.get("song_id"))
     if song is None:
         return None
     return user_id, song, data
+
+
+def _valid_timestamp(timestamp: object) -> TypeGuard[int]:
+    if not isinstance(timestamp, int) or isinstance(timestamp, bool):
+        return False
+    now = int(time.time())
+    return now - SCROBBLE_MAX_AGE <= timestamp <= now + SCROBBLE_FUTURE_TOLERANCE
+
+
+@bp.post("/play")
+def record_play():
+    user_id = _user_id()
+    data = request.get_json(silent=True)
+    if user_id is None or not isinstance(data, dict):
+        return "", 204
+    song = (
+        listens.radio_snapshot(data["radio_slot_id"])
+        if "radio_slot_id" in data
+        else listens.read_snapshot(data.get("play_snapshot"))
+    )
+    if song is None or song["song_id"] != data.get("song_id"):
+        return "", 204
+    timestamp = data.get("timestamp")
+    heard = data.get("heard_seconds")
+    duration = data.get("duration", song["duration"])
+    if not _valid_timestamp(timestamp):
+        return "", 204
+    if (
+        not isinstance(duration, (int, float))
+        or isinstance(duration, bool)
+        or not 30 < duration < float("inf")
+    ):
+        return "", 204
+    if (
+        not isinstance(heard, (int, float))
+        or isinstance(heard, bool)
+        or not min(duration, 480) / 2 <= heard <= SCROBBLE_MAX_AGE
+    ):
+        return "", 204
+
+    listens.record_play(user_id, song, timestamp)
+    return "", 204
 
 
 @bp.post("/now-playing")
@@ -74,10 +119,7 @@ def submit_scrobble():
     user_id, song, data = submission
 
     timestamp = data.get("timestamp")
-    if not isinstance(timestamp, int) or isinstance(timestamp, bool):
-        return "", 204
-    now = int(time.time())
-    if timestamp < now - SCROBBLE_MAX_AGE or timestamp > now + SCROBBLE_FUTURE_TOLERANCE:
+    if not _valid_timestamp(timestamp):
         return "", 204
 
     scrobble.send_to_all(

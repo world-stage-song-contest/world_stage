@@ -11,6 +11,7 @@
     // Scrobbling: only active for logged-in users who've linked an
     // account (the server sets this flag). When off, no events are sent.
     const scrobbleEnabled = !!window.SCROBBLE_ENABLED;
+    const playTracker = new WorldStageScrobble.Tracker(false, window.PLAY_COUNT_ENABLED);
     // Real playback time for `current`, accumulated from discrete media
     // events + wall clock — NOT periodic 'timeupdate' sampling, which is
     // throttled (or silent) in background/locked tabs and made long
@@ -53,6 +54,8 @@
         shouldPlay: () => tunedIn,
         onEnded: handleEnded,
     });
+    playTracker.attachVideoJs(player);
+    playTracker.attachMedia(audioFallback.audio);
     audioFallback.audio.addEventListener('playing', () => {
         if (playingSince === null) playingSince = Date.now() / 1000;
     });
@@ -113,14 +116,10 @@
     }
 
     function maybeScrobble(slot) {
-        // Scrobble the outgoing song if the user heard enough of it.
-        // Last.fm rules: longer than 30s, and played for at least half
-        // its length or 4 minutes, whichever comes first.
         if (!scrobbleEnabled || !slot) return;
         if (slot.slot_id === scrobbledSlotId) return;
-        const dur = slot.song.duration;
-        if (!dur || dur <= 30) return;
-        if (heardSeconds() < Math.min(dur / 2, 240)) return;
+        const threshold = WorldStageScrobble.scrobbleThreshold(slot.song.duration);
+        if (threshold === null || heardSeconds() < threshold) return;
         scrobbledSlotId = slot.slot_id;
         postScrobble('/radio/scrobble', slot);
     }
@@ -303,6 +302,7 @@
         maybeScrobble(current);  // the song being replaced, if heard enough
         hideUpNext();
         current = data;
+        playTracker.setSong({ ...data.song, radio_slot_id: data.slot_id });
         heardAccum = 0;
         playingSince = null;
         nowPlayingSent = false;

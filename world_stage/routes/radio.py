@@ -128,7 +128,7 @@ def _submission_song():
 @with_user
 def index(user: tuple[int, str] | None):
     enabled = bool(user) and scrobble.has_enabled_account(user[0])
-    return render_template("radio.html", scrobble_enabled=enabled)
+    return render_template("radio.html", scrobble_enabled=enabled, play_count_enabled=bool(user))
 
 
 @bp.get("/now")

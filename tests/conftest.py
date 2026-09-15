@@ -354,6 +354,7 @@ def _clean_songs(request):
     yield
     conn = psycopg.connect(seeded_db)
     with conn.cursor() as cur:
+        cur.execute("DELETE FROM song_play")
         cur.execute("DELETE FROM account_avatar")
         cur.execute("DELETE FROM custom_playlist_song")
         cur.execute("DELETE FROM custom_playlist")

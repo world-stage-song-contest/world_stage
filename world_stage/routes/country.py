@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from flask import Blueprint, redirect, request, url_for
 
-from .. import scrobble
+from .. import listens, scrobble
 from ..db import get_db
 from ..media import duration_for_link, is_media_link
 from ..utils import (
@@ -589,6 +589,7 @@ def details(
         revote_results=revote_results,
         scrobble_enabled=bool(user_id) and scrobble.has_enabled_account(user_id),
         current_user=user,
+        play_snapshot=listens.song_snapshot_token(song.id),
         spot_watch_available=spot_watch_available,
         spot_watched=spot_watched,
         custom_playlists=playlists_for_user(user_id) if user_id else [],
@@ -700,6 +701,7 @@ def _render_song_details(
         special_name=special_name,
         scrobble_enabled=bool(user_id) and scrobble.has_enabled_account(user_id),
         current_user=user,
+        play_snapshot=listens.song_snapshot_token(song.id),
         spot_watch_available=spot_watch_available,
         spot_watched=spot_watched,
         custom_playlists=playlists_for_user(user_id) if user_id else [],

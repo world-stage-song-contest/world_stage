@@ -184,7 +184,6 @@
 {{ stats_infobox(stats, 'Main years', 'First participation', 'Latest participation') }}
 
 <div>
-    <strong>Download playlist:</strong>
     {% from 'macros/playlist.html' import download_playlist %}
     {{ download_playlist(url_for('playlist.user', key=username)) }}
 </div>

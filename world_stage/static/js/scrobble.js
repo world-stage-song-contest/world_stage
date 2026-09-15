@@ -10,9 +10,17 @@
         }).catch(() => {});
     }
 
+    function scrobbleThreshold(duration) {
+        return Number.isFinite(duration) && duration > 30 ? Math.min(duration / 2, 240) : null;
+    }
+
     class Tracker {
-        constructor(enabled) {
+        constructor(enabled, countPlays = false) {
             this.enabled = !!enabled;
+            this.countPlays = !!countPlays;
+            this.playCounted = false;
+            this.playTimer = null;
+            this.hasEnded = false;
             this.song = null;
             this.durationProvider = null;
             this.heard = 0;
@@ -30,6 +38,7 @@
 
         setSong(song, durationProvider) {
             this.flush();
+            clearTimeout(this.playTimer);
             this.song = song && Number.isInteger(song.id) ? song : null;
             this.durationProvider = durationProvider || null;
             this.heard = 0;
@@ -37,19 +46,25 @@
             this.startedAt = null;
             this.nowPlayingSent = false;
             this.scrobbled = false;
+            this.playCounted = false;
+            this.hasEnded = false;
         }
 
         freeze() {
             if (this.playingSince !== null) {
-                this.heard += Date.now() / 1000 - this.playingSince;
+                this.heard += Date.now() - this.playingSince;
                 this.playingSince = null;
             }
         }
 
-        heardSeconds() {
+        heardMilliseconds() {
             return this.heard + (this.playingSince === null
                 ? 0
-                : Date.now() / 1000 - this.playingSince);
+                : Date.now() - this.playingSince);
+        }
+
+        heardSeconds() {
+            return this.heardMilliseconds() / 1000;
         }
 
         duration() {
@@ -61,8 +76,15 @@
 
         playing() {
             if (!this.song) return;
-            if (this.playingSince === null) this.playingSince = Date.now() / 1000;
+            if (this.hasEnded) this.setSong(this.song, this.durationProvider);
+            if (this.playingSince === null) this.playingSince = Date.now();
             if (this.startedAt === null) this.startedAt = Math.floor(Date.now() / 1000);
+            clearTimeout(this.playTimer);
+            const threshold = scrobbleThreshold(this.duration());
+            if (this.countPlays && !this.playCounted && threshold !== null) {
+                const delay = Math.ceil(Math.max(0, threshold * 1000 - this.heardMilliseconds()));
+                this.playTimer = setTimeout(this.flush, delay);
+            }
             if (this.enabled && !this.nowPlayingSent) {
                 this.nowPlayingSent = true;
                 post('/scrobble/now-playing', { song_id: this.song.id });
@@ -71,15 +93,28 @@
 
         pause() {
             this.freeze();
+            clearTimeout(this.playTimer);
+            this.flush();
         }
 
         flush() {
-            if (!this.enabled || !this.song || this.scrobbled) return;
+            if (!this.song) return;
             const duration = this.duration();
-            // AudioScrobbler eligibility: over 30 seconds long and heard
-            // for half the track or four minutes, whichever comes first.
-            if (!duration || duration <= 30) return;
-            if (this.heardSeconds() < Math.min(duration / 2, 240)) return;
+            const threshold = scrobbleThreshold(duration);
+            if (threshold === null || this.heardSeconds() < threshold) return;
+            if (this.countPlays && !this.playCounted) {
+                this.playCounted = true;
+                clearTimeout(this.playTimer);
+                post('/scrobble/play', {
+                    song_id: this.song.id,
+                    play_snapshot: this.song.play_snapshot,
+                    radio_slot_id: this.song.radio_slot_id,
+                    timestamp: this.startedAt,
+                    heard_seconds: this.heardSeconds(),
+                    duration,
+                });
+            }
+            if (!this.enabled || this.scrobbled) return;
             this.scrobbled = true;
             post('/scrobble', {
                 song_id: this.song.id,
@@ -88,8 +123,8 @@
         }
 
         ended() {
-            this.freeze();
-            this.flush();
+            this.pause();
+            this.hasEnded = true;
         }
 
         attachVideoJs(player) {
@@ -139,5 +174,5 @@
         }
     }
 
-    window.WorldStageScrobble = { Tracker };
+    window.WorldStageScrobble = { Tracker, scrobbleThreshold };
 })();

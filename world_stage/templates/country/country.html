@@ -177,7 +177,6 @@
     <label for="hidesolid">Only show placeholders</label>
 </div>
 <div>
-    <strong>Download playlist:</strong>
     {% from 'macros/playlist.html' import download_playlist %}
     {{ download_playlist(url_for('playlist.country', key=country.lower())) }}
 </div>

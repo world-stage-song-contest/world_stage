@@ -5,7 +5,8 @@ from typing import Literal, overload
 
 from flask import Blueprint, request, url_for
 
-from ..db import get_db
+from .. import listens
+from ..db import fetchone, get_db
 from ..utils import (
     DoubleEntryStats,
     Song,
@@ -28,6 +29,7 @@ VOTE_HISTORY_EDITIONS = ("normal", "special", "national-final")
 VOTE_HISTORY_DEFAULT_EDITIONS = ("normal", "special")
 VOTE_HISTORY_ROUNDS = ("sf", "sc", "f")
 VOTE_HISTORY_STATUSES = ("full", "partial")
+LISTEN_HISTORY_PAGE_SIZE = 50
 
 
 def _vote_history_filters() -> tuple[
@@ -191,6 +193,88 @@ def playlists(username: str):
         "user/playlists.html",
         username=account["username"],
         playlists=playlists_for_user(account["id"]),
+    )
+
+
+def _listen_history_account(username: str) -> dict | None:
+    username = unicodedata.normalize("NFKC", urllib.parse.unquote(username))
+    cursor = get_db().cursor()
+    cursor.execute(
+        "SELECT id, username FROM account WHERE LOWER(username) = LOWER(%s)",
+        (username,),
+    )
+    return cursor.fetchone()
+
+
+@bp.get("/<username>/listen-history")
+def listen_history(username: str):
+    account = _listen_history_account(username)
+    if not account:
+        return render_template("error.html", error="User not found"), 404
+
+    cursor = get_db().cursor()
+    cursor.execute("SELECT COUNT(*) AS total FROM song_play WHERE user_id = %s", (account["id"],))
+    total = fetchone(cursor)["total"]
+    pages = max(1, (total + LISTEN_HISTORY_PAGE_SIZE - 1) // LISTEN_HISTORY_PAGE_SIZE)
+    page = min(max(request.args.get("page", type=int) or 1, 1), pages)
+    cursor.execute(
+        """
+        SELECT play.*
+        FROM song_play AS play
+        WHERE play.user_id = %s
+        ORDER BY play.played_at DESC, play.id DESC
+        LIMIT %s OFFSET %s
+        """,
+        (account["id"], LISTEN_HISTORY_PAGE_SIZE, (page - 1) * LISTEN_HISTORY_PAGE_SIZE),
+    )
+    plays = cursor.fetchall()
+    listens.prepare_history(plays)
+
+    return render_template(
+        "user/listen_history.html",
+        username=account["username"],
+        plays=plays,
+        page=page,
+        pages=pages,
+        previous_url=(
+            url_for("user.listen_history", username=account["username"], page=page - 1)
+            if page > 1 else None
+        ),
+        next_url=(
+            url_for("user.listen_history", username=account["username"], page=page + 1)
+            if page < pages else None
+        ),
+    )
+
+
+@bp.get("/<username>/listen-history/summary")
+def listen_history_summary(username: str):
+    account = _listen_history_account(username)
+    if not account:
+        return render_template("error.html", error="User not found"), 404
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT song_id, title, artist, media_url, country_code, country_name,
+               year_id, year_label,
+               COUNT(*) AS listen_count, MAX(played_at) AS last_played_at
+        FROM song_play
+        WHERE user_id = %s
+        GROUP BY song_id, title, artist, media_url, country_code, country_name,
+                 year_id, year_label
+        ORDER BY listen_count DESC, last_played_at DESC, song_id,
+                 title, artist, media_url, country_code, country_name,
+                 year_id, year_label
+        """,
+        (account["id"],),
+    )
+    songs = cursor.fetchall()
+    listens.prepare_history(songs)
+    return render_template(
+        "user/listen_history_summary.html",
+        username=account["username"],
+        songs=songs,
     )
 
 

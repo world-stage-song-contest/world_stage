@@ -454,11 +454,13 @@
 <script>
     (function () {
         const tracker = new WorldStageScrobble.Tracker(
-            {{ 'true' if scrobble_enabled else 'false' }}
+            {{ 'true' if scrobble_enabled else 'false' }},
+            {{ 'true' if current_user else 'false' }}
         );
         tracker.setSong({
             id: {{ song.id }},
             duration: {{ song.duration|tojson }},
+            play_snapshot: {{ play_snapshot|tojson }},
         });
 
         const youtube = document.getElementById('youtube-player');

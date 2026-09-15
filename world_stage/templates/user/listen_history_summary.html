@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Listen history summary: {{ username }}{% endblock %}
+{% block navigation %}
+<a class="nav-item" href="{{ url_for('user.index') }}">Users</a>
+<span class="nav-separator"></span>
+<a class="nav-item" href="{{ url_for('user.profile', username=username) }}">{{ username }}</a>
+<span class="nav-separator"></span>
+<a class="nav-item" href="{{ url_for('user.listen_history', username=username) }}">Listen history</a>
+{% endblock %}
+{% block content %}
+{% if songs %}
+<div id="scroll-container">
+    <table>
+        <thead>
+            <tr><th>Country</th><th>Year</th><th>Artist</th><th>Title</th><th>Listens</th></tr>
+        </thead>
+        <tbody>
+            {% for song in songs %}
+            <tr>
+                <td>{{ flag(song.cc, 24, song.country) }} {{ song.country }}</td>
+                <td>{{ song.year_label }}</td>
+                <td>{{ song.artist or '—' }}</td>
+                <td>{% if song.song_url %}<a href="{{ song.song_url }}">{{ song.title or 'Unavailable song' }}</a>{% else %}{{ song.title or 'Unavailable song' }}{% endif %}</td>
+                <td>{{ song.listen_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p>No listens recorded yet.</p>
+{% endif %}
+{% endblock %}

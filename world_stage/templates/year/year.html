@@ -60,7 +60,6 @@
 {% set year_key = year|string %}
 {% endif %}
 <div>
-    <strong>Download playlist:</strong>
     {% from 'macros/playlist.html' import download_playlist %}
     {{ download_playlist(url_for('playlist.year', key=year_key)) }}
 </div>

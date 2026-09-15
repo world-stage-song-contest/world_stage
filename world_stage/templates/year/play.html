@@ -219,7 +219,8 @@
         playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
     });
     const scrobbleTracker = new WorldStageScrobble.Tracker(
-        {{ 'true' if scrobble_enabled else 'false' }}
+        {{ 'true' if scrobble_enabled else 'false' }},
+        {{ 'true' if play_count_enabled else 'false' }}
     );
     scrobbleTracker.attachVideoJs(player);
 
