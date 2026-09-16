@@ -30,6 +30,7 @@ class ShowData:
     national_final_country_id: str | None
     national_final_status: str | None
     progressions: list[dict]
+    point_system: dict
 
     @property
     def contextual_name(self) -> str:

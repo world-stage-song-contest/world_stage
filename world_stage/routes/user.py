@@ -421,8 +421,8 @@ def _fetch_entries(cursor, voter_id: int, where_sql: str, where_val, *, revote=F
                song.submitter_id,
                country.id AS cc, country.name AS country,
                vote_set.id AS vote_set_id, vote.score AS score,
-               (SELECT MAX(point.score) FROM point
-                WHERE point.point_system_id = sh.point_system_id) AS show_max
+               (SELECT max_score FROM point_system
+                WHERE id = sh.point_system_id) AS show_max
         FROM current_song AS song
         JOIN song_show ON song_show.song_id = song.id
         JOIN show sh ON song_show.show_id = sh.id
@@ -628,8 +628,10 @@ def _medal_table(cursor, user_id: int, username: str, *, revote=False):
         JOIN current_song AS song ON song.id = ss.song_id
         JOIN country ON country.id = song.country_id
         LEFT JOIN vote ON vote.vote_set_id = vs.id AND vote.song_id = song.id
-        LEFT JOIN point ON point.point_system_id = sh.point_system_id
-                       AND point.score = vote.score
+        LEFT JOIN point_system ps ON ps.id = sh.point_system_id
+        LEFT JOIN LATERAL jsonb_array_elements_text(
+            CASE WHEN ps.kind = 'ranked' THEN ps.metadata->'points' ELSE '[]'::jsonb END
+        ) WITH ORDINALITY AS point(score, place) ON point.score::integer = vote.score
         WHERE sh.status = 'full' {revote_filter} {final_filter}
           AND sh.national_final_id IS NULL
         GROUP BY country.id, country.name

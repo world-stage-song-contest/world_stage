@@ -8,15 +8,8 @@ def _seed_show_and_songs(db):
     with db.cursor() as cursor:
         cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
         cursor.execute(
-            "INSERT INTO point_system (id, number) VALUES (10, 1) ON CONFLICT DO NOTHING"
-        )
-        cursor.execute(
-            """INSERT INTO point (id, point_system_id, place, score)
-               VALUES (101, 10, 1, 12), (102, 10, 2, 10), (103, 10, 3, 8)
-               ON CONFLICT (id) DO UPDATE
-               SET point_system_id = EXCLUDED.point_system_id,
-                   place = EXCLUDED.place,
-                   score = EXCLUDED.score"""
+            """INSERT INTO point_system (id, metadata)
+               VALUES (10, '{"points": [12, 10, 8]}') ON CONFLICT DO NOTHING"""
         )
         show_id = cursor.execute(
             """INSERT INTO show (

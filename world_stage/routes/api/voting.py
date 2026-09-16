@@ -12,6 +12,7 @@ from world_stage.utils import (
     require_api_auth,
     resp,
 )
+from world_stage.utils.voting import ballot_errors
 
 bp = Blueprint("voting", __name__, url_prefix="/voting")
 
@@ -48,6 +49,7 @@ def _show_json(show, key: str) -> dict:
         "name": show.name,
         "short_name": show.short_name,
         "points": show.points,
+        "point_system": show.point_system,
         "voting_opens": show.voting_opens,
         "voting_closes": show.voting_closes,
         "predictions_close": show.predictions_close,
@@ -162,7 +164,7 @@ def _parse_pairs(
         if not isinstance(pair, dict):
             return None, f"Each {field} entry must be an object"
         a, b = pair.get(left), pair.get(right)
-        if isinstance(a, bool) or isinstance(b, bool):
+        if type(a) is not int or type(b) is not int:
             return None, f"Each {field} entry must use integer {left} and {right} values"
         try:
             parsed.append({left: int(a), right: int(b)})
@@ -226,14 +228,10 @@ def save_ballot(show: str, auth):
     cursor = get_db().cursor()
     songs = _show_songs(cursor, show_data.id)
     song_by_id = {song["id"]: song for song in songs}
-    scores = [vote["score"] for vote in votes]
-    song_ids = [vote["song_id"] for vote in votes]
-    if set(scores) != set(show_data.points) or len(scores) != len(show_data.points):
-        return err(ErrorID.BAD_REQUEST, "Votes must contain each show score exactly once")
-    if len(song_ids) != len(set(song_ids)):
-        return err(ErrorID.BAD_REQUEST, "A song can only receive one score")
-    if any(song_id not in song_by_id for song_id in song_ids):
-        return err(ErrorID.BAD_REQUEST, "Votes must reference songs in this show")
+    pairs = [(vote["score"], vote["song_id"]) for vote in votes]
+    errors = ballot_errors(pairs, show_data, song_by_id)
+    if errors:
+        return err(ErrorID.BAD_REQUEST, errors[0])
     nickname = data.get("nickname")
     if nickname is not None and not isinstance(nickname, str):
         return err(ErrorID.BAD_REQUEST, "nickname must be a string or null")
@@ -256,7 +254,7 @@ def save_ballot(show: str, auth):
         list(song_by_id),
     )
     rule_errors = ballot_rule_errors(
-        {vote["score"]: vote["song_id"] for vote in votes}, rules
+        pairs, rules
     )
     if rule_errors:
         kind, reason, _song_id, required_score = rule_errors[0]

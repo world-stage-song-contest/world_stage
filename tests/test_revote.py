@@ -33,19 +33,9 @@ def test_revotes_replace_effective_ballots_without_changing_official_results(db)
             "SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point_system"
         ).fetchone()["id"]
         cursor.execute(
-            "INSERT INTO point_system (id, number) VALUES (%s, 1)",
+            """INSERT INTO point_system (id, metadata)
+               VALUES (%s, '{"points": [12, 10]}')""",
             (point_system_id,),
-        )
-        first_point_id = cursor.execute(
-            "SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point"
-        ).fetchone()["id"]
-        cursor.executemany(
-            """INSERT INTO point (id, point_system_id, place, score)
-               VALUES (%s, %s, %s, %s)""",
-            [
-                (first_point_id, point_system_id, 1, 12),
-                (first_point_id + 1, point_system_id, 2, 10),
-            ],
         )
         show_id = cursor.execute(
             """INSERT INTO show (year_id, point_system_id, show_type, status)

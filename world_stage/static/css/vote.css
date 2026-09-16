@@ -1,17 +1,38 @@
-select, input[type="text"] {
-    border-width: 1.5px;
-}
-
 .vote-actions {
     display: flex;
     justify-content: space-between;
     width: 100%;
 }
 
-.invalid {
-    border-color: var(--error);
+.vote-field:not([hidden]) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.valid {
-    border-color: var(--border-subtle);
+.vote-field > input,
+.vote-field > select {
+    flex: 1;
+    min-width: 0;
+}
+
+.field-warning {
+    visibility: hidden;
+    color: var(--error);
+    font-weight: bold;
+}
+
+.invalid + .field-warning {
+    visibility: visible;
+}
+
+.pool-rules {
+    max-width: 40rem;
+    font-size: 0.875rem;
+}
+
+#pool-remaining {
+    grid-column: 1 / -1;
+    font-size: 1.5rem;
+    font-weight: 600;
 }

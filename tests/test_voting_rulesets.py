@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from psycopg.types.json import Jsonb
 
 
 def _create_show(cursor, *, version: str | None, scores: list[int]) -> int:
@@ -12,18 +13,8 @@ def _create_show(cursor, *, version: str | None, scores: list[int]) -> int:
     cursor.execute("SELECT COALESCE(MAX(id), 0) + 1000 AS id FROM point_system")
     point_system_id = cursor.fetchone()["id"]
     cursor.execute(
-        "INSERT INTO point_system (id, number) VALUES (%s, %s)",
-        (point_system_id, len(scores)),
-    )
-    cursor.executemany(
-        """
-        INSERT INTO point (id, point_system_id, place, score)
-        VALUES (%s, %s, %s, %s)
-        """,
-        [
-            (point_system_id * 100 + place, point_system_id, place, score)
-            for place, score in enumerate(scores, start=1)
-        ],
+        "INSERT INTO point_system (id, metadata) VALUES (%s, %s)",
+        (point_system_id, Jsonb({"points": scores})),
     )
     cursor.execute(
         "SELECT COALESCE(MAX(show_number), 0) + 1 AS number "

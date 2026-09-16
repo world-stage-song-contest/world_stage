@@ -19,6 +19,7 @@ from ..utils import (
     require_user,
 )
 from ..utils.types import VoteData
+from ..utils.voting import parse_ballot_form, pool_max_score, result_points
 
 bp = Blueprint("revote", __name__, url_prefix="/revote")
 
@@ -131,7 +132,7 @@ def _existing_ballot(cursor, voter_id: int, show_id: int) -> tuple[dict | None, 
     return ballot, ballot["result_mode"] if ballot else None
 
 
-def _ballot_selection(cursor, ballot: dict | None) -> dict[int, dict[str, Any]]:
+def _ballot_selection(cursor, ballot: dict | None, pool: bool = False) -> dict[int, dict[str, Any]]:
     selected: dict[int, dict[str, Any]] = defaultdict(dict)
     if not ballot:
         return selected
@@ -146,7 +147,9 @@ def _ballot_selection(cursor, ballot: dict | None) -> dict[int, dict[str, Any]]:
         (ballot["id"],),
     )
     for row in cursor.fetchall():
-        selected[row["score"]] = {"sid": row["song_id"], "cc": row["cc"]}
+        selected[row["song_id"] if pool else row["score"]] = {
+            "sid": row["song_id"], "cc": row["cc"], "score": row["score"]
+        }
     return selected
 
 
@@ -155,7 +158,7 @@ def _save_revote(
     show_id: int,
     nickname: str | None,
     country_id: str | None,
-    votes: dict[int, int],
+    votes: list[tuple[int, int]],
 ) -> str:
     db = get_db()
     cursor = db.cursor()
@@ -173,7 +176,7 @@ def _save_revote(
     cursor.execute("DELETE FROM vote WHERE vote_set_id = %s", (row["id"],))
     cursor.executemany(
         "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
-        [(row["id"], song_id, score) for score, song_id in votes.items()],
+        [(row["id"], song_id, score) for score, song_id in votes],
     )
     db.commit()
     return "added" if row["inserted"] else "updated"
@@ -278,6 +281,7 @@ def vote(year: str, show: str, user: tuple[int, str]):
     show_data, revote_year, error = _eligible_show(year, show)
     if error:
         return error
+    assert show_data is not None
 
     voter_id, username = user
     cursor = get_db().cursor()
@@ -290,7 +294,7 @@ def vote(year: str, show: str, user: tuple[int, str]):
         (show_data.id,),
     )
     revote_count = fetchone(cursor)["count"]
-    selected = _ballot_selection(cursor, ballot)
+    selected = _ballot_selection(cursor, ballot, show_data.point_system["kind"] == "pool")
     selected_country = ballot["country_id"] if ballot else None
     if not selected_country and countries:
         selected_country = countries[0].cc
@@ -311,6 +315,8 @@ def vote(year: str, show: str, user: tuple[int, str]):
         forced_song_by_score={},
         points=show_data.points,
         selected=selected,
+        point_system=show_data.point_system,
+        allocations={entry["sid"]: entry["score"] for entry in selected.values()},
         username=username,
         nickname=ballot["nickname"] if ballot else None,
         year=show_data.year,
@@ -431,7 +437,7 @@ def song_votes(year: str, show: str, song_id: int):
         elif not voter_entry["is_submitter"]:
             no_points_voters.append(voter_entry)
 
-    points = sorted(show_data.points, reverse=True)
+    points = result_points(show_data)
     point_groups = [
         {
             "points": points_value,
@@ -468,6 +474,7 @@ def results(year: str, show: str):
     show_data, revote_year, error = _eligible_show(year, show)
     if error:
         return error
+    assert show_data is not None
 
     cursor = get_db().cursor()
     cursor.execute(
@@ -525,7 +532,9 @@ def results(year: str, show: str):
             data = VoteData(
                 ro=song.vote_data.ro if song.vote_data else 0,
                 total_votes=sum(distribution.values()),
-                max_pts=max(show_data.points, default=0),
+                max_pts=(pool_max_score(show_data.point_system["metadata"])
+                         if show_data.point_system["kind"] == "pool"
+                         else max(show_data.points, default=0)),
                 show_voters=revote_voters,
             )
             data.count = sum(distribution.values())
@@ -534,9 +543,9 @@ def results(year: str, show: str):
             data.sum = max(sum(score * count for score, count in distribution.items()) - penalty, 0)
             song.vote_data = data
 
-        midpoint = (
-            Decimal(sum(show_data.points)) * revote_voters / len(songs) if songs else Decimal(0)
-        )
+        total_points = (show_data.point_system["metadata"]["total_points"]
+                        if show_data.point_system["kind"] == "pool" else sum(show_data.points))
+        midpoint = Decimal(total_points) * revote_voters / len(songs) if songs else Decimal(0)
         adjusted_caps = {song.id: 0 for song in songs}
         if revote_voters:
             cursor.execute(
@@ -590,7 +599,7 @@ def results(year: str, show: str):
         show_name=show_data.contextual_name,
         year=show_data.year,
         songs=songs,
-        points=show_data.points,
+        points=result_points(show_data),
         qualifiers=show_data.primary_qualifiers,
         sc_qualifiers=show_data.total_qualifiers,
         participants=len(songs),
@@ -709,6 +718,7 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
     show_data, revote_year, error = _eligible_show(year, show)
     if error:
         return error
+    assert show_data is not None
 
     voter_id, username = user
     songs = get_show_lineup(show_data.year, show_data.short_name) or []
@@ -721,33 +731,14 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
     country_id = request.form.get("country") or None
     errors: list[str] = []
     invalid: list[int] = []
-    votes: dict[int, int] = {}
+    votes: list[tuple[int, int]] = []
 
     if country_id and country_id not in allowed_country_ids:
         errors.append("You can only vote using one of your submitted countries.")
         country_id = None
 
-    for point in show_data.points:
-        value = request.form.get(f"pts-{point}")
-        try:
-            song_id = int(value) if value else None
-        except ValueError:
-            song_id = None
-        if song_id is None:
-            errors.append(f"Missing vote for {point} points.")
-            invalid.append(point)
-        elif song_id not in songs_by_id:
-            errors.append(f"Invalid song for {point} points.")
-            invalid.append(point)
-        else:
-            votes[point] = song_id
-
-    duplicate_points = [
-        point for point, song_id in votes.items() if list(votes.values()).count(song_id) > 1
-    ]
-    if duplicate_points:
-        errors.append("A song can only receive one score.")
-        invalid.extend(duplicate_points)
+    votes, vote_errors = parse_ballot_form(request.form, show_data, songs_by_id)
+    errors.extend(vote_errors)
 
     song_rules = get_ballot_entry_rules(
         show_data.id,
@@ -774,8 +765,10 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
         )
 
     selected: dict[int, dict[str, Any]] = defaultdict(dict)
-    for point, song_id in votes.items():
-        selected[point] = {"sid": song_id, "cc": songs_by_id[song_id].country.cc}
+    for point, song_id in votes:
+        if song_id in songs_by_id:
+            key = song_id if show_data.point_system["kind"] == "pool" else point
+            selected[key] = {"sid": song_id, "cc": songs_by_id[song_id].country.cc, "score": point}
     return render_template(
         "vote/vote.html",
         songs=selectable_songs,
@@ -784,6 +777,8 @@ def vote_post(year: str, show: str, user: tuple[int, str]):
         points=show_data.points,
         errors=errors,
         selected=selected,
+        point_system=show_data.point_system,
+        allocations={entry["sid"]: entry["score"] for entry in selected.values()},
         invalid=invalid,
         username=username,
         nickname=nickname,

@@ -46,6 +46,7 @@ def _show_json(show, key: str, year_status: str) -> dict:
         "short_name": show.short_name,
         "status": show.status,
         "points": show.points,
+        "point_system": show.point_system,
         "progressions": show.progressions,
     }
 

@@ -11,6 +11,7 @@ from world_stage.utils import (
     url_bool,
 )
 
+from ...utils.voting import get_point_system
 from .metadata import metadata_response
 
 bp = Blueprint("show", __name__, url_prefix="/show")
@@ -67,6 +68,7 @@ def _show_json(row: dict, points: list[int] | None = None) -> dict:
         "status": row["status"],
         "point_system_id": row["point_system_id"],
         "points": points,
+        "point_system": get_point_system(row["point_system_id"]),
         "voting_opens": row["voting_opens"],
         "voting_closes": row["voting_closes"],
         "predictions_close": row["predictions_close"],

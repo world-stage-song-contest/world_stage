@@ -214,13 +214,10 @@ def _show_nf(
         """
         SELECT show.id, show.short_name, show.show_name, show.show_type,
                show.date, show.status, show.metadata,
-               show.voting_opens, show.voting_closes, show.predictions_close,
-               array_agg(point.score ORDER BY point.place) AS points
+               show.voting_opens, show.voting_closes, show.predictions_close
         FROM show
         JOIN show_types ON show_types.id = show.show_type
-        JOIN point ON point.point_system_id = show.point_system_id
         WHERE show.national_final_id = %s
-        GROUP BY show.id, show_types.sort_order
         ORDER BY show_types.sort_order, show.show_number NULLS FIRST, show.id
         """,
         (nf["id"],),

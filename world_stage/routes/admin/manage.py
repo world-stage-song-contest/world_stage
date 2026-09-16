@@ -5,7 +5,7 @@ import psycopg
 from flask import redirect, request, url_for
 from psycopg.types.json import Jsonb
 
-from ...db import get_db
+from ...db import fetchone, get_db
 from ...discord import (
     DiscordNotificationError,
     send_final_results_notification,
@@ -27,6 +27,7 @@ from ...utils import (
 from ...utils.booleans import query_bool
 from ...utils.show_metadata import validate_metadata
 from ...utils.song_revisions import withdraw_song
+from ...utils.voting import validate_pool_settings
 from .common import _resolve_special, bp
 
 NF_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -42,13 +43,7 @@ def _show_creation_context(
     year_data = cursor.fetchone() or {}
     cursor.execute(
         """
-        SELECT point_system.id,
-               array_agg(point.score ORDER BY point.place)
-                   FILTER (WHERE point.id IS NOT NULL) AS points
-        FROM point_system
-        LEFT JOIN point ON point.point_system_id = point_system.id
-        GROUP BY point_system.id
-        ORDER BY point_system.id
+        SELECT id, kind, metadata FROM point_system ORDER BY id
         """
     )
     point_systems = cursor.fetchall()
@@ -234,7 +229,26 @@ def _create_show_post(year: int):
         short_name = f"{show_type}{show_number or ''}"
 
         point_system_value = request.form.get("point_system_id", "1")
-        if point_system_value == "custom":
+        if point_system_value == "pool":
+            system = {
+                "total_points": int(request.form.get("total_points", "")),
+                "min_items": int(request.form.get("min_items", "1")),
+                "min_points_per_item": int(request.form.get("min_points_per_item", "1")),
+            }
+            for key in ("max_items", "max_points_per_item"):
+                value = request.form.get(key, "").strip()
+                system[key] = int(value) if value else None
+            system["require_all_points"] = "require_all_points" in request.form
+            message = validate_pool_settings(system)
+            if message:
+                raise ValueError(message)
+            cur.execute(
+                """INSERT INTO point_system (kind, metadata)
+                   VALUES ('pool', %s) RETURNING id""",
+                (Jsonb(system),),
+            )
+            point_system_id = fetchone(cur)["id"]
+        elif point_system_value == "custom":
             raw_scores = request.form.get("custom_points", "")
             try:
                 scores = [
@@ -250,29 +264,20 @@ def _create_show_post(year: int):
                 raise ValueError("Custom points must contain positive integers")
             if len(set(scores)) != len(scores) or scores != sorted(scores, reverse=True):
                 raise ValueError("Custom points must be unique and in descending order")
+            metadata = Jsonb({"points": scores})
             cur.execute(
-                """
-                SELECT point_system_id
-                FROM point
-                GROUP BY point_system_id
-                HAVING array_agg(score::bigint ORDER BY place) = %s::bigint[]
-                LIMIT 1
-                """,
-                (scores,),
+                "SELECT id FROM point_system WHERE kind = 'ranked' AND metadata = %s LIMIT 1",
+                (metadata,),
             )
             existing = cur.fetchone()
             if existing:
-                point_system_id = existing["point_system_id"]
+                point_system_id = existing["id"]
             else:
                 cur.execute(
-                    "INSERT INTO point_system (number) VALUES (%s) RETURNING id",
-                    (len(scores),),
+                    "INSERT INTO point_system (kind, metadata) VALUES ('ranked', %s) RETURNING id",
+                    (metadata,),
                 )
-                point_system_id = cur.fetchone()["id"]
-                cur.executemany(
-                    "INSERT INTO point (point_system_id, place, score) VALUES (%s, %s, %s)",
-                    [(point_system_id, place, score) for place, score in enumerate(scores, 1)],
-                )
+                point_system_id = fetchone(cur)["id"]
         else:
             point_system_id = int(point_system_value)
             cur.execute("SELECT 1 FROM point_system WHERE id = %s", (point_system_id,))

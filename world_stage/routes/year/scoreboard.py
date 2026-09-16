@@ -14,6 +14,7 @@ from ...utils import (
     render_template,
     with_auth,
 )
+from ...utils.voting import result_points
 from .common import bp, resolve_special
 from .penalty import _show_penalties
 from .themes import scoreboard_theme
@@ -30,8 +31,8 @@ def _scoreboard_data(show_data, songs) -> dict:
     cursor.execute(
         """
         SELECT vote.song_id, vote.score AS pts, account.username
-        FROM vote
-        JOIN vote_set ON vote_set.id = vote.vote_set_id
+        FROM vote_set
+        LEFT JOIN vote ON vote_set.id = vote.vote_set_id
         JOIN account ON account.id = vote_set.voter_id
         WHERE vote_set.show_id = %s
           AND vote_set.result_mode = 'official'
@@ -41,15 +42,18 @@ def _scoreboard_data(show_data, songs) -> dict:
     )
     results: dict[str, dict[int, int]] = defaultdict(dict)
     for row in cursor.fetchall():
-        results[row["username"]][row["pts"]] = row["song_id"]
+        ballot = results[row["username"]]
+        if row["song_id"] is not None:
+            ballot[row["song_id"]] = row["pts"]
 
+    points = result_points(show_data)
     sequencer: AbstractVoteSequencer
     if show_data.id < 60:
-        sequencer = SuspensefulVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+        sequencer = SuspensefulVoteSequencer(results, songs, points, seed=show_data.id)
     elif show_data.id < 65:
-        sequencer = RandomVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+        sequencer = RandomVoteSequencer(results, songs, points, seed=show_data.id)
     else:
-        sequencer = ChronologicalVoteSequencer(results, songs, show_data.points, seed=show_data.id)
+        sequencer = ChronologicalVoteSequencer(results, songs, points, seed=show_data.id)
     vote_order = sequencer.get_order()
 
     cursor.execute(
@@ -101,7 +105,7 @@ def _scoreboard_data(show_data, songs) -> dict:
     return {
         "songs": songs,
         "results": results,
-        "points": show_data.points,
+        "points": points,
         "vote_order": vote_order,
         "associations": voter_assoc,
         "user_songs": user_songs,

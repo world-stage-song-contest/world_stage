@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Revote' if is_revote else 'Vote' }} - {{ show_name }}{% endblock %}
+{% block title %}{{ 'Revote' if is_revote else 'Vote' }}: {{ show_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/vote.css') }}">
     <link rel="stylesheet" href="{{ static('css/forms.css') }}">
@@ -45,19 +45,15 @@
     </div>
 </div>
 
-<div class="banner long-text">
-    <strong>The available entries and any required score follow this show's voting rules.</strong>
-</div>
-
 <form method="POST">
     <fieldset class="grid-3">
         <legend>User data</legend>
             <label class="req" title="Your submitter name. It's autofilled and can't be edited." for="username">Voter Name</label>
             <div></div>
-            <input type="text" name="username" value="{{ username or "" }}" maxlength="64" required readonly>
+            <input type="text" name="username" id="username" value="{{ username or "" }}" maxlength="64" required readonly>
             <label title="The name you want to be displayed on the scoreboard." for="nickname">Display Name</label>
             <div></div>
-            <input type="text" name="nickname" value="{{ nickname or "" }}" maxlength="64">
+            <input type="text" name="nickname" id="nickname" value="{{ nickname or "" }}" maxlength="64">
             <label class="req" title="The country to display on the scoreboard." for="country">Country</label>
             <div class="flag-container">
                 <img class="flag flag-image" id="display-flag"
@@ -79,6 +75,32 @@
         </fieldset>
         <fieldset class="grid-3">
             <legend>Songs</legend>
+        {% if point_system.kind == 'pool' %}
+            <output id="pool-remaining" data-total="{{ point_system.metadata.total_points }}">
+                <span id="pool-remaining-value">{{ point_system.metadata.total_points }}</span>
+                <span id="pool-remaining-label">points available</span>
+            </output>
+            {% for song in songs %}
+            {% set rule = song_rules[song.id] %}
+            <label for="song-{{ song.id }}" data-pool-song="{{ song.id }}"
+                   {% if rule.kind == 'FORBIDDEN' %}hidden{% endif %}>{{ song.country.name }} ({{ song.title }})</label>
+            <div class="flag-container" data-pool-song="{{ song.id }}"
+                 {% if rule.kind == 'FORBIDDEN' %}hidden{% endif %}>
+                <img class="flag flag-image" src="{{ flag_url(song.country.cc, 30) }}"
+                     height="30" width="45" draggable="false">
+            </div>
+            <div class="vote-field" data-pool-song="{{ song.id }}"
+                 {% if rule.kind == 'FORBIDDEN' %}hidden{% endif %}>
+                <input type="number" id="song-{{ song.id }}" name="song-{{ song.id }}"
+                       data-pool-song="{{ song.id }}" min="0" max="{{ rule.score_cap }}" step="1"
+                       data-min-score="{{ point_system.metadata.get('min_points_per_item', 1) }}"
+                       value="{{ allocations.get(song.id, 0) }}" oninput="updatePoolRemaining()"
+                       {% if rule.kind == 'FORBIDDEN' %}hidden disabled{% endif %}
+                       {% if rule.kind == 'FORCED' %}readonly{% endif %}>
+                <span class="field-warning" aria-hidden="true">⚠︎</span>
+            </div>
+            {% endfor %}
+        {% else %}
         {% for point in points %}
             {% set pl = loop %}
             {% set forced_song_id = forced_song_by_score.get(point) %}
@@ -88,9 +110,10 @@
                      src="{{ flag_url(selected[point]['cc'] or 'XX', 30) }}"
                      height="30" width="45" draggable="false">
             </div>
+            <div class="vote-field">
             <select name="pts-{{point}}" id="pts-{{point}}" data-flag="flag-{{point}}"
-                    class="{% if point in invalid %}invalid{% else %}valid{% endif %}"
-                    onchange="updateFlag(this)">
+                    {% if point in invalid %}class="invalid" aria-invalid="true"{% endif %}
+                    onchange="updateFlag(this); updateRankedValidity()">
                 <option data-country="XX" value=""></option>
             {% for song in songs %}
                 {% set rule = song_rules[song.id] %}
@@ -105,9 +128,26 @@
                 </option>
             {% endfor %}
             </select>
+            <span class="field-warning" aria-hidden="true">⚠︎</span>
+            </div>
         {% endfor %}
+        {% endif %}
         </fieldset>
-    </div>
+    {% if point_system.kind == 'pool' %}
+    <p class="pool-rules">
+        Distribute {{ point_system.metadata.total_points }} points among
+        {% if point_system.metadata.max_items %}
+        {{ point_system.metadata.min_items }} to {{ point_system.metadata.max_items }} songs.
+        {% else %}
+        at least {{ point_system.metadata.min_items }} songs.
+        {% endif %}
+        {% if point_system.metadata.max_points_per_item %}
+        Use at most {{ point_system.metadata.max_points_per_item }} points per song.
+        {% endif %}
+        Each song you vote for must receive at least {{ point_system.metadata.get('min_points_per_item', 1) }} points.
+        {% if point_system.metadata.require_all_points %}Use all your points.{% else %}You may leave points unused.{% endif %}
+    </p>
+    {% endif %}
     <div class="vote-actions">
         <div>
             <button type="submit" class="big">Submit</button>

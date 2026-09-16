@@ -9,6 +9,7 @@ from ...utils import (
     render_template,
     with_auth,
 )
+from ...utils.voting import result_points
 from .common import bp, get_other_shows, resolve_special
 
 
@@ -196,7 +197,7 @@ def special_results(short_name: str, show: str, user, permissions: UserPermissio
         qualifiers=qualifiers,
         sc_qualifiers=sc_qualifiers,
         songs=songs,
-        points=show_data.points,
+        points=result_points(show_data),
         show=show,
         access=access,
         host_available=show_data.status == "full",
@@ -340,7 +341,7 @@ def results(year: int, show: str, user, permissions: UserPermissions):
         qualifiers=qualifiers,
         sc_qualifiers=sc_qualifiers,
         songs=songs,
-        points=show_data.points,
+        points=result_points(show_data),
         show=show,
         access=access,
         host_available=show_data.status == "full",

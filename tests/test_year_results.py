@@ -7,13 +7,10 @@ def test_final_only_year_exposes_its_final_results(client, db):
     def property_test(total_points):
         with db.cursor() as cursor:
             cursor.execute("INSERT INTO show_status (name) VALUES ('full') ON CONFLICT DO NOTHING")
-            cursor.execute("INSERT INTO point_system (number) VALUES (1) RETURNING id")
-            point_system_id = cursor.fetchone()["id"]
             cursor.execute(
-                """INSERT INTO point (point_system_id, place, score)
-                   VALUES (%s, 1, 12)""",
-                (point_system_id,),
+                """INSERT INTO point_system (metadata) VALUES ('{"points": [12]}') RETURNING id"""
             )
+            point_system_id = cursor.fetchone()["id"]
             cursor.execute(
                 """INSERT INTO show (year_id, point_system_id, show_type, status)
                    VALUES (2024, %s, 'f', 'full') RETURNING id""",
@@ -65,7 +62,6 @@ def test_final_only_year_exposes_its_final_results(client, db):
             db.execute("DELETE FROM song_data WHERE song_id = %s", (song_id,))
             db.execute("DELETE FROM song WHERE id = %s", (song_id,))
             db.execute("DELETE FROM show WHERE id = %s", (show_id,))
-            db.execute("DELETE FROM point WHERE point_system_id = %s", (point_system_id,))
             db.execute("DELETE FROM point_system WHERE id = %s", (point_system_id,))
             db.commit()
 
@@ -86,7 +82,7 @@ def test_year_results_use_normalized_round_tiebreaks(db):
             ON CONFLICT DO NOTHING
             """
         )
-        cursor.execute("INSERT INTO point_system (number) VALUES (2) RETURNING id")
+        cursor.execute("INSERT INTO point_system DEFAULT VALUES RETURNING id")
         point_system_id = cursor.fetchone()["id"]
         cursor.execute(
             """

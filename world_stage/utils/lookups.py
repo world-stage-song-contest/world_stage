@@ -1,5 +1,6 @@
 from ..db import fetchone, get_db
 from .types import Country, ShowData
+from .voting import get_point_system
 
 
 def get_show_id(show: str, year: int | None = None) -> ShowData | None:
@@ -96,28 +97,15 @@ def get_show_id(show: str, year: int | None = None) -> ShowData | None:
         national_final_country_id=show_row["national_final_country_id"],
         national_final_status=show_row["national_final_status"],
         progressions=show_row["progressions"],
+        point_system=get_point_system(point_system_id) or {"kind": "ranked"},
     )
 
     return ret
 
 
 def get_points_for_system(point_system_id: int) -> list[int]:
-    db = get_db()
-    cursor = db.cursor()
-
-    points = []
-    cursor.execute(
-        """
-        SELECT score FROM point
-        WHERE point_system_id = %s
-        ORDER BY place
-    """,
-        (point_system_id,),
-    )
-    for p in cursor.fetchall():
-        points.append(p["score"])
-
-    return points
+    system = get_point_system(point_system_id)
+    return system["metadata"]["points"] if system and system["kind"] == "ranked" else []
 
 
 def get_countries(only_participating: bool = False) -> list[Country]:

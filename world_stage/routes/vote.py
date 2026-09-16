@@ -19,6 +19,7 @@ from ..utils import (
     render_template,
     require_user,
 )
+from ..utils.voting import parse_ballot_form
 
 bp = Blueprint("vote", __name__, url_prefix="/vote")
 
@@ -26,7 +27,7 @@ bp = Blueprint("vote", __name__, url_prefix="/vote")
 def _apply_ballot_rule_errors(
     errors: list[str],
     invalid: list[int],
-    votes: dict[int, int],
+    votes: list[tuple[int, int]],
     rules,
 ) -> None:
     for kind, reason, _song_id, score in ballot_rule_errors(votes, rules):
@@ -92,17 +93,11 @@ def update_votes(
         (nickname, country_id or "XX", request.remote_addr, vote_set_id),
     )
 
-    cursor.execute("UPDATE vote SET song_id = NULL WHERE vote_set_id = %s", (vote_set_id,))
-
-    for score, song_id in votes.items():
-        cursor.execute(
-            """
-            UPDATE vote
-            SET song_id = %s
-            WHERE vote_set_id = %s AND score = %s
-        """,
-            (song_id, vote_set_id, score),
-        )
+    cursor.execute("DELETE FROM vote WHERE vote_set_id = %s", (vote_set_id,))
+    cursor.executemany(
+        "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
+        [(vote_set_id, song_id, score) for score, song_id in votes],
+    )
 
     return True, "updated"
 
@@ -142,7 +137,7 @@ def add_votes(username, nickname, country_id, show_id, point_system_id, votes) -
             (voter_id, show_id, country_id or "XX", nickname, request.remote_addr),
         )
         vote_set_id = fetchone(cursor)["id"]
-        for score, song_id in votes.items():
+        for score, song_id in votes:
             cursor.execute(
                 "INSERT INTO vote (vote_set_id, song_id, score) VALUES (%s, %s, %s)",
                 (vote_set_id, song_id, score),
@@ -237,6 +232,7 @@ def vote(show: str, user: tuple[int, str]):
     country_id = ""
 
     selected: dict[int, dict[str, Any]] = defaultdict(dict)
+    allocations = {}
 
     show_data = get_show_id(show)
 
@@ -297,6 +293,7 @@ def vote(show: str, user: tuple[int, str]):
             (vote_set_id,),
         )
         for row in cursor.fetchall():
+            allocations[row["song_id"]] = row["score"]
             selected[row["score"]]["sid"] = row["song_id"]
             selected[row["score"]]["cc"] = row["cc"]
 
@@ -313,6 +310,7 @@ def vote(show: str, user: tuple[int, str]):
     for song_id, rule in song_rules.items():
         if rule.kind == "FORCED" and rule.required_score is not None:
             song = songs_by_id[song_id]
+            allocations[song_id] = rule.required_score
             selected[rule.required_score] = {
                 "sid": song_id,
                 "cc": song.country.cc,
@@ -328,6 +326,8 @@ def vote(show: str, user: tuple[int, str]):
             if rule.kind == "FORCED" and rule.required_score is not None
         },
         points=show_data.points,
+        point_system=show_data.point_system,
+        allocations=allocations,
         selected=selected,
         username=username,
         nickname=nickname,
@@ -385,6 +385,7 @@ def ballot_rules(show: str, user: tuple[int, str]):
                 "kind": rule.kind,
                 "reason": rule.reason,
                 "required_score": rule.required_score,
+                "score_cap": rule.score_cap,
             }
             for song_id, rule in rules.items()
         }
@@ -394,7 +395,7 @@ def ballot_rules(show: str, user: tuple[int, str]):
 @bp.post("/<show>")
 @require_user(message="Please log in to vote")
 def vote_post(show: str, user: tuple[int, str]):
-    votes = {}
+    votes = []
     invalid = []
     username = ""
     nickname = ""
@@ -438,34 +439,8 @@ def vote_post(show: str, user: tuple[int, str]):
         )
         country_id = None
 
-    missing = []
-    for point in show_data.points:
-        id_str = request.form.get(f"pts-{point}")
-        if not id_str:
-            missing.append(point)
-            continue
-        try:
-            song_id = int(id_str)
-        except ValueError:
-            errors.append(f"Invalid song for {point} points.")
-            invalid.append(point)
-            continue
-        votes[point] = song_id
-
-    if missing:
-        errors.append(f"Missing votes for {', '.join(map(str, missing))} points.")
-        invalid.extend(missing)
-
-    invalid_votes: dict[int, list[int]] = defaultdict(list)
-    for point, song_id in votes.items():
-        invalid_votes[song_id].append(point)
-
-    invalid_votes = {k: v for k, v in invalid_votes.items() if len(v) > 1}
-    invalid.extend(item for sublist in invalid_votes.values() for item in sublist)
-
-    if invalid_votes:
-        dupes = "; ".join(f"{', '.join(map(str, v))} points" for v in invalid_votes.values())
-        errors.append(f"Duplicate votes: {dupes}")
+    votes, vote_errors = parse_ballot_form(request.form, show_data, {s.id for s in songs})
+    errors.extend(vote_errors)
 
     songs_by_id = {s.id: s for s in songs}
     song_rules = get_ballot_entry_rules(
@@ -475,7 +450,7 @@ def vote_post(show: str, user: tuple[int, str]):
         country_id,
         list(songs_by_id),
     )
-    for point, song_id in votes.items():
+    for point, song_id in votes:
         if song_id not in songs_by_id:
             errors.append(f"Invalid song for {point} points.")
             invalid.append(point)
@@ -495,7 +470,9 @@ def vote_post(show: str, user: tuple[int, str]):
             return render_template("error.html", error=action)
 
     selected: dict[int, dict[str, Any]] = defaultdict(dict)
-    for point, song_id in votes.items():
+    allocations = {}
+    for point, song_id in votes:
+        allocations[song_id] = point
         selected[point]["sid"] = song_id
         song = songs_by_id.get(song_id)
         if song:
@@ -511,6 +488,8 @@ def vote_post(show: str, user: tuple[int, str]):
             if rule.kind == "FORCED" and rule.required_score is not None
         },
         points=show_data.points,
+        point_system=show_data.point_system,
+        allocations=allocations,
         errors=errors,
         selected=selected,
         invalid=invalid,
@@ -522,6 +501,8 @@ def vote_post(show: str, user: tuple[int, str]):
         show=show,
         selected_country=country_id,
         countries=countries or get_countries(),
+        short_name=show_data.short_name,
+        vote_count=get_vote_count_for_show(show_data.id),
         rules_url=url_for("vote.ballot_rules", show=show),
     )
 

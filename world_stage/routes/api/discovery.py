@@ -95,28 +95,8 @@ def genres():
 @bp.get("/point-system")
 def point_systems():
     cursor = get_db().cursor()
-    cursor.execute(
-        """
-        SELECT point_system.id, point_system.number, point.place, point.score
-        FROM point_system
-        LEFT JOIN point ON point.point_system_id = point_system.id
-        ORDER BY point_system.id, point.place
-        """
-    )
-
-    systems: dict[int, dict] = {}
-    for row in cursor.fetchall():
-        system_id = row["id"]
-        if system_id not in systems:
-            systems[system_id] = {
-                "id": system_id,
-                "number": row["number"],
-                "points": [],
-            }
-        if row["score"] is not None:
-            systems[system_id]["points"].append(row["score"])
-
-    return resp(list(systems.values()))
+    cursor.execute("SELECT id, kind, metadata FROM point_system ORDER BY id")
+    return resp([dict(row) for row in cursor.fetchall()])
 
 
 @bp.get("/voting/open")

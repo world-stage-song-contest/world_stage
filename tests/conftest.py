@@ -392,7 +392,6 @@ def _clean_songs(request):
         cur.execute("DELETE FROM show_progression")
         cur.execute("DELETE FROM show")
         cur.execute("DELETE FROM national_final")
-        cur.execute("DELETE FROM point")
         cur.execute("DELETE FROM point_system")
         cur.execute("DELETE FROM session")
         cur.execute("DELETE FROM api_token WHERE user_id > 3")

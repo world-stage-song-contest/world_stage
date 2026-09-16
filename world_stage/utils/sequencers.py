@@ -81,7 +81,7 @@ class AbstractVoteSequencer(ABC):
     def _calculate_final_scores(self) -> dict[int, int]:
         scores: dict[int, int] = {(item.id): 0 for item in self.vote_items}
         for vote in self.vote_dict.values():
-            for pts, item in vote.items():
+            for item, pts in vote.items():
                 scores[item] += pts
         return scores
 
@@ -106,7 +106,7 @@ class AbstractVoteSequencer(ABC):
                 early_voters.append(user)
                 continue
 
-            winner_points = sum(pts for pts, item in vote.items() if item == self.known_winner)
+            winner_points = sum(pts for item, pts in vote.items() if item == self.known_winner)
             if winner_points >= self.high_threshold:
                 high.append((user, vote))
             elif winner_points >= self.medium_threshold:
@@ -119,7 +119,7 @@ class AbstractVoteSequencer(ABC):
     def _suspense_metric(self, temp_scores: dict[int, int], vote: dict[int, int]) -> int:
         sorted_scores = sorted(temp_scores.values(), reverse=True)
         gap = sorted_scores[0] - sorted_scores[1] if len(sorted_scores) > 1 else 0
-        winner_points = sum(pts for pts, item in vote.items() if item == self.known_winner)
+        winner_points = sum(pts for item, pts in vote.items() if item == self.known_winner)
         return (winner_points * self.winner_weight) + gap
 
     @abstractmethod
@@ -156,14 +156,14 @@ class SuspensefulVoteSequencer(AbstractVoteSequencer):
                     if user not in remaining_voters:
                         continue
                     temp_scores = current_scores.copy()
-                    for pts, item in vote.items():
+                    for item, pts in vote.items():
                         temp_scores[item] += pts
                     score = self._suspense_metric(temp_scores, vote)
                     if score < best_score:
                         best_user, best_vote = user, vote
                         best_score = score
 
-                for pts, item in best_vote.items():
+                for item, pts in best_vote.items():
                     current_scores[item] += pts
                 final_order.append(best_user)
                 remaining_voters.remove(best_user)

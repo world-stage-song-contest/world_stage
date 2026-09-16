@@ -7,13 +7,10 @@ def get_lineup_issues(cursor, show_id: int) -> list[dict[str, str]]:
     cursor.execute(
         """
         SELECT show.id, show.year_id, show.national_final_id,
-               point_system.number AS declared_point_count,
-               COUNT(point.id) AS point_count
+               point_system.kind, COALESCE(point_system.required_items, 0) AS required_items
         FROM show
         LEFT JOIN point_system ON point_system.id = show.point_system_id
-        LEFT JOIN point ON point.point_system_id = point_system.id
         WHERE show.id = %s
-        GROUP BY show.id, point_system.number
         """,
         (show_id,),
     )
@@ -22,17 +19,9 @@ def get_lineup_issues(cursor, show_id: int) -> list[dict[str, str]]:
         return [_issue("show_missing", "The show does not exist.")]
 
     issues = []
-    point_count = show["point_count"]
-    if point_count == 0:
+    point_count = show["required_items"]
+    if show["kind"] != "pool" and point_count == 0:
         issues.append(_issue("points_missing", "No points are configured for this show."))
-    elif show["declared_point_count"] != point_count:
-        issues.append(
-            _issue(
-                "point_count_mismatch",
-                "The point system declares "
-                f"{show['declared_point_count']} positions but contains {point_count} scores.",
-            )
-        )
 
     cursor.execute(
         """
@@ -63,7 +52,7 @@ def get_lineup_issues(cursor, show_id: int) -> list[dict[str, str]]:
         issues.append(
             _issue(
                 "insufficient_entries",
-                f"The lineup has {entry_count} entries, but the point system ranks "
+                f"The lineup has {entry_count} entries, but the point system requires "
                 f"{point_count}.",
             )
         )

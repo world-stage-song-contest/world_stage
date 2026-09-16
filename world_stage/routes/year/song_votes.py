@@ -13,6 +13,7 @@ from ...utils import (
     with_auth,
 )
 from ...utils.artists import fetch_song_artist_credits
+from ...utils.voting import result_points
 from .common import bp, get_other_shows, resolve_special
 
 
@@ -195,7 +196,7 @@ def special_song_votes(
     )
     votes_by_voter = {row["username"]: row["score"] for row in cursor.fetchall()}
 
-    points = sorted(show_data.points, reverse=True)
+    points = result_points(show_data)
 
     groups: dict[int, list[dict]] = defaultdict(list)
     no_points_voters: list[dict] = []
@@ -364,7 +365,7 @@ def song_votes(
     votes_by_voter = {row["username"]: row["score"] for row in cursor.fetchall()}
 
     # Get the point system scores to know all possible point values
-    points = sorted(show_data.points, reverse=True)
+    points = result_points(show_data)
 
     # Group voters by points awarded
     groups: dict[int, list[dict]] = defaultdict(list)

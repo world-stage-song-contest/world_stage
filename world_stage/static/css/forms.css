@@ -96,8 +96,8 @@ optgroup:empty {
     width: 100%;
 }
 
-input:read-only {
-    background-color: var(--input-readonly);
+input[readonly], textarea[readonly] {
+    font-style: italic;
 }
 
 #artist-credit-editor {

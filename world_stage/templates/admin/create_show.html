@@ -39,8 +39,25 @@
             const system = document.getElementById('point_system_id');
             const points = document.getElementById('custom_points');
             const isCustom = system.value === 'custom';
+            const isPool = system.value === 'pool' || system.selectedOptions[0].dataset.kind === 'pool';
+            const poolFields = document.querySelectorAll('[data-pool-setting]');
+            poolFields.forEach((element) => {
+                element.hidden = !isPool;
+                if (element.tagName === 'INPUT') {
+                    element.disabled = system.value !== 'pool';
+                    element.required = system.value === 'pool'
+                        && ['total_points', 'min_items', 'min_points_per_item'].includes(element.name);
+                    if (isPool && system.value !== 'pool') {
+                        const value = JSON.parse(system.selectedOptions[0].dataset.settings)[element.name];
+                        if (element.type === 'checkbox') element.checked = value;
+                        else element.value = value ?? (element.name === 'min_points_per_item' ? 1 : '');
+                    }
+                }
+            });
+            points.hidden = isPool;
+            document.querySelector('label[for="custom_points"]').hidden = isPool;
             if (!isCustom) {
-                points.value = system.selectedOptions[0].dataset.points;
+                points.value = system.selectedOptions[0].dataset.points || '';
             }
             points.disabled = !isCustom;
             points.required = isCustom;
@@ -161,18 +178,40 @@
         <legend>Point system</legend>
         <label class="req" for="point_system_id">System</label>
         <select name="point_system_id" id="point_system_id" onchange="updatePointFields()">
-            {% for system in point_systems %}
-            <option value="{{ system.id }}" data-points="{{ system.points|join(', ') }}"
-                    {% if (form and form.point_system_id == system.id|string) or (not form and system.id == 1) %}selected{% endif %}>
-                #{{ system.id }} — {{ system.points|join(', ') }}
-            </option>
+            {% for kind, label, custom_value in [('ranked', 'Scores', 'custom'), ('pool', 'Point pools', 'pool')] %}
+            <optgroup label="{{ label }}">
+                {% for system in point_systems if system.kind == kind %}
+                <option value="{{ system.id }}" data-points="{{ (system.metadata.points or [])|join(', ') }}"
+                        data-kind="{{ system.kind }}" data-settings='{{ system.metadata|tojson }}'
+                        {% if (form and form.point_system_id == system.id|string) or (not form and system.id == 1) %}selected{% endif %}>
+                    {% if system.kind == 'pool' %}Point pool: {{ system.metadata.total_points }} points{% else %}{{ system.metadata.points|join(', ') }}{% endif %}
+                </option>
+                {% endfor %}
+                <option value="{{ custom_value }}" {% if form and form.point_system_id == custom_value %}selected{% endif %}>Custom…</option>
+            </optgroup>
             {% endfor %}
-            <option value="custom" {% if form and form.point_system_id == 'custom' %}selected{% endif %}>Custom…</option>
         </select>
         <label class="req" for="custom_points">Scores</label>
         <input name="custom_points" id="custom_points"
                {% if not form or form.point_system_id != 'custom' %}disabled{% endif %}
                value="{{ form.custom_points if form and form.custom_points else '12, 10, 8, 7, 6, 5, 4, 3, 2, 1' }}">
+        {% for name, label, minimum, default in [
+            ('total_points', 'Points', 1, ''),
+            ('max_items', 'Max songs', 1, ''),
+            ('min_items', 'Min songs', 0, 1),
+            ('max_points_per_item', 'Max per song', 1, ''),
+            ('min_points_per_item', 'Min per song', 1, 1)
+        ] %}
+        <label for="{{ name }}" {% if name in ['total_points', 'min_items', 'min_points_per_item'] %}class="req"{% endif %}
+               data-pool-setting hidden>{{ label }}</label>
+        <input type="number" id="{{ name }}" name="{{ name }}" min="{{ minimum }}"
+               max="2147483647" step="1" data-pool-setting hidden disabled
+               value="{{ form.get(name, default) if form else default }}">
+        {% endfor %}
+        <label for="require_all_points" data-pool-setting hidden>Exhaustive</label>
+        <input type="checkbox" id="require_all_points" name="require_all_points"
+               data-pool-setting hidden disabled
+               {% if not form or form.get('require_all_points') %}checked{% endif %}>
     </fieldset>
     <div>
         <button type="submit">Create</button>

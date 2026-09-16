@@ -69,20 +69,9 @@ def test_national_final_ballots_never_change_bias_reports(db):
             "SELECT COALESCE(MAX(id), 0) + 2000 AS id FROM point_system"
         ).fetchone()["id"]
         cursor.execute(
-            "INSERT INTO point_system (id, number) VALUES (%s, 3)",
+            """INSERT INTO point_system (id, metadata)
+               VALUES (%s, '{"points": [12, 10, 8]}')""",
             (point_system_id,),
-        )
-        first_point_id = cursor.execute(
-            "SELECT COALESCE(MAX(id), 0) + 2000 AS id FROM point"
-        ).fetchone()["id"]
-        cursor.executemany(
-            """INSERT INTO point (id, point_system_id, place, score)
-               VALUES (%s, %s, %s, %s)""",
-            [
-                (first_point_id, point_system_id, 1, 12),
-                (first_point_id + 1, point_system_id, 2, 10),
-                (first_point_id + 2, point_system_id, 3, 8),
-            ],
         )
         national_final_id = cursor.execute(
             "SELECT COALESCE(MAX(id), 0) + 2000 AS id FROM national_final"

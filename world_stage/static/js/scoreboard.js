@@ -77,7 +77,7 @@ async function loadVotes(year, show) {
     points = json.points;
     userSongs = json.user_songs;
     points.sort((a, b) => a - b);
-    maxPoints = points[points.length - 1];
+    maxPoints = points[points.length - 1] || 0;
     voteOrder = json.vote_order;
     for (const song of json.songs) {
         data.push(song);
@@ -334,7 +334,7 @@ class Country {
         if (!this.win) return false;
         // ``Math.max(points)`` returned NaN — Math.max doesn't accept
         // arrays. Spread the array so we get the actual max point value.
-        const left = this.points + leftVotes * Math.max(...points);
+        const left = this.points + leftVotes * maxPoints;
         if (left <= leaderPts) {
             this.win = false;
             return true;
@@ -493,8 +493,9 @@ async function vote() {
                 if (stale()) return;
             }
 
-            const country = countries[vts[pt]];
-            country.vote(pt);
+            for (const [songId, score] of Object.entries(vts)) {
+                if (score === pt) countries[songId].vote(pt);
+            }
         }
 
         await sortCountries();
@@ -510,8 +511,9 @@ async function vote() {
                 if (stale()) return;
             }
 
-            const country = countries[vts[pt]];
-            country.vote(pt);
+            for (const [songId, score] of Object.entries(vts)) {
+                if (score === pt) countries[songId].vote(pt);
+            }
 
             await sortCountries();
             if (stale()) return;

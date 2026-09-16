@@ -66,9 +66,9 @@ def _show_max_point(show_id: int) -> int:
     cursor = get_db().cursor()
     cursor.execute(
         """
-        SELECT MAX(point.score) AS max_score
+        SELECT point.max_score
         FROM show
-        JOIN point ON point.point_system_id = show.point_system_id
+        JOIN point_system point ON point.id = show.point_system_id
         WHERE show.id = %s
         """,
         (show_id,),

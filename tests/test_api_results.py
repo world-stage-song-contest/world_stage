@@ -12,12 +12,8 @@ def _seed_results_show(db):
                VALUES ('full'), ('partial'), ('draw') ON CONFLICT DO NOTHING"""
         )
         cursor.execute(
-            "INSERT INTO point_system (id, number) VALUES (20, 1) ON CONFLICT DO NOTHING"
-        )
-        cursor.execute(
-            """INSERT INTO point (id, point_system_id, place, score)
-               VALUES (201, 20, 1, 12), (202, 20, 2, 10)
-               ON CONFLICT DO NOTHING"""
+            """INSERT INTO point_system (id, metadata)
+               VALUES (20, '{"points": [12, 10]}') ON CONFLICT DO NOTHING"""
         )
         target_show_id = cursor.execute(
             """INSERT INTO show (year_id, point_system_id, show_type, status)

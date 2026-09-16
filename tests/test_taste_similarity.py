@@ -56,19 +56,9 @@ def test_taste_similarity_uses_each_voters_effective_ballot(db):
             "SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point_system"
         ).fetchone()["id"]
         cursor.execute(
-            "INSERT INTO point_system (id, number) VALUES (%s, 3)",
+            """INSERT INTO point_system (id, metadata)
+               VALUES (%s, '{"points": [12, 10, 8]}')""",
             (point_system_id,),
-        )
-        first_point_id = cursor.execute(
-            "SELECT COALESCE(MAX(id), 0) + 1 AS id FROM point"
-        ).fetchone()["id"]
-        cursor.executemany(
-            "INSERT INTO point (id, point_system_id, place, score) VALUES (%s, %s, %s, %s)",
-            [
-                (first_point_id, point_system_id, 1, 12),
-                (first_point_id + 1, point_system_id, 2, 10),
-                (first_point_id + 2, point_system_id, 3, 8),
-            ],
         )
         show_id = cursor.execute(
             """INSERT INTO show (
