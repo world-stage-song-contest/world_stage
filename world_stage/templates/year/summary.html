@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/show_navigation.html" import show_navigation with context %}
 {% from "macros/artists.html" import artist_links %}
 {% block title %}Results: {{ national_final_name or special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
@@ -8,48 +9,7 @@
     <script src="{{ static('js/sort-table.js') }}"></script>
 {% endblock %}
 {% block navigation %}
-    {% if national_final_short_name %}
-    <a class="nav-item" href="{{ url_for('year.nf_details', year=year_id, nf_short_name=national_final_short_name) }}">{{ national_final_name }}</a>
-    {% elif special %}
-    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
-    {% else %}
-    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
-    {% endif %}
-    <span class="nav-separator"></span>
-    {% for other_show in other_shows %}
-    {% if special %}
-    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=other_show) }}"> {{ other_show|upper }}</a>
-    {% else %}
-    <a class="nav-item" href="{{ url_for('year.results', year=year, show=other_show)}}"> {{ other_show|upper }}</a>
-    {% endif %}
-    {% endfor %}
-    <span class="nav-separator"></span>
-    {% if special %}
-    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
-    <a class="nav-item" href="{{ url_for('year.special_scoreboard', short_name=special, show=show) }}">Scoreboard</a>
-    <a class="nav-item" href="{{ url_for('year.special_predictions', short_name=special, show=show) }}">Predictions</a>
-    <a class="nav-item" href="{{ url_for('year.special_show_play', short_name=special, show=show) }}">Play</a>
-    {% if can_apply_penalty %}
-    {% if has_qualifiers %}
-    <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifiers</a>
-    {% endif %}
-    {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>{% endif %}
-    {% endif %}
-    {% else %}
-    <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
-    <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
-    <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=show) }}">Predictions</a>
-    <a class="nav-item" href="{{ url_for('year.show_play', year=year, show=show) }}">Play</a>
-    {% if can_apply_penalty %}
-    {% if has_qualifiers %}
-    <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifiers</a>
-    {% endif %}
-    {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>{% endif %}
-    {% endif %}
-    {% endif %}
-    {% if revote_eligible %}
-    <a class="nav-item" href="{{ url_for('revote.results', year=special if special else year, show=show) }}">Revote Results</a>
-    {% endif %}
+{{ show_navigation('summary') }}
 {% endblock %}
 {% block content %}
 {% if secret %}

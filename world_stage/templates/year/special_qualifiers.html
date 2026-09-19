@@ -1,15 +1,10 @@
 {% extends "base.html" %}
+{% from "macros/show_navigation.html" import show_navigation with context %}
 {% from "macros/artists.html" import artist_links %}
 {% block title %}Special qualifiers: {{ year }} {{ show_name }}{% endblock %}
 {% block headercontents %}<link rel="stylesheet" href="{{ static('css/forms.css') }}">{% endblock %}
 {% block navigation %}
-    {% if special %}
-    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results</a>
-    <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifier reveal</a>
-    {% else %}
-    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results</a>
-    <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifier reveal</a>
-    {% endif %}
+{{ show_navigation('special_qualifiers') }}
 {% endblock %}
 {% block content %}
 <h2>Special qualifiers</h2>

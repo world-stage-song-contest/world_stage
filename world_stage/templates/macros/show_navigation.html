@@ -1,0 +1,51 @@
+{% macro show_navigation(current) -%}
+    {% set nav = get_show_navigation(year|default(none), show, special|default(none)) %}
+    {% set scope = {'short_name': nav.special} if nav.special else {'year': nav.year} %}
+    {% set sections = [
+        ('summary', 'results', 'special_results', 'Results Summary', true),
+        ('detailed', 'detailed_results', 'special_detailed_results', 'Detailed Results', true),
+        ('scoreboard', 'scoreboard', 'special_scoreboard', 'Scoreboard', true),
+        ('predictions', 'show_predictions', 'special_predictions', 'Predictions', true),
+        ('play', 'show_play', 'special_show_play', 'Play', true),
+        ('qualifiers', 'qualifiers', 'special_qualifiers', 'Qualifiers', nav.can_manage and nav.show.progressions),
+        ('penalty', 'show_penalty', 'special_show_penalty', 'Penalty', nav.can_manage and nav.show.penalizes_non_voters),
+        ('voters', 'show_voters', 'special_show_voters', 'Voters', nav.can_view_voters)
+    ] %}
+    {% set sibling = (sections|selectattr('0', 'equalto', current)|first)|default(sections[0]) %}
+    {% if nav.show.national_final_short_name %}
+    <a class="nav-item" href="{{ url_for('year.nf_details', year=nav.year, nf_short_name=nav.show.national_final_short_name) }}">{{ nav.show.national_final_name }}</a>
+    {% elif nav.special %}
+    <a class="nav-item" href="{{ url_for('year.special', short_name=nav.special) }}">{{ nav.label }}</a>
+    {% else %}
+    <a class="nav-item" href="{{ url_for('year.year', year=nav.year) }}">{{ nav.label }}</a>
+    {% endif %}
+    <span class="nav-separator"></span>
+    {% for other_show in nav.other_shows %}
+    <a class="nav-item" href="{{ url_for('year.' ~ (sibling[2] if nav.special else sibling[1]), show=other_show, **scope) }}">{{ other_show|upper }}</a>
+    {% endfor %}
+    <span class="nav-separator"></span>
+    {% for key, regular_endpoint, special_endpoint, label, visible in sections %}
+    {% if key == 'voters' and nav.revote_eligible %}
+    <a class="nav-item" href="{{ url_for('revote.results', year=nav.special or nav.year, show=show) }}">Revote Results</a>
+    {% endif %}
+    {% if key != current and visible %}
+    <a class="nav-item" href="{{ url_for('year.' ~ (special_endpoint if nav.special else regular_endpoint), show=show, **scope) }}">{{ label }}</a>
+    {% endif %}
+    {% endfor %}
+{%- endmacro %}
+
+{% macro revote_navigation(current) -%}
+    <a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ special_name or year }}</a>
+    <span class="nav-separator"></span>
+    {% set sibling = current if current in ('results', 'detailed_results', 'vote') else 'results' %}
+    {% for other_show in other_revote_shows %}
+    <a class="nav-item" href="{{ url_for('revote.' ~ sibling, year=revote_year, show=other_show.short_name, revoters_only='true' if sibling == 'results' and revoters_only else none) }}">{{ other_show.short_name|upper }}</a>
+    {% endfor %}
+    <span class="nav-separator"></span>
+    <a class="nav-item" href="{{ original_results_url }}">Original Results</a>
+    {% for endpoint, label in [('results', 'Results Summary'), ('detailed_results', 'Detailed Results'), ('vote', 'Change Vote')] %}
+    {% if endpoint != current %}
+    <a class="nav-item" href="{{ url_for('revote.' ~ endpoint, year=revote_year, show=show) }}">{{ label }}</a>
+    {% endif %}
+    {% endfor %}
+{%- endmacro %}

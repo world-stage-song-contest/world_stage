@@ -15,7 +15,7 @@ from ...utils.booleans import query_bool
 from ...utils.playlist_media import resolve_playlist_media
 from ...utils.playlists import format_m3u, song_play_entries
 from ...utils.show_metadata import get_show_segments
-from .common import bp, get_other_shows, resolve_special
+from .common import bp, resolve_special
 
 
 def generate_playlist(
@@ -158,10 +158,6 @@ def _render_show_player(show_data: ShowData, user, permissions: UserPermissions,
         full_show=full_show,
         include_host=include_host,
         host_available=show_data.status == "full",
-        other_shows=get_other_shows(show_data.year, show_data.short_name),
-        can_apply_penalty=elevated,
-        penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=bool(show_data.progressions),
         special=special_year["special_short_name"] if special_year else None,
         special_name=special_year["special_name"] if special_year else None,
         scrobble_enabled=_scrobble_enabled(),

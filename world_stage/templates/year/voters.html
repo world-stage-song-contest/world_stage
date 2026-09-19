@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "macros/show_navigation.html" import show_navigation with context %}
+{% block title %}Voters: {{ national_final_name or special_name or year }} {{ show_name }}{% endblock %}
+{% block headercontents %}
+<link rel="stylesheet" href="{{ static('css/results.css') }}">
+<script src="{{ static('js/sort-table.js') }}" defer></script>
+<script src="{{ static('js/local-datetime.js') }}" defer></script>
+<style>
+    .voted-entry {
+        background-color: var(--audit-create-bg);
+    }
+    .missing-voter {
+        background-color: var(--audit-delete-bg);
+    }
+</style>
+{% endblock %}
+{% block navigation %}
+{{ show_navigation('voters') }}
+{% endblock %}
+{% block content %}
+<table class="sortable">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Country</th>
+            <th>Voted at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for voter in voters %}
+        <tr data-value="{{ loop.index }}"{% if voter.has_entry %} class="voted-entry"{% endif %}>
+            <td>{{ voter.username }}</td>
+            <td data-sort-value="{{ voter.country or '' }}"><div class="country">{{ flag(voter.code, 24, voter.country) }}{{ voter.country or '—' }}</div></td>
+            <td data-sort-value="{{ voter.created_at.timestamp() if voter.created_at else '' }}">{% if voter.created_at %}<time datetime="{{ voter.created_at.isoformat() }}" data-local-datetime>{{ voter.created_at|warsaw_datetime }}</time>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+        {% for voter in missing_voters %}
+        <tr class="missing-voter" data-value="{{ voters|length + loop.index }}">
+            <td>{{ voter.username }}</td>
+            <td data-sort-value=""></td>
+            <td data-sort-value="">Not voted</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

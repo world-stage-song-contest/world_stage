@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/show_navigation.html" import show_navigation, revote_navigation with context %}
 {% from "macros/artists.html" import artist_links %}
 {% block title %}{{ 'Detailed revote results' if is_revote else 'Detailed Results' }}: {{ national_final_name or special_name or year or '' }} {{ show_name }}{% endblock %}
 {% block headercontents %}
@@ -7,57 +8,11 @@
     {% if is_revote %}<style>.revote-voter { background: var(--qualifier-color); }</style>{% endif %}
 {% endblock %}
 {% block navigation %}
-    {% if is_revote %}
-    <a class="nav-item" href="{{ url_for('revote.year', year=revote_year) }}">{{ special_name or year }}</a>
-    <span class="nav-separator"></span>
-    {% for other_show in other_revote_shows %}
-    <a class="nav-item" href="{{ url_for('revote.detailed_results', year=revote_year, show=other_show.short_name) }}">{{ other_show.short_name|upper }}</a>
-    {% endfor %}
-    <span class="nav-separator"></span>
-    <a class="nav-item" href="{{ original_results_url }}">Original Results</a>
-    <a class="nav-item" href="{{ url_for('revote.results', year=revote_year, show=show) }}">Results Summary</a>
-    <a class="nav-item" href="{{ url_for('revote.vote', year=revote_year, show=show) }}">Change Vote</a>
-    {% else %}
-    {% if national_final_short_name %}
-    <a class="nav-item" href="{{ url_for('year.nf_details', year=year, nf_short_name=national_final_short_name) }}">{{ national_final_name }}</a>
-    {% elif special %}
-    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
-    {% else %}
-    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
-    {% endif %}
-    <span class="nav-separator"></span>
-    {% for other_show in other_shows %}
-    {% if special %}
-    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=other_show) }}"> {{ other_show|upper }}</a>
-    {% else %}
-    <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=other_show)}}"> {{ other_show|upper }}</a>
-    {% endif %}
-    {% endfor %}
-    <span class="nav-separator"></span>
-    {% if special %}
-    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results Summary</a>
-    <a class="nav-item" href="{{ url_for('year.special_scoreboard', short_name=special, show=show) }}">Scoreboard</a>
-    <a class="nav-item" href="{{ url_for('year.special_predictions', short_name=special, show=show) }}">Predictions</a>
-    <a class="nav-item" href="{{ url_for('year.special_show_play', short_name=special, show=show) }}">Play</a>
-    {% if can_apply_penalty %}
-    {% if has_qualifiers %}
-    <a class="nav-item" href="{{ url_for('year.special_qualifiers', short_name=special, show=show) }}">Qualifiers</a>
-    {% endif %}
-    {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.special_show_penalty', short_name=special, show=show) }}">Penalty</a>{% endif %}
-    {% endif %}
-    {% else %}
-    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results Summary</a>
-    <a class="nav-item" href="{{ url_for('year.scoreboard', year=year, show=show) }}">Scoreboard</a>
-    <a class="nav-item" href="{{ url_for('year.show_predictions', year=year, show=show) }}">Predictions</a>
-    <a class="nav-item" href="{{ url_for('year.show_play', year=year, show=show) }}">Play</a>
-    {% if can_apply_penalty %}
-    {% if has_qualifiers %}
-    <a class="nav-item" href="{{ url_for('year.qualifiers', year=year, show=show) }}">Qualifiers</a>
-    {% endif %}
-    {% if penalties_enabled %}<a class="nav-item" href="{{ url_for('year.show_penalty', year=year, show=show) }}">Penalty</a>{% endif %}
-    {% endif %}
-    {% endif %}
-    {% endif %}
+{% if is_revote %}
+{{ revote_navigation('detailed_results') }}
+{% else %}
+{{ show_navigation('detailed') }}
+{% endif %}
 {% endblock %}
 {% block content %}
 {% if not is_revote and secret %}

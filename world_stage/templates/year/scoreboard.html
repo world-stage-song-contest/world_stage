@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/show_navigation.html" import show_navigation with context %}
 {% block title %}Scoreboard: {{ special_name or year }} {{ show_name }}{% endblock %}
 {% block headercontents %}
     {% for stylesheet in scoreboard_stylesheets %}
@@ -8,15 +9,7 @@
     <script src="{{ static('js/scoreboard.js') }}"></script>
 {% endblock %}
 {% block navigation %}
-    {% if special %}
-    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">Results</a>
-    <a class="nav-item" href="{{ url_for('year.special_detailed_results', short_name=special, show=show) }}">Detailed Results</a>
-    <a class="nav-item" href="{{ url_for('year.special_show_play', short_name=special, show=show) }}">Play</a>
-    {% else %}
-    <a class="nav-item" href="{{ url_for('year.results', year=year, show=show) }}">Results</a>
-    <a class="nav-item" href="{{ url_for('year.detailed_results', year=year, show=show) }}">Detailed Results</a>
-    <a class="nav-item" href="{{ url_for('year.show_play', year=year, show=show) }}">Play</a>
-    {% endif %}
+{{ show_navigation('scoreboard') }}
 {% endblock %}
 
 {% block onload %}onLoad('{{ year }}', '{{ show }}', {{ 'true' if song_title_labels else 'false' }}){% endblock %}

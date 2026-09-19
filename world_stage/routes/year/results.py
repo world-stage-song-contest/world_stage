@@ -10,7 +10,7 @@ from ...utils import (
     with_auth,
 )
 from ...utils.voting import result_points
-from .common import bp, get_other_shows, resolve_special
+from .common import bp, resolve_special
 
 
 def _get_detailed_votes(show_id: int) -> tuple[list[dict], dict[tuple[int, int], int]]:
@@ -177,11 +177,6 @@ def special_results(short_name: str, show: str, user, permissions: UserPermissio
         (show_data.id,),
     )
     voter_count = fetchone(cursor)["c"]
-    cursor.execute(
-        "SELECT revote_eligible_at IS NOT NULL AS eligible FROM show WHERE id = %s",
-        (show_data.id,),
-    )
-    revote_eligible = fetchone(cursor)["eligible"]
     songs.sort(reverse=True)
 
     songs, qualifier_reveal, result_places = _prepare_qualification_results(
@@ -204,7 +199,6 @@ def special_results(short_name: str, show: str, user, permissions: UserPermissio
         offset=0,
         result_places=result_places,
         qualifier_reveal=qualifier_reveal,
-        other_shows=get_other_shows(_year, show),
         show_name=show_data.name,
         short_name=show_data.short_name,
         show_id=show_data.id,
@@ -212,10 +206,6 @@ def special_results(short_name: str, show: str, user, permissions: UserPermissio
         year_id=_year,
         participants=participants,
         voters=voter_count,
-        can_apply_penalty=elevated,
-        penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=bool(show_data.progressions),
-        revote_eligible=revote_eligible,
         national_final_name=show_data.national_final_name,
         national_final_short_name=show_data.national_final_short_name,
         special=short_name,
@@ -260,7 +250,6 @@ def special_detailed_results(short_name: str, show: str, user, permissions: User
         "year/detailed.html",
         qualifiers=qualifiers,
         sc_qualifiers=sc_qualifiers,
-        other_shows=get_other_shows(_year, show),
         songs=songs,
         voters=voters,
         scores=scores,
@@ -268,9 +257,6 @@ def special_detailed_results(short_name: str, show: str, user, permissions: User
         show=show,
         year=short_name,
         participants=len(songs),
-        can_apply_penalty=elevated,
-        penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=bool(show_data.progressions),
         special=short_name,
         special_name=special_year["special_name"],
         national_final_name=show_data.national_final_name,
@@ -321,11 +307,6 @@ def results(year: int, show: str, user, permissions: UserPermissions):
         (show_data.id,),
     )
     voter_count = fetchone(cursor)["c"]
-    cursor.execute(
-        "SELECT revote_eligible_at IS NOT NULL AS eligible FROM show WHERE id = %s",
-        (show_data.id,),
-    )
-    revote_eligible = fetchone(cursor)["eligible"]
     songs.sort(reverse=True)
 
     songs, qualifier_reveal, result_places = _prepare_qualification_results(
@@ -348,7 +329,6 @@ def results(year: int, show: str, user, permissions: UserPermissions):
         offset=0,
         result_places=result_places,
         qualifier_reveal=qualifier_reveal,
-        other_shows=get_other_shows(_year, show),
         show_name=show_data.name,
         short_name=show_data.short_name,
         show_id=show_data.id,
@@ -356,10 +336,6 @@ def results(year: int, show: str, user, permissions: UserPermissions):
         year_id=_year,
         participants=participants,
         voters=voter_count,
-        can_apply_penalty=elevated,
-        penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=bool(show_data.progressions),
-        revote_eligible=revote_eligible,
         national_final_name=show_data.national_final_name,
         national_final_short_name=show_data.national_final_short_name,
     )
@@ -398,7 +374,6 @@ def detailed_results(year: int, show: str, user, permissions: UserPermissions):
         "year/detailed.html",
         qualifiers=qualifiers,
         sc_qualifiers=sc_qualifiers,
-        other_shows=get_other_shows(_year, show),
         songs=songs,
         voters=voters,
         scores=scores,
@@ -406,9 +381,6 @@ def detailed_results(year: int, show: str, user, permissions: UserPermissions):
         show=show,
         year=year,
         participants=len(songs),
-        can_apply_penalty=elevated,
-        penalties_enabled=show_data.penalizes_non_voters,
-        has_qualifiers=bool(show_data.progressions),
         national_final_name=show_data.national_final_name,
         national_final_short_name=show_data.national_final_short_name,
     )

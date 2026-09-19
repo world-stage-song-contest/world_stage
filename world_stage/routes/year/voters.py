@@ -202,36 +202,93 @@ def special_year_voters(short_name: str, permissions: UserPermissions):
         permissions,
     )
 
+
+def _render_show_voters(
+    year_id: int,
+    show: str,
+    permissions: UserPermissions,
+    special: str | None = None,
+    special_name: str | None = None,
+):
+    show_data = get_show_id(show, year_id)
+    if not show_data:
+        return render_template("error.html", error="Show not found"), 404
+    if show_data.status != "full" and not permissions.can_view_restricted:
+        return render_template(
+            "error.html", error="This show has not published full results yet"
+        ), 403
+
+    cursor = get_db().cursor()
+    cursor.execute(
+        """
+        SELECT account.id, account.username,
+               COALESCE(vote_set.country_id, 'XX') AS code,
+               country.name AS country, vote_set.created_at,
+               EXISTS (
+                   SELECT 1 FROM current_song AS song
+                   JOIN song_show ON song_show.song_id = song.id
+                   WHERE song_show.show_id = vote_set.show_id
+                     AND song.submitter_id = vote_set.voter_id
+                     AND NOT song.is_placeholder
+               ) AS has_entry
+        FROM vote_set
+        JOIN account ON account.id = vote_set.voter_id
+        LEFT JOIN country ON country.id = vote_set.country_id
+        WHERE vote_set.show_id = %s AND vote_set.result_mode = 'official'
+        ORDER BY vote_set.created_at, vote_set.id
+        """,
+        (show_data.id,),
+    )
+    voters = cursor.fetchall()
+    cursor.execute(
+        """
+        SELECT account.id, account.username
+        FROM account
+        WHERE EXISTS (
+            SELECT 1 FROM current_song AS song
+            JOIN song_show ON song_show.song_id = song.id
+            WHERE song_show.show_id = %s
+              AND song.submitter_id = account.id
+              AND NOT song.is_placeholder
+        ) AND NOT EXISTS (
+            SELECT 1 FROM vote_set
+            WHERE vote_set.show_id = %s
+              AND vote_set.voter_id = account.id
+              AND vote_set.result_mode = 'official'
+        )
+        ORDER BY LOWER(account.username), account.id
+        """,
+        (show_data.id, show_data.id),
+    )
+    missing_voters = cursor.fetchall()
+    return render_template(
+        "year/voters.html",
+        year=year_id,
+        show=show,
+        show_name=show_data.name,
+        special=special,
+        special_name=special_name,
+        national_final_name=show_data.national_final_name,
+        national_final_short_name=show_data.national_final_short_name,
+        year_id=year_id,
+        voters=voters,
+        missing_voters=missing_voters,
+    )
+
+
 @bp.get("/<int:year>/<show>/voters")
 @with_permissions
 def show_voters(year: int, show: str, permissions: UserPermissions):
-    _year = year
-    show_data = get_show_id(show, _year)
+    return _render_show_voters(year, show, permissions)
 
-    if not show_data:
-        return render_template("error.html", error="Show not found"), 404
 
-    if not permissions.can_view_restricted:
-        return render_template("error.html", error="You aren't allowed to access this show"), 400
-
-    db = get_db()
-    cursor = db.cursor()
-
-    cursor.execute(
-        """
-        SELECT username, nickname, COALESCE(country.id, 'XX') FROM vote_set
-        JOIN account ON voter_id = account.id
-        LEFT OUTER JOIN country ON country_id = country.id
-        WHERE show_id = %s AND vote_set.result_mode = 'official'
-    """,
-        (show_data.id,),
+@bp.get("/special/<short_name>/<show>/voters")
+@with_permissions
+def special_show_voters(short_name: str, show: str, permissions: UserPermissions):
+    special_year = resolve_special(short_name)
+    if not special_year:
+        return render_template("error.html", error="Special not found"), 404
+    return _render_show_voters(
+        special_year["id"], show, permissions,
+        short_name, special_year["special_name"],
     )
-
-    return render_template("year/voters.html")
-
-
-# ── Penalty management ───────────────────────────────────────────────
-# Admins can dock a song its show's maximum point value when its
-# submitter failed to vote in that show. The penalty is stored on
-# ``song_show.penalty`` and the ``refresh_show_results`` SQL trigger
-# automatically rebuilds the show's standings whenever it changes.

@@ -11,7 +11,7 @@ from ...utils import (
     render_template,
     with_auth,
 )
-from .common import bp, get_other_shows, resolve_special
+from .common import bp, resolve_special
 
 
 @bp.get("/special/<short_name>/<show>/predictions")
@@ -170,7 +170,6 @@ def special_predictions(
         show=show,
         show_name=show_data.name,
         year=short_name,
-        other_shows=get_other_shows(_year, show),
         special=short_name,
         special_name=special_year["special_name"],
         national_final_name=show_data.national_final_name,
@@ -598,7 +597,6 @@ def show_predictions(year: int, show: str, user, permissions: UserPermissions):
         show=show,
         show_name=show_data.name,
         year=year,
-        other_shows=get_other_shows(_year, show),
         national_final_name=show_data.national_final_name,
         national_final_short_name=show_data.national_final_short_name,
         predictor_scores=predictor_scores,

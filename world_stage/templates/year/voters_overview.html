@@ -8,9 +8,9 @@
     <a class="nav-item" href="{{ url_for('year.index') }}">Years</a>
     <span class="nav-separator"></span>
     {% if special %}
-    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">Overview</a>
+    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
     {% else %}
-    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">Overview</a>
+    <a class="nav-item" href="{{ url_for('year.year', year=year) }}">{{ year }}</a>
     {% endif %}
 {% endblock %}
 {% block content %}

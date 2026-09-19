@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/show_navigation.html" import show_navigation with context %}
 {% from "macros/artists.html" import artist_links %}
 {% block title %}{{ country_name }} — {{ special_name }} {{ show_name }}{% endblock %}
 {% block headercontents %}
@@ -6,8 +7,7 @@
     <link rel="stylesheet" href="{{ static('css/song-table.css') }}">
 {% endblock %}
 {% block navigation %}
-    <a class="nav-item" href="{{ url_for('year.special', short_name=special) }}">{{ special_name }}</a>
-    <a class="nav-item" href="{{ url_for('year.special_results', short_name=special, show=show) }}">{{ show_name }}</a>
+{{ show_navigation('song_votes') }}
 {% endblock %}
 {% block content %}
 <h2>{{ country_name }} in {{ show_name }} ({{ special_name }})</h2>

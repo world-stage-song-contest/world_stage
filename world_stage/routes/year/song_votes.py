@@ -14,7 +14,7 @@ from ...utils import (
 )
 from ...utils.artists import fetch_song_artist_credits
 from ...utils.voting import result_points
-from .common import bp, get_other_shows, resolve_special
+from .common import bp, resolve_special
 
 
 @bp.get("/special/<short_name>/<show>/song/<country_code>")
@@ -244,7 +244,6 @@ def special_song_votes(
         total_points=total_points,
         total_voters=total_voters,
         voters_who_gave=voters_who_gave,
-        other_shows=get_other_shows(_year, show),
         special=short_name,
         special_name=special_year["special_name"],
         national_final_name=show_data.national_final_name,
@@ -415,7 +414,6 @@ def song_votes(
         total_points=total_points,
         total_voters=total_voters,
         voters_who_gave=voters_who_gave,
-        other_shows=get_other_shows(_year, show),
         national_final_name=show_data.national_final_name,
         national_final_short_name=show_data.national_final_short_name,
     )
