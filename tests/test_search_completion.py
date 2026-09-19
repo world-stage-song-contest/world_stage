@@ -20,7 +20,7 @@ def complete():
 
     def run(source, result_type, caret=None, choices=None):
         script = """
-            import {completeWsql} from './world_stage/static/js/wsql-completion.mjs';
+            import {completeWsql} from './world_stage/static/js/wsql-completion.js';
             let input = '';
             for await (const chunk of process.stdin) input += chunk;
             const {source, resultType, caret, schema, choices} = JSON.parse(input);

@@ -129,10 +129,10 @@ def _scrobble_enabled() -> bool:
 
 
 def _render_show_player(show_data: ShowData, user, permissions: UserPermissions, special_year=None):
-    postcards = query_bool(request.args, "postcards", True)
+    postcards = query_bool(request.args, "postcards", False)
 
     full_show = query_bool(request.args, "intervals", query_bool(request.args, "full_show", False))
-    include_host = query_bool(request.args, "host", show_data.status != "full")
+    include_host = query_bool(request.args, "host", False)
     entries, bad_countries = get_show_play_entries(show_data, postcards, full_show, include_host)
 
     elevated = can_manage_show(show_data, user, permissions)

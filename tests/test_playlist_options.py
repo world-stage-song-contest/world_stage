@@ -2,7 +2,6 @@ from hypothesis import given
 from hypothesis import strategies as st
 from werkzeug.datastructures import MultiDict
 
-from world_stage.utils.booleans import query_bool
 from world_stage.utils.playlist_options import playlist_options
 
 
@@ -38,22 +37,26 @@ def test_query_options_override_suffixes_and_name_downloads(postcards, host, int
 
 
 @given(flags=st.lists(st.sampled_from(["nh", "ni", "np"]), unique=True), show=st.booleans())
-def test_legacy_names_keep_suffix_order(flags, show):
+def test_missing_options_are_false_with_any_legacy_suffixes(flags, show):
     if not show:
         flags = [flag for flag in flags if flag == "np"]
     key = "1997sf1" + "".join(f"-{flag}" for flag in flags)
     options = playlist_options(key, MultiDict(), show=show)
-    assert options.filename == key
+    assert options.filename == "1997sf1" + ("-nh-ni-np" if show else "-np")
     assert options.stem == "1997sf1"
-    assert options.postcards == ("np" not in flags)
-    assert options.host == ("nh" not in flags)
+    assert options.postcards is False
+    assert options.host is False
     assert options.intervals is False
 
 
-@given(value=boolean_values(), default=st.booleans())
-def test_checkbox_values_override_hidden_defaults(value, default):
-    args = MultiDict([("postcards", str(default)), ("postcards", value[1])])
-    assert query_bool(args, "postcards", not value[0]) == value[0]
+@given(postcards=st.booleans(), host=st.booleans(), intervals=st.booleans(), show=st.booleans())
+def test_native_checkbox_options_enable_only_checked_values(postcards, host, intervals, show):
+    checked = {"postcards": postcards, "host": host, "intervals": intervals}
+    args = MultiDict((name, "on") for name, enabled in checked.items() if enabled)
+    options = playlist_options("1997sf1", args, show=show)
+    assert options.postcards == postcards
+    assert options.host == (show and host)
+    assert options.intervals == (show and intervals)
 
 
 @given(name=st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1),

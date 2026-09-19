@@ -83,7 +83,7 @@ def _render_player(
     back_url: str,
     download_url: str,
 ):
-    postcards = query_bool(request.args, "postcards", True)
+    postcards = query_bool(request.args, "postcards", False)
     entries, bad_countries = song_play_entries(rows, postcards)
     err = _bad_links_error(bad_countries, permissions)
     if err:

@@ -138,10 +138,7 @@
 
     document.querySelector('[data-playlist-player]').addEventListener('change', (event) => {
         const url = new URL(window.location.href);
-        for (const [name, value] of new FormData(event.currentTarget)) {
-            url.searchParams.set(name, value);
-        }
-        url.searchParams.delete('full_show');
+        url.search = new URLSearchParams(new FormData(event.currentTarget)).toString();
         window.location.href = url.toString();
     });
 

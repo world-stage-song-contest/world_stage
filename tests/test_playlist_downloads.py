@@ -45,7 +45,11 @@ def test_download_and_playback_share_show_options(client, db, login):
     def check(postcards, host, intervals, status, suffix_order):
         db.execute("UPDATE show SET status = %s WHERE id = %s", (status, show_id))
         db.commit()
-        query = {"postcards": str(postcards), "host": str(host), "intervals": str(intervals)}
+        query = {
+            name: "on" for name, enabled in
+            {"postcards": postcards, "host": host, "intervals": intervals}.items()
+            if enabled
+        }
         response = client.get("/playlist/show/2025sf1.m3u", query_string=query)
         assert response.status_code == 200
         urls = [line for line in response.text.splitlines() if not line.startswith('#')]
@@ -65,13 +69,13 @@ def test_download_and_playback_share_show_options(client, db, login):
         default = client.get(
             "/year/2025/sf1/play", headers={"Accept": "application/json"}
         ).get_json()
-        assert default["postcards"] is True
-        assert default["include_host"] == (status != "full")
+        assert default["postcards"] is False
+        assert default["include_host"] is False
         assert default["full_show"] is False
         legacy_key = "2025sf1" + "".join(f"-{flag}" for flag in suffix_order)
         legacy = client.get(f"/playlist/show/{legacy_key}.m3u")
         assert legacy.status_code == 200
-        assert legacy.headers['Content-Disposition'].endswith(legacy_key + '.m3u')
+        assert legacy.headers['Content-Disposition'].endswith('2025sf1-nh-ni-np.m3u')
         legacy_urls = [line for line in legacy.text.splitlines() if not line.startswith('#')]
         assert legacy_urls == [
             f"{MEDIA}/ES.mp4", f"{MEDIA}/FR.mp4", f"{MEDIA}/recaps/2025sf1.mov"

@@ -88,7 +88,7 @@
                     <a href="{{ url_for('country.country', code=song.country.cc.lower()) }}"><div class="country">{{ flag(song.country.cc, 24, song.country.name, variant=song.country.flag_variant) }}{{ song.country.name }}</div></a>
                     {% endif %}
                 </td>
-                <td><span class="col-truncate" title="{{ song.artist }}">{{ artist_links(song) }}</span></td>
+                <td><span class="col-truncate" title="{{ song.artist }}">{{ song.artist if song.hidden else artist_links(song) }}</span></td>
                 {% if song.hidden %}
                 <td><span class="col-truncate" title="{{ song.title }}">{{ song.title }}</span></td>
                 {% elif access in ('partial', 'full') %}

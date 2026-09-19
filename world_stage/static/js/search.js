@@ -1,4 +1,4 @@
-import {completeWsql} from './wsql-completion.mjs';
+import {completeWsql} from './wsql-completion.js';
 
 const searchType = document.getElementById('search-type');
 const searchQuery = document.getElementById('search-query');

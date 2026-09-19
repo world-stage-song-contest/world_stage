@@ -15,21 +15,17 @@ class PlaylistOptions:
 
 
 def playlist_options(key: str, args: MultiDict, *, show: bool = False) -> PlaylistOptions:
-    values = {"postcards": True, "host": True, "intervals": False}
+    values = {"postcards": False, "host": False, "intervals": False}
     suffixes = {"np": "postcards"}
     if show:
         suffixes.update(nh="host", ni="intervals")
     stem = key
     while stem.rsplit("-", 1)[-1] in suffixes and "-" in stem:
-        stem, suffix = stem.rsplit("-", 1)
-        values[suffixes[suffix]] = False
-    parameters = set(suffixes.values())
-    for parameter in parameters:
-        values[parameter] = query_bool(args, parameter, values[parameter])
-    filename = key
-    if parameters.intersection(key.casefold() for key in args):
-        filename = stem + "".join(
-            f"-{suffix}" for suffix, parameter in sorted(suffixes.items())
-            if not values[parameter]
-        )
+        stem = stem.rsplit("-", 1)[0]
+    for parameter in suffixes.values():
+        values[parameter] = query_bool(args, parameter, False)
+    filename = stem + "".join(
+        f"-{suffix}" for suffix, parameter in sorted(suffixes.items())
+        if not values[parameter]
+    )
     return PlaylistOptions(stem, filename, **values)
