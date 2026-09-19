@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/artists.html" import artist_links %}
 {% from "macros/languages.html" import language_links %}
+{% from "macros/submitters.html" import submitter_link %}
 {% block title %}Overview: {{ special_name or year }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -165,7 +166,7 @@
                 </div>
             </td>
             <td>{{ language_links(song.languages) }}</td>
-            <td>{{ song.submitter or '' }}</td>
+            <td>{{ submitter_link(song.submitter) }}</td>
             {% if has_sf %}
             {% set sf_sn = sf_numbers.get(song.id) %}
             {% if sf_sn %}
@@ -208,7 +209,7 @@
                 {% endif %}
             </div></td>
             <td></td>
-            <td>{{ nf.owner_username }}</td>
+            <td>{{ submitter_link(nf.owner_username) }}</td>
             {% if has_sf %}<td class="number"></td>{% endif %}
             {% if is_closed and has_result_stages %}
             {% if has_f %}<td></td><td></td>{% endif %}

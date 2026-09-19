@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/artists.html" import artist_links %}
 {% from "macros/languages.html" import language_links %}
+{% from "macros/submitters.html" import submitter_link %}
 {% block title %}Overview: {{ country_name }}{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/results.css') }}">
@@ -37,7 +38,7 @@
 {% macro submitter_list(submitters) %}
   {% if submitters %}
     {% for submitter in submitters %}
-      {{ submitter.name }} ({{ submitter.count }}){% if not loop.last %}, {% endif %}
+      {{ submitter_link(submitter.name) }} ({{ submitter.count }}){% if not loop.last %}, {% endif %}
     {% endfor %}
   {% else %}
     &mdash;
@@ -260,7 +261,7 @@
                 {% endif %}
             </div></td>
             <td>{{ language_links(song.languages) }}</td>
-            <td>{{ song.submitter or '' }}</td>
+            <td>{{ submitter_link(song.submitter) }}</td>
             {{ year_result_cell(r.get('year'), 'year-result') }}
             {{ result_cells(r.get('f'),  'final') }}
             {{ result_cells(r.get('sc'), 'repechage') }}
@@ -281,7 +282,7 @@
         <td><a href="{{ url_for('year.nf_details', year=song.year.id, nf_short_name=song.national_final_short_name) }}">{{ song.national_final_name }}</a></td>
         <td>{{ artist_links(song) }}</td>
         <td><a href="{{ url_for('country.details', code=song.country.cc.lower(), year=song.year.id, entry_number=song.entry_number) }}">{{ song.title }}</a></td>
-        <td>{{ song.submitter or '' }}</td>
+        <td>{{ submitter_link(song.submitter) }}</td>
     </tr>
     {% endfor %}
     </tbody>
@@ -329,7 +330,7 @@
                 {% endif %}
             </div></td>
             <td>{{ language_links(song.languages) }}</td>
-            <td>{{ song.submitter or '' }}</td>
+            <td>{{ submitter_link(song.submitter) }}</td>
             {{ year_result_cell(r.get('year'), 'year-result') }}
             {{ result_cells(r.get('f'),  'final') }}
             {{ result_cells(r.get('sc'), 'repechage') }}

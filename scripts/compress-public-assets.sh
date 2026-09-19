@@ -37,9 +37,8 @@ for root in "${roots[@]}"; do
         local asset="$1"
         case "$asset" in
             *.css|*.js|*.mjs|*.html|*.svg|*.txt|*.xml|*.json|*.map|*.webmanifest)
-                /usr/bin/brotli --quality=11 --keep --force "$asset"
                 /usr/bin/gzip --best --keep --force "$asset"
-                /usr/bin/zstd --ultra -22 --quiet --keep --force "$asset"
+                /usr/bin/zstd -12 --quiet --keep --force "$asset"
                 ;;
         esac
     }

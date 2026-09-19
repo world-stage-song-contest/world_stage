@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/languages.html" import language_links %}
 {% from "macros/artists.html" import artist_links %}
+{% from "macros/submitters.html" import submitter_link %}
 {% block title %}Years{% endblock %}
 {% block headercontents %}
     <link rel="stylesheet" href="{{ static('css/year.css') }}">
@@ -78,7 +79,7 @@
                 <td class="points">{{ winner.vote_data.sum }}</td>
                 <td class="percent">{{ winner.vote_data.pct() }}</td>
                 <td class="percent detail-col">{{ winner.vote_data.adjusted_pct() }}</td>
-                <td class="submitter">{{ winner.submitter }}</td>
+                <td class="submitter">{{ submitter_link(winner.submitter) }}</td>
                 {% else %}
                 <td colspan="8"></td>
                 {% endif %}
@@ -132,7 +133,7 @@
                 <td class="points">{{ winner.vote_data.sum }}</td>
                 <td class="percent">{{ winner.vote_data.pct() }}</td>
                 <td class="percent detail-col">{{ winner.vote_data.adjusted_pct() }}</td>
-                <td class="submitter">{{ winner.submitter }}</td>
+                <td class="submitter">{{ submitter_link(winner.submitter) }}</td>
                 {% else %}
                 <td colspan="8"></td>
                 {% endif %}

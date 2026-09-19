@@ -1,0 +1,5 @@
+{% macro submitter_link(username) -%}
+    {%- if username -%}
+        <a href="{{ url_for('user.submissions', username=username) }}">{{ username }}</a>
+    {%- endif -%}
+{%- endmacro %}
