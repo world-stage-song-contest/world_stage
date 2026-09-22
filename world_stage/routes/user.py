@@ -886,6 +886,12 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         _vote_history_filters()
     )
     selected_statuses = _vote_history_statuses()
+    publication_filter = """
+        (show.status <> 'partial' OR EXISTS (
+            SELECT 1 FROM show_qualifier
+            WHERE source_show_id = show.id
+        ))
+    """
     year_from, year_to, year_filter_sql, year_filter_parameters = (
         _vote_history_year_filter()
     )
@@ -897,6 +903,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         JOIN show ON vote_set.show_id = show.id
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
           AND show.status = ANY(%s)
+          AND {publication_filter}
           AND {filter_sql}
           AND {year_filter_sql}
         """,
@@ -924,6 +931,7 @@ def votes(username: str, user: tuple[int, str] | None, permissions: UserPermissi
         LEFT JOIN national_final ON national_final.id = show.national_final_id
         WHERE vote_set.voter_id = %s AND vote_set.result_mode = 'official'
           AND show.status = ANY(%s)
+          AND {publication_filter}
           AND {filter_sql}
           AND {year_filter_sql}
         ORDER BY show.date DESC NULLS LAST, show.id DESC
